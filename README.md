@@ -27,12 +27,15 @@ cargo run -p maplecompass --example probe       # no UI: capture the title and p
 
 Run the game windowed or borderless, with the minimap open.
 
-The panel starts on the right edge of the game window, and clicks pass through it to the game. These hotkeys work while the game has focus:
+The panel starts on the right edge of the game window, and clicks pass through it to the game. It sits just above the game rather than on top of everything, so an app you bring in front of the game covers it too, and it disappears while the game is minimised. These hotkeys work while the game has focus:
 
 - **Ctrl+Shift+M** collapses the panel to an icon, or expands it again.
 - **Ctrl+Shift+E** enters edit mode: drag the panel where you want it, then press Ctrl+Shift+E again to make it click-through.
+- **Ctrl+Shift+D** switches placement: inside the game window, docked to its right edge, docked to its left edge, or detached.
 
-The panel keeps its spot relative to the game window. Settings, including the hotkeys, are saved in `%APPDATA%\com.itechify.maplecompass\settings.json`.
+Inside, the panel keeps its spot relative to the game window. Docked, it follows the game window's outside edge, and goes inside when there is no room on screen. Detached, it is an ordinary window: drag it anywhere, such as onto another monitor, and it stays there.
+
+Settings, including the placement and the hotkeys, are saved in `%APPDATA%\com.itechify.maplecompass\settings.json`.
 
 ## Credits
 

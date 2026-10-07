@@ -13,7 +13,10 @@ mod settings;
 mod tracker;
 
 pub use map_index::{MapDataSource, MapEntry, SourceError};
-pub use panel::{Action, InsideOffset, PanelSizes, ScreenRect, Size};
+pub use panel::{
+    Action, GameWindow, InsideOffset, Layer, PanelSizes, PlacementMode, ScreenPoint, ScreenRect,
+    Size,
+};
 pub use settings::{Hotkeys, Settings};
 
 use matcher::Matcher;
@@ -94,11 +97,21 @@ pub struct PanelState {
     pub not_sure: bool,
     /// Expanded to the full panel, or collapsed to a small icon.
     pub expanded: bool,
-    /// The overlay takes the mouse so the player can drag it; otherwise clicks pass
-    /// through to the game.
+    /// The player asked to move the panel (the edit-mode hotkey).
     pub edit_mode: bool,
-    /// Where the overlay goes on screen; `None` while there is no game window.
+    /// A visible game window was found (not minimised).
+    pub game_found: bool,
+    /// Where the player wants the panel: inside, docked or detached.
+    pub placement_mode: PlacementMode,
+    /// Where the overlay goes on screen; `None` while there is no game window, unless
+    /// the panel is detached.
     pub placement: Option<ScreenRect>,
+    /// Where the overlay sits in the z-order, or hidden.
+    pub layer: Layer,
+    /// The overlay takes the mouse and the player drags it, so the shell leaves its
+    /// position alone except when its size or layer changes. Otherwise clicks pass
+    /// through to the game and the shell keeps the overlay at `placement`.
+    pub draggable: bool,
 }
 
 /// How long to wait before asking for the map index again after a failure. MeowDB is
@@ -157,9 +170,10 @@ impl Compass {
         &self.state
     }
 
-    /// The game window's client area moved, resized, appeared or went away.
-    pub fn on_game_window(&mut self, client: Option<ScreenRect>) -> &PanelState {
-        self.panel.game = client;
+    /// The game window moved, resized, appeared or went away (`None`: not found, or
+    /// minimised).
+    pub fn on_game_window(&mut self, game: Option<GameWindow>) -> &PanelState {
+        self.panel.game = game;
         self.sync_panel()
     }
 
@@ -179,6 +193,8 @@ impl Compass {
     pub fn restore(&mut self, settings: Settings) -> &PanelState {
         self.panel.expanded = settings.expanded;
         self.panel.inside_offset = settings.inside_offset;
+        self.panel.mode = settings.placement;
+        self.panel.detached_at = settings.detached_at;
         self.settings = settings;
         self.sync_panel()
     }
@@ -188,6 +204,8 @@ impl Compass {
         Settings {
             expanded: self.panel.expanded,
             inside_offset: self.panel.inside_offset,
+            placement: self.panel.mode,
+            detached_at: self.panel.detached_at,
             ..self.settings.clone()
         }
     }
@@ -219,7 +237,11 @@ impl Compass {
     fn sync_panel(&mut self) -> &PanelState {
         self.state.expanded = self.panel.expanded;
         self.state.edit_mode = self.panel.edit_mode;
+        self.state.game_found = self.panel.game.is_some();
+        self.state.placement_mode = self.panel.mode;
         self.state.placement = self.panel.placement();
+        self.state.layer = self.panel.layer();
+        self.state.draggable = self.panel.draggable();
         &self.state
     }
 }
