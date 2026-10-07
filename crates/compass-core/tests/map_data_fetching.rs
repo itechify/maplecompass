@@ -5,7 +5,7 @@
 mod common;
 
 use common::{FakeSource, black_frame, requests_for, sample_frame};
-use compass_core::{Compass, MEOWDB_CREDIT, MapData, MapDataStatus, Mob, PanelState, Settings};
+use compass_core::{Compass, MEOWDB_CREDIT, MapData, MapDataStatus, Mob, OpenInBrowser, PanelState};
 use std::task::Poll;
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
@@ -129,15 +129,18 @@ fn the_shown_map_carries_its_meowdb_page_and_the_meowdb_credit() {
     assert_eq!(MEOWDB_CREDIT, "NiaMeowDB (meowdb.com)");
 }
 
+/// Settings from before this hotkey existed get Win+Alt+O.
 #[test]
-fn the_hotkey_to_open_the_maps_meowdb_page_defaults_to_ctrl_shift_o_and_older_settings_get_it() {
-    let older: Settings = serde_json::from_str(
-        r#"{"version":1,"expanded":true,"hotkeys":{"togglePanel":"ctrl+shift+m","editMode":"ctrl+shift+e"}}"#,
-    )
-    .unwrap();
+fn win_alt_o_opens_the_shown_maps_page_even_with_settings_from_before_it_existed() {
+    let older = r#"{"version":1,"expanded":true,"hotkeys":{"togglePanel":"ctrl+shift+m","editMode":"ctrl+shift+e"}}"#;
+    let mut compass = Compass::new(FakeSource::meowdb());
+    compass.restore(serde_json::from_str(older).unwrap());
+    compass.on_frame(sample_frame(SUNSET, 0));
+    compass.on_frame(sample_frame(SUNSET, 333));
 
-    assert_eq!(older.hotkeys.open_meowdb_page, "ctrl+shift+o");
-    assert_eq!(Settings::default().hotkeys.open_meowdb_page, "ctrl+shift+o");
+    let opened = compass.on_hotkey("super+alt+o");
+
+    assert_eq!(opened, Some(OpenInBrowser { url: "https://meowdb.com/msclassic/maps/010003070".into() }));
 }
 
 /// When a saved copy was made: 2026-10-01 00:00 UTC, in ms since the Unix epoch.

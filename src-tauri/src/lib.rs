@@ -12,12 +12,11 @@ mod settings;
 mod setup;
 
 use compass_core::{
-    Action, Compass, Frame, GameWindow, Hotkeys, Layer, PanelSizes, PanelState, ScreenRect,
-    Settings, Size, default_title_region,
+    Action, Compass, Frame, GameWindow, Layer, PanelSizes, PanelState, ScreenRect, Size,
+    default_title_region,
 };
 use gamewin::ClientArea;
 use meowdb::MeowDbSource;
-use serde::Serialize;
 use setup::{Bridge, SetupWindows};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -41,12 +40,12 @@ const EXPANDED_HEIGHTS: std::ops::RangeInclusive<f64> = 44.0..=900.0;
 const COLLAPSED: (f64, f64) = (44.0, 44.0);
 
 /// What the compass loop is asked to do.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) enum Command {
-    /// Something the player did, for the core.
+    /// Something the player did in the overlay or the setup window, for the core.
     Act(Action),
-    /// Open the shown map's MeowDB page in the browser.
-    OpenMeowDbPage,
+    /// The player pressed this hotkey (its accelerator string), for the core.
+    Hotkey(String),
     /// The expanded panel's content is this tall (CSS px).
     PanelHeight(f64),
 }
@@ -70,14 +69,6 @@ pub fn capture_title_frame(client: ClientArea, at_ms: u64) -> Result<Frame, Stri
     Ok(Frame { width: r.width, height: r.height, rgba, at_ms })
 }
 
-/// What the overlay webview renders.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct OverlayState<'a> {
-    panel: &'a PanelState,
-    hotkeys: &'a Hotkeys,
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -90,17 +81,22 @@ pub fn run() {
             // Clicks pass through to the game until the panel is draggable.
             overlay.set_ignore_cursor_events(true)?;
 
+            // MeowDB pages are cached on disk (ADR 0003). WebView2 shares the app cache
+            // folder, hence the subfolder.
+            let source = MeowDbSource::new(app.path().app_cache_dir()?.join("cache"))?;
+            let mut compass = Compass::new(source);
             let settings_path = settings::path(app.handle())?;
-            let settings = settings::load(&settings_path);
+            // The core brings older settings up to date (hotkeys included).
+            compass.restore(settings::load(&settings_path));
             let (commands, commands_rx) = mpsc::channel();
-            hotkeys::install(app, &settings.hotkeys, commands.clone())?;
+            let unavailable = hotkeys::install(app, &compass.panel_state().hotkeys, commands.clone())?;
+            compass.hotkeys_unavailable(unavailable);
             app.manage(commands.clone());
             let (picks, picks_rx) = mpsc::channel();
             app.manage(Bridge {
                 commands: commands.clone(),
                 picks,
                 game: Mutex::new(None),
-                needed: Mutex::new(None),
                 view: Mutex::new(None),
             });
             let setup_windows = SetupWindows::new(app.handle())?;
@@ -112,15 +108,12 @@ pub fn run() {
                 }
             });
 
-            // MeowDB pages are cached on disk (ADR 0003). WebView2 shares the app cache
-            // folder, hence the subfolder.
-            let source = MeowDbSource::new(app.path().app_cache_dir()?.join("cache"))?;
             let handle = app.handle().clone();
-            // Capture + OCR are blocking and CPU-bound: run them on their own thread.
-            // Spawned from setup, so the process is already Per-Monitor-V2 DPI aware.
+            // Off the UI thread. Spawned from setup, so the process is already
+            // Per-Monitor-V2 DPI aware.
             let channels = Channels { commands: commands_rx, picks: picks_rx };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
-                compass_loop(handle, overlay, setup_windows, source, channels, settings, settings_path)
+                compass_loop(handle, overlay, setup_windows, compass, channels, settings_path)
             })?;
             Ok(())
         })
@@ -148,14 +141,10 @@ fn compass_loop(
     app: AppHandle,
     overlay: WebviewWindow,
     mut setup_windows: SetupWindows,
-    source: MeowDbSource,
+    mut compass: Compass,
     channels: Channels,
-    settings: Settings,
     settings_path: PathBuf,
 ) {
-    let hotkeys = settings.hotkeys.clone();
-    let mut compass = Compass::new(source);
-    compass.restore(settings);
     let mut window = OverlayWindow::new(overlay);
     let mut saved = compass.settings();
     let mut pending = (saved.clone(), Instant::now());
@@ -171,11 +160,12 @@ fn compass_loop(
         match channels.commands.recv_timeout(due.saturating_duration_since(Instant::now())) {
             Ok(Command::Act(action)) => {
                 compass.act(action);
-                if action == Action::RequestSetup {
-                    setup_windows.open();
+            }
+            Ok(Command::Hotkey(pressed)) => {
+                if let Some(page) = compass.on_hotkey(&pressed) {
+                    open_in_browser(&app, &page.url);
                 }
             }
-            Ok(Command::OpenMeowDbPage) => open_meowdb_page(&app, compass.panel_state()),
             Ok(Command::PanelHeight(height)) => {
                 expanded.1 = height.clamp(*EXPANDED_HEIGHTS.start(), *EXPANDED_HEIGHTS.end());
                 set_panel_sizes(&mut compass, &window.overlay, expanded);
@@ -187,8 +177,7 @@ fn compass_loop(
             compass.pick_game_window(title);
             next_window_check = Instant::now(); // look for it at once
         }
-        let game_title = compass.settings().game_window_title.unwrap_or_else(|| gamewin::GAME_TITLE.into());
-        gamewin::look_for(&game_title);
+        gamewin::look_for(&compass.panel_state().game_window_title);
         // Checked after every wake-up, so a stream of drag moves can't starve them.
         if Instant::now() >= next_window_check {
             next_window_check = Instant::now() + WINDOW_TICK;
@@ -210,12 +199,14 @@ fn compass_loop(
                 }
             }
         }
-        setup_windows.sync(compass.panel_state(), game.map(|g| g.client), &game_title, &hotkeys.setup);
-
         let state = compass.panel_state();
+        if state.quit {
+            app.exit(0);
+            return;
+        }
+        setup_windows.sync(state, game.map(|g| g.client));
         if emitted.as_ref() != Some(state) {
-            let overlay_state = OverlayState { panel: state, hotkeys: &hotkeys };
-            if let Err(e) = app.emit_to("overlay", "overlay-state", &overlay_state) {
+            if let Err(e) = app.emit_to("overlay", "overlay-state", state) {
                 eprintln!("emit failed: {e}");
             }
             emitted = Some(state.clone());
@@ -262,11 +253,10 @@ fn set_panel_sizes(compass: &mut Compass, overlay: &WebviewWindow, expanded: (f6
     }
 }
 
-/// Open the shown map's MeowDB page in the player's browser; without a map, nothing.
-fn open_meowdb_page(app: &AppHandle, state: &PanelState) {
-    let Some(map) = &state.map else { return };
-    if let Err(e) = app.opener().open_url(&map.url, None::<&str>) {
-        eprintln!("couldn't open {}: {e}", map.url);
+/// Open a page (the shown map's on MeowDB) in the player's browser.
+fn open_in_browser(app: &AppHandle, url: &str) {
+    if let Err(e) = app.opener().open_url(url, None::<&str>) {
+        eprintln!("couldn't open {url}: {e}");
     }
 }
 

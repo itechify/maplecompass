@@ -150,7 +150,27 @@ pub struct PanelState {
     /// Where on screen to capture the Title Region (physical px); `None` while there
     /// is no game window or the region isn't known to fit it.
     pub title_region: Option<ScreenRect>,
+    /// The title of the game window to look for: "MapleStory", or one the player
+    /// picked by hand.
+    pub game_window_title: String,
+    /// The global hotkeys to register, as the overlay names them.
+    pub hotkeys: Hotkeys,
+    /// Hotkeys the shell couldn't register (another app has them), to tell the player.
+    pub unavailable_hotkeys: Vec<String>,
+    /// The player closed first-run setup: with no Title Region there is nothing to
+    /// read, so the app quits.
+    pub quit: bool,
 }
+
+/// A page to open in the player's browser (the open-page hotkey asked for it): the one
+/// thing the shell does on the core's say beyond rendering the panel state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenInBrowser {
+    pub url: String,
+}
+
+/// The game window's title, unless the player picked another by hand.
+pub const GAME_WINDOW_TITLE: &str = "MapleStory";
 
 /// How long to wait before asking for the map index again after a failure. MeowDB is
 /// asked politely (ADR 0003): never on every frame.
@@ -247,20 +267,66 @@ impl Compass {
 
     /// Apply something the player did.
     pub fn act(&mut self, action: Action) -> &PanelState {
-        if action == Action::ChooseCandidate {
-            self.shown_map.choose_next(&mut *self.source);
-            self.sync_shown_map();
+        match action {
+            Action::ToggleExpanded => self.panel.expanded = !self.panel.expanded,
+            Action::ToggleEditMode => self.panel.edit_mode = !self.panel.edit_mode,
+            Action::PanelMoved { x, y } => self.panel.moved_to(x, y),
+            Action::CyclePlacement => self.panel.cycle_placement(),
+            Action::ChooseCandidate => {
+                self.shown_map.choose_next(&mut *self.source);
+                self.sync_shown_map();
+            }
+            Action::MarkTitleRegion(marked) => self.setup.mark(marked),
+            Action::FinishSetup => self.setup.finish(),
+            Action::RequestSetup => self.setup.request(),
+            Action::CancelSetup => {
+                self.state.quit |= self.setup.state().needed == Some(SetupReason::FirstRun);
+                self.setup.cancel();
+            }
         }
-        self.panel.act(action);
-        self.setup.act(action);
         self.sync_panel()
     }
 
-    /// Pick up settings saved by an earlier session.
-    pub fn restore(&mut self, settings: Settings) -> &PanelState {
+    /// The player pressed one of the global hotkeys (an accelerator string, as listed
+    /// in the panel state's `hotkeys`). Returns the page to open, if it asks for one.
+    pub fn on_hotkey(&mut self, pressed: &str) -> Option<OpenInBrowser> {
+        let hotkeys = &self.settings.hotkeys;
+        let is = |hotkey: &str| same_hotkey(hotkey, pressed);
+        let action = if is(&hotkeys.toggle_panel) {
+            Action::ToggleExpanded
+        } else if is(&hotkeys.edit_mode) {
+            Action::ToggleEditMode
+        } else if is(&hotkeys.cycle_placement) {
+            Action::CyclePlacement
+        } else if is(&hotkeys.setup) {
+            Action::RequestSetup
+        } else if is(&hotkeys.choose_candidate) {
+            Action::ChooseCandidate
+        } else if is(&hotkeys.open_meowdb_page) {
+            return self.state.map.as_ref().map(|map| OpenInBrowser { url: map.url.clone() });
+        } else {
+            return None;
+        };
+        self.act(action);
+        None
+    }
+
+    /// These hotkeys couldn't be registered (another app has them).
+    pub fn hotkeys_unavailable(&mut self, hotkeys: Vec<String>) -> &PanelState {
+        self.state.unavailable_hotkeys = hotkeys;
+        self.sync_panel()
+    }
+
+    /// Pick up settings saved by an earlier session. Hotkeys from before version 2
+    /// (Ctrl+Shift, which players bind in the game) are replaced by the defaults.
+    pub fn restore(&mut self, mut settings: Settings) -> &PanelState {
+        if settings.version < settings::VERSION {
+            settings.hotkeys = Hotkeys::default();
+            settings.version = settings::VERSION;
+        }
         self.panel.expanded = settings.expanded;
         self.panel.inside_offset = settings.inside_offset;
-        self.panel.mode = settings.placement;
+        self.panel.mode = settings.placement_mode;
         self.panel.detached_at = settings.detached_at;
         self.setup.saved = settings.title_region;
         self.settings = settings;
@@ -268,9 +334,10 @@ impl Compass {
     }
 
     /// The player picked the game window by hand: look for windows with this title
-    /// from now on (the shell's window locator reads it from [`Compass::settings`]).
-    pub fn pick_game_window(&mut self, title: String) {
+    /// from now on.
+    pub fn pick_game_window(&mut self, title: String) -> &PanelState {
         self.settings.game_window_title = Some(title);
+        self.sync_panel()
     }
 
     /// The settings to save: whatever the player has changed since [`Compass::restore`].
@@ -278,7 +345,7 @@ impl Compass {
         Settings {
             expanded: self.panel.expanded,
             inside_offset: self.panel.inside_offset,
-            placement: self.panel.mode,
+            placement_mode: self.panel.mode,
             detached_at: self.panel.detached_at,
             title_region: self.setup.saved,
             ..self.settings.clone()
@@ -339,14 +406,27 @@ impl Compass {
         self.state.placement = self.panel.placement();
         self.state.layer = self.panel.layer();
         self.state.draggable = self.panel.draggable();
+        self.state.hotkeys = self.settings.hotkeys.clone();
+        self.state.game_window_title =
+            self.settings.game_window_title.clone().unwrap_or_else(|| GAME_WINDOW_TITLE.into());
         &self.state
     }
 
-    fn sync_setup(&mut self) -> &PanelState {
+    fn sync_setup(&mut self) {
+        self.setup.follow_needed();
         self.state.setup = self.setup.state();
         self.state.title_region = self.setup.title_region(self.matcher.as_ref().map(Matcher::longest_name));
-        &self.state
     }
+}
+
+/// Whether two accelerator strings name the same keys ("Super+Alt+C", "super + alt + c").
+fn same_hotkey(a: &str, b: &str) -> bool {
+    let keys = |s: &str| {
+        let mut keys: Vec<String> = s.split('+').map(|k| k.trim().to_lowercase()).collect();
+        keys.sort();
+        keys
+    };
+    keys(a) == keys(b)
 }
 
 fn frame_to_rgb(frame: &Frame) -> Option<image::RgbImage> {

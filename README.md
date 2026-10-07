@@ -33,16 +33,18 @@ The panel starts on the right edge of the game window, and clicks pass through i
 
 Hidden Portals are exits to other maps that MeowDB marks invisible (type 1), hidden (10) or script (11, shown as a Quest Portal). Each shows where it leads (tagged when that is a Hidden Street) and roughly where it is on the map. Invisible exits on a town are its building doors, which you can see, so they aren't listed. Walk-into portals (type 3) count as visible until checked in-game. When play shows a portal the rule gets wrong, add it to the override list in `crates/compass-core/src/portal_overrides.rs`, by map ID and MeowDB portal name.
 
-These hotkeys work while the game has focus:
+These hotkeys work while the game has focus. They use Win+Alt rather than Ctrl or Shift, which players commonly bind in the game, and they avoid Windows' own Win+Alt shortcuts:
 
-- **Ctrl+Shift+M** collapses the panel to an icon, or expands it again.
-- **Ctrl+Shift+E** enters edit mode: drag the panel where you want it, then press Ctrl+Shift+E again to make it click-through.
-- **Ctrl+Shift+D** switches placement: inside the game window, docked to its right edge, docked to its left edge, or detached.
-- **Ctrl+Shift+O** opens the current map's MeowDB page in your browser.
-- **Ctrl+Shift+S** opens setup again, to mark the minimap title anew.
-- **Ctrl+Shift+C** shows the next map with the same title, when the panel can't tell which one you're on.
+- **Win+Alt+C** collapses the panel to an icon, or expands it again.
+- **Win+Alt+E** enters edit mode: drag the panel where you want it, then press Win+Alt+E again to make it click-through.
+- **Win+Alt+P** switches placement: inside the game window, docked to its right edge, docked to its left edge, or detached.
+- **Win+Alt+O** opens the current map's MeowDB page in your browser.
+- **Win+Alt+S** opens setup again, to mark the minimap title anew.
+- **Win+Alt+N** shows the next map with the same title, when the panel can't tell which one you're on.
 
-A few maps share a title, such as the two Maple Road / Mushroom Town maps. If they would show the same Map Summary, mobs and hidden portals anyway, the panel just shows them. Otherwise it picks the one connected to the map you came from, and failing that it shows the first and says so; Ctrl+Shift+C then steps through them, and your pick holds until you change maps.
+They are ordinary registered hotkeys (no keyboard hook), so while MapleCompass runs the game never sees these combinations. If another app already has one, the panel and the setup window say so. Settings from earlier versions, which used Ctrl+Shift, are moved to these.
+
+A few maps share a title, such as the two Maple Road / Mushroom Town maps. If they would show the same Map Summary, mobs and hidden portals anyway, the panel just shows them. Otherwise it picks the one connected to the map you came from, and failing that it shows the first and lists them all, each with its map ID, mob levels, first mobs and hidden portal count; Win+Alt+N then steps through them, and your pick holds until you change maps.
 
 Inside, the panel keeps its spot relative to the game window. Docked, it follows the game window's outside edge, and goes inside when there is no room on screen. Detached, it is an ordinary window: drag it anywhere, such as onto another monitor, and it stays there.
 

@@ -63,7 +63,8 @@ pub enum Action {
     FinishSetup,
     /// The player wants to redo setup (the re-setup hotkey).
     RequestSetup,
-    /// The player closed setup without finishing it.
+    /// The player closed setup without finishing it. On the first run that quits
+    /// (`PanelState::quit`): there is nothing to read without a Title Region.
     CancelSetup,
 }
 
@@ -164,32 +165,28 @@ impl Default for Panel {
 }
 
 impl Panel {
-    pub fn act(&mut self, action: Action) {
-        match action {
-            Action::ToggleExpanded => self.expanded = !self.expanded,
-            Action::ToggleEditMode => self.edit_mode = !self.edit_mode,
-            Action::PanelMoved { x, y } => match (self.mode, self.edit_mode, &self.game) {
-                // A detached panel is an ordinary window: the player moves it any time.
-                (PlacementMode::Detached, _, _) => self.detached_at = Some(ScreenPoint { x, y }),
-                (PlacementMode::Inside, true, Some(game)) => {
-                    let right = x + self.size().width as i32;
-                    let client = game.client;
-                    self.inside_offset = Some(InsideOffset { x: right - client.x, y: y - client.y });
-                }
-                // Docked panels stay docked; moves outside edit mode are the shell's own.
-                _ => {}
-            },
-            Action::CyclePlacement => {
-                let was = self.placement();
-                self.mode = self.mode.next();
-                // Detaching for the first time leaves the panel where it was.
-                if self.mode == PlacementMode::Detached && self.detached_at.is_none() {
-                    self.detached_at = was.map(|r| ScreenPoint { x: r.x, y: r.y });
-                }
+    /// The overlay window was moved so its top-left corner is at (x, y): see
+    /// [`Action::PanelMoved`].
+    pub fn moved_to(&mut self, x: i32, y: i32) {
+        match (self.mode, self.edit_mode, &self.game) {
+            // A detached panel is an ordinary window: the player moves it any time.
+            (PlacementMode::Detached, _, _) => self.detached_at = Some(ScreenPoint { x, y }),
+            (PlacementMode::Inside, true, Some(game)) => {
+                let right = x + self.size().width as i32;
+                let client = game.client;
+                self.inside_offset = Some(InsideOffset { x: right - client.x, y: y - client.y });
             }
-            // Not about layout: setup actions (see `setup.rs`), and choosing between
-            // maps sharing a title (see `shown_map.rs`).
+            // Docked panels stay docked; moves outside edit mode are the shell's own.
             _ => {}
+        }
+    }
+
+    pub fn cycle_placement(&mut self) {
+        let was = self.placement();
+        self.mode = self.mode.next();
+        // Detaching for the first time leaves the panel where it was.
+        if self.mode == PlacementMode::Detached && self.detached_at.is_none() {
+            self.detached_at = was.map(|r| ScreenPoint { x: r.x, y: r.y });
         }
     }
 

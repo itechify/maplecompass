@@ -23,10 +23,8 @@ pub struct Game {
     pub frame: ScreenRect,
 }
 
-/// Exact title of the game window, unless the player picked another by hand.
-pub const GAME_TITLE: &str = "MapleStory";
-
-/// The title [`find_game`] looks for: [`GAME_TITLE`], or the window picked by hand.
+/// The title [`find_game`] looks for, as the core says (the panel state's
+/// `game_window_title`). Nothing is found until it is set.
 static LOOK_FOR: std::sync::RwLock<String> = std::sync::RwLock::new(String::new());
 
 /// Look for windows titled exactly `title` from now on.
@@ -39,8 +37,7 @@ pub fn look_for(title: &str) {
 
 /// The title [`find_game`] looks for.
 pub fn looking_for() -> String {
-    let current = LOOK_FOR.read().unwrap_or_else(|e| e.into_inner());
-    if current.is_empty() { GAME_TITLE.to_string() } else { current.clone() }
+    LOOK_FOR.read().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
 #[cfg(windows)]

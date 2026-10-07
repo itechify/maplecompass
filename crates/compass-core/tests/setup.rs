@@ -11,7 +11,7 @@ mod common;
 
 use common::FakeSource;
 use compass_core::{
-    Action, Compass, CurrentMap, GameWindow, Rect, ScreenRect, Settings, SetupReason, TestRead,
+    Action, Compass, CurrentMap, GameWindow, Rect, ScreenRect, SetupReason, TestRead,
 };
 
 const KERNING: &str = "victoria-road__kerning-city--window";
@@ -274,24 +274,84 @@ fn cancelling_first_run_setup_leaves_it_still_needed() {
 }
 
 #[test]
-fn a_game_window_picked_by_hand_is_remembered_after_a_restart() {
+fn a_game_window_picked_by_hand_is_looked_for_from_then_on_even_after_a_restart() {
     let mut compass = Compass::new(FakeSource::meowdb());
-    assert_eq!(compass.settings().game_window_title, None);
+    assert_eq!(compass.panel_state().game_window_title, "MapleStory");
 
-    compass.pick_game_window("MapleStory Classic".into());
+    let state = compass.pick_game_window("MapleStory Classic".into());
+    assert_eq!(state.game_window_title, "MapleStory Classic");
 
-    assert_eq!(restart(&compass).settings().game_window_title.as_deref(), Some("MapleStory Classic"));
+    assert_eq!(restart(&compass).panel_state().game_window_title, "MapleStory Classic");
 }
 
 #[test]
 fn an_empty_settings_file_has_a_re_setup_hotkey_and_needs_setup() {
-    let settings: Settings = serde_json::from_str("{}").unwrap();
-    assert_eq!(settings.hotkeys.setup, "ctrl+shift+s");
-
     let mut compass = Compass::new(FakeSource::meowdb());
-    compass.restore(settings);
+    compass.restore(serde_json::from_str("{}").unwrap());
+
     let state = compass.on_game_window(window(game(KERNING)));
+
     assert_eq!(state.setup.needed, Some(SetupReason::FirstRun));
+    assert_eq!(state.hotkeys.setup, "super+alt+s");
+}
+
+// The setup window: the core says when it shows, and what closing it does.
+
+#[test]
+fn the_setup_window_opens_on_first_run_and_closing_it_then_quits() {
+    let mut compass = Compass::new(FakeSource::meowdb());
+    let state = compass.on_game_window(window(game(KERNING)));
+    assert!(state.setup.window_open);
+    assert!(!state.quit);
+
+    // Nothing can be read without a Title Region.
+    let state = compass.act(Action::CancelSetup);
+    assert!(state.quit);
+}
+
+#[test]
+fn closing_a_requested_setup_just_closes_it() {
+    let mut compass = set_up();
+    assert!(!compass.panel_state().setup.window_open);
+    assert!(compass.act(Action::RequestSetup).setup.window_open);
+
+    let state = compass.act(Action::CancelSetup);
+
+    assert!(!state.setup.window_open);
+    assert!(!state.quit);
+}
+
+#[test]
+fn finishing_setup_closes_its_window() {
+    let compass = set_up();
+
+    assert!(!compass.panel_state().setup.window_open);
+}
+
+#[test]
+fn a_new_game_resolution_opens_setup_and_closing_it_leaves_it_needed_without_quitting() {
+    let mut compass = set_up();
+    let resized = ScreenRect { width: 1280, height: 720, ..game(KERNING) };
+    assert!(compass.on_game_window(window(resized)).setup.window_open);
+
+    let state = compass.act(Action::CancelSetup);
+    assert!(!state.setup.window_open);
+    assert!(!state.quit);
+    assert_eq!(state.setup.needed, Some(SetupReason::ResolutionChanged));
+
+    // The re-setup hotkey opens it again.
+    assert!(compass.act(Action::RequestSetup).setup.window_open);
+}
+
+#[test]
+fn a_recognised_test_read_credits_meowdb_for_the_names_it_shows() {
+    let mut compass = Compass::new(FakeSource::meowdb());
+    compass.on_game_window(window(game(KERNING)));
+    assert_eq!(compass.act(Action::MarkTitleRegion(MARK)).setup.credit, None);
+
+    mark_and_test_read(&mut compass, KERNING);
+
+    assert_eq!(compass.panel_state().setup.credit, Some("NiaMeowDB (meowdb.com)"));
 }
 
 /// The width of the region the core captures after marking `MARK` and reading one frame

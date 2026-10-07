@@ -9,14 +9,17 @@
 mod common;
 
 use common::{
-    FakeSource, black_frame, index_with_title, requests_for, sample_frame, saved_index, saved_page,
+    FakeSource, arrive, black_frame, index_with_title, requests_for, sample_frame, saved_index,
+    saved_page,
 };
 use compass_core::{
-    Action, Compass, LevelRange, MapDataStatus, Outline, PanelState, Settings, SourceError, meowdb,
+    Action, Compass, LevelRange, MapDataStatus, MapEntry, Outline, PanelState, SourceError, meowdb,
 };
 use std::task::Poll;
 
-/// The titles MeowDB gives to more than one map (index saved 2026-10-07).
+/// The titles MeowDB gives to more than one map (index saved 2026-10-07): Maple Road /
+/// Mushroom Town and Hidden Street / Coconut Harvest, and no others (checked by hand
+/// against the saved index; a fact about MeowDB's data, not something the core does).
 const MUSHROOM_TOWNS: [&str; 2] = ["000000010", "000000020"];
 const COCONUT_HARVESTS: [&str; 3] = ["090040200", "090040201", "090040202"];
 
@@ -32,26 +35,36 @@ fn titled_like_kerning_city(ids: &[&str]) -> FakeSource {
     FakeSource::with_index(index_with_title("Victoria Road", "Kerning City", ids))
 }
 
-#[test]
-fn the_only_titles_meowdb_gives_to_more_than_one_map_are_mushroom_town_and_coconut_harvest() {
-    let index = saved_index();
-    let mut shared: Vec<(String, Vec<&str>)> = Vec::new();
-    for entry in &index {
-        let title = format!("{} / {}", entry.street_name, entry.map_name);
-        let ids: Vec<&str> =
-            index.iter().filter(|e| e.street_name == entry.street_name && e.map_name == entry.map_name).map(|e| e.id.as_str()).collect();
-        if ids.len() > 1 && !shared.iter().any(|(t, _)| *t == title) {
-            shared.push((title, ids));
-        }
-    }
+/// MeowDB's saved index, with whatever maps it titles `street` / `map` shown under the
+/// Kerning City sample's title instead (and the real Kerning City left out).
+fn saved_index_reading_as_kerning_city(street: &str, map: &str) -> FakeSource {
+    let index = saved_index()
+        .into_iter()
+        .filter(|e| e.map_name != "Kerning City")
+        .map(|e| {
+            if e.street_name == street && e.map_name == map {
+                MapEntry { street_name: "Victoria Road".into(), map_name: "Kerning City".into(), ..e }
+            } else {
+                e
+            }
+        })
+        .collect();
+    // Unreachable pages can't show the same, so every map with the title is offered.
+    FakeSource::with_index(index).with_pages_offline()
+}
 
-    assert_eq!(
-        shared,
-        [
-            ("Maple Road / Mushroom Town".to_string(), MUSHROOM_TOWNS.to_vec()),
-            ("Hidden Street / Coconut Harvest".to_string(), COCONUT_HARVESTS.to_vec()),
-        ]
-    );
+#[test]
+fn meowdbs_index_gives_the_mushroom_town_title_to_two_maps_and_coconut_harvest_to_three() {
+    for (street, map, ids) in [
+        ("Maple Road", "Mushroom Town", MUSHROOM_TOWNS.to_vec()),
+        ("Hidden Street", "Coconut Harvest", COCONUT_HARVESTS.to_vec()),
+    ] {
+        let mut compass = Compass::new(saved_index_reading_as_kerning_city(street, map));
+
+        let state = arrive(&mut compass, KERNING, 0);
+
+        assert_eq!(candidates(&state), Some((ids, 0, false)), "{street} / {map}");
+    }
 }
 
 #[test]
@@ -275,15 +288,17 @@ fn a_chosen_candidate_holds_through_unreadable_frames_until_the_map_changes() {
     assert_eq!(candidates(state), coconut_candidates(0, false));
 }
 
+/// Settings from before this hotkey existed (or used Ctrl+Shift) get Win+Alt+N.
 #[test]
-fn the_choose_candidate_hotkey_defaults_to_ctrl_shift_c_and_older_settings_get_it() {
-    let older: Settings = serde_json::from_str(
-        r#"{"version":1,"expanded":true,"hotkeys":{"togglePanel":"ctrl+shift+m","openMeowdbPage":"ctrl+shift+o"}}"#,
-    )
-    .unwrap();
+fn win_alt_n_shows_the_next_candidate_even_with_settings_from_before_it_existed() {
+    let older = r#"{"version":1,"expanded":true,"hotkeys":{"togglePanel":"ctrl+shift+m","openMeowdbPage":"ctrl+shift+o"}}"#;
+    let mut compass = Compass::new(coconut_harvests_that_differ());
+    compass.restore(serde_json::from_str(older).unwrap());
+    arrive(&mut compass, KERNING, 0);
 
-    assert_eq!(older.hotkeys.choose_candidate, "ctrl+shift+c");
-    assert_eq!(Settings::default().hotkeys.choose_candidate, "ctrl+shift+c");
+    compass.on_hotkey("super+alt+n");
+
+    assert_eq!(candidates(compass.panel_state()), coconut_candidates(1, true));
 }
 
 #[test]

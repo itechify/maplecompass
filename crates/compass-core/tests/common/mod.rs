@@ -3,8 +3,8 @@
 #![allow(dead_code)]
 
 use compass_core::{
-    Fetched, Frame, MapData, MapDataSource, MapEntry, ScreenRect, SourceError, default_title_region,
-    meowdb,
+    Compass, Fetched, Frame, MapData, MapDataSource, MapEntry, PanelState, Rect, ScreenRect, Size,
+    SourceError, TitleRegion, default_title_region, meowdb,
 };
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -69,6 +69,21 @@ pub fn default_region_frame(window: &image::RgbaImage, at_ms: u64) -> Frame {
 pub fn sample_frame(name: &str, at_ms: u64) -> Frame {
     let img = load(name);
     if name.ends_with("--window") { default_region_frame(&img, at_ms) } else { frame(&img, at_ms) }
+}
+
+/// Two confident reads of a sample: the panel switches to its map.
+pub fn arrive(compass: &mut Compass, sample: &str, at_ms: u64) -> PanelState {
+    compass.on_frame(sample_frame(sample, at_ms));
+    compass.on_frame(sample_frame(sample, at_ms + 333)).clone()
+}
+
+/// A Title Region marked around the minimap title of the Kerning City window sample,
+/// whose client area is 1916x1197.
+pub fn kerning_title_region() -> TitleRegion {
+    TitleRegion {
+        marked: Rect { x: 70, y: 40, width: 130, height: 48 },
+        client: Size { width: 1916, height: 1197 },
+    }
 }
 
 #[derive(Deserialize)]
