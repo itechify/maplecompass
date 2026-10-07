@@ -8,6 +8,7 @@ pub mod gamewin;
 mod files;
 mod hotkeys;
 pub mod meowdb;
+mod search;
 mod settings;
 mod setup;
 
@@ -17,6 +18,7 @@ use compass_core::{
     default_title_region,
 };
 use meowdb::MeowDbSource;
+use search::SearchWindow;
 use setup::{Bridge, SetupWindows};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -46,6 +48,8 @@ pub(crate) enum Command {
     Act(Action),
     /// The player pressed this hotkey (its accelerator string), for the core.
     Hotkey(String),
+    /// The search window's text box now holds this, for the core.
+    SearchQuery(String),
     /// The expanded panel's content is this tall (CSS px).
     PanelHeight(f64),
     /// The title reader is done with a capture of `region`: what it read, or `None`
@@ -103,6 +107,7 @@ pub fn run() {
                 view: Mutex::new(None),
             });
             let setup_windows = SetupWindows::new(app.handle())?;
+            let search_window = SearchWindow::new(app.handle(), commands.clone());
             // The core only takes moves of a draggable panel, so the shell's own
             // repositioning is harmless; otherwise they are the player's drag.
             overlay.on_window_event(move |event| {
@@ -116,8 +121,9 @@ pub fn run() {
             // Per-Monitor-V2 DPI aware.
             let reader = TitleReaderThread::spawn(app.state::<Sender<Command>>().inner().clone())?;
             let channels = Channels { commands: commands_rx, picks: picks_rx };
+            let windows = Windows { overlay, setup: setup_windows, search: search_window };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
-                compass_loop(handle, overlay, setup_windows, compass, reader, channels, settings_path)
+                compass_loop(handle, windows, compass, reader, channels, settings_path)
             })?;
             Ok(())
         })
@@ -131,9 +137,21 @@ pub fn run() {
             setup::mark_title_region,
             setup::cancel_marking,
             setup::finish_setup,
+            search::search_view,
+            search::search_query,
+            search::search_move,
+            search::search_enter,
+            search::search_escape,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Our windows: the overlay, setup (with its region window) and mob search.
+struct Windows {
+    overlay: WebviewWindow,
+    setup: SetupWindows,
+    search: SearchWindow,
 }
 
 /// What the compass loop hears from hotkeys, the overlay, the setup window and the
@@ -195,13 +213,13 @@ impl TitleReaderThread {
 
 fn compass_loop(
     app: AppHandle,
-    overlay: WebviewWindow,
-    mut setup_windows: SetupWindows,
+    windows: Windows,
     mut compass: Compass,
     mut reader: TitleReaderThread,
     channels: Channels,
     settings_path: PathBuf,
 ) {
+    let Windows { overlay, setup: mut setup_windows, search: mut search_window } = windows;
     let mut window = OverlayWindow::new(overlay);
     let mut saved = compass.settings();
     let mut pending = (saved.clone(), Instant::now());
@@ -221,6 +239,9 @@ fn compass_loop(
                 if let Some(page) = compass.on_hotkey(&pressed) {
                     open_in_browser(&app, &page.url);
                 }
+            }
+            Ok(Command::SearchQuery(query)) => {
+                compass.search_query(&query);
             }
             Ok(Command::PanelHeight(height)) => {
                 expanded.1 = height.clamp(*EXPANDED_HEIGHTS.start(), *EXPANDED_HEIGHTS.end());
@@ -263,6 +284,7 @@ fn compass_loop(
             return;
         }
         setup_windows.sync(state, game.map(|g| g.client));
+        search_window.sync(state);
         if emitted.as_ref() != Some(state) {
             if let Err(e) = app.emit_to("overlay", "overlay-state", state) {
                 eprintln!("emit failed: {e}");

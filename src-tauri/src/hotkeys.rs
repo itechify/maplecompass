@@ -15,22 +15,15 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 /// compass loop. Returns the ones that couldn't be registered (invalid, or taken by
 /// another app), for the core to show the player.
 pub fn install(app: &tauri::App, hotkeys: &Hotkeys, commands: Sender<Command>) -> tauri::Result<Vec<String>> {
-    let all = [
-        &hotkeys.toggle_panel,
-        &hotkeys.edit_mode,
-        &hotkeys.cycle_placement,
-        &hotkeys.open_meowdb_page,
-        &hotkeys.setup,
-        &hotkeys.choose_candidate,
-    ];
     let mut unavailable = Vec::new();
     let mut bindings: Vec<(Shortcut, String)> = Vec::new();
-    for text in all {
+    // Every hotkey the core lists (the search one included), so none is forgotten.
+    for text in hotkeys.all() {
         match text.parse::<Shortcut>() {
-            Ok(shortcut) => bindings.push((shortcut, text.clone())),
+            Ok(shortcut) => bindings.push((shortcut, text.to_string())),
             Err(e) => {
                 eprintln!("hotkey {text:?} invalid: {e}");
-                unavailable.push(text.clone());
+                unavailable.push(text.to_string());
             }
         }
     }

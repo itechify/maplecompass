@@ -43,6 +43,18 @@
           <ul id="portal-rows"></ul>
         </section>
       </section>
+      <section class="mob-search" id="mob-search" aria-label="Mob search" hidden>
+        <h2 id="search-title"></h2>
+        <p class="note" id="search-note" role="status" hidden></p>
+        <table class="results" id="search-results">
+          <thead>
+            <tr><th>Map</th><th title="Spawn Count × Mob Rate">Density</th><th title="Share of all mob spawns on the Map" aria-label="Spawn Share">Share</th><th>Tier</th></tr>
+          </thead>
+          <tbody id="search-rows"></tbody>
+        </table>
+        <p class="more" id="search-more" hidden></p>
+        <p class="search-credit" id="search-credit" hidden></p>
+      </section>
       <p class="note crawl" id="crawl-progress" role="status" hidden></p>
       <footer id="footer" hidden>
         <span id="credit"></span><span class="hint" id="open-hint"></span>
