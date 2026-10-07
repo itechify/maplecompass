@@ -4,7 +4,7 @@ status: accepted
 
 # One bundled title recogniser on every platform: ocrs
 
-MapleCompass targets Windows first but must not block macOS and Linux (Wine/Proton), so we read the minimap title with a single recogniser bundled in the app rather than each OS's native OCR (Windows.Media.Ocr, Apple Vision, Tesseract on Linux). Three engines would mean three different sets of errors to tune the name matching against; one engine behaves the same everywhere. A spike on the real screenshots (issue #2) picked **ocrs** (pure-Rust OCR on the rten runtime), using only its text-recognition model. We find the two text lines ourselves, so its detection model is not shipped. Either way, the raw reading is snapped to the closest known street name and map name.
+MapleCompass targets Windows first but must not block macOS and Linux (Wine/Proton), so we read the minimap title with a single recogniser bundled in the app rather than each OS's native OCR (Windows.Media.Ocr, Apple Vision, Tesseract on Linux). Three engines would mean three different sets of errors to tune the name matching against; one engine behaves the same everywhere. A spike on the real screenshots (issue #2) picked **ocrs** (pure-Rust OCR on the rten runtime), using only its text-recognition model. We find the two text lines ourselves, so its detection model is not shipped. The raw reading is then snapped to the closest known street name and map name.
 
 ## Why ocrs
 
