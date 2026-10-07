@@ -5,7 +5,7 @@
 //! physical px (measured on the dev machine); an expanded panel of 340x72 and a
 //! collapsed icon of 44x44.
 
-use compass_core::{Action, Compass, PanelSizes, ScreenRect, Size};
+use compass_core::{Action, Compass, PanelSizes, ScreenRect, Settings, Size};
 
 fn compass() -> Compass {
     let mut compass = Compass::new();
@@ -98,6 +98,45 @@ fn the_panel_stays_inside_the_game_window_when_the_window_shrinks() {
     let state = compass.on_game_window(Some(smaller_game));
     // Flush with the 1280x720 client's bottom-right corner at (2092, 830).
     assert_eq!(state.placement, Some(rect(1752, 758, 340, 72)));
+}
+
+/// What the shell does on restart: save the settings as JSON, load them into a new core.
+fn restart(compass: &Compass) -> Compass {
+    let json = serde_json::to_string(&compass.settings()).unwrap();
+    let mut restarted = self::compass();
+    restarted.restore(serde_json::from_str(&json).unwrap());
+    restarted
+}
+
+#[test]
+fn the_dragged_spot_and_collapsed_state_survive_a_restart() {
+    let mut compass = compass();
+    compass.on_game_window(Some(GAME));
+    compass.act(Action::ToggleEditMode);
+    compass.act(Action::PanelMoved { x: 1000, y: 300 });
+    compass.act(Action::ToggleEditMode);
+    compass.act(Action::ToggleExpanded);
+
+    let mut restarted = restart(&compass);
+    let moved_game = ScreenRect { x: 100, y: 50, ..GAME };
+    let state = restarted.on_game_window(Some(moved_game));
+    assert!(!state.expanded);
+    assert!(!state.edit_mode);
+    // Icon top-right at client (528, 190), as dragged.
+    assert_eq!(state.placement, Some(rect(584, 240, 44, 44)));
+}
+
+#[test]
+fn an_empty_settings_file_gives_the_default_panel_and_hotkeys() {
+    let settings: Settings = serde_json::from_str("{}").unwrap();
+    assert_eq!(settings.hotkeys.toggle_panel, "ctrl+shift+m");
+    assert_eq!(settings.hotkeys.edit_mode, "ctrl+shift+e");
+
+    let mut compass = compass();
+    compass.restore(settings);
+    let state = compass.on_game_window(Some(GAME));
+    assert!(state.expanded);
+    assert_eq!(state.placement, Some(rect(2376, 674, 340, 72)));
 }
 
 #[test]

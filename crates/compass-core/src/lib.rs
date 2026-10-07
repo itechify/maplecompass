@@ -6,8 +6,10 @@
 mod panel;
 mod prep;
 mod recogniser;
+mod settings;
 
-pub use panel::{Action, PanelSizes, ScreenRect, Size};
+pub use panel::{Action, InsideOffset, PanelSizes, ScreenRect, Size};
+pub use settings::{Hotkeys, Settings};
 
 use panel::Panel;
 use recogniser::Recogniser;
@@ -75,14 +77,20 @@ pub struct PanelState {
 pub struct Compass {
     recogniser: Recogniser,
     panel: Panel,
+    /// The last settings restored; the panel's own fields live in `panel`.
+    settings: Settings,
     state: PanelState,
 }
 
 impl Compass {
-    /// A core using the bundled title recogniser.
+    /// A core using the bundled title recogniser and default settings.
     pub fn new() -> Self {
-        let mut compass =
-            Self { recogniser: Recogniser::bundled(), panel: Panel::default(), state: PanelState::default() };
+        let mut compass = Self {
+            recogniser: Recogniser::bundled(),
+            panel: Panel::default(),
+            settings: Settings::default(),
+            state: PanelState::default(),
+        };
         compass.sync_panel();
         compass
     }
@@ -110,6 +118,23 @@ impl Compass {
     pub fn act(&mut self, action: Action) -> &PanelState {
         self.panel.act(action);
         self.sync_panel()
+    }
+
+    /// Pick up settings saved by an earlier session.
+    pub fn restore(&mut self, settings: Settings) -> &PanelState {
+        self.panel.expanded = settings.expanded;
+        self.panel.inside_offset = settings.inside_offset;
+        self.settings = settings;
+        self.sync_panel()
+    }
+
+    /// The settings to save: whatever the player has changed since [`Compass::restore`].
+    pub fn settings(&self) -> Settings {
+        Settings {
+            expanded: self.panel.expanded,
+            inside_offset: self.panel.inside_offset,
+            ..self.settings.clone()
+        }
     }
 
     pub fn panel_state(&self) -> &PanelState {
