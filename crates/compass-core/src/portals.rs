@@ -57,7 +57,7 @@ pub(crate) fn hidden_portals(map: &MapFacts, exits: Vec<Exit>) -> Vec<HiddenPort
         .map(|e| HiddenPortal {
             position: position_hint(map.minimap, e.x, e.y),
             to_hidden_street: e.to_street_name == "Hidden Street",
-            quest: false,
+            quest: e.kind == SCRIPT,
             name: e.name,
             to_map_id: e.to_map_id,
             to_map_name: e.to_map_name,
