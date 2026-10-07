@@ -73,7 +73,7 @@ pub fn map_url(id: &str) -> String {
 /// and without a summary (a town) is valid.
 ///
 /// The map's Hidden Portals follow the Hidden Portal rule and the app's hand-kept
-/// [`PORTAL_OVERRIDES`].
+/// [`PORTAL_OVERRIDES`]. Its connected maps come from the map's `connectedMaps`.
 pub fn read_map_page(html: &str, id: &str) -> Result<MapData, SourceError> {
     read_map_page_with(html, id, PORTAL_OVERRIDES)
 }
@@ -96,6 +96,12 @@ fn read_page(html: &str, id: &str, overrides: &[PortalOverride]) -> Result<MapDa
         return Err(format!("payload is for map {}", map["id"]));
     }
     let monsters = map["monsters"].as_array().ok_or("no monsters list")?;
+    let connected_maps = map["connectedMaps"]
+        .as_array()
+        .ok_or("no connectedMaps list")?
+        .iter()
+        .map(|c| c["mapId"].as_str().map(|id| id.trim().to_string()).ok_or("connected map without a mapId"))
+        .collect::<Result<Vec<_>, _>>()?;
     let total_spawns = uint(&map["totalMobCount"], "totalMobCount")?;
 
     let rates = props_at(&flight, r#"{"rates":{"id":""#)?;
@@ -153,7 +159,7 @@ fn read_page(html: &str, id: &str, overrides: &[PortalOverride]) -> Result<MapDa
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
-    Ok(MapData { summary, mobs, hidden_portals: hidden_portals(map, id, overrides)? })
+    Ok(MapData { summary, mobs, hidden_portals: hidden_portals(map, id, overrides)?, connected_maps })
 }
 
 /// The map's Hidden Portals from its `portals` (exits to other maps). `intraPortals`,

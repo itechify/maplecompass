@@ -48,6 +48,11 @@ impl Matcher {
         &self.maps[index].entry
     }
 
+    /// Every map with the same title as map `index` (itself included), in index order.
+    pub fn same_title_as(&self, index: usize) -> Vec<usize> {
+        (0..self.maps.len()).filter(|&i| self.same_title(i, index)).collect()
+    }
+
     /// The length, in characters, of the longest street name or map name.
     pub fn longest_name(&self) -> usize {
         let len = |s: &str| s.chars().count();
@@ -61,8 +66,8 @@ impl Matcher {
     /// The map whose street name and map name best match the reading, if the match
     /// is confident and no other title matches as well.
     ///
-    /// Maps sharing one title score the same; the first in the index wins for now
-    /// (#7 resolves them using the previous map).
+    /// Maps sharing one title score the same, and the first in the index stands for
+    /// them all: [`Matcher::same_title_as`] gives the rest.
     pub fn snap(&self, street: &str, map: &str) -> Option<Snap> {
         let (street, map) = (key(street), key(map));
         let mut best: Option<(usize, f32)> = None;

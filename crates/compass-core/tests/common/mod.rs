@@ -89,6 +89,23 @@ pub fn saved_index() -> Vec<MapEntry> {
         .collect()
 }
 
+/// The saved index, except that the title `street` / `map` belongs to the maps `ids`
+/// and to no other. A sample showing that title then stands in for those maps'
+/// minimap: there are no samples of titles MeowDB really shares.
+pub fn index_with_title(street: &str, map: &str, ids: &[&str]) -> Vec<MapEntry> {
+    saved_index()
+        .into_iter()
+        .filter(|e| !(e.street_name == street && e.map_name == map) || ids.contains(&e.id.as_str()))
+        .map(|e| {
+            if ids.contains(&e.id.as_str()) {
+                MapEntry { street_name: street.into(), map_name: map.into(), ..e }
+            } else {
+                e
+            }
+        })
+        .collect()
+}
+
 /// A MeowDB map page saved on 2026-10-07: `tests/fixtures/meowdb-maps/<id>__<slug>.html`.
 pub fn saved_page(id: &str) -> Option<String> {
     let dir = fixtures_dir().join("meowdb-maps");

@@ -116,6 +116,7 @@ fn a_page_whose_format_changed_is_reported_as_such_with_no_partial_data_and_the_
         ("summary's mob figures renamed", page.replace("perMob", "mobFigures")),
         ("no Map Summary although mobs spawn", page.replace(r#"\"rates\""#, r#"\"yields\""#)),
         ("no Monsters table", page.replace(">Monsters (", ">Mobs (")),
+        ("connected maps renamed", page.replace("connectedMaps", "linkedMaps")),
         ("a mob's HP not a number", page.replace(">133<", ">lots<")),
         ("cut off halfway", page[..half].to_string()),
         ("another map's page", saved_page("010003080").unwrap()),

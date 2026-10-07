@@ -14,6 +14,10 @@ pub struct MapData {
     pub mobs: Vec<Mob>,
     /// The exits the player can't see, in MeowDB's order. Empty when there are none.
     pub hidden_portals: Vec<HiddenPortal>,
+    /// The IDs of the maps its portals lead to. They tell apart maps sharing a title
+    /// (the one the player came from is connected to the right one); not rendered.
+    #[serde(skip_serializing)]
+    pub connected_maps: Vec<String>,
 }
 
 /// A portal to another map that is drawn neither on the minimap nor in the world.
@@ -85,25 +89,38 @@ pub enum MapDataStatus {
     FormatChanged,
 }
 
-/// Asks the source for a map's data once the panel switches to that map, and only
-/// then (ADR 0003: never ahead of time).
+impl MapData {
+    /// Whether the panel would show the same for both maps: the same Map Summary, mobs
+    /// and Hidden Portals. (Mobs sorted as the panel sorts them.)
+    pub(crate) fn shows_same_as(&self, other: &MapData) -> bool {
+        self.summary == other.summary
+            && self.mobs == other.mobs
+            && self.hidden_portals == other.hidden_portals
+    }
+}
+
+/// Asks the source for maps' data, each only when the core needs it (ADR 0003: never
+/// ahead of time), and keeps the answers until told to forget them.
 #[derive(Default)]
 pub(crate) struct MapDataLoader {
-    /// The map the status is for.
-    id: Option<String>,
-    status: MapDataStatus,
+    /// Each map asked about, and how asking went.
+    statuses: Vec<(String, MapDataStatus)>,
 }
 
 impl MapDataLoader {
-    /// The panel shows map `id`: ask for its data if it's new, or check on a request
-    /// still in flight.
-    pub fn show(&mut self, id: Option<&str>, source: &mut dyn MapDataSource) -> &MapDataStatus {
-        if id != self.id.as_deref() {
-            self.id = id.map(str::to_string);
-            self.status = if id.is_some() { MapDataStatus::Loading } else { MapDataStatus::NoMap };
-        }
-        if let (MapDataStatus::Loading, Some(id)) = (&self.status, &self.id) {
-            self.status = match source.map_data(id) {
+    /// Map `id`'s data: asked for if it's new, checked on if a request is still in
+    /// flight, and otherwise what came back.
+    pub fn load(&mut self, id: &str, source: &mut dyn MapDataSource) -> &MapDataStatus {
+        let at = match self.statuses.iter().position(|(asked, _)| asked == id) {
+            Some(at) => at,
+            None => {
+                self.statuses.push((id.to_string(), MapDataStatus::Loading));
+                self.statuses.len() - 1
+            }
+        };
+        let status = &mut self.statuses[at].1;
+        if *status == MapDataStatus::Loading {
+            *status = match source.map_data(id) {
                 Poll::Pending => MapDataStatus::Loading,
                 Poll::Ready(Ok(mut data)) => {
                     data.mobs.sort_by(|a, b| a.level.cmp(&b.level).then_with(|| a.name.cmp(&b.name)));
@@ -113,6 +130,16 @@ impl MapDataLoader {
                 Poll::Ready(Err(SourceError::FormatChanged(_))) => MapDataStatus::FormatChanged,
             };
         }
-        &self.status
+        status
+    }
+
+    /// Map `id`'s data as last loaded, if it was asked for.
+    pub fn status(&self, id: &str) -> Option<&MapDataStatus> {
+        self.statuses.iter().find(|(asked, _)| asked == id).map(|(_, status)| status)
+    }
+
+    /// Forget every answer, so a map is asked about afresh.
+    pub fn forget(&mut self) {
+        self.statuses.clear();
     }
 }
