@@ -14,6 +14,7 @@ pub fn install(app: &tauri::App, hotkeys: &Hotkeys, actions: Sender<Action>) -> 
     let bindings = [
         (parse(&hotkeys.toggle_panel, &defaults.toggle_panel), Action::ToggleExpanded),
         (parse(&hotkeys.edit_mode, &defaults.edit_mode), Action::ToggleEditMode),
+        (parse(&hotkeys.cycle_placement, &defaults.cycle_placement), Action::CyclePlacement),
         (parse(&hotkeys.setup, &defaults.setup), Action::RequestSetup),
     ];
     app.handle().plugin(

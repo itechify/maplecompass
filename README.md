@@ -29,13 +29,16 @@ Run the game windowed or borderless, with the minimap open.
 
 On first run a setup window walks you through a ban-risk warning, finding the game window (or picking it by hand), the requirements, and marking the minimap title: drag a box around its two lines. A test read then shows the map it recognised; finish to start the overlay. Closing setup on first run quits. MapleCompass asks you to set up again when the game window changes size.
 
-The panel starts on the right edge of the game window, and clicks pass through it to the game. These hotkeys work while the game has focus:
+The panel starts on the right edge of the game window, and clicks pass through it to the game. It sits just above the game rather than on top of everything, so an app you bring in front of the game covers it too, and it disappears while the game is minimised. These hotkeys work while the game has focus:
 
 - **Ctrl+Shift+M** collapses the panel to an icon, or expands it again.
 - **Ctrl+Shift+E** enters edit mode: drag the panel where you want it, then press Ctrl+Shift+E again to make it click-through.
+- **Ctrl+Shift+D** switches placement: inside the game window, docked to its right edge, docked to its left edge, or detached.
 - **Ctrl+Shift+S** opens setup again, to mark the minimap title anew.
 
-The panel keeps its spot relative to the game window. Settings, including the marked title, a hand-picked game window and the hotkeys, are saved in `%APPDATA%\com.itechify.maplecompass\settings.json`.
+Inside, the panel keeps its spot relative to the game window. Docked, it follows the game window's outside edge, and goes inside when there is no room on screen. Detached, it is an ordinary window: drag it anywhere, such as onto another monitor, and it stays there.
+
+Settings, including the placement, the marked title, a hand-picked game window and the hotkeys, are saved in `%APPDATA%\com.itechify.maplecompass\settings.json`.
 
 ## Credits
 
