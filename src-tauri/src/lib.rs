@@ -19,9 +19,10 @@ use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent};
+use tauri_plugin_opener::OpenerExt;
 
 /// Capture and recognition rate: ~3 Hz keeps a map change within about a second.
 const TICK: Duration = Duration::from_millis(333);
@@ -30,9 +31,28 @@ const TICK: Duration = Duration::from_millis(333);
 const WINDOW_TICK: Duration = Duration::from_millis(50);
 /// Settings are saved once they have stopped changing for this long (after a drag).
 const SAVE_DELAY: Duration = Duration::from_millis(500);
-/// The overlay's size in CSS px (logical); `src/styles.css` lays out to fit.
-const EXPANDED: (f64, f64) = (340.0, 72.0);
+/// The overlay's size in CSS px (logical); `src/styles.css` lays out to fit. The
+/// expanded panel's height follows its content, as the overlay reports it.
+const EXPANDED: (f64, f64) = (380.0, 72.0);
+const EXPANDED_HEIGHTS: std::ops::RangeInclusive<f64> = 44.0..=900.0;
 const COLLAPSED: (f64, f64) = (44.0, 44.0);
+
+/// What the compass loop is asked to do.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Command {
+    /// Something the player did, for the core.
+    Act(Action),
+    /// Open the shown map's MeowDB page in the browser.
+    OpenMeowDbPage,
+    /// The expanded panel's content is this tall (CSS px).
+    PanelHeight(f64),
+}
+
+/// The overlay reports how tall its expanded content is, so the window fits it.
+#[tauri::command]
+fn panel_height(height: f64, commands: tauri::State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::PanelHeight(height));
+}
 
 /// Capture the default Title Region of the game's client area.
 pub fn capture_title_frame(client: ClientArea, at_ms: u64) -> Result<Frame, String> {
@@ -57,6 +77,8 @@ struct OverlayState<'a> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![panel_height])
         .setup(|app| {
             let overlay = app.get_webview_window("overlay").expect("overlay window in tauri.conf.json");
             // Keep our own panel out of our own (and any) screen capture.
@@ -66,13 +88,14 @@ pub fn run() {
 
             let settings_path = settings::path(app.handle())?;
             let settings = settings::load(&settings_path);
-            let (actions, actions_rx) = mpsc::channel();
-            hotkeys::install(app, &settings.hotkeys, actions.clone())?;
+            let (commands, commands_rx) = mpsc::channel();
+            hotkeys::install(app, &settings.hotkeys, commands.clone())?;
+            app.manage(commands.clone());
             // The core only takes moves of a draggable panel, so the shell's own
             // repositioning is harmless; otherwise they are the player's drag.
             overlay.on_window_event(move |event| {
                 if let WindowEvent::Moved(to) = event {
-                    let _ = actions.send(Action::PanelMoved { x: to.x, y: to.y });
+                    let _ = commands.send(Command::Act(Action::PanelMoved { x: to.x, y: to.y }));
                 }
             });
 
@@ -83,7 +106,7 @@ pub fn run() {
             // Capture + OCR are blocking and CPU-bound: run them on their own thread.
             // Spawned from setup, so the process is already Per-Monitor-V2 DPI aware.
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
-                compass_loop(handle, overlay, source, actions_rx, settings, settings_path)
+                compass_loop(handle, overlay, source, commands_rx, settings, settings_path)
             })?;
             Ok(())
         })
@@ -95,7 +118,7 @@ fn compass_loop(
     app: AppHandle,
     overlay: WebviewWindow,
     source: MeowDbSource,
-    actions: Receiver<Action>,
+    commands: Receiver<Command>,
     settings: Settings,
     settings_path: PathBuf,
 ) {
@@ -107,15 +130,21 @@ fn compass_loop(
     let mut pending = (saved.clone(), Instant::now());
     let mut emitted: Option<PanelState> = None;
     let mut game = None;
+    let mut expanded = EXPANDED;
     let start = Instant::now();
     let mut next_capture = Instant::now();
     let mut next_window_check = Instant::now();
     loop {
         // Wait for the player until the next check is due, so hotkeys act at once.
         let due = next_capture.min(next_window_check);
-        match actions.recv_timeout(due.saturating_duration_since(Instant::now())) {
-            Ok(action) => {
+        match commands.recv_timeout(due.saturating_duration_since(Instant::now())) {
+            Ok(Command::Act(action)) => {
                 compass.act(action);
+            }
+            Ok(Command::OpenMeowDbPage) => open_meowdb_page(&app, compass.panel_state()),
+            Ok(Command::PanelHeight(height)) => {
+                expanded.1 = height.clamp(*EXPANDED_HEIGHTS.start(), *EXPANDED_HEIGHTS.end());
+                set_panel_sizes(&mut compass, &window.overlay, expanded);
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
@@ -123,7 +152,7 @@ fn compass_loop(
         // Checked after every wake-up, so a stream of drag moves can't starve them.
         if Instant::now() >= next_window_check {
             next_window_check = Instant::now() + WINDOW_TICK;
-            game = find_game(&mut compass, &window.overlay);
+            game = find_game(&mut compass, &window.overlay, expanded);
         }
         if Instant::now() >= next_capture {
             next_capture = Instant::now() + TICK;
@@ -162,10 +191,8 @@ fn compass_loop(
 }
 
 /// Find the game window and the monitors, and feed them to the core.
-fn find_game(compass: &mut Compass, overlay: &WebviewWindow) -> Option<gamewin::Game> {
-    if let Ok(scale) = overlay.scale_factor() {
-        compass.set_panel_sizes(PanelSizes { expanded: physical(EXPANDED, scale), collapsed: physical(COLLAPSED, scale) });
-    }
+fn find_game(compass: &mut Compass, overlay: &WebviewWindow, expanded: (f64, f64)) -> Option<gamewin::Game> {
+    set_panel_sizes(compass, overlay, expanded);
     let game = gamewin::find_game();
     compass.on_game_window(game.map(|g| GameWindow {
         client: screen_rect(g.client),
@@ -179,8 +206,27 @@ fn screen_rect(a: ClientArea) -> ScreenRect {
     ScreenRect { x: a.x, y: a.y, width: a.width, height: a.height }
 }
 
+/// Tell the core the panel's sizes in physical px, for the overlay's current display.
+fn set_panel_sizes(compass: &mut Compass, overlay: &WebviewWindow, expanded: (f64, f64)) {
+    if let Ok(scale) = overlay.scale_factor() {
+        compass.set_panel_sizes(PanelSizes {
+            expanded: physical(expanded, scale),
+            collapsed: physical(COLLAPSED, scale),
+        });
+    }
+}
+
+/// Open the shown map's MeowDB page in the player's browser; without a map, nothing.
+fn open_meowdb_page(app: &AppHandle, state: &PanelState) {
+    let Some(map) = &state.map else { return };
+    if let Err(e) = app.opener().open_url(&map.url, None::<&str>) {
+        eprintln!("couldn't open {}: {e}", map.url);
+    }
+}
+
+/// CSS px to physical px, rounded up so the panel's content is never clipped.
 fn physical((width, height): (f64, f64), scale: f64) -> Size {
-    Size { width: (width * scale).round() as u32, height: (height * scale).round() as u32 }
+    Size { width: (width * scale).ceil() as u32, height: (height * scale).ceil() as u32 }
 }
 
 /// The overlay window, kept in line with the panel state. Window properties are only

@@ -1,5 +1,8 @@
 //! The map index and the injected map data source it comes from (MeowDB, ADR 0003).
 
+use crate::map_data::MapData;
+use std::task::Poll;
+
 /// One map in MeowDB's map index.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MapEntry {
@@ -38,4 +41,10 @@ pub trait MapDataSource {
     /// Every map's ID, street name, map name and region. The core asks once at
     /// startup, and again only if asking failed.
     fn map_index(&mut self) -> Result<Vec<MapEntry>, SourceError>;
+
+    /// One map's data, by its 9-digit ID. The core asks when the panel switches to the
+    /// map, then again on each frame while the answer is [`Poll::Pending`], so a slow
+    /// fetch never holds up the panel: start it on the first call and report it on a
+    /// later one. A source should answer at once when it can (from a cache, say).
+    fn map_data(&mut self, id: &str) -> Poll<Result<MapData, SourceError>>;
 }

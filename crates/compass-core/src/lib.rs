@@ -3,6 +3,7 @@
 //! Inputs are plain data (captured Title Region frames); the output is a [`PanelState`]
 //! holding everything the overlay renders. No OS or UI dependencies live here.
 
+mod map_data;
 mod map_index;
 mod matcher;
 pub mod meowdb;
@@ -12,6 +13,7 @@ mod recogniser;
 mod settings;
 mod tracker;
 
+pub use map_data::{MapData, MapDataStatus, MapSummary, Mob, PerParty};
 pub use map_index::{MapDataSource, MapEntry, SourceError};
 pub use panel::{
     Action, GameWindow, InsideOffset, Layer, PanelSizes, PlacementMode, ScreenPoint, ScreenRect,
@@ -19,6 +21,7 @@ pub use panel::{
 };
 pub use settings::{Hotkeys, Settings};
 
+use map_data::MapDataLoader;
 use matcher::Matcher;
 use panel::Panel;
 use recogniser::Recogniser;
@@ -69,7 +72,12 @@ pub struct CurrentMap {
     pub id: String,
     pub street_name: String,
     pub map_name: String,
+    /// The map's MeowDB page.
+    pub url: String,
 }
+
+/// The credit for everything MapleCompass shows from MeowDB (ADR 0003).
+pub const MEOWDB_CREDIT: &str = "NiaMeowDB (meowdb.com)";
 
 /// Whether minimap titles can be recognised as real maps.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
@@ -95,6 +103,10 @@ pub struct PanelState {
     /// The latest frame didn't confirm the map shown (unreadable, low confidence, or
     /// a different map not yet confirmed).
     pub not_sure: bool,
+    /// The shown map's Map Summary and mobs from MeowDB, or why they aren't there.
+    pub data: MapDataStatus,
+    /// [`MEOWDB_CREDIT`] whenever a map is shown: its names and data are MeowDB's.
+    pub credit: Option<&'static str>,
     /// Expanded to the full panel, or collapsed to a small icon.
     pub expanded: bool,
     /// The player asked to move the panel (the edit-mode hotkey).
@@ -126,6 +138,7 @@ pub struct Compass {
     /// When asking for the map index last failed (frame time).
     index_failed_at: Option<u64>,
     tracker: Tracker,
+    map_data: MapDataLoader,
     panel: Panel,
     /// The last settings restored; the panel's own fields live in `panel`.
     settings: Settings,
@@ -142,6 +155,7 @@ impl Compass {
             matcher: None,
             index_failed_at: None,
             tracker: Tracker::default(),
+            map_data: MapDataLoader::default(),
             panel: Panel::default(),
             settings: Settings::default(),
             state: PanelState::default(),
@@ -163,8 +177,12 @@ impl Compass {
                 id: entry.id.clone(),
                 street_name: entry.street_name.clone(),
                 map_name: entry.map_name.clone(),
+                url: meowdb::map_url(&entry.id),
             }
         });
+        let shown = self.state.map.as_ref().map(|m| m.id.as_str());
+        self.state.data = self.map_data.show(shown, &mut *self.source).clone();
+        self.state.credit = shown.map(|_| MEOWDB_CREDIT);
         self.state.confidence = (tracked.confidence * 100.0).round() as u8;
         self.state.not_sure = tracked.not_sure;
         &self.state
