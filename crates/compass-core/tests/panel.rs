@@ -5,10 +5,14 @@
 //! physical px (measured on the dev machine); an expanded panel of 340x72 and a
 //! collapsed icon of 44x44.
 
+mod common;
+
+use common::FakeSource;
 use compass_core::{Action, Compass, PanelSizes, ScreenRect, Settings, Size};
 
 fn compass() -> Compass {
-    let mut compass = Compass::new();
+    // Layout never asks for the map index, so any source will do.
+    let mut compass = Compass::new(FakeSource::offline());
     compass.set_panel_sizes(PanelSizes {
         expanded: Size { width: 340, height: 72 },
         collapsed: Size { width: 44, height: 44 },
