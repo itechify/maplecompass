@@ -2,6 +2,7 @@
 //! see, and roughly where each one is.
 
 use crate::map_data::HiddenPortal;
+use crate::portal_overrides::PortalOverride;
 
 /// MeowDB's dead-end destination: a portal that goes nowhere.
 const DEAD_END: &str = "999999999";
@@ -44,15 +45,24 @@ pub(crate) struct Minimap {
 ///
 /// An exit counts when it leads to another map (not the dead end) and its type is
 /// invisible (1), hidden (10) or script (11, a Quest Portal). Invisible exits on a Town
-/// are Doors: drawn into the scenery, so the player sees them.
-pub(crate) fn hidden_portals(map: &MapFacts, exits: Vec<Exit>) -> Vec<HiddenPortal> {
+/// are Doors: drawn into the scenery, so the player sees them. An entry in `overrides`
+/// for the map and portal settles it either way, except for the destination.
+pub(crate) fn hidden_portals(
+    map: &MapFacts,
+    exits: Vec<Exit>,
+    overrides: &[PortalOverride],
+) -> Vec<HiddenPortal> {
     exits
         .into_iter()
         .filter(|e| e.to_map_id != map.id && e.to_map_id != DEAD_END)
-        .filter(|e| match e.kind {
-            INVISIBLE => !map.is_town,
-            HIDDEN | SCRIPT => true,
-            _ => false,
+        .filter(|e| {
+            let overridden = overrides.iter().find(|o| o.map_id == map.id && o.portal == e.name);
+            match (overridden, e.kind) {
+                (Some(o), _) => o.hidden,
+                (None, INVISIBLE) => !map.is_town,
+                (None, HIDDEN | SCRIPT) => true,
+                (None, _) => false,
+            }
         })
         .map(|e| HiddenPortal {
             position: position_hint(map.minimap, e.x, e.y),

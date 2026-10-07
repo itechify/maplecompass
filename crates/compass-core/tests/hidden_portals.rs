@@ -6,7 +6,8 @@
 mod common;
 
 use common::{FakeSource, sample_frame, saved_index, saved_page};
-use compass_core::{Compass, HiddenPortal, MapDataStatus, MapEntry, PanelState};
+use compass_core::{Compass, HiddenPortal, MapDataStatus, MapEntry, PanelState, PortalOverride, meowdb};
+use std::task::Poll;
 
 const CONSTRUCTION_SITE: &str = "victoria-road__construction-site-north-of-kerning-city--window";
 const KERNING: &str = "victoria-road__kerning-city--window";
@@ -178,6 +179,48 @@ fn an_exit_into_the_same_map_or_to_the_dead_end_is_not_a_hidden_portal() {
 
         assert_eq!(hidden_portals(&state), [], "{to}");
     }
+}
+
+/// A source serving the saved pages read with these portal overrides, in place of the
+/// hand-kept list the app ships.
+fn with_overrides(overrides: Vec<PortalOverride>) -> impl FnOnce(Vec<MapEntry>) -> FakeSource {
+    move |index| {
+        FakeSource::with_index(index).with_pages(move |id| {
+            let page = saved_page(id).expect("saved page");
+            Poll::Ready(meowdb::read_map_page_with(&page, id, &overrides))
+        })
+    }
+}
+
+/// Exceptions found in play go on the override list, keyed by map ID and portal name.
+/// Here 3-Way Road-Split's visible west exit is listed as if it were found hidden; the
+/// Construction Site's override doesn't touch 3-Way's portal of the same name.
+#[test]
+fn an_exit_the_override_list_marks_hidden_is_a_hidden_portal() {
+    let overrides = vec![
+        PortalOverride { map_id: THREE_WAY_ROAD_SPLIT, portal: "west00", hidden: true },
+        PortalOverride { map_id: CONSTRUCTION_SITE_ID, portal: "east00", hidden: true },
+    ];
+
+    let state = arrive_on(THREE_WAY_ROAD_SPLIT, with_overrides(overrides));
+
+    assert_eq!(
+        destinations(&state),
+        [
+            ("The Pig Beach", "left, lower"),
+            ("Beach Hunting Ground", "centre, lower"),
+            ("Thicket Around the Beach III", "far left, lower"),
+        ]
+    );
+}
+
+#[test]
+fn an_exit_the_override_list_marks_not_hidden_is_left_out() {
+    let overrides = vec![PortalOverride { map_id: FIELD_EAST_OF_AMHERST, portal: "in00", hidden: false }];
+
+    let state = arrive_on(FIELD_EAST_OF_AMHERST, with_overrides(overrides));
+
+    assert_eq!(hidden_portals(&state), []);
 }
 
 /// The Hidden Room has no minimap, so MeowDB gives it no bounds to place its exit by.
