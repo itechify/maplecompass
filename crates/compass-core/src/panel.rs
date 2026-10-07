@@ -53,6 +53,15 @@ pub enum Action {
     PanelMoved { x: i32, y: i32 },
     /// Switch to the next placement: inside, docked right, docked left, detached.
     CyclePlacement,
+    /// The player marked the Title Region (relative to the game client area) and wants
+    /// a test read of it.
+    MarkTitleRegion(crate::Rect),
+    /// Keep the marked Title Region, if its test read recognised a map.
+    FinishSetup,
+    /// The player wants to redo setup (the re-setup hotkey).
+    RequestSetup,
+    /// The player closed setup without finishing it.
+    CancelSetup,
 }
 
 /// Where the player wants the panel.
@@ -171,6 +180,8 @@ impl Panel {
                     self.detached_at = was.map(|r| ScreenPoint { x: r.x, y: r.y });
                 }
             }
+            // Setup actions (see `setup.rs`).
+            _ => {}
         }
     }
 

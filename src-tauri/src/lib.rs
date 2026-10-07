@@ -8,6 +8,7 @@ pub mod gamewin;
 mod hotkeys;
 pub mod meowdb;
 mod settings;
+mod setup;
 
 use compass_core::{
     Action, Compass, Frame, GameWindow, Hotkeys, Layer, PanelSizes, PanelState, ScreenRect,
@@ -16,8 +17,9 @@ use compass_core::{
 use gamewin::ClientArea;
 use meowdb::MeowDbSource;
 use serde::Serialize;
+use setup::{Bridge, SetupWindows};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
@@ -54,7 +56,8 @@ fn panel_height(height: f64, commands: tauri::State<'_, Sender<Command>>) {
     let _ = commands.send(Command::PanelHeight(height));
 }
 
-/// Capture the default Title Region of the game's client area.
+/// Capture the default Title Region of the game's client area (the probe's guess; the
+/// app captures the region the player marked at setup).
 pub fn capture_title_frame(client: ClientArea, at_ms: u64) -> Result<Frame, String> {
     let r = default_title_region(client.width, client.height);
     let rgba = capture::capture_rgba(
@@ -78,7 +81,6 @@ struct OverlayState<'a> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![panel_height])
         .setup(|app| {
             let overlay = app.get_webview_window("overlay").expect("overlay window in tauri.conf.json");
             // Keep our own panel out of our own (and any) screen capture.
@@ -91,6 +93,15 @@ pub fn run() {
             let (commands, commands_rx) = mpsc::channel();
             hotkeys::install(app, &settings.hotkeys, commands.clone())?;
             app.manage(commands.clone());
+            let (picks, picks_rx) = mpsc::channel();
+            app.manage(Bridge {
+                commands: commands.clone(),
+                picks,
+                game: Mutex::new(None),
+                needed: Mutex::new(None),
+                view: Mutex::new(None),
+            });
+            let setup_windows = SetupWindows::new(app.handle())?;
             // The core only takes moves of a draggable panel, so the shell's own
             // repositioning is harmless; otherwise they are the player's drag.
             overlay.on_window_event(move |event| {
@@ -105,20 +116,38 @@ pub fn run() {
             let handle = app.handle().clone();
             // Capture + OCR are blocking and CPU-bound: run them on their own thread.
             // Spawned from setup, so the process is already Per-Monitor-V2 DPI aware.
+            let channels = Channels { commands: commands_rx, picks: picks_rx };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
-                compass_loop(handle, overlay, source, commands_rx, settings, settings_path)
+                compass_loop(handle, overlay, setup_windows, source, channels, settings, settings_path)
             })?;
             Ok(())
         })
+        .invoke_handler(tauri::generate_handler![
+            panel_height,
+            setup::setup_view,
+            setup::pick_game_window,
+            setup::start_marking,
+            setup::mark_title_region,
+            setup::cancel_marking,
+            setup::finish_setup,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// What the compass loop hears from hotkeys, the overlay and the setup window.
+struct Channels {
+    commands: Receiver<Command>,
+    /// Titles of game windows the player picked by hand.
+    picks: Receiver<String>,
 }
 
 fn compass_loop(
     app: AppHandle,
     overlay: WebviewWindow,
+    mut setup_windows: SetupWindows,
     source: MeowDbSource,
-    commands: Receiver<Command>,
+    channels: Channels,
     settings: Settings,
     settings_path: PathBuf,
 ) {
@@ -137,9 +166,12 @@ fn compass_loop(
     loop {
         // Wait for the player until the next check is due, so hotkeys act at once.
         let due = next_capture.min(next_window_check);
-        match commands.recv_timeout(due.saturating_duration_since(Instant::now())) {
+        match channels.commands.recv_timeout(due.saturating_duration_since(Instant::now())) {
             Ok(Command::Act(action)) => {
                 compass.act(action);
+                if action == Action::RequestSetup {
+                    setup_windows.open();
+                }
             }
             Ok(Command::OpenMeowDbPage) => open_meowdb_page(&app, compass.panel_state()),
             Ok(Command::PanelHeight(height)) => {
@@ -149,6 +181,12 @@ fn compass_loop(
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
         }
+        while let Ok(title) = channels.picks.try_recv() {
+            compass.pick_game_window(title);
+            next_window_check = Instant::now(); // look for it at once
+        }
+        let game_title = compass.settings().game_window_title.unwrap_or_else(|| gamewin::GAME_TITLE.into());
+        gamewin::look_for(&game_title);
         // Checked after every wake-up, so a stream of drag moves can't starve them.
         if Instant::now() >= next_window_check {
             next_window_check = Instant::now() + WINDOW_TICK;
@@ -156,15 +194,19 @@ fn compass_loop(
         }
         if Instant::now() >= next_capture {
             next_capture = Instant::now() + TICK;
-            if let Some(game) = game {
-                match capture_title_frame(game.client, start.elapsed().as_millis() as u64) {
-                    Ok(frame) => {
-                        compass.on_frame(frame);
+            // The region the player marked; none until setup is done, nor after the
+            // game's resolution changes.
+            if let Some(r) = compass.panel_state().title_region {
+                match capture::capture_rgba(r.x, r.y, r.width as i32, r.height as i32) {
+                    Ok(rgba) => {
+                        let at_ms = start.elapsed().as_millis() as u64;
+                        compass.on_frame(Frame { width: r.width, height: r.height, rgba, at_ms });
                     }
                     Err(e) => eprintln!("capture failed: {e}"),
                 }
             }
         }
+        setup_windows.sync(compass.panel_state(), game.map(|g| g.client), &game_title, &hotkeys.setup);
 
         let state = compass.panel_state();
         if emitted.as_ref() != Some(state) {
