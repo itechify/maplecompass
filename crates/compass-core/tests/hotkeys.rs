@@ -231,7 +231,7 @@ fn the_hotkeys_are_live_only_while_the_game_or_maplecompass_is_in_front() {
 
     assert!(compass.on_foreground(Foreground::Game).hotkeys_live);
     assert!(!compass.on_foreground(Foreground::OtherApp).hotkeys_live, "other apps keep their Ctrl+Shift keys");
-    assert!(compass.on_foreground(Foreground::MapleCompass).hotkeys_live, "e.g. the search window or setup");
+    assert!(compass.on_foreground(Foreground::MapleCompass).hotkeys_live, "e.g. the overlay in search mode, or setup");
 }
 
 #[test]

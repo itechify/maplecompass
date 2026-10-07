@@ -1,5 +1,5 @@
-//! Mob search: the search window's state (query, suggestions, highlight) and the picked
-//! mob, as the overlay renders them, plus how far the world crawl behind it has got.
+//! Mob search: search mode's state (query, suggestions, highlight) and the picked mob, as
+//! the overlay renders them, plus how far the world crawl behind it has got.
 
 use crate::MEOWDB_CREDIT;
 use crate::crawl::{Crawl, CrawlProgress};
@@ -8,7 +8,7 @@ use crate::map_index::MapEntry;
 use crate::world::{Distance, Distances, Here, Step, Travel, World};
 use serde::Serialize;
 
-/// How many results the panel shows; the search window shows them all.
+/// How many results the panel shows outside search mode; search mode shows them all.
 pub const PANEL_RESULTS: usize = 5;
 
 /// A mob the player can pick: one per MeowDB mob ID.
@@ -74,9 +74,10 @@ pub struct RouteStop {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchState {
-    /// The search window is open, and has the keyboard (ADR 0001).
-    pub window_open: bool,
-    /// What the player has typed in the search window.
+    /// The overlay is in search mode: it shows the query box and every result, and has
+    /// the keyboard and the mouse (ADR 0001).
+    pub search_mode: bool,
+    /// What the player has typed in the query box.
     pub query: String,
     /// The known mobs whose name contains the query (case-insensitive), by name.
     pub suggestions: Vec<MobChoice>,
@@ -85,16 +86,16 @@ pub struct SearchState {
     /// The mob the player picked, until they clear the search.
     pub picked: Option<MobChoice>,
     /// Every known map the picked mob spawns on (Event maps left out), by Density Tier
-    /// and then Density: the search window's list.
+    /// and then Density: search mode's list.
     pub results: Vec<SearchResult>,
-    /// The first [`PANEL_RESULTS`] of the results: the panel's list.
+    /// The first [`PANEL_RESULTS`] of the results: the list outside search mode.
     pub top_results: Vec<SearchResult>,
     /// How many results there are besides the panel's.
     pub more_results: u32,
     /// The picked mob spawns only on Event maps (of the maps known so far), which
     /// search leaves out: why it has no results.
     pub only_on_event_maps: bool,
-    /// The result whose route the search window shows in full; `None` when there are
+    /// The result whose route search mode shows in full; `None` when there are
     /// no results.
     pub highlighted_result: Option<usize>,
     /// The headline: which of the results is the nearest with a route, whatever its
@@ -123,7 +124,7 @@ pub(crate) struct Searched<'a> {
 /// The player's side of mob search: what they typed, highlighted and picked.
 #[derive(Default)]
 pub(crate) struct MobSearch {
-    window_open: bool,
+    search_mode: bool,
     query: String,
     /// The ID of the mob the player moved the highlight to; `None` for the first
     /// suggestion. Kept by ID, so the highlight stays on it as the crawl adds mobs.
@@ -135,10 +136,10 @@ pub(crate) struct MobSearch {
 }
 
 impl MobSearch {
-    /// The search hotkey: open the window, with nothing typed yet.
+    /// The search hotkey: enter search mode, with nothing typed yet.
     pub fn open(&mut self) {
-        if !self.window_open {
-            self.window_open = true;
+        if !self.search_mode {
+            self.search_mode = true;
             self.type_query("");
         }
     }
@@ -152,7 +153,7 @@ impl MobSearch {
     /// Move the highlight `by` suggestions (up when negative), stopping at either end.
     /// With no suggestions listed, move it through the results instead.
     pub fn move_highlight(&mut self, by: isize, searched: &Searched) {
-        if !self.window_open {
+        if !self.search_mode {
             return;
         }
         let suggestions = self.suggestions(searched.crawl);
@@ -162,29 +163,34 @@ impl MobSearch {
         }
     }
 
-    /// Enter: pick the highlighted mob and close the window; with nothing typed, clear
-    /// the search and close it. A query matching no mob leaves the window open.
+    /// Enter: pick the highlighted mob and leave search mode; with nothing typed, clear
+    /// the search. A query matching no mob stays in search mode.
     pub fn enter(&mut self, crawl: Option<&Crawl>) {
-        if !self.window_open {
+        if !self.search_mode {
             return;
         }
         if self.query.trim().is_empty() {
-            self.picked = None;
-            self.highlighted_result = None;
-            self.window_open = false;
+            self.clear();
             return;
         }
         let suggestions = self.suggestions(crawl);
         if let Some(at) = highlight_in(&suggestions, &self.highlighted, MobChoice::key) {
             self.picked = Some(suggestions[at].clone());
             self.highlighted_result = None;
-            self.window_open = false;
+            self.search_mode = false;
         }
     }
 
-    /// Esc: close the window, keeping the current search.
+    /// Esc: leave search mode, keeping the current search.
     pub fn escape(&mut self) {
-        self.window_open = false;
+        self.search_mode = false;
+    }
+
+    /// Clear the search: no picked mob, so no results; out of search mode if it was on.
+    pub fn clear(&mut self) {
+        self.picked = None;
+        self.highlighted_result = None;
+        self.search_mode = false;
     }
 
     /// The search state for the panel.
@@ -199,7 +205,7 @@ impl MobSearch {
             _ => false,
         };
         SearchState {
-            window_open: self.window_open,
+            search_mode: self.search_mode,
             query: self.query.clone(),
             highlighted: highlight_in(&suggestions, &self.highlighted, MobChoice::key),
             picked: self.picked.clone(),
