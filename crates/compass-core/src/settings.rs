@@ -2,6 +2,7 @@
 //! JSON in the app's config directory and hands it back to the core at startup.
 
 use crate::panel::InsideOffset;
+use crate::setup::TitleRegion;
 use serde::{Deserialize, Serialize};
 
 /// The player's settings. Missing fields (an older or empty file) take their defaults.
@@ -15,11 +16,19 @@ pub struct Settings {
     /// Where the player dragged the inside panel; `None` for the default position.
     pub inside_offset: Option<InsideOffset>,
     pub hotkeys: Hotkeys,
+    /// The Title Region marked at setup; `None` until setup is first finished.
+    pub title_region: Option<TitleRegion>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { version: 1, expanded: true, inside_offset: None, hotkeys: Hotkeys::default() }
+        Self {
+            version: 1,
+            expanded: true,
+            inside_offset: None,
+            hotkeys: Hotkeys::default(),
+            title_region: None,
+        }
     }
 }
 

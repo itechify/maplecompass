@@ -10,14 +10,17 @@ mod panel;
 mod prep;
 mod recogniser;
 mod settings;
+mod setup;
 mod tracker;
 
 pub use map_index::{MapDataSource, MapEntry, SourceError};
 pub use panel::{Action, InsideOffset, PanelSizes, ScreenRect, Size};
 pub use settings::{Hotkeys, Settings};
+pub use setup::{SetupReason, SetupState, TestRead, TitleRegion};
 
 use matcher::Matcher;
 use panel::Panel;
+use setup::Setup;
 use recogniser::Recogniser;
 use tracker::Tracker;
 use serde::Serialize;
@@ -33,7 +36,7 @@ pub struct Frame {
 }
 
 /// A rectangle in physical pixels, relative to the game window's client area.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Rect {
     pub x: u32,
@@ -99,6 +102,11 @@ pub struct PanelState {
     pub edit_mode: bool,
     /// Where the overlay goes on screen; `None` while there is no game window.
     pub placement: Option<ScreenRect>,
+    /// First-run setup and re-setup.
+    pub setup: SetupState,
+    /// Where on screen to capture the Title Region (physical px); `None` while there
+    /// is no game window or the region isn't known to fit it.
+    pub title_region: Option<ScreenRect>,
 }
 
 /// How long to wait before asking for the map index again after a failure. MeowDB is
@@ -114,6 +122,7 @@ pub struct Compass {
     index_failed_at: Option<u64>,
     tracker: Tracker,
     panel: Panel,
+    setup: Setup,
     /// The last settings restored; the panel's own fields live in `panel`.
     settings: Settings,
     state: PanelState,
@@ -130,6 +139,7 @@ impl Compass {
             index_failed_at: None,
             tracker: Tracker::default(),
             panel: Panel::default(),
+            setup: Setup::default(),
             settings: Settings::default(),
             state: PanelState::default(),
         };
@@ -140,26 +150,35 @@ impl Compass {
     /// Read a captured Title Region frame and update the panel state.
     pub fn on_frame(&mut self, frame: Frame) -> &PanelState {
         self.load_map_index(frame.at_ms);
-        let Some(matcher) = &self.matcher else { return &self.state };
+        let Some(matcher) = &self.matcher else {
+            // Without the map index nothing can be recognised.
+            self.setup.on_read(None);
+            return self.sync_setup();
+        };
         let read = frame_to_rgb(&frame).and_then(|img| self.recogniser.read(&img));
         let snap = read.and_then(|raw| matcher.snap(&raw.street, &raw.map));
-        let tracked = self.tracker.update(snap);
-        self.state.map = tracked.current.map(|i| {
+        let current_map = |i: usize| {
             let entry = matcher.map(i);
             CurrentMap {
                 id: entry.id.clone(),
                 street_name: entry.street_name.clone(),
                 map_name: entry.map_name.clone(),
             }
-        });
+        };
+        // A test read judges this one frame: the tracker would keep showing the last
+        // confident map through a badly marked region.
+        self.setup.on_read(snap.map(|s| current_map(s.index)));
+        let tracked = self.tracker.update(snap);
+        self.state.map = tracked.current.map(current_map);
         self.state.confidence = (tracked.confidence * 100.0).round() as u8;
         self.state.not_sure = tracked.not_sure;
-        &self.state
+        self.sync_setup()
     }
 
     /// The game window's client area moved, resized, appeared or went away.
     pub fn on_game_window(&mut self, client: Option<ScreenRect>) -> &PanelState {
         self.panel.game = client;
+        self.setup.game = client;
         self.sync_panel()
     }
 
@@ -172,6 +191,7 @@ impl Compass {
     /// Apply something the player did.
     pub fn act(&mut self, action: Action) -> &PanelState {
         self.panel.act(action);
+        self.setup.act(action);
         self.sync_panel()
     }
 
@@ -179,6 +199,7 @@ impl Compass {
     pub fn restore(&mut self, settings: Settings) -> &PanelState {
         self.panel.expanded = settings.expanded;
         self.panel.inside_offset = settings.inside_offset;
+        self.setup.saved = settings.title_region;
         self.settings = settings;
         self.sync_panel()
     }
@@ -188,6 +209,7 @@ impl Compass {
         Settings {
             expanded: self.panel.expanded,
             inside_offset: self.panel.inside_offset,
+            title_region: self.setup.saved,
             ..self.settings.clone()
         }
     }
@@ -220,6 +242,12 @@ impl Compass {
         self.state.expanded = self.panel.expanded;
         self.state.edit_mode = self.panel.edit_mode;
         self.state.placement = self.panel.placement();
+        self.sync_setup()
+    }
+
+    fn sync_setup(&mut self) -> &PanelState {
+        self.state.setup = self.setup.state();
+        self.state.title_region = self.setup.title_region(self.matcher.as_ref().map(Matcher::longest_name));
         &self.state
     }
 }
