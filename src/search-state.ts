@@ -115,6 +115,48 @@ export function nearestLine(search: SearchState): string {
   return `Nearest: ${nearest.mapName}, ${away}${travel ? ` · ${travel}` : ""}`;
 }
 
+/** A results table's header row: Map, Density, Share, Tier, Distance. */
+export function resultsHead(): HTMLTableSectionElement {
+  const head = document.createElement("thead");
+  const row = head.insertRow();
+  const columns: [string, string?, string?][] = [
+    ["Map"],
+    ["Density", "Spawn Count × Mob Rate"],
+    ["Share", "Share of all mob spawns on the Map", "Spawn Share"],
+    ["Tier"],
+    ["Distance", "Map changes from the map you're on"],
+  ];
+  for (const [text, title, label] of columns) {
+    const th = document.createElement("th");
+    th.textContent = text;
+    if (title) th.title = title;
+    if (label) th.setAttribute("aria-label", label);
+    row.append(th);
+  }
+  return head;
+}
+
+/** A picked mob's section, in the panel or the search window. */
+export type PickedSection = {
+  title: HTMLElement;
+  nearest: HTMLElement;
+  note: HTMLElement;
+  table: HTMLTableElement;
+  rows: HTMLElement;
+};
+
+/** Show the picked mob, its headline, why it has no results, and these result rows. */
+export function showPicked(section: PickedSection, search: SearchState, picked: MobChoice, rows: HTMLTableRowElement[]) {
+  section.title.textContent = mobTitle(picked);
+  section.nearest.textContent = nearestLine(search);
+  section.nearest.hidden = section.nearest.textContent === "";
+  section.note.textContent = resultsNote(search);
+  section.note.hidden = section.note.textContent === "";
+  section.table.hidden = rows.length === 0;
+  if (!section.table.tHead) section.table.prepend(resultsHead());
+  section.rows.replaceChildren(...rows);
+}
+
 /** One result as table cells: map (name over street), Density, Spawn Share, tier, Distance. */
 export function resultRow(result: SearchResult): HTMLTableRowElement {
   const row = document.createElement("tr");
