@@ -7,12 +7,12 @@
 //! Every decision is the core's; this only shows the window and relays the player's
 //! typing and keys.
 
+use crate::view::{LastView, ViewSender};
 use crate::{Command, gamewin};
 use compass_core::{Action, PanelState, SearchState};
 use serde::Serialize;
-use std::sync::Mutex;
 use std::sync::mpsc::Sender;
-use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow, WindowEvent};
+use tauri::{AppHandle, Manager, State, WebviewWindow, WindowEvent};
 
 pub const SEARCH: &str = "search";
 
@@ -25,14 +25,14 @@ struct SearchView<'a> {
 
 /// The last view sent to the search window, for when it loads after it was sent.
 #[derive(Default)]
-pub struct LastSearchView(Mutex<Option<serde_json::Value>>);
+pub struct LastSearchView(LastView);
 
 /// Shows and hides the search window as the core says.
 pub struct SearchWindow {
     app: AppHandle,
     window: WebviewWindow,
     shown: bool,
-    emitted: Option<serde_json::Value>,
+    view: ViewSender,
 }
 
 impl SearchWindow {
@@ -53,7 +53,7 @@ impl SearchWindow {
             _ => {}
         });
         app.manage(LastSearchView::default());
-        Self { app: app.clone(), window, shown: false, emitted: None }
+        Self { app: app.clone(), window, shown: false, view: ViewSender::new(SEARCH, "search-state") }
     }
 
     /// Follow the core's search state, and send the search window what it renders.
@@ -70,15 +70,7 @@ impl SearchWindow {
             _ => {}
         }
         self.shown = state.search.window_open;
-        let Ok(view) = serde_json::to_value(SearchView { search: &state.search }) else { return };
-        if self.emitted.as_ref() == Some(&view) {
-            return;
-        }
-        if let Err(e) = self.app.emit_to(SEARCH, "search-state", &view) {
-            eprintln!("emit failed: {e}");
-        }
-        *self.app.state::<LastSearchView>().0.lock().unwrap() = Some(view.clone());
-        self.emitted = Some(view);
+        self.view.send(&self.app, &SearchView { search: &state.search }, &self.app.state::<LastSearchView>().0);
     }
 
     /// Bring the open search window back in front, if the game came in front of it.
@@ -107,7 +99,7 @@ fn bring_to_front(window: &WebviewWindow) {
 /// What the search window renders, as last sent (`None` before the first).
 #[tauri::command]
 pub fn search_view(last: State<'_, LastSearchView>) -> Option<serde_json::Value> {
-    last.0.lock().unwrap().clone()
+    last.0.get()
 }
 
 // The player's input. Plain (not async) commands run in the order they come, so a
