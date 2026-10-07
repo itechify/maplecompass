@@ -1,0 +1,467 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-07T18:51:16.655Z",
+  "title": "Design System: MapleCompass",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Compass Gold",
+        "tonalRamp": [
+          "oklch(15% 0.1513 87.87)",
+          "oklch(25% 0.1513 87.87)",
+          "oklch(35% 0.1513 87.87)",
+          "oklch(45% 0.1513 87.87)",
+          "oklch(60% 0.1513 87.87)",
+          "oklch(72% 0.1513 87.87)",
+          "oklch(84% 0.1513 87.87)",
+          "oklch(95% 0.1513 87.87)"
+        ]
+      },
+      "bg": {
+        "role": "neutral",
+        "displayName": "Midnight Slate",
+        "tonalRamp": [
+          "oklch(15% 0.0231 254.31)",
+          "oklch(25% 0.0231 254.31)",
+          "oklch(35% 0.0231 254.31)",
+          "oklch(45% 0.0231 254.31)",
+          "oklch(60% 0.0231 254.31)",
+          "oklch(72% 0.0231 254.31)",
+          "oklch(84% 0.0231 254.31)",
+          "oklch(95% 0.0231 254.31)"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Clear Frost",
+        "tonalRamp": [
+          "oklch(15% 0.0051 247.88)",
+          "oklch(25% 0.0051 247.88)",
+          "oklch(35% 0.0051 247.88)",
+          "oklch(45% 0.0051 247.88)",
+          "oklch(60% 0.0051 247.88)",
+          "oklch(72% 0.0051 247.88)",
+          "oklch(84% 0.0051 247.88)",
+          "oklch(95% 0.0051 247.88)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Blue Grey",
+        "tonalRamp": [
+          "oklch(15% 0.0405 247.17)",
+          "oklch(25% 0.0405 247.17)",
+          "oklch(35% 0.0405 247.17)",
+          "oklch(45% 0.0405 247.17)",
+          "oklch(60% 0.0405 247.17)",
+          "oklch(72% 0.0405 247.17)",
+          "oklch(84% 0.0405 247.17)",
+          "oklch(95% 0.0405 247.17)"
+        ]
+      },
+      "ok": {
+        "role": "secondary",
+        "displayName": "Recognition Green",
+        "tonalRamp": [
+          "oklch(15% 0.1274 147.75)",
+          "oklch(25% 0.1274 147.75)",
+          "oklch(35% 0.1274 147.75)",
+          "oklch(45% 0.1274 147.75)",
+          "oklch(60% 0.1274 147.75)",
+          "oklch(72% 0.1274 147.75)",
+          "oklch(84% 0.1274 147.75)",
+          "oklch(95% 0.1274 147.75)"
+        ]
+      },
+      "bad": {
+        "role": "secondary",
+        "displayName": "Retry Coral",
+        "tonalRamp": [
+          "oklch(15% 0.1274 29.87)",
+          "oklch(25% 0.1274 29.87)",
+          "oklch(35% 0.1274 29.87)",
+          "oklch(45% 0.1274 29.87)",
+          "oklch(60% 0.1274 29.87)",
+          "oklch(72% 0.1274 29.87)",
+          "oklch(84% 0.1274 29.87)",
+          "oklch(95% 0.1274 29.87)"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Midnight Slate Panel",
+        "tonalRamp": [
+          "oklch(15% 0.0269 258.30)",
+          "oklch(25% 0.0269 258.30)",
+          "oklch(35% 0.0269 258.30)",
+          "oklch(45% 0.0269 258.30)",
+          "oklch(60% 0.0269 258.30)",
+          "oklch(72% 0.0269 258.30)",
+          "oklch(84% 0.0269 258.30)",
+          "oklch(95% 0.0269 258.30)"
+        ]
+      },
+      "inset": {
+        "role": "neutral",
+        "displayName": "Midnight Slate Inset",
+        "tonalRamp": [
+          "oklch(15% 0.0269 258.30)",
+          "oklch(25% 0.0269 258.30)",
+          "oklch(35% 0.0269 258.30)",
+          "oklch(45% 0.0269 258.30)",
+          "oklch(60% 0.0269 258.30)",
+          "oklch(72% 0.0269 258.30)",
+          "oklch(84% 0.0269 258.30)",
+          "oklch(95% 0.0269 258.30)"
+        ]
+      },
+      "secondary-text": {
+        "role": "neutral",
+        "displayName": "Soft Frost",
+        "tonalRamp": [
+          "oklch(15% 0.0171 250.87)",
+          "oklch(25% 0.0171 250.87)",
+          "oklch(35% 0.0171 250.87)",
+          "oklch(45% 0.0171 250.87)",
+          "oklch(60% 0.0171 250.87)",
+          "oklch(72% 0.0171 250.87)",
+          "oklch(84% 0.0171 250.87)",
+          "oklch(95% 0.0171 250.87)"
+        ]
+      },
+      "warning": {
+        "role": "secondary",
+        "displayName": "Saved-copy Amber",
+        "tonalRamp": [
+          "oklch(15% 0.1115 82.94)",
+          "oklch(25% 0.1115 82.94)",
+          "oklch(35% 0.1115 82.94)",
+          "oklch(45% 0.1115 82.94)",
+          "oklch(60% 0.1115 82.94)",
+          "oklch(72% 0.1115 82.94)",
+          "oklch(84% 0.1115 82.94)",
+          "oklch(95% 0.1115 82.94)"
+        ]
+      },
+      "tag-text": {
+        "role": "neutral",
+        "displayName": "Cool Tag Text",
+        "tonalRamp": [
+          "oklch(15% 0.0289 246.51)",
+          "oklch(25% 0.0289 246.51)",
+          "oklch(35% 0.0289 246.51)",
+          "oklch(45% 0.0289 246.51)",
+          "oklch(60% 0.0289 246.51)",
+          "oklch(72% 0.0289 246.51)",
+          "oklch(84% 0.0289 246.51)",
+          "oklch(95% 0.0289 246.51)"
+        ]
+      },
+      "tag-fill": {
+        "role": "neutral",
+        "displayName": "Cool Tag Wash",
+        "tonalRamp": [
+          "oklch(15% 0.0405 247.17)",
+          "oklch(25% 0.0405 247.17)",
+          "oklch(35% 0.0405 247.17)",
+          "oklch(45% 0.0405 247.17)",
+          "oklch(60% 0.0405 247.17)",
+          "oklch(72% 0.0405 247.17)",
+          "oklch(84% 0.0405 247.17)",
+          "oklch(95% 0.0405 247.17)"
+        ]
+      },
+      "quest-fill": {
+        "role": "secondary",
+        "displayName": "Quest Amber Wash",
+        "tonalRamp": [
+          "oklch(15% 0.1115 82.94)",
+          "oklch(25% 0.1115 82.94)",
+          "oklch(35% 0.1115 82.94)",
+          "oklch(45% 0.1115 82.94)",
+          "oklch(60% 0.1115 82.94)",
+          "oklch(72% 0.1115 82.94)",
+          "oklch(84% 0.1115 82.94)",
+          "oklch(95% 0.1115 82.94)"
+        ]
+      },
+      "notice-fill": {
+        "role": "primary",
+        "displayName": "Compass Gold Notice Wash",
+        "tonalRamp": [
+          "oklch(15% 0.1513 87.87)",
+          "oklch(25% 0.1513 87.87)",
+          "oklch(35% 0.1513 87.87)",
+          "oklch(45% 0.1513 87.87)",
+          "oklch(60% 0.1513 87.87)",
+          "oklch(72% 0.1513 87.87)",
+          "oklch(84% 0.1513 87.87)",
+          "oklch(95% 0.1513 87.87)"
+        ]
+      },
+      "selection-fill": {
+        "role": "primary",
+        "displayName": "Compass Gold Selection Wash",
+        "tonalRamp": [
+          "oklch(15% 0.1513 87.87)",
+          "oklch(25% 0.1513 87.87)",
+          "oklch(35% 0.1513 87.87)",
+          "oklch(45% 0.1513 87.87)",
+          "oklch(60% 0.1513 87.87)",
+          "oklch(72% 0.1513 87.87)",
+          "oklch(84% 0.1513 87.87)",
+          "oklch(95% 0.1513 87.87)"
+        ]
+      },
+      "scrim": {
+        "role": "neutral",
+        "displayName": "Marking Scrim",
+        "tonalRamp": [
+          "oklch(15% 0.0196 255.33)",
+          "oklch(25% 0.0196 255.33)",
+          "oklch(35% 0.0196 255.33)",
+          "oklch(45% 0.0196 255.33)",
+          "oklch(60% 0.0196 255.33)",
+          "oklch(72% 0.0196 255.33)",
+          "oklch(84% 0.0196 255.33)",
+          "oklch(95% 0.0196 255.33)"
+        ]
+      },
+      "secondary-border": {
+        "role": "neutral",
+        "displayName": "Secondary Slate Border",
+        "tonalRamp": [
+          "oklch(15% 0.0367 251.70)",
+          "oklch(25% 0.0367 251.70)",
+          "oklch(35% 0.0367 251.70)",
+          "oklch(45% 0.0367 251.70)",
+          "oklch(60% 0.0367 251.70)",
+          "oklch(72% 0.0367 251.70)",
+          "oklch(84% 0.0367 251.70)",
+          "oklch(95% 0.0367 251.70)"
+        ]
+      },
+      "inset-border": {
+        "role": "neutral",
+        "displayName": "Inset Slate Border",
+        "tonalRamp": [
+          "oklch(15% 0.0310 248.78)",
+          "oklch(25% 0.0310 248.78)",
+          "oklch(35% 0.0310 248.78)",
+          "oklch(45% 0.0310 248.78)",
+          "oklch(60% 0.0310 248.78)",
+          "oklch(72% 0.0310 248.78)",
+          "oklch(84% 0.0310 248.78)",
+          "oklch(95% 0.0310 248.78)"
+        ]
+      },
+      "accent-ink": {
+        "role": "primary",
+        "displayName": "Gold Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0296 85.80)",
+          "oklch(25% 0.0296 85.80)",
+          "oklch(35% 0.0296 85.80)",
+          "oklch(45% 0.0296 85.80)",
+          "oklch(60% 0.0296 85.80)",
+          "oklch(72% 0.0296 85.80)",
+          "oklch(84% 0.0296 85.80)",
+          "oklch(95% 0.0296 85.80)"
+        ]
+      },
+      "icon": {
+        "role": "tertiary",
+        "displayName": "Icon Turquoise",
+        "tonalRamp": [
+          "oklch(15% 0.1109 221.72)",
+          "oklch(25% 0.1109 221.72)",
+          "oklch(35% 0.1109 221.72)",
+          "oklch(45% 0.1109 221.72)",
+          "oklch(60% 0.1109 221.72)",
+          "oklch(72% 0.1109 221.72)",
+          "oklch(84% 0.1109 221.72)",
+          "oklch(95% 0.1109 221.72)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Instructional setup heading."
+      },
+      "window-title": {
+        "displayName": "Window Title",
+        "purpose": "Setup heading beside the app icon."
+      },
+      "map-title": {
+        "displayName": "Map Title",
+        "purpose": "Current Map Name in the overlay."
+      },
+      "test-map-title": {
+        "displayName": "Test Map Title",
+        "purpose": "Recognised Map Name in the test read."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Setup instructions and secondary-button text."
+      },
+      "button": {
+        "displayName": "Button",
+        "purpose": "Primary setup-button labels."
+      },
+      "marking-hint": {
+        "displayName": "Marking Hint",
+        "purpose": "Instruction above the game during Title Region marking."
+      },
+      "note": {
+        "displayName": "Note",
+        "purpose": "Overlay status explanations and test-read Street Name size."
+      },
+      "data": {
+        "displayName": "Data",
+        "purpose": "Tables, Candidates, portal lists, and small section labels."
+      },
+      "street": {
+        "displayName": "Street",
+        "purpose": "Overlay Street Name with slight tracking."
+      },
+      "footer": {
+        "displayName": "Footer",
+        "purpose": "Attribution, source-page hotkey, and help/setup hint."
+      },
+      "tag": {
+        "displayName": "Tag",
+        "purpose": "Hidden Street and Quest labels."
+      }
+    },
+    "shadows": [],
+    "motion": [],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Filled setup action with visible keyboard focus and disabled opacity.",
+      "html": "<div class=\"ds-context\"><button class=\"ds-button\" type=\"button\">Mark the title</button></div>",
+      "css": ".ds-context { font: 14px/1.5 \"Segoe UI\", system-ui, sans-serif; color: var(--text, #f2f5f8); color-scheme: dark; } .ds-button { font: 14px/1.5 \"Segoe UI\", system-ui, sans-serif; padding: 7px 16px; border-radius: 6px; border: 1px solid transparent; background: var(--accent, #f5c542); color: #1b1405; font-weight: 600; } .ds-button-secondary { background: transparent; border-color: #3a4a5c; color: var(--text, #f2f5f8); font-weight: 400; } .ds-button:disabled { opacity: 0.45; } .ds-button:focus-visible { outline: 2px solid var(--accent, #f5c542); outline-offset: 3px; } .ds-button:not(:disabled):hover { filter: brightness(1.1); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outlined secondary setup action with regular text.",
+      "html": "<div class=\"ds-context\"><button class=\"ds-button ds-button-secondary\" type=\"button\">Back</button></div>",
+      "css": ".ds-context { font: 14px/1.5 \"Segoe UI\", system-ui, sans-serif; color: var(--text, #f2f5f8); color-scheme: dark; } .ds-button { font: 14px/1.5 \"Segoe UI\", system-ui, sans-serif; padding: 7px 16px; border-radius: 6px; border: 1px solid transparent; background: var(--accent, #f5c542); color: #1b1405; font-weight: 600; } .ds-button-secondary { background: transparent; border-color: #3a4a5c; color: var(--text, #f2f5f8); font-weight: 400; } .ds-button:disabled { opacity: 0.45; } .ds-button:focus-visible { outline: 2px solid var(--accent, #f5c542); outline-offset: 3px; } .ds-button:not(:disabled):hover { filter: brightness(1.1); }"
+    },
+    {
+      "name": "Overlay Panel",
+      "kind": "card",
+      "refersTo": "overlay-panel",
+      "description": "A translucent Map heading specimen without the game backdrop.",
+      "html": "<section class=\"ds-overlay\"><header><p class=\"ds-street\">Victoria Road</p><div class=\"ds-map-line\"><p class=\"ds-map\">Henesys Hunting Ground I</p></div></header></section>",
+      "css": ".ds-overlay { box-sizing: border-box; padding: 10px 14px; border-radius: 10px; background: rgba(16, 24, 36, 0.82); color: #f2f5f8; font-family: \"Segoe UI\", system-ui, sans-serif; display: flex; flex-direction: column; gap: 8px; } .ds-overlay { width: 380px; } .ds-overlay p { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-street { font-size: 12px; color: #9fb6cc; letter-spacing: 0.02em; } .ds-map { font-size: 17px; font-weight: 600; } .ds-overlay.ds-editing { outline: 2px dashed #f5c542; outline-offset: -2px; } .ds-overlay.ds-uncertain .ds-map { color: #c3ccd6; } .ds-map-line { display: flex; align-items: baseline; gap: 6px; } .ds-map-line .ds-map { min-width: 0; } .ds-uncertainty { flex: none; color: #f0c674; font-size: 17px; } .ds-overlay.ds-draggable, .ds-overlay.ds-draggable * { cursor: move; }"
+    },
+    {
+      "name": "Test Read",
+      "kind": "card",
+      "refersTo": "test-read",
+      "description": "A recognised setup result, with reading and failed source states.",
+      "html": "<div class=\"ds-test-read ds-test-recognised\"><p class=\"ds-test-street\">Victoria Road</p><p class=\"ds-test-map\">Henesys Hunting Ground I ✓</p></div>",
+      "css": ".ds-test-read { padding: 14px 16px; border-radius: 8px; background: rgba(16, 24, 36, 0.9); border: 1px solid #2a3846; } .ds-test-read { font: 14px/1.5 \"Segoe UI\", system-ui, sans-serif; color: var(--text, #f2f5f8); } .ds-test-read p { margin: 0; } .ds-test-street { color: var(--muted, #9fb6cc); font-size: 13px; } .ds-test-map { font-size: 18px; font-weight: 600; } .ds-test-recognised .ds-test-map { color: var(--ok, #7fd18b); } .ds-test-failed { border-color: var(--bad, #f08a7a); } .ds-test-reading { color: var(--muted, #9fb6cc); }"
+    },
+    {
+      "name": "Setup Notice",
+      "kind": "custom",
+      "refersTo": "notice",
+      "description": "Tinted body text with a Compass Gold left rule.",
+      "html": "<p class=\"ds-notice\">The game window changed size since setup, so the minimap title has probably moved. Mark it again.</p>",
+      "css": ".ds-notice { margin: 14px 0 0; padding: 8px 12px; border-left: 3px solid var(--accent, #f5c542); background: rgba(245, 197, 66, 0.08); } .ds-notice { font: 14px/1.5 \"Segoe UI\", system-ui, sans-serif; color: var(--text, #f2f5f8); }"
+    },
+    {
+      "name": "Hidden Street Tag",
+      "kind": "chip",
+      "refersTo": "tag-hidden-street",
+      "description": "A noninteractive destination label.",
+      "html": "<span class=\"ds-tag\">Hidden Street</span>",
+      "css": ".ds-tag { flex: none; padding: 0 5px; border-radius: 3px; font: 11px \"Segoe UI\", system-ui, sans-serif; background: rgba(159, 182, 204, 0.2); color: #c3d4e4; } .ds-tag-quest { background: rgba(240, 198, 116, 0.2); color: #f0c674; }"
+    },
+    {
+      "name": "Quest Tag",
+      "kind": "chip",
+      "refersTo": "tag-quest",
+      "description": "A noninteractive amber Quest Portal label.",
+      "html": "<span class=\"ds-tag ds-tag-quest\">Quest</span>",
+      "css": ".ds-tag { flex: none; padding: 0 5px; border-radius: 3px; font: 11px \"Segoe UI\", system-ui, sans-serif; background: rgba(159, 182, 204, 0.2); color: #c3d4e4; } .ds-tag-quest { background: rgba(240, 198, 116, 0.2); color: #f0c674; }"
+    },
+    {
+      "name": "Mob Table",
+      "kind": "custom",
+      "refersTo": "map-table",
+      "description": "Numeric columns are aligned. Dashes are specimen placeholders, not statistics.",
+      "html": "<table class=\"ds-table\"><thead><tr><th>Mob</th><th>Lv</th><th>HP</th><th>EXP</th><th>Count</th><th>Share</th></tr></thead><tbody><tr><td>Orange Mushroom</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr></tbody></table>",
+      "css": ".ds-table { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; } .ds-table { width: 100%; font-family: \"Segoe UI\", system-ui, sans-serif; color: #f2f5f8; } .ds-table th { font-weight: 400; color: #9fb6cc; text-align: right; } .ds-table td { text-align: right; } .ds-table th, .ds-table td { padding: 1px 0 1px 6px; white-space: nowrap; } .ds-table th:first-child, .ds-table td:first-child { padding-left: 0; text-align: left; } .ds-table td:first-child { max-width: 140px; overflow: hidden; text-overflow: ellipsis; } .ds-table { table-layout: fixed; } .ds-table th, .ds-table td { box-sizing: border-box; } .ds-table th:nth-child(1) { width: 32%; } .ds-table th:nth-child(2) { width: 8%; } .ds-table th:nth-child(3), .ds-table th:nth-child(4) { width: 17%; } .ds-table th:nth-child(5) { width: 11%; } .ds-table th:nth-child(6) { width: 15%; } .ds-table td:not(:first-child) { white-space: normal; overflow-wrap: anywhere; }"
+    },
+    {
+      "name": "Candidate List",
+      "kind": "custom",
+      "refersTo": "candidate-list",
+      "description": "Mob clues lead; facts and the secondary Map ID wrap beneath. Rows are not controls.",
+      "html": "<ol class=\"ds-candidates\"><li class=\"ds-current\" aria-current=\"true\"><span class=\"ds-candidate-mobs\">Comparison data unavailable</span><div class=\"ds-candidate-facts\"><span class=\"ds-candidate-id\">Map 000000010</span></div></li><li><span class=\"ds-candidate-mobs\">Comparison data unavailable</span><div class=\"ds-candidate-facts\"><span class=\"ds-candidate-id\">Map 000000020</span></div></li></ol>",
+      "css": ".ds-candidates { margin: 4px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font: 12px/1.4 \"Segoe UI\", system-ui, sans-serif; color: #9fb6cc; } .ds-candidates li { position: relative; padding-left: 14px; overflow-wrap: anywhere; } .ds-candidates .ds-current { color: #f2f5f8; font-weight: 600; } .ds-candidates .ds-current::before { content: \"▶ \"; position: absolute; left: 0; top: 0; } .ds-candidate-mobs { display: block; } .ds-candidate-facts { display: flex; flex-wrap: wrap; gap: 2px 8px; } .ds-candidate-id { margin-left: auto; color: #9fb6cc; font-weight: 400; }"
+    },
+    {
+      "name": "Marking Hint",
+      "kind": "custom",
+      "refersTo": "marking-hint",
+      "description": "Wrapping pointer and keyboard instructions; specimen omits viewport anchoring.",
+      "html": "<div class=\"ds-marking-hint\"><strong>Mark both lines of the minimap title</strong><p>Drag a box, or use Arrow keys to move · Alt+Arrow to resize · Shift for larger steps</p><p>Enter to test · Esc to cancel</p></div>",
+      "css": ".ds-marking-hint { display: inline-block; padding: 10px 16px; border-radius: 8px; background: rgba(16, 24, 36, 0.9); color: #f2f5f8; font: 15px/1.4 \"Segoe UI\", system-ui, sans-serif; pointer-events: none; text-align: center; } .ds-marking-hint p { margin: 4px 0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Scout’s Notes",
+    "overview": "MapleCompass is quiet, practical, and compact. Its interface reads like a small set of useful notes beside the game: a clear Map Name, tightly grouped facts, and brief signals when something needs attention. The game keeps the player's attention; the companion stays easy to consult.\n\nFamiliar, straightforward controls sit on Midnight Slate surfaces. Compass Gold identifies setup actions and marking feedback, while cool supporting text gives the Map Name and selected information room to lead. Rounded containers and translucent fills keep the system approachable without introducing ornamental depth.",
+    "keyCharacteristics": [
+      "Compact facts with a clear Map Name and aligned numeric columns.",
+      "Midnight Slate surfaces, cool supporting text, and purposeful Compass Gold.",
+      "Familiar, straightforward buttons, containers, and small descriptive tags.",
+      "Flat tonal layers, subtle borders, and immediate state changes."
+    ],
+    "rules": [
+      {
+        "name": "The Accent Has a Job Rule",
+        "body": "Use Compass Gold for the existing action and marking roles. Keep recognition, uncertainty, and Quest signals in their own established status tones.",
+        "section": "colors"
+      },
+      {
+        "name": "The Facts Stay Aligned Rule",
+        "body": "Use tabular numerals in the tables, right-align numeric columns, and left-align the first descriptive column. Table headers remain regular; summary values are semibold.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Layers Rule",
+        "body": "Preserve the current hierarchy with fill opacity, text emphasis, and restrained borders. Window stacking is a platform behavior, not a decorative elevation token.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep the Map Name prominent and supporting facts compact.",
+      "Do preserve the distinct opaque setup, translucent panel, and inset surface roles.",
+      "Do use the established status tones together with explanatory text, the uncertainty mark, or the recognised-result check mark.",
+      "Do keep numeric columns aligned and status explanations able to wrap.",
+      "Do retain familiar button variants, visible keyboard focus, and the visible disabled state.",
+      "Do keep attribution and source-page hints legible within the low-emphasis footer."
+    ],
+    "donts": [
+      "Don't substitute the icon's turquoise for the Compass Gold action accent.",
+      "Don't turn descriptive portal tags or Candidate rows into controls without an explicit interaction change.",
+      "Don't ellipsize status explanations using the name-row clipping treatment.",
+      "Don't describe shadows, blur, hover animation, mobile breakpoints as established parts of this system.",
+      "Don't treat the overlay's starting height as a fixed content height.",
+      "Don't turn preview-only tonal ramps or specimen data into product colors or factual map data."
+    ]
+  }
+}
