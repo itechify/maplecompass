@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { hotkeyAvailable, keyLabel, type Hotkeys } from "./hotkeys";
-import { PANEL_RESULTS, mobTitle, resultRow, resultsNote, type SearchState } from "./search-state";
+import { PANEL_RESULTS, mobTitle, nearestLine, resultRow, resultsNote, type SearchState } from "./search-state";
 
 type PlacementMode = "inside" | "dockedRight" | "dockedLeft" | "detached";
 
@@ -111,6 +111,7 @@ const uncertainty = byId("uncertainty");
 const crawlProgress = byId("crawl-progress");
 const mobSearch = byId("mob-search");
 const searchTitle = byId("search-title");
+const searchNearest = byId("search-nearest");
 const searchNote = byId("search-note");
 const searchResults = byId("search-results");
 const searchRows = byId("search-rows");
@@ -289,6 +290,8 @@ function renderSearch(panel: PanelState) {
   mobSearch.hidden = !panel.gameFound || !search.picked;
   if (!search.picked) return;
   searchTitle.textContent = mobTitle(search.picked);
+  searchNearest.textContent = nearestLine(search);
+  searchNearest.hidden = searchNearest.textContent === "";
   searchNote.textContent = resultsNote(search);
   searchNote.hidden = searchNote.textContent === "";
   searchResults.hidden = search.results.length === 0;

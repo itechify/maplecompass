@@ -5,6 +5,7 @@ use crate::MEOWDB_CREDIT;
 use crate::crawl::{Crawl, CrawlProgress};
 use crate::map_data::Mob;
 use crate::map_index::MapEntry;
+use crate::world::{Distance, World};
 use serde::Serialize;
 
 /// How many results the panel shows; the search window shows them all.
@@ -45,6 +46,8 @@ pub struct SearchResult {
     /// The mob's Spawn Share on the map, in whole percent.
     pub spawn_share_percent: u32,
     pub tier: DensityTier,
+    /// How many map changes it is from the map the panel shows.
+    pub distance: Distance,
 }
 
 /// Mob search, as the overlay renders it.
@@ -64,6 +67,9 @@ pub struct SearchState {
     /// Every known map the picked mob spawns on (Event maps left out), by Density Tier
     /// and then Density. The panel shows the first [`PANEL_RESULTS`].
     pub results: Vec<SearchResult>,
+    /// The headline: the nearest of the results with a route, whatever its tier (of
+    /// those equally near, the densest). `None` with no map shown or no route to any.
+    pub nearest: Option<SearchResult>,
     /// [`crate::MEOWDB_CREDIT`] whenever there are results: they are MeowDB's data.
     pub credit: Option<&'static str>,
     /// How many of the index's maps the world crawl knows so far ("312 of 422 maps
@@ -129,11 +135,12 @@ impl MobSearch {
         self.window_open = false;
     }
 
-    /// The search state for the panel, over the maps the crawl knows.
-    pub fn state(&self, crawl: Option<&Crawl>) -> SearchState {
+    /// The search state for the panel, over the maps the crawl knows, with Distances
+    /// from map `from` (the map the panel shows; `None`: no map).
+    pub fn state(&self, crawl: Option<&Crawl>, from: Option<&str>) -> SearchState {
         let suggestions = self.suggestions(crawl);
         let results = match (&self.picked, crawl) {
-            (Some(mob), Some(crawl)) => results(&mob.id, crawl),
+            (Some(mob), Some(crawl)) => results(&mob.id, crawl, from),
             _ => Vec::new(),
         };
         SearchState {
@@ -143,6 +150,7 @@ impl MobSearch {
             picked: self.picked.clone(),
             suggestions,
             credit: (!results.is_empty()).then_some(MEOWDB_CREDIT),
+            nearest: nearest(&results),
             results,
             crawl: crawl.map(Crawl::progress).unwrap_or_default(),
         }
@@ -174,12 +182,29 @@ impl MobSearch {
     }
 }
 
+/// The nearest of the ranked `results` with a route, whatever its tier; of those equally
+/// near, the densest (then the first ranked).
+fn nearest(results: &[SearchResult]) -> Option<SearchResult> {
+    results
+        .iter()
+        .filter_map(|r| match r.distance {
+            Distance::MapChanges(changes) => Some((changes, r)),
+            Distance::NoRoute | Distance::QuestOnly | Distance::Unknown => None,
+        })
+        // `min_by_key` keeps the first of equals: the first ranked.
+        .min_by_key(|&(changes, r)| (changes, std::cmp::Reverse(r.density_hundredths)))
+        .map(|(_, r)| r.clone())
+}
+
 /// MeowDB's display region for event maps, which the player can't normally enter.
 const EVENT_REGION: &str = "Event";
 
-/// Every known, non-Event map mob `mob_id` spawns on, ranked: by Density Tier, then
-/// Density (densest first), then name.
-fn results(mob_id: &str, crawl: &Crawl) -> Vec<SearchResult> {
+/// Every known, non-Event map mob `mob_id` spawns on, ranked: by Density Tier; within a
+/// tier, maps with a route by Distance from map `from`, then those with no known route,
+/// then the quest-only ones; then by Density (densest first), then name.
+fn results(mob_id: &str, crawl: &Crawl, from: Option<&str>) -> Vec<SearchResult> {
+    let distances = from.map(|from| World::of(crawl).distances_from(from));
+    let distance = |map_id: &str| distances.as_ref().map_or(Distance::Unknown, |d| d.to(map_id));
     let found: Vec<(&MapEntry, &Mob, u32)> = crawl
         .known()
         .filter(|(entry, _)| entry.region != EVENT_REGION)
@@ -211,11 +236,13 @@ fn results(mob_id: &str, crawl: &Crawl) -> Vec<SearchResult> {
             density_hundredths: density,
             spawn_share_percent: mob.spawn_share_percent,
             tier: tier(density),
+            distance: distance(&entry.id),
         })
         .collect();
     results.sort_by(|a, b| {
-        (a.tier, std::cmp::Reverse(a.density_hundredths), &a.street_name, &a.map_name, &a.map_id).cmp(&(
+        (a.tier, a.distance, std::cmp::Reverse(a.density_hundredths), &a.street_name, &a.map_name, &a.map_id).cmp(&(
             b.tier,
+            b.distance,
             std::cmp::Reverse(b.density_hundredths),
             &b.street_name,
             &b.map_name,
