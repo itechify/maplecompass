@@ -25,6 +25,12 @@ _Avoid_: title, map title
 **Minimap Title**:
 The street name and map name as rendered at the top of the in-game minimap; the only signal MapleCompass reads from the game.
 
+**Candidate**:
+One of several maps that share a Minimap Title, offered to the player when the map they came from doesn't settle which one they are on.
+
+**Saved Copy**:
+MeowDB data cached earlier and shown, with its date, because MeowDB can't be reached right now.
+
 **Title Region**:
 The rectangle the player marks around the minimap title, saved relative to the game window.
 _Avoid_: minimap region, capture area
@@ -38,6 +44,14 @@ _Avoid_: hidden street (when meaning the portal), secret exit
 
 **Hidden Street**:
 A map whose street name is literally "Hidden Street". Not the same thing as a hidden portal: a Hidden Street can be reached through a visible portal, and a hidden portal can lead somewhere that is not a Hidden Street.
+
+**Town**:
+A map that is a settlement (shops, NPCs, no mobs) rather than a hunting field, as marked in the map data.
+_Avoid_: city, village (except inside map names)
+
+**Door**:
+A portal from a town into a building interior, drawn as part of the scenery. The player can see it, so it is not a hidden portal even though the minimap doesn't show it.
+_Avoid_: entrance, building portal
 
 **Quest Portal**:
 A hidden portal that only works while the player meets a quest condition.

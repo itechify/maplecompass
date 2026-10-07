@@ -8,7 +8,12 @@ MeowDB is the only source with everything MapleCompass needs (connected maps wit
 
 **This is a personal-use arrangement, and MapleCompass must not be released publicly while it stands.** MeowDB's terms (§4) forbid "automated scripts, bots, or scrapers to access or collect data from the Site without permission", and live fetching very likely falls under that. Before any public release, we need written permission from MeowDB (contact@meowdb.com, see meowdb.com/reuse), or we revisit this decision. Every screen that shows MeowDB data credits it as "NiaMeowDB (meowdb.com)".
 
+### Exception: maps that share a title
+
+A few titles belong to more than one map (Maple Road / Mushroom Town, Hidden Street / Coconut Harvest). When the player is confirmed on such a title, and the map they came from doesn't settle which map it is, we fetch the pages of every map with that title, one at a time, not only the one we show. The product decision on identical titles (ticket #7) needs them: if all would show the same Map Summary, mobs and Hidden Portals the panel shows it without asking, and otherwise it lists the candidates with what sets each apart. This stays within the spirit of the rule above: it happens only on a confirmed title, never ahead of time, it covers at most a handful of pages, and a page cached less than a day ago is used without a request.
+
 ## Consequences
 
 - The app needs a network connection, and it breaks when MeowDB changes its page structure or URLs. MeowDB plans to rename itself to NiaDB in late October 2026.
+- When MeowDB can't be reached, a page or index cached earlier is still used, and the panel says it is a saved copy and from when. With nothing cached, the panel shows the map without MeowDB's data.
 - We still need an index of map names and IDs, both to turn a recognised title into a page URL and to snap OCR output to a real name. That index also comes from MeowDB.

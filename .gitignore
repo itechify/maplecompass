@@ -1,0 +1,9 @@
+.claude/worktrees/
+
+# Rust
+/target/
+
+# Frontend
+node_modules/
+dist/
+*.local

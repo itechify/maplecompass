@@ -1,0 +1,259 @@
+html,
+body {
+  /* Transparent page, or WebView2 paints white behind the panel. */
+  background: transparent;
+  margin: 0;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+}
+
+/* As tall as its content: the overlay reports this height and the window fits it. */
+.panel {
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(16, 24, 36, 0.82);
+  color: #f2f5f8;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel p {
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+#data {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Wraps rather than truncates: an error must be read in full. */
+.panel .note {
+  white-space: normal;
+  font-size: 13px;
+  color: #c3ccd6;
+}
+
+.note.problem {
+  color: #f0c674;
+}
+
+/* The maps sharing the title, each with what sets it apart; the shown one marked. */
+.candidates ol {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: #9fb6cc;
+}
+
+.candidates li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.candidates li::before {
+  content: "\00a0\00a0 ";
+}
+
+.candidates li.current {
+  color: #f2f5f8;
+  font-weight: 600;
+}
+
+.candidates li.current::before {
+  content: "▶ ";
+}
+
+table {
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+th {
+  font-weight: 400;
+  color: #9fb6cc;
+  text-align: right;
+}
+
+td {
+  text-align: right;
+}
+
+th,
+td {
+  padding: 1px 0 1px 10px;
+  white-space: nowrap;
+}
+
+th:first-child,
+td:first-child {
+  padding-left: 0;
+  text-align: left;
+}
+
+.summary td {
+  font-weight: 600;
+  min-width: 72px;
+}
+
+.mobs {
+  width: 100%;
+}
+
+.mobs td:first-child {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.portals h2 {
+  margin: 0 0 2px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #9fb6cc;
+}
+
+.portals .none {
+  font-size: 12px;
+  color: #c3ccd6;
+}
+
+.portals ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.portals li div {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.portals .to {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portals .tag {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  background: rgba(159, 182, 204, 0.2);
+  color: #c3d4e4;
+}
+
+.portals .tag.quest {
+  background: rgba(240, 198, 116, 0.2);
+  color: #f0c674;
+}
+
+.portals .where {
+  display: block;
+  color: #9fb6cc;
+}
+
+.portals .where::first-letter {
+  text-transform: uppercase;
+}
+
+footer {
+  font-size: 11px;
+  color: #8293a5;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.street {
+  font-size: 12px;
+  color: #9fb6cc;
+  letter-spacing: 0.02em;
+}
+
+.map {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.unreadable .map {
+  font-weight: 400;
+  font-size: 14px;
+  color: #c3ccd6;
+}
+
+/* The last confident map, while the latest frames don't confirm it. */
+.not-sure .map {
+  color: #c3ccd6;
+}
+
+.not-sure .map::after {
+  content: " ?";
+  color: #f0c674;
+}
+
+/* Collapsed: only the icon shows; the window shrinks to fit it. */
+.icon {
+  display: none;
+  box-sizing: border-box;
+  width: 100vw;
+  height: 100vh;
+  border-radius: 10px;
+  opacity: 0.85;
+}
+
+.collapsed .panel {
+  display: none;
+}
+
+.collapsed .icon {
+  display: block;
+}
+
+/* Draggable (edit mode inside the game, or detached): the overlay takes the mouse and
+   can be dragged anywhere on it. */
+.draggable,
+.draggable * {
+  cursor: move;
+}
+
+/* No game window (minimised or closed): the overlay window stays but draws nothing. */
+.hidden .panel,
+.hidden .icon {
+  display: none;
+}
+
+.editing .panel,
+.editing .icon {
+  outline: 2px dashed #f5c542;
+  outline-offset: -2px;
+}
+
+.editing .street {
+  color: #f5c542;
+}
