@@ -9,7 +9,7 @@ Personal use only for now: see [ADR 0003](docs/adr/0003-fetch-meowdb-live-until-
 ## Layout
 
 - `crates/compass-core`: the headless core (no OS or UI dependencies). Title Region frames go in, a panel state comes out. It is the only test seam.
-- `src-tauri`: the Tauri v2 shell. It finds the "MapleStory" window, captures the Title Region the player marked at setup about 3 times a second, feeds the core and moves the overlay. It also fetches MeowDB's map index once at startup, which the core snaps readings to, and a map's page only once you are confirmed on that map. Pages are cached for a day in `%LOCALAPPDATA%\com.itechify.maplecompass\cache`, so revisits don't refetch.
+- `src-tauri`: the Tauri v2 shell. It finds the "MapleStory" window and moves the overlay with it (20 times a second), and on a thread of its own captures and reads the Title Region the player marked at setup about 3 times a second, feeding the readings to the core. It also fetches MeowDB's map index in the background at startup, which the core snaps readings to, and a map's page only once you are confirmed on that map (or on a title several maps share). Pages are cached for a day in `%LOCALAPPDATA%\com.itechify.maplecompass\cache`, so revisits don't refetch.
 - `src`, `index.html`, `setup.html`, `region.html`: the web UI (vanilla TypeScript) for the overlay, the setup window and the title-marking window. It only renders state from the core.
 - `samples/minimap`: test screenshots named `street-name__map-name[--variant].png`.
 
