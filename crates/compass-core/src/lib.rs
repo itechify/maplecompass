@@ -19,6 +19,7 @@ mod settings;
 mod setup;
 mod shown_map;
 mod tracker;
+mod travel_links;
 mod world;
 
 pub use crawl::CrawlProgress;
@@ -31,11 +32,11 @@ pub use panel::{
     Action, GameWindow, InsideOffset, Layer, PanelSizes, PlacementMode, ScreenPoint, ScreenRect,
     Size,
 };
-pub use search::{DensityTier, MobChoice, PANEL_RESULTS, SearchResult, SearchState};
+pub use search::{DensityTier, MobChoice, PANEL_RESULTS, RouteStop, SearchResult, SearchState};
 pub use settings::{Hotkeys, Settings};
 pub use setup::{SelectionDirection, SetupReason, SetupState, TestRead, TitleRegion};
 pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
-pub use world::Distance;
+pub use world::{Distance, Step};
 
 use crawl::Crawl;
 use search::MobSearch;
@@ -341,12 +342,10 @@ impl Compass {
                 self.search.open();
                 self.sync_search();
             }
-            Action::SearchPrevious => {
-                self.search.move_highlight(-1, self.crawl.as_ref());
-                self.sync_search();
-            }
-            Action::SearchNext => {
-                self.search.move_highlight(1, self.crawl.as_ref());
+            Action::SearchPrevious | Action::SearchNext => {
+                let by = if action == Action::SearchNext { 1 } else { -1 };
+                let from = self.state.map.as_ref().map(|m| m.id.as_str());
+                self.search.move_highlight(by, self.crawl.as_ref(), from);
                 self.sync_search();
             }
             Action::SearchEnter => {
