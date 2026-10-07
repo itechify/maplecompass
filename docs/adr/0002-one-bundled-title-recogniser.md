@@ -1,0 +1,3 @@
+# One bundled title recogniser on every platform
+
+MapleCompass targets Windows first but must not block macOS and Linux (Wine/Proton), so we read the minimap title with a single recogniser bundled in the app rather than each OS's native OCR (Windows.Media.Ocr, Apple Vision, Tesseract on Linux). Three engines would mean three different sets of errors to tune the name matching against; one engine behaves the same everywhere. Whether that recogniser is bundled Tesseract or a custom glyph matcher for the game's fixed pixel font is left to a spike on real screenshots. Either way, the raw reading is snapped to the closest known street name and map name.
