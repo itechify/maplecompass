@@ -72,6 +72,22 @@ fn arriving_in_mushroom_town_shows_it_without_asking_since_both_mushroom_towns_s
 }
 
 #[test]
+fn maps_alike_but_for_their_hidden_portals_are_offered_as_candidates() {
+    // Neither has mobs, but Orbis Tower <Hidden Room> has a Hidden Portal and Mushroom
+    // Town has none.
+    const HIDDEN_ROOM: &str = "020000099";
+    let mut compass = Compass::new(titled_like_kerning_city(&[MUSHROOM_TOWNS[0], HIDDEN_ROOM]));
+    compass.on_frame(sample_frame(KERNING, 0));
+
+    let state = compass.on_frame(sample_frame(KERNING, 333));
+
+    assert_eq!(
+        state.candidates,
+        Some(Candidates { ids: vec![MUSHROOM_TOWNS[0].into(), HIDDEN_ROOM.into()], shown: 0, chosen: false })
+    );
+}
+
+#[test]
 fn maps_sharing_a_title_are_fetched_one_at_a_time_and_the_panel_shows_loading_meanwhile() {
     // Each page arrives on the second time the core checks on it.
     let source = titled_like_kerning_city(&MUSHROOM_TOWNS).with_slow_pages(2);

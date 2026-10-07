@@ -5,17 +5,38 @@ use serde::Serialize;
 use std::task::Poll;
 
 /// One map's data, as the map data source reads it from the map's MeowDB page.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MapData {
     /// `None` on a map without mobs, such as a town: MeowDB has no summary for it.
     pub summary: Option<MapSummary>,
     /// In the panel, sorted by level (then name); from a source, in any order.
     pub mobs: Vec<Mob>,
+    /// The exits the player can't see, in MeowDB's order. Empty when there are none.
+    pub hidden_portals: Vec<HiddenPortal>,
     /// The IDs of the maps its portals lead to. They tell apart maps sharing a title
     /// (the one the player came from is connected to the right one); not rendered.
     #[serde(skip_serializing)]
     pub connected_maps: Vec<String>,
+}
+
+/// A portal to another map that is drawn neither on the minimap nor in the world.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HiddenPortal {
+    /// MeowDB's name for the portal on its map (e.g. `"in00"`); with the map ID, what
+    /// the portal override list is keyed by.
+    pub name: String,
+    pub to_map_id: String,
+    pub to_map_name: String,
+    pub to_street_name: String,
+    /// The destination is a Hidden Street.
+    pub to_hidden_street: bool,
+    /// A Quest Portal: it only works while the player meets a quest condition.
+    pub quest: bool,
+    /// Roughly where the portal is on the map, in words: "far right, lower", or
+    /// "position unknown" when MeowDB has no minimap bounds for the map.
+    pub position: String,
 }
 
 /// The Map Summary: MeowDB's ceiling figures (every mob killed as soon as it spawns),
@@ -69,10 +90,12 @@ pub enum MapDataStatus {
 }
 
 impl MapData {
-    /// Whether the panel would show the same for both maps: the same Map Summary and
-    /// mobs. (Mobs sorted as the panel sorts them.)
+    /// Whether the panel would show the same for both maps: the same Map Summary, mobs
+    /// and Hidden Portals. (Mobs sorted as the panel sorts them.)
     pub(crate) fn shows_same_as(&self, other: &MapData) -> bool {
-        self.summary == other.summary && self.mobs == other.mobs
+        self.summary == other.summary
+            && self.mobs == other.mobs
+            && self.hidden_portals == other.hidden_portals
     }
 }
 

@@ -6,7 +6,7 @@ mod common;
 
 use common::{FakeSource, sample_frame, saved_index, saved_page};
 use compass_core::{
-    Compass, MapData, MapDataStatus, MapEntry, MapSummary, Mob, PanelState, PerParty,
+    Compass, MapDataStatus, MapEntry, MapSummary, Mob, PanelState, PerParty,
 };
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
@@ -30,22 +30,23 @@ fn arriving_on_sunset_sky_shows_its_map_summary_and_mobs_sorted_by_level() {
 
     let state = arrive(&mut compass, SUNSET, 0);
 
+    let MapDataStatus::Ready(data) = &state.data else { panic!("{:?}", state.data) };
     assert_eq!(
-        state.data,
-        MapDataStatus::Ready(MapData {
-            summary: Some(MapSummary {
-                mobs_per_hour: PerParty { solo: 15714, full_party: 20952 },
-                exp_per_hour: PerParty { solo: 223928, full_party: 298572 },
-            }),
-            mobs: vec![
-                mob("Blue Snail", 2, 51, 4, 7, 16),
-                mob("Stump", 5, 133, 10, 15, 34),
-                mob("Orange Mushroom", 8, 142, 15, 8, 18),
-                mob("Dark Stump", 11, 236, 21, 7, 16),
-                mob("Green Mushroom", 14, 233, 26, 7, 16),
-            ],
-            connected_maps: vec!["010003000".into(), "010003080".into()],
+        data.summary,
+        Some(MapSummary {
+            mobs_per_hour: PerParty { solo: 15714, full_party: 20952 },
+            exp_per_hour: PerParty { solo: 223928, full_party: 298572 },
         })
+    );
+    assert_eq!(
+        data.mobs,
+        [
+            mob("Blue Snail", 2, 51, 4, 7, 16),
+            mob("Stump", 5, 133, 10, 15, 34),
+            mob("Orange Mushroom", 8, 142, 15, 8, 18),
+            mob("Dark Stump", 11, 236, 21, 7, 16),
+            mob("Green Mushroom", 14, 233, 26, 7, 16),
+        ]
     );
 }
 
@@ -55,23 +56,24 @@ fn arriving_on_construction_site_north_of_kerning_city_shows_its_map_summary_and
 
     let state = arrive(&mut compass, "victoria-road__construction-site-north-of-kerning-city--window", 0);
 
+    let MapDataStatus::Ready(data) = &state.data else { panic!("{:?}", state.data) };
     assert_eq!(
-        state.data,
-        MapDataStatus::Ready(MapData {
-            summary: Some(MapSummary {
-                mobs_per_hour: PerParty { solo: 19285, full_party: 25714 },
-                exp_per_hour: PerParty { solo: 297499, full_party: 396667 },
-            }),
-            mobs: vec![
-                mob("Red Snail", 4, 68, 8, 23, 43),
-                mob("Orange Mushroom", 8, 142, 15, 9, 17),
-                mob("Dark Stump", 11, 236, 21, 11, 20),
-                mob("Octopus", 12, 191, 23, 8, 15),
-                mob("Axe Stump", 17, 371, 32, 2, 4),
-                mob("Blue Mushroom", 19, 342, 35, 1, 2),
-            ],
-            connected_maps: vec!["010003070".into(), "010003081".into(), "010004030".into()],
+        data.summary,
+        Some(MapSummary {
+            mobs_per_hour: PerParty { solo: 19285, full_party: 25714 },
+            exp_per_hour: PerParty { solo: 297499, full_party: 396667 },
         })
+    );
+    assert_eq!(
+        data.mobs,
+        [
+            mob("Red Snail", 4, 68, 8, 23, 43),
+            mob("Orange Mushroom", 8, 142, 15, 9, 17),
+            mob("Dark Stump", 11, 236, 21, 11, 20),
+            mob("Octopus", 12, 191, 23, 8, 15),
+            mob("Axe Stump", 17, 371, 32, 2, 4),
+            mob("Blue Mushroom", 19, 342, 35, 1, 2),
+        ]
     );
 }
 

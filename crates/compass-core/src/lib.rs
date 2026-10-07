@@ -8,6 +8,8 @@ mod map_index;
 mod matcher;
 pub mod meowdb;
 mod panel;
+mod portal_overrides;
+mod portals;
 mod prep;
 mod recogniser;
 mod settings;
@@ -15,8 +17,9 @@ mod setup;
 mod shown_map;
 mod tracker;
 
-pub use map_data::{MapData, MapDataStatus, MapSummary, Mob, PerParty};
+pub use map_data::{HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty};
 pub use map_index::{MapDataSource, MapEntry, SourceError};
+pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 pub use panel::{
     Action, GameWindow, InsideOffset, Layer, PanelSizes, PlacementMode, ScreenPoint, ScreenRect,
     Size,
@@ -126,7 +129,8 @@ pub struct PanelState {
     /// The maps sharing the shown map's title, when the core couldn't tell which of
     /// them the player is on; `None` when it could.
     pub candidates: Option<Candidates>,
-    /// The shown map's Map Summary and mobs from MeowDB, or why they aren't there.
+    /// The shown map's Map Summary, mobs and Hidden Portals from MeowDB, or why they
+    /// aren't there.
     pub data: MapDataStatus,
     /// [`MEOWDB_CREDIT`] whenever a map is shown: its names and data are MeowDB's.
     pub credit: Option<&'static str>,
