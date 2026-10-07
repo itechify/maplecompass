@@ -1,4 +1,4 @@
-//! Panel layout: expanded or collapsed, edit mode, and where the panel sits on screen.
+//! Panel layout: expanded or collapsed, dragging, and where the panel sits on screen.
 
 use serde::{Deserialize, Serialize};
 
@@ -53,11 +53,9 @@ pub struct PanelSizes {
 pub enum Action {
     /// Collapse the panel to its icon, or expand it again.
     ToggleExpanded,
-    /// Make the click-through overlay draggable, or return it to click-through.
-    ToggleEditMode,
-    /// The overlay window was moved so its top-left corner is at (x, y), physical
-    /// screen px. It moves an inside panel only in edit mode, a detached panel at any
-    /// time, and a docked panel never; other moves are ignored.
+    /// The player dragged the overlay window so its top-left corner is at (x, y),
+    /// physical screen px. It moves an inside or detached panel, and a docked panel
+    /// never.
     PanelMoved { x: i32, y: i32 },
     /// Switch to the next placement: inside, docked right, docked left, detached.
     CyclePlacement,
@@ -82,26 +80,28 @@ pub enum Action {
     /// The player closed setup without finishing it. On the first run that quits
     /// (`PanelState::quit`): there is nothing to read without a Title Region.
     CancelSetup,
-    /// Put the overlay in search mode (the search hotkey), with nothing typed yet. A
-    /// collapsed panel expands to show the query box.
+    /// Open the search view on its mobs, with nothing typed yet (the search hotkey, or
+    /// the 🔍 at the top of the panel). A collapsed panel expands to show it.
     OpenSearch,
-    /// Move search mode's highlight up the suggestions (or the results).
+    /// Move the search view's highlight up the suggestions (or the map list).
     SearchPrevious,
-    /// Move search mode's highlight down the suggestions (or the results).
+    /// Move the search view's highlight down the suggestions (or the map list).
     SearchNext,
-    /// Enter in search mode: pick the highlighted mob and leave search mode, or with
-    /// nothing typed, clear the search.
+    /// Enter in the search view: pick the highlighted mob and list its maps, or pick
+    /// the highlighted map and make it the Hunting Target.
     SearchEnter,
-    /// Esc in search mode, or focus moving to another window: leave search mode,
-    /// keeping the current search.
+    /// Esc or the back arrow in the search view, or focus moving to another window: back
+    /// to the normal view, with nothing changed.
     SearchEscape,
-    /// The mob search section's × button: remove the picked mob and its results, and
-    /// leave search mode if it is on.
-    ClearSearch,
-    /// Turn taxis on or off for Distance (the Taxis checkbox in search mode).
+    /// The Hunting section's ×: there is no Hunting Target any more.
+    ClearHuntingTarget,
+    /// The Hunting section's 🔍: open the search view on the Hunting Target mob's map
+    /// list, to pick another of its maps.
+    ReopenMapList,
+    /// Turn taxis on or off for Distance (the Taxis checkbox in the map list).
     ToggleTaxis,
     /// Turn Teleport Scrolls on or off for Distance (the Teleport Scrolls checkbox in
-    /// search mode).
+    /// the map list).
     ToggleTeleportScrolls,
 }
 
@@ -174,7 +174,6 @@ pub(crate) struct Panel {
     pub sizes: PanelSizes,
     pub game: Option<GameWindow>,
     pub expanded: bool,
-    pub edit_mode: bool,
     /// `None` until the player drags the panel: then it uses the default position.
     pub inside_offset: Option<InsideOffset>,
     pub mode: PlacementMode,
@@ -183,10 +182,9 @@ pub(crate) struct Panel {
     /// Where the Title Region is captured on screen. A panel inside the game is kept off
     /// it, or the capture would read the panel instead of the minimap title.
     pub avoid: Option<ScreenRect>,
-    /// Where the mouse pointer is on screen; `None` when the shell couldn't tell.
-    pub pointer: Option<ScreenPoint>,
-    /// Where the overlay's clickable controls are on screen, as the overlay reports them.
-    pub controls: Vec<ScreenRect>,
+    /// The monitors' work areas, as last known with the game window: a detached panel
+    /// stays within them after the game is gone.
+    pub screens: Vec<ScreenRect>,
 }
 
 impl Default for Panel {
@@ -196,13 +194,11 @@ impl Default for Panel {
             sizes: PanelSizes { expanded: zero, collapsed: zero },
             game: None,
             expanded: true,
-            edit_mode: false,
             inside_offset: None,
             mode: PlacementMode::Inside,
             detached_at: None,
             avoid: None,
-            pointer: None,
-            controls: Vec::new(),
+            screens: Vec::new(),
         }
     }
 }
@@ -211,15 +207,14 @@ impl Panel {
     /// The overlay window was moved so its top-left corner is at (x, y): see
     /// [`Action::PanelMoved`].
     pub fn moved_to(&mut self, x: i32, y: i32) {
-        match (self.mode, self.edit_mode, &self.game) {
-            // A detached panel is an ordinary window: the player moves it any time.
-            (PlacementMode::Detached, _, _) => self.detached_at = Some(ScreenPoint { x, y }),
-            (PlacementMode::Inside, true, Some(game)) => {
+        match (self.mode, &self.game) {
+            (PlacementMode::Detached, _) => self.detached_at = Some(ScreenPoint { x, y }),
+            (PlacementMode::Inside, Some(game)) => {
                 let right = x + self.size().width as i32;
                 let client = game.client;
                 self.inside_offset = Some(InsideOffset { x: right - client.x, y: y - client.y });
             }
-            // Docked panels stay docked; moves outside edit mode are the shell's own.
+            // Docked panels stay docked.
             _ => {}
         }
     }
@@ -241,23 +236,14 @@ impl Panel {
         }
     }
 
-    /// The overlay takes the mouse so the player can drag it: a detached panel always,
-    /// an inside panel in edit mode, a docked or hidden one never.
+    /// The player can drag the panel by its header: inside or detached, at any time; a
+    /// docked or hidden one never.
     pub fn draggable(&self) -> bool {
         match self.layer() {
             Layer::Free => true,
-            Layer::AboveGame => self.edit_mode && self.mode == PlacementMode::Inside,
+            Layer::AboveGame => self.mode == PlacementMode::Inside,
             Layer::Hidden => false,
         }
-    }
-
-    /// The overlay takes the mouse when the player can drag it, in search mode, and
-    /// while the pointer is over one of its controls; otherwise clicks pass through to
-    /// the game. Hidden, it never does.
-    pub fn takes_mouse(&self, search_mode: bool) -> bool {
-        let over_a_control =
-            self.pointer.is_some_and(|at| self.controls.iter().any(|control| holds(*control, at)));
-        self.layer() != Layer::Hidden && (self.draggable() || search_mode || over_a_control)
     }
 
     fn size(&self) -> Size {
@@ -265,20 +251,29 @@ impl Panel {
     }
 
     /// Where the overlay goes on screen. `None` while there is no game window, unless
-    /// the panel is detached: a detached panel doesn't depend on the game.
+    /// the panel is detached: a detached panel doesn't depend on the game. Never taller
+    /// than the space where it goes: the game's client area inside, the monitor's work
+    /// area below its top docked or detached.
     pub fn placement(&self) -> Option<ScreenRect> {
         if self.mode == PlacementMode::Detached {
             let at = self.detached_at.unwrap_or(DEFAULT_DETACHED_AT);
             let size = self.size();
-            return Some(ScreenRect { x: at.x, y: at.y, width: size.width, height: size.height });
+            let panel = ScreenRect { x: at.x, y: at.y, width: size.width, height: size.height };
+            // On the monitor its top-left corner is on (the last ones known, as it
+            // doesn't depend on the game).
+            let on = self.screens.iter().copied().find(|screen| holds(*screen, at));
+            return Some(on.map_or(panel, |screen| below_top(panel, screen)));
         }
         let game = self.game.as_ref()?;
         match self.mode {
             PlacementMode::DockedRight | PlacementMode::DockedLeft => {
                 let docked = self.docked(game);
                 // Never off-screen: without room beside the game, it goes inside.
-                let fits = game.screens.iter().any(|screen| contains(*screen, docked));
-                Some(if fits { docked } else { self.inside(game.client) })
+                let fits = game.screens.iter().find_map(|&screen| {
+                    let docked = below_top(docked, screen);
+                    (docked.height > 0 && contains(screen, docked)).then_some(docked)
+                });
+                Some(fits.unwrap_or_else(|| self.inside(game.client)))
             }
             _ => Some(self.inside(game.client)),
         }
@@ -295,8 +290,27 @@ impl Panel {
         ScreenRect { x, y: game.client.y, width: size.width, height: size.height }
     }
 
+    /// Inside the game's client area, no taller than it, and clear of the Title Region:
+    /// beside it at full height if there is room, or else in the taller of the spaces
+    /// below and above it.
     fn inside(&self, game: ScreenRect) -> ScreenRect {
-        let size = self.size();
+        let height = self.size().height.min(game.height);
+        let panel = self.inside_at(game, height);
+        let Some(title) = self.avoid else { return panel };
+        let clear = clear_of(panel, title, game);
+        if !overlaps(clear, title) {
+            return clear;
+        }
+        let below = bottom(game) - bottom(title);
+        let above = title.y as i64 - game.y as i64;
+        let height = height.min(below.max(above).max(0) as u32);
+        clear_of(self.inside_at(game, height), title, game)
+    }
+
+    /// The panel `height` px tall at its spot inside the game's client area: where the
+    /// player dragged it, or the default one.
+    fn inside_at(&self, game: ScreenRect, height: u32) -> ScreenRect {
+        let size = Size { height, ..self.size() };
         let (w, h) = (size.width as i32, size.height as i32);
         let (x, y) = match self.inside_offset {
             Some(offset) => (game.x + offset.x - w, game.y + offset.y),
@@ -310,12 +324,24 @@ impl Panel {
         // Keep the whole panel inside the client (its top-left wins if it can't fit).
         let x = x.min(game.x + game.width as i32 - w).max(game.x);
         let y = y.min(game.y + game.height as i32 - h).max(game.y);
-        let panel = ScreenRect { x, y, width: size.width, height: size.height };
-        match self.avoid {
-            Some(title) => clear_of(panel, title, game),
-            None => panel,
-        }
+        ScreenRect { x, y, width: size.width, height: size.height }
     }
+}
+
+/// `rect`, cut short at the bottom of `screen` if it reaches past it.
+fn below_top(rect: ScreenRect, screen: ScreenRect) -> ScreenRect {
+    let room = (bottom(screen) - rect.y as i64).max(0);
+    ScreenRect { height: rect.height.min(room as u32), ..rect }
+}
+
+fn bottom(r: ScreenRect) -> i64 {
+    r.y as i64 + r.height as i64
+}
+
+/// Whether pixel `at` lies inside `rect`.
+fn holds(rect: ScreenRect, at: ScreenPoint) -> bool {
+    let (x, y) = (at.x as i64, at.y as i64);
+    (rect.x as i64) <= x && x < rect.x as i64 + rect.width as i64 && (rect.y as i64) <= y && y < bottom(rect)
 }
 
 /// `panel`, moved the shortest way (below, above, right or left of `title`) so it no
@@ -343,15 +369,6 @@ fn overlaps(a: ScreenRect, b: ScreenRect) -> bool {
     let right = |r: ScreenRect| r.x as i64 + r.width as i64;
     let bottom = |r: ScreenRect| r.y as i64 + r.height as i64;
     (a.x as i64) < right(b) && (b.x as i64) < right(a) && (a.y as i64) < bottom(b) && (b.y as i64) < bottom(a)
-}
-
-/// Whether pixel `at` lies inside `rect`.
-fn holds(rect: ScreenRect, at: ScreenPoint) -> bool {
-    let (x, y) = (at.x as i64, at.y as i64);
-    (rect.x as i64) <= x
-        && x < rect.x as i64 + rect.width as i64
-        && (rect.y as i64) <= y
-        && y < rect.y as i64 + rect.height as i64
 }
 
 /// Whether `inner` lies wholly inside `outer`.
