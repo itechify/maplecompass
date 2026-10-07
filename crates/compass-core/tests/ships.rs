@@ -1,4 +1,4 @@
-//! Ships: a ride between continents (Ellinia ↔ Orbis) is always one map change, so maps
+//! Ships: a ride between regions (Ellinia ↔ Orbis) is always one map change, so maps
 //! in Ossyria have a Distance from Victoria Island and the other way round. Each result
 //! has its route (the maps in order, each with how it is reached) and says which kinds
 //! of travel besides portals that route uses.

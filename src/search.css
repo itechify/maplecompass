@@ -7,7 +7,6 @@
   --muted: #9fb6cc;
   --secondary-text: #c3ccd6;
   --accent: #f5c542;
-  --warning: #f0c674;
   --inset: rgba(16, 24, 36, 0.9);
   --inset-border: #2a3846;
   --secondary-border: #3a4a5c;
@@ -292,11 +291,13 @@ h3 {
   text-align: right;
 }
 
-/* Anything but a portal is worth noticing on the way. */
+/* Anything but a portal is worth noticing on the way: by text emphasis alone, like the
+   tiers, since the accent is kept for actions. */
 .route-stops .step.ship,
 .route-stops .step.taxi,
 .route-stops .step.teleportScroll {
-  color: var(--accent);
+  color: var(--text);
+  font-weight: 600;
 }
 
 .route-stops .route-street {
