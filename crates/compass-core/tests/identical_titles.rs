@@ -12,7 +12,7 @@ use common::{
     FakeSource, black_frame, index_with_title, requests_for, sample_frame, saved_index, saved_page,
 };
 use compass_core::{
-    Action, Candidates, Compass, MapDataStatus, PanelState, Settings, SourceError, meowdb,
+    Action, Compass, LevelRange, MapDataStatus, Outline, PanelState, Settings, SourceError, meowdb,
 };
 use std::task::Poll;
 
@@ -81,10 +81,17 @@ fn maps_alike_but_for_their_hidden_portals_are_offered_as_candidates() {
 
     let state = compass.on_frame(sample_frame(KERNING, 333));
 
-    assert_eq!(
-        state.candidates,
-        Some(Candidates { ids: vec![MUSHROOM_TOWNS[0].into(), HIDDEN_ROOM.into()], shown: 0, chosen: false })
-    );
+    assert_eq!(candidates(state), Some((vec![MUSHROOM_TOWNS[0], HIDDEN_ROOM], 0, false)));
+    // What sets them apart: no mobs either way, but one Hidden Portal against none.
+    let outlines: Vec<_> = state.candidates.as_ref().unwrap().maps.iter().map(|m| m.outline.clone()).collect();
+    let none_mobs_and = |hidden_portals| Some(Outline { mob_levels: None, first_mobs: vec![], hidden_portals });
+    assert_eq!(outlines, [none_mobs_and(0), none_mobs_and(1)]);
+}
+
+/// The candidates' IDs, which of them the panel shows, and whether the player chose it.
+fn candidates(state: &PanelState) -> Option<(Vec<&str>, usize, bool)> {
+    let c = state.candidates.as_ref()?;
+    Some((c.maps.iter().map(|m| m.id.as_str()).collect(), c.shown, c.chosen))
 }
 
 #[test]
@@ -136,8 +143,34 @@ fn mob_count(state: &PanelState) -> Option<usize> {
     }
 }
 
-fn coconut_candidates(shown: usize, chosen: bool) -> Option<Candidates> {
-    Some(Candidates { ids: COCONUT_HARVESTS.map(String::from).to_vec(), shown, chosen })
+fn coconut_candidates(shown: usize, chosen: bool) -> Option<(Vec<&'static str>, usize, bool)> {
+    Some((COCONUT_HARVESTS.to_vec(), shown, chosen))
+}
+
+/// Each candidate's mob levels and first (lowest-level) mobs.
+fn mobs_at_a_glance(state: &PanelState) -> Vec<Option<(LevelRange, Vec<String>)>> {
+    let maps = &state.candidates.as_ref().expect("candidates").maps;
+    maps.iter()
+        .map(|m| m.outline.as_ref().and_then(|o| Some((o.mob_levels?, o.first_mobs.clone()))))
+        .collect()
+}
+
+#[test]
+fn each_candidate_is_listed_with_its_mob_levels_and_first_mobs_to_tell_them_apart() {
+    let mut compass = Compass::new(coconut_harvests_that_differ());
+    compass.on_frame(sample_frame(KERNING, 0));
+
+    let state = compass.on_frame(sample_frame(KERNING, 333));
+
+    let names = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+    assert_eq!(
+        mobs_at_a_glance(state),
+        [
+            Some((LevelRange { lowest: 2, highest: 14 }, names(&["Blue Snail", "Stump", "Orange Mushroom"]))),
+            Some((LevelRange { lowest: 4, highest: 19 }, names(&["Red Snail", "Orange Mushroom", "Dark Stump"]))),
+            Some((LevelRange { lowest: 41, highest: 58 }, names(&["Flyeye", "Minor Zombie"]))),
+        ]
+    );
 }
 
 #[test]
@@ -150,7 +183,7 @@ fn arriving_with_nothing_to_go_on_in_one_of_maps_that_differ_shows_the_first_and
     let state = compass.on_frame(sample_frame(KERNING, 333));
 
     assert_eq!(shown_id(state), Some("090040200"));
-    assert_eq!(state.candidates, coconut_candidates(0, false));
+    assert_eq!(candidates(state), coconut_candidates(0, false));
     assert_eq!(mob_count(state), Some(5));
     for id in COCONUT_HARVESTS {
         assert!(requests_for(&requests, id) <= 1, "{id} asked for more than once");
@@ -207,7 +240,7 @@ fn the_choose_candidate_hotkey_shows_each_candidate_in_turn_with_its_own_data() 
 
     let state = compass.act(Action::ChooseCandidate);
     assert_eq!(shown_id(state), Some("090040201"));
-    assert_eq!(state.candidates, coconut_candidates(1, true));
+    assert_eq!(candidates(state), coconut_candidates(1, true));
     assert_eq!(mob_count(state), Some(6));
 
     let state = compass.act(Action::ChooseCandidate);
@@ -216,7 +249,7 @@ fn the_choose_candidate_hotkey_shows_each_candidate_in_turn_with_its_own_data() 
 
     let state = compass.act(Action::ChooseCandidate);
     assert_eq!(shown_id(state), Some("090040200"));
-    assert_eq!(state.candidates, coconut_candidates(0, true));
+    assert_eq!(candidates(state), coconut_candidates(0, true));
 }
 
 #[test]
@@ -229,7 +262,7 @@ fn a_chosen_candidate_holds_through_unreadable_frames_until_the_map_changes() {
     compass.on_frame(black_frame(666));
     let state = compass.on_frame(sample_frame(KERNING, 1000));
     assert_eq!(shown_id(state), Some("090040201"));
-    assert_eq!(state.candidates, coconut_candidates(1, true));
+    assert_eq!(candidates(state), coconut_candidates(1, true));
 
     // Off to Sunset Sky and back: the choice is gone, and the first is shown again.
     compass.on_frame(sample_frame(SUNSET, 1333));
@@ -239,7 +272,7 @@ fn a_chosen_candidate_holds_through_unreadable_frames_until_the_map_changes() {
     compass.on_frame(sample_frame(KERNING, 2000));
     let state = compass.on_frame(sample_frame(KERNING, 2333));
     assert_eq!(shown_id(state), Some("090040200"));
-    assert_eq!(state.candidates, coconut_candidates(0, false));
+    assert_eq!(candidates(state), coconut_candidates(0, false));
 }
 
 #[test]

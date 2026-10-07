@@ -26,6 +26,7 @@ pub use panel::{
 };
 pub use settings::{Hotkeys, Settings};
 pub use setup::{SetupReason, SetupState, TestRead, TitleRegion};
+pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
 
 use shown_map::ShownMap;
 use matcher::Matcher;
@@ -83,21 +84,6 @@ pub struct CurrentMap {
     pub map_name: String,
     /// The map's MeowDB page.
     pub url: String,
-}
-
-/// Maps that share one Minimap Title and would show different content, with neither
-/// the map the player came from nor the player having settled which it is. The panel
-/// shows one of them; the choose-candidate hotkey shows the next.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Candidates {
-    /// Their 9-digit map IDs, in map index order.
-    pub ids: Vec<String>,
-    /// Which of them the panel shows (an index into `ids`).
-    pub shown: usize,
-    /// The player chose the shown one with the hotkey. The choice holds until the
-    /// map changes.
-    pub chosen: bool,
 }
 
 /// The credit for everything MapleCompass shows from MeowDB (ADR 0003).

@@ -46,8 +46,19 @@ type Recognition =
   | { status: "starting" | "ready" | "unavailable" }
   | { status: "savedCopy"; savedAtUnixMs: number };
 
+/** Mirror of `compass_core::Outline`. */
+type Outline = {
+  mobLevels: { lowest: number; highest: number } | null;
+  firstMobs: string[];
+  hiddenPortals: number;
+};
+
 /** Mirror of `compass_core::Candidates`. */
-type Candidates = { ids: string[]; shown: number; chosen: boolean };
+type Candidates = {
+  maps: { id: string; outline: Outline | null }[];
+  shown: number;
+  chosen: boolean;
+};
 
 /** Mirror of `compass_core::PanelState`. */
 type PanelState = {
@@ -87,6 +98,8 @@ const map = byId("map");
 const dataEl = byId("data");
 const note = byId("note");
 const candidatesEl = byId("candidates");
+const candidatesNote = byId("candidates-note");
+const candidateRows = byId("candidate-rows");
 const summary = byId("summary");
 const mobsTable = byId("mobs");
 const mobRows = byId("mob-rows");
@@ -139,6 +152,25 @@ function portalRow(portal: HiddenPortal): HTMLLIElement {
   return row;
 }
 
+/** "090040200 · Lv 2–14 · Blue Snail, Stump, Orange Mushroom · 1 hidden portal" */
+function candidateLine(id: string, outline: Outline | null): string {
+  if (!outline) return `${id} · loading…`;
+  const parts = [id];
+  const { mobLevels, firstMobs, hiddenPortals } = outline;
+  if (mobLevels) {
+    parts.push(
+      mobLevels.lowest === mobLevels.highest
+        ? `Lv ${mobLevels.lowest}`
+        : `Lv ${mobLevels.lowest}–${mobLevels.highest}`,
+      firstMobs.join(", "),
+    );
+  } else {
+    parts.push("no mobs");
+  }
+  parts.push(`${hiddenPortals} hidden portal${hiddenPortals === 1 ? "" : "s"}`);
+  return parts.join(" · ");
+}
+
 /** "7 Oct 2026", in the player's time zone. */
 const savedOn = (unixMs: number) =>
   new Date(unixMs).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
@@ -175,12 +207,19 @@ function renderData(state: OverlayState) {
   const { candidates } = state.panel;
   candidatesEl.hidden = !candidates;
   if (candidates) {
-    const which = `${candidates.shown + 1} of ${candidates.ids.length}`;
     const next = `${keyLabel(state.hotkeys.chooseCandidate)} for the next`;
-    candidatesEl.textContent = candidates.chosen
-      ? `Your pick: map ${which} with this title · ${next}`
-      : `Showing map ${which} with this title; not sure which you're on · ${next}`;
-    candidatesEl.classList.toggle("problem", !candidates.chosen);
+    candidatesNote.textContent = candidates.chosen
+      ? `Your pick of ${candidates.maps.length} maps with this title · ${next}`
+      : `${candidates.maps.length} maps share this title; not sure which you're on · ${next}`;
+    candidatesNote.classList.toggle("problem", !candidates.chosen);
+    candidateRows.replaceChildren(
+      ...candidates.maps.map((candidate, i) => {
+        const row = document.createElement("li");
+        row.textContent = candidateLine(candidate.id, candidate.outline);
+        row.classList.toggle("current", i === candidates.shown);
+        return row;
+      }),
+    );
   }
 
   note.textContent = dataNote(data, state.panel.recognition);
