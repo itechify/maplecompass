@@ -12,7 +12,8 @@ mod common;
 
 use common::FakeSource;
 use compass_core::{
-    Action, Compass, GameWindow, Layer, PanelSizes, PlacementMode, ScreenRect, Settings, Size,
+    Action, Compass, GameWindow, Layer, PanelSizes, PlacementMode, Rect, ScreenRect, Settings, Size,
+    TitleRegion,
 };
 
 fn compass() -> Compass {
@@ -366,4 +367,69 @@ fn a_hidden_overlay_never_takes_the_mouse() {
     let state = compass.on_game_window(None);
     assert_eq!(state.layer, Layer::Hidden);
     assert!(!state.draggable);
+}
+
+// The overlay shows up in screenshots and streams, so it must never cover the Title
+// Region: the core would read the panel instead of the minimap title. Worked example: a
+// small 640x200 client at (812,110) whose title was marked at client (70,40) 130x48. The
+// core captures it widened to the client's right edge: screen x 882..1452, y 150..198.
+
+const SMALL_GAME: ScreenRect = ScreenRect { x: 812, y: 110, width: 640, height: 200 };
+
+/// Set up on `SMALL_GAME`, with the minimap title marked at client (70,40) 130x48.
+fn set_up_on_small_game() -> Compass {
+    let mut compass = compass();
+    compass.restore(Settings {
+        title_region: Some(TitleRegion {
+            marked: Rect { x: 70, y: 40, width: 130, height: 48 },
+            client: Size { width: 640, height: 200 },
+        }),
+        ..Settings::default()
+    });
+    compass
+}
+
+fn overlaps(a: ScreenRect, b: ScreenRect) -> bool {
+    let (ar, ab) = (a.x + a.width as i32, a.y + a.height as i32);
+    let (br, bb) = (b.x + b.width as i32, b.y + b.height as i32);
+    a.x < br && b.x < ar && a.y < bb && b.y < ab
+}
+
+#[test]
+fn the_default_spot_moves_below_the_title_region_when_it_would_cover_it() {
+    let mut compass = set_up_on_small_game();
+
+    let state = compass.on_game_window(game(SMALL_GAME));
+
+    assert_eq!(state.title_region, Some(rect(882, 150, 570, 48)));
+    // Centred on the right edge it would span y 174..246; just below the title instead.
+    assert_eq!(state.placement, Some(rect(1096, 198, 340, 72)));
+}
+
+#[test]
+fn a_panel_dragged_onto_the_minimap_title_is_moved_clear_of_it() {
+    let mut compass = set_up_on_small_game();
+    compass.on_game_window(game(SMALL_GAME));
+    compass.act(Action::ToggleEditMode);
+
+    compass.act(Action::PanelMoved { x: 892, y: 140 });
+    let state = compass.act(Action::ToggleEditMode);
+
+    let placement = state.placement.unwrap();
+    assert_eq!(placement, rect(892, 198, 340, 72));
+    assert!(!overlaps(placement, state.title_region.unwrap()));
+}
+
+#[test]
+fn the_collapsed_icon_never_covers_the_minimap_title_either() {
+    let mut compass = set_up_on_small_game();
+    compass.on_game_window(game(SMALL_GAME));
+    compass.act(Action::ToggleEditMode);
+    compass.act(Action::PanelMoved { x: 892, y: 140 });
+    compass.act(Action::ToggleEditMode);
+
+    let state = compass.act(Action::ToggleExpanded);
+
+    let placement = state.placement.unwrap();
+    assert!(!overlaps(placement, state.title_region.unwrap()), "{placement:?}");
 }
