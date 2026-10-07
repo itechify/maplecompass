@@ -45,7 +45,8 @@ export type SearchState = {
   /** The picked mob spawns only on Event maps, which search leaves out. */
   onlyOnEventMaps: boolean;
   highlightedResult: number | null;
-  nearest: SearchResult | null;
+  /** Which result is the nearest with a route. */
+  nearest: number | null;
   credit: string | null;
   crawl: CrawlProgress;
   /** Distances count taxi rides between towns (the Taxis checkbox). */
@@ -105,7 +106,7 @@ export const travelMarker = (result: SearchResult) => result.travel.map((step) =
 
 /** The headline: "Nearest: Mushroom Field, 2 map changes away", or "" with none. */
 export function nearestLine(search: SearchState): string {
-  const { nearest } = search;
+  const nearest = search.nearest === null ? null : search.results[search.nearest];
   if (!nearest || typeof nearest.distance === "string") return "";
   const n = nearest.distance.mapChanges;
   const away = n === 0 ? "the map you're on" : `${n} map change${n === 1 ? "" : "s"} away`;
