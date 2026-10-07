@@ -306,6 +306,52 @@ const CONSTRUCTION_SITE: &str = "victoria-road__construction-site-north-of-kerni
 const KERNING: &str = "victoria-road__kerning-city--window";
 
 #[test]
+fn the_overlay_gets_tracking_as_the_panel_renders_it() {
+    let mut compass = tracking();
+    read(&mut compass, 0, 160, 381);
+    let warming_up = serde_json::to_value(read(&mut compass, 10 * S, 266, 633)).unwrap();
+    assert_eq!(
+        warming_up["expTracking"],
+        serde_json::json!({
+            "state": "warmingUp",
+            "timeToLevelS": null,
+            "timeToLevelBadge": null,
+            "rolling": null,
+            "session": null,
+            "ceilingShareHundredths": null,
+            "deaths": { "count": 0, "expLost": 0, "percentLostHundredths": 0 },
+        })
+    );
+
+    // A minute in on Sunset Sky (as above), then a death: 335 [7.98%] to 266 [6.33%].
+    read(&mut compass, 70 * S, 335, 798);
+    let sunset = serde_json::to_value(arrive(&mut compass, SUNSET, 70 * S)).unwrap();
+    let rate = serde_json::json!({ "expPerHour": 4140, "percentPerHourHundredths": 9858 });
+    assert_eq!(
+        sunset["expTracking"],
+        serde_json::json!({
+            "state": "active",
+            "timeToLevelS": 3360,
+            "timeToLevelBadge": "56m",
+            "rolling": rate,
+            "session": rate,
+            "ceilingShareHundredths": 185,
+            "deaths": { "count": 0, "expLost": 0, "percentLostHundredths": 0 },
+        })
+    );
+    let died = serde_json::to_value(read(&mut compass, 75 * S, 266, 633)).unwrap();
+    assert_eq!(died["expTracking"]["deaths"], serde_json::json!({ "count": 1, "expLost": 69, "percentLostHundredths": 165 }));
+
+    let paused = serde_json::to_value(compass.tick(10 * MIN)).unwrap();
+    assert_eq!(paused["expTracking"]["state"], "paused");
+    let off = serde_json::to_value(Compass::new(FakeSource::meowdb()).panel_state()).unwrap();
+    assert_eq!(off["expTracking"]["state"], "off");
+    compass.act(Action::ResetSession);
+    let waiting = serde_json::to_value(compass.panel_state()).unwrap();
+    assert_eq!(waiting["expTracking"]["state"], "waiting");
+}
+
+#[test]
 fn the_rolling_rate_is_compared_with_the_map_s_solo_ceiling_and_a_map_change_keeps_the_session() {
     let mut compass = tracking();
     read(&mut compass, 0, 160, 381);
