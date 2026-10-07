@@ -17,13 +17,15 @@ use gamewin::ClientArea;
 use meowdb::MeowDbSource;
 use serde::Serialize;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent};
 
 /// Capture and recognition rate: ~3 Hz keeps a map change within about a second.
 const TICK: Duration = Duration::from_millis(333);
-/// Game window and z-order check rate: a docked panel follows a moving game window,
+/// Game window and z-order check rate: a docked panel follows a moving game window
 /// and the overlay is back above the game within ~50 ms of the game coming to front.
 const WINDOW_TICK: Duration = Duration::from_millis(50);
 /// Settings are saved once they have stopped changing for this long (after a drag).
@@ -143,7 +145,7 @@ fn compass_loop(
             }
             emitted = Some(state.clone());
         }
-        window.show(state, game);
+        window.show(state);
 
         // Save once the settings settle, not on every move of a drag.
         let current = compass.settings();
@@ -187,17 +189,28 @@ struct OverlayWindow {
     overlay: WebviewWindow,
     layer: Option<Layer>,
     click_through: bool,
-    /// The last z-order failure reported.
-    zorder_error: Option<String>,
+    /// Tells the z-order keeper to hold the overlay just above the game.
+    above_game: Arc<AtomicBool>,
 }
 
 impl OverlayWindow {
     fn new(overlay: WebviewWindow) -> Self {
-        Self { overlay, layer: None, click_through: true, zorder_error: None }
+        let above_game = Arc::new(AtomicBool::new(false));
+        let (keeper_overlay, keeper_flag) = (overlay.clone(), above_game.clone());
+        // Its own thread: title recognition can hold the compass loop for a few hundred
+        // ms, and the overlay should be back above the game well before then.
+        let spawned = std::thread::Builder::new()
+            .name("z-order".into())
+            .spawn(move || keep_above_game(keeper_overlay, keeper_flag));
+        if let Err(e) = spawned {
+            eprintln!("z-order keeper not started: {e}");
+        }
+        Self { overlay, layer: None, click_through: true, above_game }
     }
 
-    fn show(&mut self, state: &PanelState, game: Option<gamewin::Game>) {
+    fn show(&mut self, state: &PanelState) {
         let overlay = &self.overlay;
+        self.above_game.store(state.layer == Layer::AboveGame, Ordering::Relaxed);
         let layer_changed = self.layer != Some(state.layer);
         if layer_changed {
             self.layer = Some(state.layer);
@@ -220,17 +233,29 @@ impl OverlayWindow {
         if let Some(placement) = state.placement {
             place(overlay, placement, state.draggable && !layer_changed);
         }
+    }
+}
+
+/// While `above_game` is set, check every `WINDOW_TICK` that the overlay is still just
+/// above the game in the z-order, and restack it if not (the game came to the front).
+fn keep_above_game(overlay: WebviewWindow, above_game: Arc<AtomicBool>) {
+    let mut last_error = None;
+    loop {
+        std::thread::sleep(WINDOW_TICK);
+        if !above_game.load(Ordering::Relaxed) {
+            continue;
+        }
         #[cfg(windows)]
-        if let (Layer::AboveGame, Some(game), Ok(hwnd)) = (state.layer, game, overlay.hwnd()) {
-            // Polled ~20 times a second: report a failure once, not every time.
+        if let (Some(game), Ok(hwnd)) = (gamewin::find_game(), overlay.hwnd()) {
+            // Polled 20 times a second: report a failure once, not every time.
             let error = gamewin::keep_above(hwnd, game.handle).err().map(|e| e.to_string());
-            if error.is_some() && error != self.zorder_error {
+            if error.is_some() && error != last_error {
                 eprintln!("keeping the overlay above the game failed: {}", error.as_deref().unwrap_or_default());
             }
-            self.zorder_error = error;
+            last_error = error;
         }
         #[cfg(not(windows))]
-        let _ = game;
+        let _ = (&overlay, &mut last_error);
     }
 }
 
