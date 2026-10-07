@@ -19,7 +19,7 @@ use compass_core::{
     default_title_region,
 };
 use meowdb::MeowDbSource;
-use search::SearchWindow;
+use serde::Deserialize;
 use setup::{Bridge, SetupWindows};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -49,10 +49,12 @@ pub(crate) enum Command {
     Act(Action),
     /// The player pressed this hotkey (its accelerator string), for the core.
     Hotkey(String),
-    /// The search window's text box now holds this, for the core.
+    /// The overlay's query box now holds this, for the core.
     SearchQuery(String),
     /// The expanded panel's content is this tall (CSS px).
     PanelHeight(f64),
+    /// The overlay's clickable controls are here (CSS px, in the overlay's viewport).
+    OverlayControls(Vec<CssRect>),
     /// The title reader is done with a capture of `region`: what it read, or `None`
     /// if the capture failed.
     Read { region: ScreenRect, reading: Option<TitleReading> },
@@ -62,6 +64,22 @@ pub(crate) enum Command {
 #[tauri::command]
 fn panel_height(height: f64, commands: tauri::State<'_, Sender<Command>>) {
     let _ = commands.send(Command::PanelHeight(height));
+}
+
+/// A rectangle in the overlay's viewport, in CSS px, as the page measures it.
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+pub(crate) struct CssRect {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
+/// The overlay reports where its clickable controls are (the mob search section's ×),
+/// so the overlay can take the mouse while the pointer is over one.
+#[tauri::command]
+fn overlay_controls(controls: Vec<CssRect>, commands: tauri::State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::OverlayControls(controls));
 }
 
 /// Capture the default Title Region of the game's client area (the probe's guess; the
@@ -86,7 +104,7 @@ pub fn run() {
             // Not content-protected: the panel shows in the player's screenshots and
             // streams. The core keeps it off the Title Region instead, so our own capture
             // never reads it.
-            // Clicks pass through to the game until the panel is draggable.
+            // Clicks pass through to the game until the core says the overlay takes the mouse.
             overlay.set_ignore_cursor_events(true)?;
 
             // MeowDB pages are cached on disk (ADR 0003). WebView2 shares the app cache
@@ -108,13 +126,19 @@ pub fn run() {
                 view: Default::default(),
             });
             let setup_windows = SetupWindows::new(app.handle())?;
-            let search_window = SearchWindow::new(app.handle(), commands.clone());
-            // The core only takes moves of a draggable panel, so the shell's own
-            // repositioning is harmless; otherwise they are the player's drag.
-            overlay.on_window_event(move |event| {
-                if let WindowEvent::Moved(to) = event {
+            overlay.on_window_event(move |event| match event {
+                // The core only takes moves of a draggable panel, so the shell's own
+                // repositioning is harmless; otherwise they are the player's drag.
+                WindowEvent::Moved(to) => {
                     let _ = commands.send(Command::Act(Action::PanelMoved { x: to.x, y: to.y }));
                 }
+                // Leaving the overlay for another window (the game) in search mode is
+                // Esc: it has the keyboard only while it's in front. Not when focus only
+                // moved within our windows, as into the overlay's own webview.
+                WindowEvent::Focused(false) if !gamewin::foreground_is_ours() => {
+                    let _ = commands.send(Command::Act(Action::SearchEscape));
+                }
+                _ => {}
             });
 
             let handle = app.handle().clone();
@@ -122,7 +146,7 @@ pub fn run() {
             // Per-Monitor-V2 DPI aware.
             let reader = TitleReaderThread::spawn(app.state::<Sender<Command>>().inner().clone())?;
             let channels = Channels { commands: commands_rx, picks: picks_rx };
-            let windows = Windows { overlay, setup: setup_windows, search: search_window, hotkeys };
+            let windows = Windows { overlay, setup: setup_windows, hotkeys };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
                 compass_loop(handle, windows, compass, reader, channels, settings_path)
             })?;
@@ -130,6 +154,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             panel_height,
+            overlay_controls,
             setup::setup_view,
             setup::pick_game_window,
             setup::start_marking,
@@ -138,11 +163,11 @@ pub fn run() {
             setup::mark_title_region,
             setup::cancel_marking,
             setup::finish_setup,
-            search::search_view,
             search::search_query,
             search::search_move,
             search::search_enter,
             search::search_escape,
+            search::search_clear,
             search::search_toggle_taxis,
             search::search_toggle_teleport_scrolls,
         ])
@@ -150,11 +175,10 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-/// Our windows: the overlay, setup (with its region window) and mob search.
+/// Our windows: the overlay (with mob search in it) and setup (with its region window).
 struct Windows {
     overlay: WebviewWindow,
     setup: SetupWindows,
-    search: SearchWindow,
     /// Not a window, but registered and released as the foreground changes.
     hotkeys: hotkeys::GlobalHotkeys,
 }
@@ -224,8 +248,10 @@ fn compass_loop(
     channels: Channels,
     settings_path: PathBuf,
 ) {
-    let Windows { overlay, setup: mut setup_windows, search: mut search_window, mut hotkeys } = windows;
+    let Windows { overlay, setup: mut setup_windows, mut hotkeys } = windows;
     let mut window = OverlayWindow::new(overlay);
+    // Where the overlay last said its controls are, in its viewport.
+    let mut controls = Vec::new();
     let mut saved = compass.settings();
     let mut pending = (saved.clone(), Instant::now());
     let mut emitted: Option<PanelState> = None;
@@ -244,7 +270,7 @@ fn compass_loop(
                 match compass.on_hotkey(&pressed) {
                     Some(Request::OpenInBrowser { url }) => open_in_browser(&app, &url),
                     // Right after our hotkey, so Windows lets us take the foreground.
-                    Some(Request::RaiseOverlay) => search_window.raise(),
+                    Some(Request::RaiseOverlay) => search::take_focus(&window.overlay),
                     None => {}
                 }
             }
@@ -254,6 +280,10 @@ fn compass_loop(
             Ok(Command::PanelHeight(height)) => {
                 expanded.1 = height.clamp(*EXPANDED_HEIGHTS.start(), *EXPANDED_HEIGHTS.end());
                 set_panel_sizes(&mut compass, &window.overlay, expanded);
+            }
+            Ok(Command::OverlayControls(reported)) => {
+                controls = reported;
+                compass.set_overlay_controls(on_screen(&window.overlay, &controls));
             }
             Ok(Command::Read { region, reading }) => {
                 reader.busy = false;
@@ -275,6 +305,10 @@ fn compass_loop(
         if Instant::now() >= next_window_check {
             next_window_check = Instant::now() + WINDOW_TICK;
             game = find_game(&mut compass, &window.overlay, expanded);
+            // The overlay's controls take the mouse while the pointer rests over them:
+            // the pointer position is polled, never hooked (ADR 0001).
+            compass.set_overlay_controls(on_screen(&window.overlay, &controls));
+            compass.on_pointer(gamewin::pointer());
             // The hotkeys are live only while the game or one of our windows is in front.
             compass.on_foreground(gamewin::foreground(game.map(|g| g.handle)));
             if let Some(unavailable) = hotkeys.sync(&app, compass.panel_state().hotkeys_live) {
@@ -297,7 +331,6 @@ fn compass_loop(
             return;
         }
         setup_windows.sync(state, game.map(|g| g.client));
-        search_window.sync(state);
         if emitted.as_ref() != Some(state) {
             if let Err(e) = app.emit_to("overlay", "overlay-state", state) {
                 eprintln!("emit failed: {e}");
@@ -349,6 +382,26 @@ fn open_in_browser(app: &AppHandle, url: &str) {
     }
 }
 
+/// Where the overlay's controls are on screen (physical px), from where it said they are
+/// in its viewport. None when the overlay's position or scale can't be had.
+fn on_screen(overlay: &WebviewWindow, controls: &[CssRect]) -> Vec<ScreenRect> {
+    let (Ok(at), Ok(scale)) = (overlay.inner_position(), overlay.scale_factor()) else { return Vec::new() };
+    controls
+        .iter()
+        .map(|c| {
+            // Every physical pixel the control touches.
+            let (left, top) = ((c.x * scale).floor(), (c.y * scale).floor());
+            let (right, bottom) = (((c.x + c.width) * scale).ceil(), ((c.y + c.height) * scale).ceil());
+            ScreenRect {
+                x: at.x + left as i32,
+                y: at.y + top as i32,
+                width: (right - left).max(0.0) as u32,
+                height: (bottom - top).max(0.0) as u32,
+            }
+        })
+        .collect()
+}
+
 /// CSS px to physical px, rounded up so the panel's content is never clipped.
 fn physical((width, height): (f64, f64), scale: f64) -> Size {
     Size { width: (width * scale).ceil() as u32, height: (height * scale).ceil() as u32 }
@@ -360,6 +413,8 @@ struct OverlayWindow {
     overlay: WebviewWindow,
     layer: Option<Layer>,
     click_through: bool,
+    focusable: Option<bool>,
+    search_mode: bool,
     /// Tells the z-order keeper to hold the overlay just above the game.
     above_game: Arc<AtomicBool>,
 }
@@ -377,31 +432,46 @@ impl OverlayWindow {
         if let Err(e) = spawned {
             eprintln!("z-order keeper not started: {e}");
         }
-        Self { overlay, layer: None, click_through: true, above_game }
+        Self { overlay, layer: None, click_through: true, focusable: None, search_mode: false, above_game }
     }
 
     fn show(&mut self, state: &PanelState) {
         let overlay = &self.overlay;
         self.above_game.store(state.layer == Layer::AboveGame, Ordering::Relaxed);
         let layer_changed = self.layer != Some(state.layer);
+        let free = state.layer == Layer::Free;
         if layer_changed {
             self.layer = Some(state.layer);
-            // Detached, it is an ordinary window: it can be activated and found in the
-            // taskbar. Otherwise it never takes focus from the game. Never topmost:
-            // above the game it is kept just above it in the z-order instead.
-            let free = state.layer == Layer::Free;
+            // Detached, it is an ordinary window: it can be found in the taskbar. Never
+            // topmost: above the game it is kept just above it in the z-order instead.
             let _ = overlay.set_always_on_top(false);
-            let _ = overlay.set_focusable(free);
             let _ = overlay.set_skip_taskbar(!free);
         }
-        // Clicks pass through unless the player can drag the panel. Hidden (the game
-        // is gone) the webview draws nothing, so nothing shows and nothing is in the way.
-        if self.click_through == state.draggable {
-            self.click_through = !state.draggable;
+        // Detached, it can be activated like any window, and in search mode it takes the
+        // typing. Otherwise it never takes focus from the game.
+        let search_mode = state.search.search_mode;
+        let focusable = free || search_mode;
+        if self.focusable != Some(focusable) {
+            self.focusable = Some(focusable);
+            let _ = overlay.set_focusable(focusable);
+        }
+        // Clicks pass through unless the core says the overlay takes the mouse (edit
+        // mode, detached, search mode, or the pointer over one of its controls). Hidden
+        // (the game is gone) the webview draws nothing, and nothing is in the way.
+        if self.click_through == state.takes_mouse {
+            self.click_through = !state.takes_mouse;
             if let Err(e) = overlay.set_ignore_cursor_events(self.click_through) {
                 eprintln!("click-through toggle failed: {e}");
             }
         }
+        // Search mode starts right after our hotkey, so Windows lets us take the
+        // foreground; when it ends, Windows gives focus back to the window below.
+        match (self.search_mode, search_mode) {
+            (false, true) => search::take_focus(overlay),
+            (true, false) if !free => search::give_focus_back(overlay),
+            _ => {}
+        }
+        self.search_mode = search_mode;
         if let Some(placement) = state.placement {
             place(overlay, placement, state.draggable && !layer_changed);
         }

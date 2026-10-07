@@ -35,13 +35,15 @@ export type Travel = { taxis: boolean; teleportScrolls: boolean };
 
 /** Mirror of `compass_core::SearchState`. */
 export type SearchState = {
-  windowOpen: boolean;
+  /** The overlay is in search mode: query box, every result, the highlighted one's route. */
+  searchMode: boolean;
   query: string;
   suggestions: MobChoice[];
   highlighted: number | null;
   picked: MobChoice | null;
+  /** Every result: search mode's list. */
   results: SearchResult[];
-  /** The first five results: the panel's list. */
+  /** The first five results: the list outside search mode. */
   topResults: SearchResult[];
   /** How many results there are besides the panel's. */
   moreResults: number;
@@ -61,9 +63,6 @@ export const TIER_NAMES: Record<DensityTier, string> = { high: "High", medium: "
 /** A Density in hundredths as the player reads it: 1500 is "15", 1250 is "12.5". */
 export const density = (hundredths: number) =>
   (hundredths / 100).toLocaleString("en-US", { maximumFractionDigits: 2 });
-
-/** "Orange Mushroom · Lv 8" */
-export const mobTitle = (mob: MobChoice) => `${mob.name} · Lv ${mob.level}`;
 
 /** Why a picked mob has no results, as the core says. (The crawl line says how much of the world is known.) */
 export const resultsNote = (search: SearchState) =>
@@ -134,27 +133,6 @@ export function resultsHead(): HTMLTableSectionElement {
     row.append(th);
   }
   return head;
-}
-
-/** A picked mob's section, in the panel or the search window. */
-export type PickedSection = {
-  title: HTMLElement;
-  nearest: HTMLElement;
-  note: HTMLElement;
-  table: HTMLTableElement;
-  rows: HTMLElement;
-};
-
-/** Show the picked mob, its headline, why it has no results, and these result rows. */
-export function showPicked(section: PickedSection, search: SearchState, picked: MobChoice, rows: HTMLTableRowElement[]) {
-  section.title.textContent = mobTitle(picked);
-  section.nearest.textContent = nearestLine(search);
-  section.nearest.hidden = section.nearest.textContent === "";
-  section.note.textContent = resultsNote(search);
-  section.note.hidden = section.note.textContent === "";
-  section.table.hidden = rows.length === 0;
-  if (!section.table.tHead) section.table.prepend(resultsHead());
-  section.rows.replaceChildren(...rows);
 }
 
 /** One result as table cells: map (name over street), Density, Spawn Share, tier, Distance. */
