@@ -17,6 +17,17 @@ type Mob = {
   spawnSharePercent: number;
 };
 
+/** Mirror of `compass_core::HiddenPortal`. */
+type HiddenPortal = {
+  name: string;
+  toMapId: string;
+  toMapName: string;
+  toStreetName: string;
+  toHiddenStreet: boolean;
+  quest: boolean;
+  position: string;
+};
+
 /** Mirror of `compass_core::MapDataStatus`. */
 type MapDataStatus =
   | { status: "noMap" | "loading" | "unavailable" | "formatChanged" }
@@ -24,6 +35,7 @@ type MapDataStatus =
       status: "ready";
       summary: { mobsPerHour: PerParty; expPerHour: PerParty } | null;
       mobs: Mob[];
+      hiddenPortals: HiddenPortal[];
     };
 
 /** Mirror of `compass_core::PanelState`. */
@@ -64,6 +76,9 @@ const note = byId("note");
 const summary = byId("summary");
 const mobsTable = byId("mobs");
 const mobRows = byId("mob-rows");
+const portals = byId("portals");
+const noPortals = byId("no-portals");
+const portalRows = byId("portal-rows");
 const footer = byId("footer");
 const credit = byId("credit");
 const openHint = byId("open-hint");
@@ -90,6 +105,24 @@ function cell(text: string): HTMLTableCellElement {
   const td = document.createElement("td");
   td.textContent = text;
   return td;
+}
+
+function span(className: string, text: string): HTMLSpanElement {
+  const el = document.createElement("span");
+  el.className = className;
+  el.textContent = text;
+  return el;
+}
+
+/** "Northern Top of Construction Site [Hidden Street]" over "right, upper". */
+function portalRow(portal: HiddenPortal): HTMLLIElement {
+  const row = document.createElement("li");
+  const to = document.createElement("div");
+  to.append(span("to", portal.toMapName));
+  if (portal.toHiddenStreet) to.append(span("tag", "Hidden Street"));
+  if (portal.quest) to.append(span("tag quest", "Quest"));
+  row.append(to, span("where", portal.position));
+  return row;
 }
 
 /** The note shown in place of (or above) the map's data. */
@@ -143,6 +176,10 @@ function renderData(state: OverlayState) {
       return row;
     }),
   );
+
+  portals.hidden = !ready;
+  noPortals.hidden = !ready || ready.hiddenPortals.length > 0;
+  portalRows.replaceChildren(...(ready?.hiddenPortals ?? []).map(portalRow));
 
   credit.textContent = state.panel.credit ?? "";
   openHint.textContent = `${keyLabel(state.hotkeys.openMeowdbPage)} opens the page`;
