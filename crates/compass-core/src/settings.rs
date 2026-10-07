@@ -69,6 +69,23 @@ pub struct Hotkeys {
     /// Show the next of the maps sharing the shown map's title, when the core couldn't
     /// tell which one the player is on.
     pub choose_candidate: String,
+    /// Open the mob search window.
+    pub search: String,
+}
+
+impl Hotkeys {
+    /// Every hotkey, for the shell to register: one list, so none is forgotten.
+    pub fn all(&self) -> [&str; 7] {
+        [
+            &self.toggle_panel,
+            &self.edit_mode,
+            &self.cycle_placement,
+            &self.open_meowdb_page,
+            &self.setup,
+            &self.choose_candidate,
+            &self.search,
+        ]
+    }
 }
 
 impl Default for Hotkeys {
@@ -80,6 +97,7 @@ impl Default for Hotkeys {
             open_meowdb_page: "super+alt+o".into(),
             setup: "super+alt+s".into(),
             choose_candidate: "super+alt+n".into(),
+            search: "super+alt+f".into(),
         }
     }
 }
