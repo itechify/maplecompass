@@ -1,0 +1,46 @@
+html,
+body {
+  /* Transparent page, or WebView2 paints white behind the panel. */
+  background: transparent;
+  margin: 0;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+}
+
+.panel {
+  box-sizing: border-box;
+  height: 100vh;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(16, 24, 36, 0.82);
+  color: #f2f5f8;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.panel p {
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.street {
+  font-size: 12px;
+  color: #9fb6cc;
+  letter-spacing: 0.02em;
+}
+
+.map {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.unreadable .map {
+  font-weight: 400;
+  font-size: 14px;
+  color: #c3ccd6;
+}

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/compass-core"]
+members = ["crates/compass-core", "src-tauri"]
 # Bare `cargo test` / `cargo build` only touch the headless core, never Tauri.
 default-members = ["crates/compass-core"]
 

@@ -1,0 +1,41 @@
+//! Read-only smoke test of the shell's adapters without any UI: find the "MapleStory"
+//! window, capture its default Title Region a few times, and print what the core shows.
+//! It only reads window geometry and screen pixels (ADR 0001).
+//!
+//! `cargo run -p maplecompass --example probe [reads] [save.png]`
+//! With a path, the last captured Title Region is saved there for inspection.
+
+use compass_core::Compass;
+use maplecompass_lib::{capture_title_frame, gamewin};
+use std::time::{Duration, Instant};
+
+fn main() {
+    let mut args = std::env::args().skip(1);
+    let reads: u32 = args.next().and_then(|s| s.parse().ok()).unwrap_or(5);
+    let save = args.next();
+    let Some(client) = gamewin::find_game_client() else {
+        println!("No visible \"{}\" window found.", gamewin::GAME_TITLE);
+        return;
+    };
+    println!("Game client area: {client:?}");
+    let mut compass = Compass::new();
+    let start = Instant::now();
+    let mut last = None;
+    for _ in 0..reads {
+        let t = Instant::now();
+        match capture_title_frame(client, start.elapsed().as_millis() as u64) {
+            Ok(frame) => {
+                last = Some(frame.clone());
+                let state = compass.on_frame(frame);
+                println!("{:>4} ms  {:?}", t.elapsed().as_millis(), state.title);
+            }
+            Err(e) => println!("capture failed: {e}"),
+        }
+        std::thread::sleep(Duration::from_millis(333));
+    }
+    if let (Some(path), Some(f)) = (save, last) {
+        let img = image::RgbaImage::from_raw(f.width, f.height, f.rgba).expect("frame size");
+        img.save(&path).expect("save png");
+        println!("saved {path}");
+    }
+}

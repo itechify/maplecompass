@@ -1,0 +1,34 @@
+[package]
+name = "maplecompass"
+version = "0.1.0"
+description = "MapleCompass overlay shell: window lookup, Title Region capture and rendering around compass-core"
+authors = ["Jeffrey Davis"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+# The `_lib` suffix keeps the lib name distinct from the bin (cargo#8519 on Windows).
+name = "maplecompass_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+compass-core = { path = "../crates/compass-core" }
+tauri = { version = "2.12", features = [] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+image = { workspace = true, features = ["png"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "=0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dwm",
+] }
