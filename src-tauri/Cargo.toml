@@ -1,0 +1,42 @@
+[package]
+name = "maplecompass"
+version = "0.1.0"
+description = "MapleCompass overlay shell: window lookup, Title Region capture and rendering around compass-core"
+authors = ["Jeffrey Davis"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+# The `_lib` suffix keeps the lib name distinct from the bin (cargo#8519 on Windows).
+name = "maplecompass_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+compass-core = { path = "../crates/compass-core" }
+tauri = { version = "2.12", features = [] }
+# RegisterHotKey on Windows: no keyboard hook, no input sent anywhere (ADR 0001).
+tauri-plugin-global-shortcut = "2.4"
+# Opens the shown map's MeowDB page in the player's browser.
+tauri-plugin-opener = "2"
+serde = { workspace = true }
+serde_json = { workspace = true }
+# MeowDB pages (ADR 0003). OS TLS (SChannel on Windows): reqwest's default rustls
+# backend builds aws-lc, which needs NASM/CMake.
+reqwest = { version = "0.13", default-features = false, features = ["native-tls", "http2", "charset", "system-proxy", "gzip"] }
+
+[dev-dependencies]
+image = { workspace = true, features = ["png"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "=0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dwm",
+    "Win32_System_Threading",
+] }

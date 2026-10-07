@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/setup.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MapleCompass setup</title>
+    <script type="module" src="/src/setup.ts" defer></script>
+  </head>
+  <body>
+    <header>
+      <img src="/assets/icon.svg" width="28" height="28" alt="" />
+      <h1>MapleCompass setup</h1>
+      <span class="progress" id="progress"></span>
+    </header>
+    <p class="notice" id="notice" hidden></p>
+    <p class="notice" id="hotkey-problem" hidden></p>
+
+    <section data-step="warning">
+      <h2>Before you start: your account</h2>
+      <p>
+        MapleCompass is a third-party tool, not made or approved by Nexon. Nexon's terms forbid
+        some third-party programs, and a penalty in Classic World applies to your whole account,
+        MapleStory included. <strong>Using MapleCompass is at your own risk.</strong>
+      </p>
+      <p>To keep that risk low, MapleCompass only looks at the screen:</p>
+      <ul>
+        <li>It captures the minimap title the same way a screenshot does, and draws its own window.</li>
+        <li>It never reads or changes the game's memory or files, and never injects anything into it.</li>
+        <li>It never presses keys or clicks for you, and automates nothing.</li>
+      </ul>
+      <footer>
+        <button class="secondary" data-action="close">Quit</button>
+        <button data-action="next">I understand, continue</button>
+      </footer>
+    </section>
+
+    <section data-step="window">
+      <h2>Find the game window</h2>
+      <p id="window-status"></p>
+      <p id="pick-status" class="muted"></p>
+      <footer>
+        <button class="secondary" id="pick">Pick the game window by hand</button>
+        <button data-action="next" id="window-next">Next</button>
+      </footer>
+    </section>
+
+    <section data-step="requirements">
+      <h2>Set up the game</h2>
+      <ul class="checklist">
+        <li>
+          <strong>Keep the minimap open, with its title showing.</strong>
+          MapleCompass reads the street name and map name at the top of the minimap.
+        </li>
+        <li>
+          <strong>Play in windowed or borderless mode.</strong>
+          Screen capture can't see exclusive fullscreen, and the panel can only dock beside a
+          window.
+        </li>
+      </ul>
+      <footer>
+        <button class="secondary" data-action="back">Back</button>
+        <button data-action="next">Next</button>
+      </footer>
+    </section>
+
+    <section data-step="mark">
+      <h2>Mark the minimap title</h2>
+      <p>
+        Drag a box around the two lines of the minimap title: the street name and the map name.
+        Leave a little of the blue panel around them.
+      </p>
+      <p class="muted">Press Esc to cancel. Long map names are read whole, even if the title is short now.</p>
+      <footer>
+        <button class="secondary" data-action="back">Back</button>
+        <button class="mark" id="mark">Mark the title</button>
+      </footer>
+    </section>
+
+    <section data-step="test">
+      <h2>Test read</h2>
+      <div class="test-read" id="test-read"></div>
+      <p class="muted credit" id="test-credit"></p>
+      <p class="muted" id="resetup-hint"></p>
+      <footer>
+        <button class="secondary mark">Mark again</button>
+        <button id="finish">Finish</button>
+      </footer>
+    </section>
+  </body>
+</html>
