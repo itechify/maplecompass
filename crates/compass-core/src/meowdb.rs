@@ -4,6 +4,7 @@
 use crate::map_data::{HiddenPortal, MapData, MapSummary, Mob, PerParty};
 use crate::map_index::{MapEntry, SourceError};
 use crate::portals::{self, Exit, MapFacts, Minimap};
+use crate::portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 use serde_json::Value;
 
 /// MeowDB's "All Maps A-Z" page: every map, grouped by region and street.
@@ -70,11 +71,24 @@ pub fn map_url(id: &str) -> String {
 /// chunks, a missing or repeated payload, a payload for another map, missing fields,
 /// or a mob that the summary or the Monsters table doesn't list. A map without mobs
 /// and without a summary (a town) is valid.
+///
+/// The map's Hidden Portals follow the Hidden Portal rule and the app's hand-kept
+/// [`PORTAL_OVERRIDES`].
 pub fn read_map_page(html: &str, id: &str) -> Result<MapData, SourceError> {
-    read_page(html, id).map_err(|why| SourceError::FormatChanged(format!("map page {id}: {why}")))
+    read_map_page_with(html, id, PORTAL_OVERRIDES)
 }
 
-fn read_page(html: &str, id: &str) -> Result<MapData, String> {
+/// [`read_map_page`], with these portal overrides in place of [`PORTAL_OVERRIDES`].
+pub fn read_map_page_with(
+    html: &str,
+    id: &str,
+    overrides: &[PortalOverride],
+) -> Result<MapData, SourceError> {
+    read_page(html, id, overrides)
+        .map_err(|why| SourceError::FormatChanged(format!("map page {id}: {why}")))
+}
+
+fn read_page(html: &str, id: &str, overrides: &[PortalOverride]) -> Result<MapData, String> {
     let flight = flight(html)?;
     let map = props_at(&flight, r#"{"map":{"id":""#)?.ok_or("no map payload")?;
     let map = &map["map"];
@@ -139,12 +153,16 @@ fn read_page(html: &str, id: &str) -> Result<MapData, String> {
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
-    Ok(MapData { summary, mobs, hidden_portals: hidden_portals(map, id)? })
+    Ok(MapData { summary, mobs, hidden_portals: hidden_portals(map, id, overrides)? })
 }
 
 /// The map's Hidden Portals from its `portals` (exits to other maps). `intraPortals`,
 /// teleports within the map, are never Hidden Portals, but must be there all the same.
-fn hidden_portals(map: &Value, id: &str) -> Result<Vec<HiddenPortal>, String> {
+fn hidden_portals(
+    map: &Value,
+    id: &str,
+    overrides: &[PortalOverride],
+) -> Result<Vec<HiddenPortal>, String> {
     let text = |v: &Value, what: &str| -> Result<String, String> {
         v.as_str().map(|s| s.trim().to_string()).ok_or_else(|| format!("{what} is {v}, not text"))
     };
@@ -176,7 +194,7 @@ fn hidden_portals(map: &Value, id: &str) -> Result<Vec<HiddenPortal>, String> {
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
-    Ok(portals::hidden_portals(&facts, exits))
+    Ok(portals::hidden_portals(&facts, exits, overrides))
 }
 
 /// The page's flight stream: the strings of every `self.__next_f.push([1, "…"])`, joined

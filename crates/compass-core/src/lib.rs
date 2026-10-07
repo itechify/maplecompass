@@ -8,6 +8,7 @@ mod map_index;
 mod matcher;
 pub mod meowdb;
 mod panel;
+mod portal_overrides;
 mod portals;
 mod prep;
 mod recogniser;
@@ -16,6 +17,7 @@ mod tracker;
 
 pub use map_data::{HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty};
 pub use map_index::{MapDataSource, MapEntry, SourceError};
+pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 pub use panel::{
     Action, GameWindow, InsideOffset, Layer, PanelSizes, PlacementMode, ScreenPoint, ScreenRect,
     Size,
