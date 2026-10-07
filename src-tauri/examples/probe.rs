@@ -14,14 +14,16 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let reads: u32 = args.next().and_then(|s| s.parse().ok()).unwrap_or(5);
     let save = args.next();
-    let Some(client) = gamewin::find_game_client() else {
-        println!("No visible \"{}\" window found.", gamewin::GAME_TITLE);
-        return;
-    };
-    println!("Game client area: {client:?}");
     // Its own cache, outside the app's: the probe has no Tauri path resolver.
     let cache = std::env::temp_dir().join("maplecompass-probe-cache");
     let mut compass = Compass::new(MeowDbSource::new(cache).expect("HTTP client"));
+    let title = compass.panel_state().game_window_title.clone();
+    gamewin::look_for(&title);
+    let Some(client) = gamewin::find_game_client() else {
+        println!("No visible \"{title}\" window found.");
+        return;
+    };
+    println!("Game client area: {client:?}");
     let start = Instant::now();
     let mut last = None;
     for _ in 0..reads {

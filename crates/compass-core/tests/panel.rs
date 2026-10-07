@@ -146,14 +146,13 @@ fn the_dragged_spot_and_collapsed_state_survive_a_restart() {
 
 #[test]
 fn an_empty_settings_file_gives_the_default_panel_and_hotkeys() {
-    let settings: Settings = serde_json::from_str("{}").unwrap();
-    assert_eq!(settings.hotkeys.toggle_panel, "ctrl+shift+m");
-    assert_eq!(settings.hotkeys.edit_mode, "ctrl+shift+e");
-    assert_eq!(settings.hotkeys.cycle_placement, "ctrl+shift+d");
-
     let mut compass = compass();
-    compass.restore(settings);
+    compass.restore(serde_json::from_str("{}").unwrap());
+
     let state = compass.on_game_window(game(GAME));
+    assert_eq!(state.hotkeys.toggle_panel, "super+alt+c");
+    assert_eq!(state.hotkeys.edit_mode, "super+alt+e");
+    assert_eq!(state.hotkeys.cycle_placement, "super+alt+p");
     assert!(state.expanded);
     assert_eq!(state.placement_mode, PlacementMode::Inside);
     assert_eq!(state.placement, Some(rect(2376, 674, 340, 72)));
@@ -290,6 +289,17 @@ fn a_detached_panel_moved_to_another_monitor_stays_there_across_a_restart() {
     let state = restarted.on_game_window(game(GAME));
     assert_eq!(state.placement_mode, PlacementMode::Detached);
     assert_eq!(state.placement, Some(rect(-1500, 200, 340, 72)));
+}
+
+/// Earlier versions saved the placement under `placement`.
+#[test]
+fn a_placement_saved_by_an_earlier_version_is_kept() {
+    let mut compass = compass();
+    compass.restore(serde_json::from_str(r#"{"version":1,"placement":"dockedLeft"}"#).unwrap());
+
+    let state = compass.on_game_window(game(GAME));
+
+    assert_eq!(state.placement_mode, PlacementMode::DockedLeft);
 }
 
 #[test]

@@ -12,7 +12,8 @@ type SetupReason = "firstRun" | "resolutionChanged" | "requested";
 
 /** Mirror of the shell's `SetupView`. */
 type SetupView = {
-  setup: { needed: SetupReason | null; testRead: TestRead | null };
+  setup: { needed: SetupReason | null; testRead: TestRead | null; credit: string | null };
+  unavailableHotkeys: string[];
   recognition: { status: "starting" | "ready" | "savedCopy" | "unavailable" };
   game: { width: number; height: number } | null;
   gameTitle: string;
@@ -44,11 +45,11 @@ function move(by: number) {
   show(STEPS[Math.min(Math.max(STEPS.indexOf(step) + by, 0), STEPS.length - 1)]);
 }
 
-/** "ctrl+shift+s" -> "Ctrl+Shift+S" */
+/** "super+alt+s" -> "Win+Alt+S" */
 function keyLabel(accelerator: string): string {
   return accelerator
     .split("+")
-    .map((k) => k.charAt(0).toUpperCase() + k.slice(1))
+    .map((k) => (k.toLowerCase() === "super" ? "Win" : k.charAt(0).toUpperCase() + k.slice(1)))
     .join("+");
 }
 
@@ -99,8 +100,15 @@ function render() {
       "No map recognised in the marked box. Check that the minimap title is showing, then mark a box around both lines with a little of the blue panel around them.";
   }
   ($("finish") as HTMLButtonElement).disabled = read?.status !== "recognised";
+  $("test-credit").textContent = setup.credit ? `Map names from ${setup.credit}` : "";
   $("resetup-hint").textContent =
     `To mark the title again later, press ${keyLabel(view.setupHotkey)} while you play.`;
+  const taken = view.unavailableHotkeys.map(keyLabel);
+  $("hotkey-problem").hidden = taken.length === 0;
+  $("hotkey-problem").textContent =
+    `${taken.join(", ")} ${taken.length === 1 ? "is" : "are"} taken by another app (or invalid), so ` +
+    `${taken.length === 1 ? "that hotkey does" : "those hotkeys do"} nothing. Close the app that uses ` +
+    `${taken.length === 1 ? "it" : "them"}, or change MapleCompass's hotkeys in settings.json, then restart MapleCompass.`;
 }
 
 function update(next: SetupView) {

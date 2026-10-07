@@ -10,7 +10,7 @@
 
 use crate::gamewin::{self, ClientArea};
 use crate::Command;
-use compass_core::{Action, PanelState, Recognition, Rect, SetupReason, SetupState};
+use compass_core::{Action, PanelState, Recognition, Rect, SetupState};
 use serde::Serialize;
 use std::sync::Mutex;
 use std::sync::mpsc::Sender;
@@ -26,8 +26,6 @@ pub struct Bridge {
     pub picks: Sender<String>,
     /// The game's client area as last found, where the region window goes.
     pub game: Mutex<Option<ClientArea>>,
-    /// Why setup is needed, as last reported by the core.
-    pub needed: Mutex<Option<SetupReason>>,
     /// The last view sent to the setup window, for when it loads after it was sent.
     pub view: Mutex<Option<serde_json::Value>>,
 }
@@ -43,6 +41,8 @@ struct SetupView<'a> {
     /// The window title looked for.
     game_title: &'a str,
     setup_hotkey: &'a str,
+    /// Hotkeys another app has taken.
+    unavailable_hotkeys: &'a [String],
 }
 
 #[derive(Serialize)]
@@ -51,63 +51,55 @@ struct GameView {
     height: u32,
 }
 
-/// Shows the setup window when the core says setup is needed, and hides it when done.
+/// Shows and hides the setup window as the core says.
 pub struct SetupWindows {
     app: AppHandle,
     setup: WebviewWindow,
-    shown_for: Option<SetupReason>,
+    shown: bool,
     /// The last view sent to the setup window.
     emitted: Option<serde_json::Value>,
 }
 
 impl SetupWindows {
-    /// Closing setup cancels it; closing it on the first run quits, since there is
-    /// nothing to read without a Title Region.
+    /// Closing setup tells the core, which decides what that means (on the first run,
+    /// quitting).
     pub fn new(app: &AppHandle) -> tauri::Result<Self> {
         let setup = app.get_webview_window(SETUP).expect("setup window in tauri.conf.json");
         let handle = app.clone();
         setup.on_window_event(move |event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                let bridge = handle.state::<Bridge>();
-                if *bridge.needed.lock().unwrap() == Some(SetupReason::FirstRun) {
-                    handle.exit(0);
-                    return;
-                }
                 hide(&handle, SETUP);
                 hide(&handle, REGION);
-                let _ = bridge.commands.send(Command::Act(Action::CancelSetup));
+                let _ = handle.state::<Bridge>().commands.send(Command::Act(Action::CancelSetup));
             }
         });
-        Ok(Self { app: app.clone(), setup, shown_for: None, emitted: None })
-    }
-
-    /// Bring setup up (the re-setup hotkey), even if it was needed before and closed.
-    pub fn open(&self) {
-        let _ = self.setup.show();
-        let _ = self.setup.unminimize();
-        let _ = self.setup.set_focus();
+        Ok(Self { app: app.clone(), setup, shown: false, emitted: None })
     }
 
     /// Follow the core's setup state, and send the setup window what it renders.
-    pub fn sync(&mut self, state: &PanelState, game: Option<ClientArea>, game_title: &str, setup_hotkey: &str) {
-        *self.app.state::<Bridge>().needed.lock().unwrap() = state.setup.needed;
+    pub fn sync(&mut self, state: &PanelState, game: Option<ClientArea>) {
         *self.app.state::<Bridge>().game.lock().unwrap() = game;
-        match (self.shown_for, state.setup.needed) {
-            (None, Some(_)) => self.open(),
-            (Some(_), None) => {
+        match (self.shown, state.setup.window_open) {
+            (false, true) => {
+                let _ = self.setup.show();
+                let _ = self.setup.unminimize();
+                let _ = self.setup.set_focus();
+            }
+            (true, false) => {
                 hide(&self.app, SETUP);
                 hide(&self.app, REGION);
             }
             _ => {}
         }
-        self.shown_for = state.setup.needed;
+        self.shown = state.setup.window_open;
         let view = SetupView {
             setup: &state.setup,
             recognition: state.recognition,
             game: game.map(|c| GameView { width: c.width, height: c.height }),
-            game_title,
-            setup_hotkey,
+            game_title: &state.game_window_title,
+            setup_hotkey: &state.hotkeys.setup,
+            unavailable_hotkeys: &state.unavailable_hotkeys,
         };
         // Only send changes: the loop wakes up 20 times a second.
         let Ok(view) = serde_json::to_value(&view) else { return };

@@ -76,11 +76,6 @@ type PanelState = {
   layer: "aboveGame" | "free" | "hidden";
   draggable: boolean;
   setup: { needed: "firstRun" | "resolutionChanged" | "requested" | null };
-};
-
-/** Mirror of the shell's `OverlayState`. */
-type OverlayState = {
-  panel: PanelState;
   hotkeys: {
     togglePanel: string;
     editMode: string;
@@ -89,6 +84,8 @@ type OverlayState = {
     setup: string;
     chooseCandidate: string;
   };
+  unavailableHotkeys: string[];
+  gameWindowTitle: string;
 };
 
 const byId = (id: string) => document.getElementById(id)!;
@@ -109,6 +106,7 @@ const portalRows = byId("portal-rows");
 const footer = byId("footer");
 const credit = byId("credit");
 const openHint = byId("open-hint");
+const hotkeyProblem = byId("hotkey-problem");
 let draggable = false;
 
 const PLACEMENT_NAMES: Record<PlacementMode, string> = {
@@ -118,12 +116,19 @@ const PLACEMENT_NAMES: Record<PlacementMode, string> = {
   detached: "Detached",
 };
 
-/** "ctrl+shift+e" -> "Ctrl+Shift+E" */
+/** "super+alt+e" -> "Win+Alt+E" */
 function keyLabel(accelerator: string): string {
   return accelerator
     .split("+")
-    .map((k) => k.charAt(0).toUpperCase() + k.slice(1))
+    .map((k) => (k.toLowerCase() === "super" ? "Win" : k.charAt(0).toUpperCase() + k.slice(1)))
     .join("+");
+}
+
+/** "Win+Alt+E is taken by another app, so it does nothing here" */
+function takenHotkeys(hotkeys: string[]): string {
+  if (hotkeys.length === 0) return "";
+  const one = hotkeys.length === 1;
+  return `${hotkeys.map(keyLabel).join(", ")} ${one ? "is" : "are"} taken by another app (or invalid), so ${one ? "it does" : "they do"} nothing here`;
 }
 
 const number = (n: number) => n.toLocaleString("en-US");
@@ -197,17 +202,17 @@ function dataNote(data: MapDataStatus, recognition: Recognition): string {
   }
 }
 
-function renderData(state: OverlayState) {
-  const { data } = state.panel;
-  const shown = state.panel.gameFound && !!state.panel.map;
+function renderData(panel: PanelState) {
+  const { data } = panel;
+  const shown = panel.gameFound && !!panel.map;
   dataEl.hidden = !shown;
   footer.hidden = !shown;
   if (!shown) return;
 
-  const { candidates } = state.panel;
+  const { candidates } = panel;
   candidatesEl.hidden = !candidates;
   if (candidates) {
-    const next = `${keyLabel(state.hotkeys.chooseCandidate)} for the next`;
+    const next = `${keyLabel(panel.hotkeys.chooseCandidate)} for the next`;
     candidatesNote.textContent = candidates.chosen
       ? `Your pick of ${candidates.maps.length} maps with this title · ${next}`
       : `${candidates.maps.length} maps share this title; not sure which you're on · ${next}`;
@@ -222,10 +227,10 @@ function renderData(state: OverlayState) {
     );
   }
 
-  note.textContent = dataNote(data, state.panel.recognition);
+  note.textContent = dataNote(data, panel.recognition);
   note.hidden = note.textContent === "";
   const problem = ["unavailable", "formatChanged", "savedCopy"].includes(data.status);
-  note.classList.toggle("problem", problem || state.panel.recognition.status === "savedCopy");
+  note.classList.toggle("problem", problem || panel.recognition.status === "savedCopy");
 
   const ready = data.status === "ready" || data.status === "savedCopy" ? data : null;
   summary.hidden = !ready?.summary;
@@ -256,12 +261,12 @@ function renderData(state: OverlayState) {
   noPortals.hidden = !ready || ready.hiddenPortals.length > 0;
   portalRows.replaceChildren(...(ready?.hiddenPortals ?? []).map(portalRow));
 
-  credit.textContent = state.panel.credit ?? "";
-  openHint.textContent = `${keyLabel(state.hotkeys.openMeowdbPage)} opens the page`;
+  credit.textContent = panel.credit ?? "";
+  openHint.textContent = `${keyLabel(panel.hotkeys.openMeowdbPage)} opens the page`;
 }
 
-function render(state: OverlayState) {
-  const { panel, hotkeys } = state;
+function render(panel: PanelState) {
+  const { hotkeys } = panel;
   const { recognition, map: current, notSure } = panel;
   draggable = panel.draggable;
   // Hidden while the game is minimised or gone: the window stays, but draws nothing.
@@ -273,12 +278,12 @@ function render(state: OverlayState) {
   document.body.classList.toggle("not-sure", !!current && notSure);
   if (!panel.gameFound) {
     street.textContent = "";
-    map.textContent = "Looking for MapleStory…";
+    map.textContent = `Looking for ${panel.gameWindowTitle}…`;
   } else if (panel.setup.needed === "firstRun" || panel.setup.needed === "resolutionChanged") {
     // Nothing is read until the Title Region is marked (again).
     street.textContent =
       panel.setup.needed === "firstRun" ? "Finish setup to start" : "The game window changed size";
-    map.textContent = `Set up: ${keyLabel(state.hotkeys.setup)}`;
+    map.textContent = `Set up: ${keyLabel(panel.hotkeys.setup)}`;
   } else if (recognition.status === "unavailable") {
     street.textContent = "Couldn't load the map list from MeowDB";
     map.textContent = "Map recognition unavailable";
@@ -296,7 +301,9 @@ function render(state: OverlayState) {
         ? `Drag to move · ${keyLabel(hotkeys.editMode)} when done`
         : place;
   }
-  renderData(state);
+  hotkeyProblem.textContent = takenHotkeys(panel.unavailableHotkeys);
+  hotkeyProblem.hidden = hotkeyProblem.textContent === "";
+  renderData(panel);
   reportHeight(panel.expanded);
 }
 
@@ -319,4 +326,4 @@ document.addEventListener("mousedown", (e) => {
   }
 });
 
-listen<OverlayState>("overlay-state", (e) => render(e.payload));
+listen<PanelState>("overlay-state", (e) => render(e.payload));
