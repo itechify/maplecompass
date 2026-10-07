@@ -10,6 +10,7 @@ type PerParty = { solo: number; fullParty: number };
 
 /** Mirror of `compass_core::Mob`. */
 type Mob = {
+  id: string;
   name: string;
   level: number;
   hp: number;
