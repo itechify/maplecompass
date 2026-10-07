@@ -272,9 +272,6 @@ fn route(distances: &Distances, map_id: &str, crawl: &Crawl) -> Vec<RouteStop> {
         .collect()
 }
 
-/// MeowDB's display region for event maps, which the player can't normally enter.
-const EVENT_REGION: &str = "Event";
-
 /// Every known, non-Event map mob `mob_id` spawns on, ranked: by Density Tier; within a
 /// tier, maps with a route by Distance from map `from` (by portals, ships and the
 /// `travel` turned on), then those with no known route, then the quest-only ones; then
@@ -284,7 +281,7 @@ fn results(mob_id: &str, crawl: &Crawl, from: Option<&str>, travel: Travel) -> V
     let distance = |map_id: &str| distances.as_ref().map_or(Distance::Unknown, |d| d.to(map_id));
     let found: Vec<(&MapEntry, &Mob, u32)> = crawl
         .known()
-        .filter(|(entry, _)| entry.region != EVENT_REGION)
+        .filter(|(entry, _)| !entry.is_event())
         .flat_map(|(entry, data)| {
             data.mobs
                 .iter()
