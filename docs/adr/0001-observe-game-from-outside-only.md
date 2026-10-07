@@ -5,3 +5,5 @@ MapleCompass must not be seen as interacting with the MapleStory client, because
 ## Consequences
 
 The map has to be inferred from the rendered minimap title (OCR or glyph matching) rather than read directly. Shortcuts such as reading the current map ID from process memory are permanently off the table, even though they would be more accurate.
+
+To stay at the game's level in the z-order, rather than on top of every app, the overlay is kept just above the game by polling the window order and restacking only our own window (`SetWindowPos` with no activation). Making the overlay an owned or child window of the game (`GWLP_HWNDPARENT`, `SetParent`) would do this for free, but it is ruled out: a cross-process owner or parent link attaches our input queue to the game's, which is interaction with the game client. Window-event hooks (`SetWinEventHook`) are avoided for the same reason.
