@@ -49,6 +49,37 @@ body {
   color: #f0c674;
 }
 
+/* The maps sharing the title, each with what sets it apart; the shown one marked. */
+.candidates ol {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: #9fb6cc;
+}
+
+.candidates li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.candidates li::before {
+  content: "\00a0\00a0 ";
+}
+
+.candidates li.current {
+  color: #f2f5f8;
+  font-weight: 600;
+}
+
+.candidates li.current::before {
+  content: "▶ ";
+}
+
 table {
   border-collapse: collapse;
   font-size: 12px;
