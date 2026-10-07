@@ -1,5 +1,13 @@
 //! Every minimap sample, fed through the core's public inputs, shows the map its
 //! filename names: `street-name__map-name[--variant].png`.
+//!
+//! `--title-region` samples are what the shell captures with `default_title_region`
+//! (the probe's capture, 560x96 at client (0, 16)), fed whole. The Tree That Grew II's
+//! is the probe's live capture. I's and III's are that same rectangle cropped from the
+//! player's screenshots of the game's client area (no Windows title bar, so the
+//! minimap starts at y = 0); those screenshots are hand-cropped to within a few px of
+//! the client area, so the crops can sit a pixel or three off the live capture. In
+//! I's, the mouse pointer covers the map icon.
 
 mod common;
 
@@ -7,7 +15,27 @@ use common::{FakeSource, sample_frame, samples_dir};
 use compass_core::{Compass, CurrentMap};
 use std::path::PathBuf;
 
-/// ocrs reads this title as "Rocky RoadI"; the panel still shows the real map.
+/// Map names that differ only in a trailing Roman numeral: ocrs reads the game font's
+/// "II" and "III" as an unknown glyph, which once snapped both to "The Tree That Grew I".
+#[test]
+fn the_tree_that_grew_i_ii_and_iii_each_show_their_own_map() {
+    for (sample, id, map_name) in [
+        ("victoria-road__the-tree-that-grew-i--title-region", "010002060", "The Tree That Grew I"),
+        ("victoria-road__the-tree-that-grew-ii--title-region", "010002061", "The Tree That Grew II"),
+        ("victoria-road__the-tree-that-grew-iii--title-region", "010002062", "The Tree That Grew III"),
+    ] {
+        let mut compass = Compass::new(FakeSource::meowdb());
+        compass.on_frame(sample_frame(sample, 0));
+        let state = compass.on_frame(sample_frame(sample, 333));
+
+        let shown = state.map.as_ref().map(|m| (m.id.as_str(), m.street_name.as_str(), m.map_name.as_str()));
+        assert_eq!(shown, Some((id, "Victoria Road", map_name)), "{sample}");
+        assert!(!state.not_sure, "{sample}");
+    }
+}
+
+/// ocrs runs this title's last two words together ("Rocky RoadI"); the panel still
+/// shows the real map.
 #[test]
 fn a_slightly_misread_title_snaps_to_the_right_map() {
     let mut compass = Compass::new(FakeSource::meowdb());

@@ -30,7 +30,7 @@ pub use setup::{SetupReason, SetupState, TestRead, TitleRegion};
 pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
 
 use shown_map::ShownMap;
-use matcher::Matcher;
+use matcher::{Match, Matcher, Snap};
 use panel::Panel;
 use setup::Setup;
 pub use recogniser::{TitleLines, TitleReader, TitleReading};
@@ -231,7 +231,21 @@ impl Compass {
             self.setup.on_read(None);
             return self.sync_panel();
         };
-        let snap = reading.lines.and_then(|lines| matcher.snap(&lines.street, &lines.map));
+        let snap = reading.lines.and_then(|lines| match matcher.snap(&lines.street, &lines.map)? {
+            Match::Sure(snap) => Some(snap),
+            // Names differing only in a numeral the reading doesn't make out: the
+            // one within the player's reach, if just one is; otherwise not sure.
+            Match::OneOf { maps, score } => {
+                let reach = self.shown_map.within_reach();
+                let mut reachable = maps.into_iter().filter(|&i| {
+                    matcher.same_title_as(i).into_iter().any(|j| reach.contains(&matcher.map(j).id))
+                });
+                match (reachable.next(), reachable.next()) {
+                    (Some(index), None) => Some(Snap { index, score }),
+                    _ => None,
+                }
+            }
+        });
         let current_map = |i: usize| {
             let entry = matcher.map(i);
             CurrentMap {

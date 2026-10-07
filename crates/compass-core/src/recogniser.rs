@@ -2,9 +2,9 @@
 //! boxes from our own mask and line split, so ocrs' detection model is not shipped.
 
 use crate::Frame;
-use crate::prep::{Prepared, prepare};
+use crate::prep::{Numeral, Prepared, prepare};
 use image::RgbImage;
-use ocrs::{ImageSource, OcrEngine, OcrEngineParams};
+use ocrs::{ImageSource, OcrEngine, OcrEngineParams, TextItem, TextLine};
 use rten::Model;
 use rten_imageproc::{RectF, RotatedRect};
 
@@ -96,12 +96,27 @@ impl Recogniser {
             })
             .collect();
         let out = self.engine.recognize_text(&input, &boxes).ok()?;
-        let text = |i: usize| {
-            out.get(i)
-                .and_then(|l| l.as_ref())
-                .map(|l| l.to_string().trim().to_string())
-                .filter(|s| !s.is_empty())
+        let line = |i: usize| out.get(i).and_then(|l| l.as_ref());
+        let street = line(0).map(|l| l.to_string().trim().to_string());
+        let map = match (line(1), p.numeral) {
+            (line, Some(numeral)) => Some(with_numeral(line, numeral)),
+            (Some(line), None) => Some(line.to_string().trim().to_string()),
+            (None, None) => None,
         };
-        Some(TitleLines { street: text(0)?, map: text(1)? })
+        let nonempty = |s: Option<String>| s.filter(|s| !s.is_empty());
+        Some(TitleLines { street: nonempty(street)?, map: nonempty(map)? })
     }
+}
+
+/// The map line as read, with whatever ocrs made of its last word (an unknown glyph
+/// for "II", say) replaced by the numeral counted from the mask.
+fn with_numeral(line: Option<&TextLine>, numeral: Numeral) -> String {
+    let before: String = line
+        .map(|l| l.chars())
+        .unwrap_or_default()
+        .iter()
+        .filter(|c| (c.rect.left() + c.rect.right()) < 2 * numeral.x as i32)
+        .map(|c| c.char)
+        .collect();
+    format!("{} {}", before.trim(), "I".repeat(numeral.strokes)).trim().to_string()
 }
