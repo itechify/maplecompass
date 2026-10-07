@@ -72,7 +72,7 @@ type ExpTracking = {
   timeToLevelS: number | null;
   timeToLevelBadge: string | null;
   rolling: ExpRate | null;
-  session: ExpRate | null;
+  sessionAverage: ExpRate | null;
   ceilingShareHundredths: number | null;
   deaths: { count: number; expLost: number; percentLostHundredths: number };
 };
@@ -131,7 +131,12 @@ const hotkeyProblem = byId("hotkey-problem");
 const trackingEl = byId("tracking");
 const trackingWaiting = byId("tracking-waiting");
 const trackingFigures = byId("tracking-figures");
+const timeToLevel = byId("time-to-level");
 const trackingTag = byId("tracking-tag");
+const rollingExp = byId("rolling-exp");
+const sessionExp = byId("session-exp");
+const rollingPercent = byId("rolling-percent");
+const sessionPercent = byId("session-percent");
 const trackingExtra = byId("tracking-extra");
 const resetSession = byId("reset-session");
 const badge = byId("badge");
@@ -317,7 +322,7 @@ function renderTracking(panel: PanelState) {
   // Only while the overlay takes the mouse: edit mode inside the game, or detached.
   resetSession.hidden = waiting || !(panel.editMode && panel.draggable);
 
-  byId("ttl").textContent = tracking.timeToLevelBadge ?? "—";
+  timeToLevel.textContent = tracking.timeToLevelBadge ?? "—";
   const tag = TRACKING_TAGS[tracking.state];
   trackingTag.hidden = !tag;
   trackingTag.textContent = tag ?? "";
@@ -326,10 +331,10 @@ function renderTracking(panel: PanelState) {
   const exp = (rate: ExpRate | null) => (rate ? signed(number(rate.expPerHour)) : "—");
   const share = (rate: ExpRate | null) =>
     rate?.percentPerHourHundredths != null ? percent(rate.percentPerHourHundredths) : "—";
-  byId("rolling-exp").textContent = exp(tracking.rolling);
-  byId("session-exp").textContent = exp(tracking.session);
-  byId("rolling-percent").textContent = share(tracking.rolling);
-  byId("session-percent").textContent = share(tracking.session);
+  rollingExp.textContent = exp(tracking.rolling);
+  sessionExp.textContent = exp(tracking.sessionAverage);
+  rollingPercent.textContent = share(tracking.rolling);
+  sessionPercent.textContent = share(tracking.sessionAverage);
 
   const extra = [];
   if (tracking.ceilingShareHundredths !== null) {
