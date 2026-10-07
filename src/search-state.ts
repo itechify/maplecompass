@@ -30,6 +30,9 @@ export type SearchResult = {
   travel: Step[];
 };
 
+/** Mirror of `compass_core::Travel`: taxi rides between towns, and Teleport Scrolls to towns. */
+export type Travel = { taxis: boolean; teleportScrolls: boolean };
+
 /** Mirror of `compass_core::SearchState`. */
 export type SearchState = {
   windowOpen: boolean;
@@ -38,18 +41,20 @@ export type SearchState = {
   highlighted: number | null;
   picked: MobChoice | null;
   results: SearchResult[];
+  /** The first five results: the panel's list. */
+  topResults: SearchResult[];
+  /** How many results there are besides the panel's. */
+  moreResults: number;
+  /** The picked mob spawns only on Event maps, which search leaves out. */
+  onlyOnEventMaps: boolean;
   highlightedResult: number | null;
-  nearest: SearchResult | null;
+  /** Which result is the nearest with a route. */
+  nearest: number | null;
   credit: string | null;
   crawl: CrawlProgress;
-  /** Distances count taxi rides between towns (the Taxis checkbox). */
-  taxis: boolean;
-  /** Distances count Teleport Scrolls to towns (the Teleport Scrolls checkbox). */
-  teleportScrolls: boolean;
+  /** What Distances count besides portals and ships (the checkboxes). */
+  travel: Travel;
 };
-
-/** Mirror of `compass_core::PANEL_RESULTS`: the panel shows this many results. */
-export const PANEL_RESULTS = 5;
 
 export const TIER_NAMES: Record<DensityTier, string> = { high: "High", medium: "Medium", low: "Low" };
 
@@ -60,15 +65,13 @@ export const density = (hundredths: number) =>
 /** "Orange Mushroom · Lv 8" */
 export const mobTitle = (mob: MobChoice) => `${mob.name} · Lv ${mob.level}`;
 
-/** Why a picked mob has no results, or that the list may be incomplete mid-crawl. */
-export function resultsNote(search: SearchState): string {
-  if (!search.picked) return "";
-  const { crawl } = search;
-  if (search.results.length === 0) {
-    return crawl.done ? "It only spawns on Event maps." : "None of the maps known so far.";
-  }
-  return crawl.done ? "" : `From the ${crawl.known} of ${crawl.total} maps known so far.`;
-}
+/** Why a picked mob has no results, as the core says. (The crawl line says how much of the world is known.) */
+export const resultsNote = (search: SearchState) =>
+  search.onlyOnEventMaps ? "Found only on Event maps, which search leaves out." : "";
+
+/** "312 of 422 maps known" while the world crawl runs; "" before the Map list arrives and once it's done. */
+export const crawlLine = ({ crawl }: SearchState) =>
+  crawl.total > 0 && !crawl.done ? `${crawl.known} of ${crawl.total} maps known` : "";
 
 const DISTANCE_TEXT = {
   noRoute: { text: "no route", title: "No known route leads there" },
@@ -104,12 +107,54 @@ export const travelMarker = (result: SearchResult) => result.travel.map((step) =
 
 /** The headline: "Nearest: Mushroom Field, 2 map changes away", or "" with none. */
 export function nearestLine(search: SearchState): string {
-  const { nearest } = search;
+  const nearest = search.nearest === null ? null : search.results[search.nearest];
   if (!nearest || typeof nearest.distance === "string") return "";
   const n = nearest.distance.mapChanges;
   const away = n === 0 ? "the map you're on" : `${n} map change${n === 1 ? "" : "s"} away`;
   const travel = travelMarker(nearest);
   return `Nearest: ${nearest.mapName}, ${away}${travel ? ` · ${travel}` : ""}`;
+}
+
+/** A results table's header row: Map, Density, Share, Tier, Distance. */
+export function resultsHead(): HTMLTableSectionElement {
+  const head = document.createElement("thead");
+  const row = head.insertRow();
+  const columns: [string, string?, string?][] = [
+    ["Map"],
+    ["Density", "Spawn Count × Mob Rate"],
+    ["Share", "Share of all mob spawns on the Map", "Spawn Share"],
+    ["Tier"],
+    ["Distance", "Map changes from the map you're on"],
+  ];
+  for (const [text, title, label] of columns) {
+    const th = document.createElement("th");
+    th.textContent = text;
+    if (title) th.title = title;
+    if (label) th.setAttribute("aria-label", label);
+    row.append(th);
+  }
+  return head;
+}
+
+/** A picked mob's section, in the panel or the search window. */
+export type PickedSection = {
+  title: HTMLElement;
+  nearest: HTMLElement;
+  note: HTMLElement;
+  table: HTMLTableElement;
+  rows: HTMLElement;
+};
+
+/** Show the picked mob, its headline, why it has no results, and these result rows. */
+export function showPicked(section: PickedSection, search: SearchState, picked: MobChoice, rows: HTMLTableRowElement[]) {
+  section.title.textContent = mobTitle(picked);
+  section.nearest.textContent = nearestLine(search);
+  section.nearest.hidden = section.nearest.textContent === "";
+  section.note.textContent = resultsNote(search);
+  section.note.hidden = section.note.textContent === "";
+  section.table.hidden = rows.length === 0;
+  if (!section.table.tHead) section.table.prepend(resultsHead());
+  section.rows.replaceChildren(...rows);
 }
 
 /** One result as table cells: map (name over street), Density, Spawn Share, tier, Distance. */

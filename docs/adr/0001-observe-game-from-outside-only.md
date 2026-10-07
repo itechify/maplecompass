@@ -4,7 +4,7 @@ MapleCompass must not be seen as interacting with the MapleStory client, because
 
 Normally clicks pass through the overlay to the game. Two moments are exceptions, and both are our own windows taking the mouse while they lie over the game, never anything sent to the game: edit mode, where the player drags the panel, and the region-marking window, where the player drags a box around the minimap title at setup. While either is up, a click on it lands on MapleCompass and the game doesn't see it, just as with any other window in front of the game.
 
-The mob search window is a third exception, and the only one that takes the keyboard. A hotkey opens it, and it takes focus like any app window the player switches to, so their typing goes to it. Picking a mob or pressing Esc closes it, and Windows gives focus back to the game. Nothing is sent to the game at any point.
+The mob search window is a third exception, and the only one that takes the keyboard. A hotkey opens it, and it takes focus like any app window the player switches to, so their typing goes to it; pressing it again while the window is open brings it back in front the same way. Picking a mob or pressing Esc closes it, and Windows gives focus back to the game. Nothing is sent to the game at any point.
 
 Keyboard input comes only through global hotkeys registered with the operating system (`RegisterHotKey` on Windows): the system tells us when the player presses one of our combinations. There are no low-level keyboard hooks (`WH_KEYBOARD_LL`) and no polling of key state (`GetAsyncKeyState`). A registered combination doesn't reach the game while MapleCompass runs, so the hotkeys avoid what players bind in the game (Ctrl and Shift combinations) and use Win+Alt+letter instead.
 

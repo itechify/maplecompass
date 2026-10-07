@@ -6,7 +6,7 @@
 mod common;
 
 use common::{FakeSource, arrive};
-use compass_core::{Compass, Hotkeys, OpenInBrowser, PlacementMode, Settings, SetupReason};
+use compass_core::{Compass, Hotkeys, PlacementMode, Request, Settings, SetupReason};
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
 
@@ -89,7 +89,7 @@ fn win_alt_o_opens_the_shown_maps_meowdb_page_and_nothing_without_a_map() {
 
     assert_eq!(
         compass.on_hotkey("super+alt+o"),
-        Some(OpenInBrowser { url: "https://meowdb.com/msclassic/maps/010003070".into() })
+        Some(Request::OpenInBrowser { url: "https://meowdb.com/msclassic/maps/010003070".into() })
     );
 }
 
