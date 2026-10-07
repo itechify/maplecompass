@@ -63,6 +63,12 @@ fn panel_height(height: f64, commands: tauri::State<'_, Sender<Command>>) {
     let _ = commands.send(Command::PanelHeight(height));
 }
 
+/// The player clicked the panel's Reset Session button (in edit mode).
+#[tauri::command]
+fn reset_session(commands: tauri::State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::Act(Action::ResetSession));
+}
+
 /// Capture the default Title Region of the game's client area (the probe's guess; the
 /// app captures the region the player marked at setup).
 pub fn capture_title_frame(client: ScreenRect, at_ms: u64) -> Result<Frame, String> {
@@ -127,6 +133,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             panel_height,
+            reset_session,
             setup::setup_view,
             setup::pick_game_window,
             setup::start_marking,
