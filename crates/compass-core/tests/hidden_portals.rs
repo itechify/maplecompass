@@ -223,6 +223,44 @@ fn an_exit_the_override_list_marks_not_hidden_is_left_out() {
     assert_eq!(hidden_portals(&state), []);
 }
 
+/// Never a partial list: if the portals or the minimap bounds aren't where the reader
+/// expects them, the whole page counts as changed.
+#[test]
+fn a_page_whose_portals_or_minimap_bounds_changed_is_reported_as_a_format_change() {
+    let page = saved_page(CONSTRUCTION_SITE_ID).unwrap();
+    let renamed = |field: &str| page.replace(&format!(r#"\"{field}\""#), r#"\"renamed\""#);
+    let mut altered: Vec<_> = [
+        "portals",
+        "intraPortals",
+        "isTown",
+        "minimapWidth",
+        "minimapHeight",
+        "miniMapCenterX",
+        "miniMapCenterY",
+        "toMapId",
+        "toMapName",
+        "toStreetName",
+    ]
+    .into_iter()
+    .map(|field| (format!("{field} renamed"), renamed(field)))
+    .collect();
+    altered.push((
+        "a portal's type not a number".into(),
+        construction_site_with(r#"\"type\":1,"#, r#"\"type\":\"invisible\","#),
+    ));
+    altered.push((
+        "a portal's position missing".into(),
+        construction_site_with(r#"\"x\":-3415,\"y\":-733,"#, ""),
+    ));
+    for (how, html) in altered {
+        let mut compass = Compass::new(FakeSource::meowdb().with_page(CONSTRUCTION_SITE_ID, html));
+
+        let state = arrive(&mut compass, CONSTRUCTION_SITE, 0);
+
+        assert_eq!(state.data, MapDataStatus::FormatChanged, "{how}");
+    }
+}
+
 /// The Hidden Room has no minimap, so MeowDB gives it no bounds to place its exit by.
 #[test]
 fn on_a_map_without_a_minimap_a_hidden_portals_position_is_unknown() {
