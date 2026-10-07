@@ -1,0 +1,206 @@
+/* The mob search window: setup's opaque Midnight Slate surface, with the overlay's
+   compact data styles for the results. */
+:root {
+  color-scheme: dark;
+  --bg: #121a24;
+  --text: #f2f5f8;
+  --muted: #9fb6cc;
+  --secondary-text: #c3ccd6;
+  --accent: #f5c542;
+  --warning: #f0c674;
+  --inset: rgba(16, 24, 36, 0.9);
+  --inset-border: #2a3846;
+  --secondary-border: #3a4a5c;
+  --selection-fill: rgba(245, 197, 66, 0.12);
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+  cursor: default;
+}
+
+body {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 24px 20px;
+  overflow-y: auto;
+  scrollbar-color: var(--muted) var(--bg);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.progress {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field .label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--secondary-border);
+  border-radius: 6px;
+  background: var(--inset);
+  color: var(--text);
+  font: inherit;
+}
+
+input::placeholder {
+  color: var(--muted);
+}
+
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* The suggestions: the highlighted one is what Enter picks. */
+.suggestions {
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 168px;
+  overflow-y: auto;
+  border: 1px solid var(--inset-border);
+  border-radius: 8px;
+  background: var(--inset);
+  font-size: 13px;
+}
+
+.suggestions li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  color: var(--muted);
+}
+
+.suggestions li.current {
+  background: var(--selection-fill);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.suggestions .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggestions .level {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+
+.none,
+.keys,
+.note,
+.credit {
+  margin: 0;
+  font-size: 12px;
+  color: var(--secondary-text);
+}
+
+.keys {
+  color: var(--muted);
+}
+
+.picked {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+th {
+  font-weight: 400;
+  color: var(--muted);
+  text-align: right;
+}
+
+td {
+  text-align: right;
+  vertical-align: top;
+}
+
+th,
+td {
+  box-sizing: border-box;
+  padding: 2px 0 2px 6px;
+}
+
+th:first-child,
+td:first-child {
+  padding-left: 0;
+  text-align: left;
+}
+
+th:nth-child(1) { width: 52%; }
+th:nth-child(2) { width: 16%; }
+th:nth-child(3) { width: 14%; }
+th:nth-child(4) { width: 18%; }
+
+.result-map,
+.result-street {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-street {
+  color: var(--muted);
+}
+
+.tier.high { font-weight: 600; }
+.tier.medium { color: var(--secondary-text); }
+.tier.low { color: var(--muted); }
