@@ -1,5 +1,5 @@
-//! The panel stays out of the way: it collapses to an icon, and in edit mode the player
-//! drags it to a spot inside the game window that it keeps as the game window moves.
+//! The panel stays out of the way: it collapses to an icon, and the player drags it by
+//! its header to a spot inside the game window that it keeps as the game window moves.
 //! It can also dock against the game window's left or right edge, or detach into a
 //! free window anywhere.
 //!
@@ -13,7 +13,7 @@ mod common;
 use common::FakeSource;
 use common::world::SEARCH;
 use compass_core::{
-    Action, Compass, GameWindow, Layer, PanelSizes, PlacementMode, Rect, ScreenPoint, ScreenRect, Settings, Size,
+    Action, Compass, GameWindow, Layer, PanelSizes, PlacementMode, Rect, ScreenRect, Settings, Size,
     TitleRegion,
 };
 
@@ -66,15 +66,14 @@ fn the_collapse_hotkey_shrinks_the_panel_to_an_icon_and_expands_it_again() {
 }
 
 #[test]
-fn a_panel_dragged_in_edit_mode_keeps_its_spot_relative_to_the_game_window() {
+fn a_panel_dragged_inside_at_any_time_keeps_its_spot_relative_to_the_game_window() {
     let mut compass = compass();
-    compass.on_game_window(game(GAME));
+    let state = compass.on_game_window(game(GAME));
+    assert!(state.draggable, "no edit mode needed");
 
-    assert!(compass.act(Action::ToggleEditMode).edit_mode);
     // 188 px right of and 190 px below the client's top-left corner.
     let state = compass.act(Action::PanelMoved { x: 1000, y: 300 });
     assert_eq!(state.placement, Some(rect(1000, 300, 340, 72)));
-    assert!(!compass.act(Action::ToggleEditMode).edit_mode);
 
     let moved_game = ScreenRect { x: 100, y: 50, ..GAME };
     let state = compass.on_game_window(game(moved_game));
@@ -82,22 +81,10 @@ fn a_panel_dragged_in_edit_mode_keeps_its_spot_relative_to_the_game_window() {
 }
 
 #[test]
-fn outside_edit_mode_moving_the_overlay_window_does_not_move_the_panel() {
-    let mut compass = compass();
-    compass.on_game_window(game(GAME));
-
-    let state = compass.act(Action::PanelMoved { x: 1000, y: 300 });
-    assert!(!state.edit_mode);
-    assert_eq!(state.placement, Some(rect(2376, 674, 340, 72)));
-}
-
-#[test]
 fn a_dragged_panel_collapses_to_an_icon_at_its_top_right_corner() {
     let mut compass = compass();
     compass.on_game_window(game(GAME));
-    compass.act(Action::ToggleEditMode);
     compass.act(Action::PanelMoved { x: 1000, y: 300 });
-    compass.act(Action::ToggleEditMode);
 
     // The expanded panel spans x 1000..1340, so the icon ends at 1340 too.
     let state = compass.act(Action::ToggleExpanded);
@@ -108,10 +95,8 @@ fn a_dragged_panel_collapses_to_an_icon_at_its_top_right_corner() {
 fn the_panel_stays_inside_the_game_window_when_the_window_shrinks() {
     let mut compass = compass();
     compass.on_game_window(game(GAME));
-    compass.act(Action::ToggleEditMode);
     // Near the bottom-right corner of the 1920x1200 client.
     compass.act(Action::PanelMoved { x: 2376, y: 1200 });
-    compass.act(Action::ToggleEditMode);
 
     let smaller_game = ScreenRect { width: 1280, height: 720, ..GAME };
     let state = compass.on_game_window(game(smaller_game));
@@ -131,16 +116,13 @@ fn restart(compass: &Compass) -> Compass {
 fn the_dragged_spot_and_collapsed_state_survive_a_restart() {
     let mut compass = compass();
     compass.on_game_window(game(GAME));
-    compass.act(Action::ToggleEditMode);
     compass.act(Action::PanelMoved { x: 1000, y: 300 });
-    compass.act(Action::ToggleEditMode);
     compass.act(Action::ToggleExpanded);
 
     let mut restarted = restart(&compass);
     let moved_game = ScreenRect { x: 100, y: 50, ..GAME };
     let state = restarted.on_game_window(game(moved_game));
     assert!(!state.expanded);
-    assert!(!state.edit_mode);
     // Icon top-right at client (528, 190), as dragged.
     assert_eq!(state.placement, Some(rect(584, 240, 44, 44)));
 }
@@ -152,7 +134,6 @@ fn an_empty_settings_file_gives_the_default_panel_and_hotkeys() {
 
     let state = compass.on_game_window(game(GAME));
     assert_eq!(state.hotkeys.toggle_panel, "ctrl+shift+c");
-    assert_eq!(state.hotkeys.edit_mode, "ctrl+shift+e");
     assert_eq!(state.hotkeys.cycle_placement, "ctrl+shift+p");
     assert!(state.expanded);
     assert_eq!(state.placement_mode, PlacementMode::Inside);
@@ -282,7 +263,7 @@ fn a_detached_panel_moved_to_another_monitor_stays_there_across_a_restart() {
     compass.on_game_window(game(GAME));
     detach(&mut compass);
 
-    // Dragged onto a monitor left of the main one; no edit mode needed when detached.
+    // Dragged onto a monitor left of the main one.
     let state = compass.act(Action::PanelMoved { x: -1500, y: 200 });
     assert_eq!(state.placement, Some(rect(-1500, 200, 340, 72)));
 
@@ -349,105 +330,38 @@ fn a_detached_panel_is_an_ordinary_window_that_stays_when_the_game_is_gone() {
 }
 
 #[test]
-fn clicks_pass_through_an_inside_panel_until_edit_mode() {
+fn inside_and_detached_the_panel_can_be_dragged_at_any_time_docked_never() {
     let mut compass = compass();
     let state = compass.on_game_window(game(GAME));
-    assert!(!state.draggable);
-
-    assert!(compass.act(Action::ToggleEditMode).draggable);
-}
-
-// The overlay's own controls (the mob search section's ×) are clickable at any time: the
-// overlay takes the mouse while the pointer is over one, and lets clicks through again
-// once it leaves. The default panel is at (2376,674) 340x72; its × at (2690,682) 20x20.
-
-const CLEAR_BUTTON: ScreenRect = ScreenRect { x: 2690, y: 682, width: 20, height: 20 };
-
-fn point(x: i32, y: i32) -> Option<ScreenPoint> {
-    Some(ScreenPoint { x, y })
-}
-
-#[test]
-fn clicks_pass_through_except_while_the_pointer_is_over_one_of_the_overlays_controls() {
-    let mut compass = compass();
-    compass.on_game_window(game(GAME));
-    compass.set_overlay_controls(vec![CLEAR_BUTTON]);
-
-    assert!(!compass.on_pointer(point(2400, 690)).takes_mouse, "over the panel, not the ×");
-    assert!(compass.on_pointer(point(2690, 682)).takes_mouse, "the ×'s top-left pixel");
-    assert!(compass.on_pointer(point(2709, 701)).takes_mouse, "its bottom-right pixel");
-    assert!(!compass.on_pointer(point(2710, 701)).takes_mouse, "just right of it");
-    assert!(!compass.on_pointer(None).takes_mouse, "no pointer position");
-}
-
-#[test]
-fn a_control_the_overlay_no_longer_reports_does_not_take_the_mouse() {
-    let mut compass = compass();
-    compass.on_game_window(game(GAME));
-    compass.set_overlay_controls(vec![CLEAR_BUTTON]);
-    assert!(compass.on_pointer(point(2700, 690)).takes_mouse);
-
-    // The search was cleared, so the × is gone.
-    let state = compass.set_overlay_controls(vec![]);
-
-    assert!(!state.takes_mouse);
-}
-
-#[test]
-fn a_dragged_panel_takes_the_mouse_wherever_the_pointer_is() {
-    let mut compass = compass();
-    compass.on_game_window(game(GAME));
-    compass.on_pointer(point(10, 10));
-
-    assert!(!compass.panel_state().takes_mouse);
-    assert!(compass.act(Action::ToggleEditMode).takes_mouse, "edit mode");
-    compass.act(Action::ToggleEditMode);
-    detach(&mut compass);
-    assert!(compass.panel_state().takes_mouse, "detached");
-}
-
-#[test]
-fn in_search_mode_the_overlay_takes_the_mouse_until_search_mode_ends() {
-    let mut compass = compass();
-    compass.on_game_window(game(GAME));
-    compass.on_pointer(point(10, 10));
-
+    assert!(state.draggable, "inside");
     compass.on_hotkey(SEARCH);
-    assert!(compass.panel_state().takes_mouse);
+    assert!(compass.panel_state().draggable, "with the search view open too");
 
-    assert!(!compass.act(Action::SearchEscape).takes_mouse, "back to click-through");
+    use PlacementMode::*;
+    let draggable: Vec<_> = (0..3)
+        .map(|_| {
+            let state = compass.act(Action::CyclePlacement);
+            (state.placement_mode, state.draggable)
+        })
+        .collect();
+    assert_eq!(draggable, [(DockedRight, false), (DockedLeft, false), (Detached, true)]);
 }
 
 #[test]
-fn a_hidden_overlay_never_takes_the_mouse_even_over_a_control() {
-    let mut compass = compass();
-    compass.on_game_window(game(GAME));
-    compass.set_overlay_controls(vec![CLEAR_BUTTON]);
-    compass.on_pointer(point(2700, 690));
-
-    let state = compass.on_game_window(None);
-
-    assert_eq!(state.layer, Layer::Hidden);
-    assert!(!state.takes_mouse);
-}
-
-#[test]
-fn a_docked_panel_cannot_be_dragged_off_its_edge_even_in_edit_mode() {
+fn a_docked_panel_cannot_be_dragged_off_its_edge() {
     let mut compass = compass();
     compass.on_game_window(game(GAME));
     compass.act(Action::CyclePlacement);
 
-    let state = compass.act(Action::ToggleEditMode);
-    assert!(!state.draggable);
     let state = compass.act(Action::PanelMoved { x: 1000, y: 300 });
+
     assert_eq!(state.placement, Some(rect(2733, 110, 340, 72)));
 }
 
 #[test]
-fn a_hidden_overlay_never_takes_the_mouse() {
+fn a_hidden_overlay_cannot_be_dragged() {
     let mut compass = compass();
     compass.on_game_window(game(GAME));
-    compass.act(Action::ToggleEditMode);
 
     let state = compass.on_game_window(None);
     assert_eq!(state.layer, Layer::Hidden);
@@ -491,14 +405,76 @@ fn the_default_spot_moves_below_the_title_region_when_it_would_cover_it() {
     assert_eq!(state.placement, Some(rect(1096, 198, 340, 72)));
 }
 
+// The panel is as tall as its content, but never taller than the space where it is
+// placed: the game's client area inside, the monitor's work area docked or detached.
+// The overlay then scrolls its long part.
+
+/// The panel's content is `height` px tall (and 340 px wide).
+fn content_height(compass: &mut Compass, height: u32) {
+    compass.set_panel_sizes(PanelSizes {
+        expanded: Size { width: 340, height },
+        collapsed: Size { width: 44, height: 44 },
+    });
+}
+
+#[test]
+fn inside_the_panel_is_never_taller_than_the_game_client() {
+    let mut compass = compass();
+    content_height(&mut compass, 2_000);
+
+    let state = compass.on_game_window(game(GAME));
+
+    assert_eq!(state.placement, Some(rect(2376, 110, 340, 1200)));
+}
+
+#[test]
+fn inside_a_tall_panel_still_keeps_clear_of_the_title_region_in_the_space_below_it() {
+    let mut compass = set_up_on_small_game();
+    content_height(&mut compass, 500);
+
+    let state = compass.on_game_window(game(SMALL_GAME));
+
+    // The title spans the client's width (y 150..198), so the panel has the 112 px
+    // below it, down to the client's bottom at 310.
+    let placement = state.placement.unwrap();
+    assert_eq!(placement, rect(1096, 198, 340, 112));
+    assert!(!overlaps(placement, state.title_region.unwrap()));
+}
+
+#[test]
+fn docked_the_panel_is_never_taller_than_the_work_area_below_its_top() {
+    let mut compass = compass();
+    content_height(&mut compass, 2_000);
+    compass.act(Action::CyclePlacement);
+    // A taskbar takes the bottom 40 px of the screen.
+    let frame = rect(811, 79, 1922, 1232);
+    let work_area = rect(0, 0, 3440, 1400);
+
+    let state = compass.on_game_window(Some(GameWindow { client: GAME, frame, screens: vec![work_area] }));
+
+    // From the client's top at 110 down to 1400.
+    assert_eq!(state.placement, Some(rect(2733, 110, 340, 1290)));
+}
+
+#[test]
+fn detached_the_panel_is_never_taller_than_the_work_area_below_its_top_even_without_the_game() {
+    let mut compass = compass();
+    compass.on_game_window(game(GAME));
+    detach(&mut compass);
+    compass.act(Action::PanelMoved { x: 100, y: 400 });
+    content_height(&mut compass, 2_000);
+
+    assert_eq!(compass.panel_state().placement, Some(rect(100, 400, 340, 1040)));
+    let state = compass.on_game_window(None);
+    assert_eq!(state.placement, Some(rect(100, 400, 340, 1040)), "the monitors last known");
+}
+
 #[test]
 fn a_panel_dragged_onto_the_minimap_title_is_moved_clear_of_it() {
     let mut compass = set_up_on_small_game();
     compass.on_game_window(game(SMALL_GAME));
-    compass.act(Action::ToggleEditMode);
 
-    compass.act(Action::PanelMoved { x: 892, y: 140 });
-    let state = compass.act(Action::ToggleEditMode);
+    let state = compass.act(Action::PanelMoved { x: 892, y: 140 });
 
     let placement = state.placement.unwrap();
     assert_eq!(placement, rect(892, 198, 340, 72));
@@ -509,9 +485,7 @@ fn a_panel_dragged_onto_the_minimap_title_is_moved_clear_of_it() {
 fn the_collapsed_icon_never_covers_the_minimap_title_either() {
     let mut compass = set_up_on_small_game();
     compass.on_game_window(game(SMALL_GAME));
-    compass.act(Action::ToggleEditMode);
     compass.act(Action::PanelMoved { x: 892, y: 140 });
-    compass.act(Action::ToggleEditMode);
 
     let state = compass.act(Action::ToggleExpanded);
 

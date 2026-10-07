@@ -1,13 +1,12 @@
-//! Mob search: the player presses the search hotkey, types part of a mob's name, picks
-//! the mob, and sees every map it spawns on, ranked by Density Tier and then Density.
-//! In search mode the overlay takes the keyboard (ADR 0001); the top results stay on the
-//! panel as the player travels, until the search is cleared.
+//! Mob search: the player opens the search view (the search hotkey or the 🔍 button),
+//! types part of a mob's name and picks the mob, then picks one of the maps it spawns
+//! on, ranked by Density Tier and then Density. That mob and map become the Hunting
+//! Target. While the search view is open the overlay takes the keyboard (ADR 0001).
 
 mod common;
 
 use common::world::{SEARCH, WorldMap, crawled, map, mob, orange, search_for, tick_through, world};
-use common::{FakeSource, arrive};
-use compass_core::{Action, Compass, DensityTier, MEOWDB_CREDIT, Mob, PanelState, Request, SearchState};
+use compass_core::{Action, Compass, DensityTier, MEOWDB_CREDIT, Mob, PanelState, Request, SearchView};
 
 fn mushroom_world() -> Vec<WorldMap> {
     vec![
@@ -18,10 +17,72 @@ fn mushroom_world() -> Vec<WorldMap> {
     ]
 }
 
+/// The map list's maps, by name, in order.
+fn maps(state: &PanelState) -> Vec<&str> {
+    state.search.results.iter().map(|r| r.map_name.as_str()).collect()
+}
+
+/// The Hunting Target as "Mob · Map".
+fn hunting(state: &PanelState) -> Option<String> {
+    state.search.hunting.as_ref().map(|h| format!("{} · {}", h.mob.name, h.map.map_name))
+}
+
 #[test]
-fn the_search_hotkey_in_search_mode_brings_the_overlay_back_in_front_as_it_is() {
+fn the_player_picks_a_mob_then_one_of_its_maps_and_that_becomes_the_hunting_target() {
     let mut compass = crawled(mushroom_world());
-    assert_eq!(compass.on_hotkey(SEARCH), None, "entering search mode brings it in front");
+    compass.on_hotkey(SEARCH);
+    assert_eq!(compass.panel_state().search.view, Some(SearchView::Mobs));
+
+    compass.search_query("orange");
+    let state = compass.act(Action::SearchEnter);
+    assert_eq!(state.search.view, Some(SearchView::Maps), "the mob's map list");
+    assert_eq!(picked(state), Some("Orange Mushroom"));
+    assert_eq!(maps(state), ["Mushroom Field", "Mushroom Hill"]);
+    assert_eq!(hunting(state), None, "nothing is set until a map is picked");
+
+    compass.act(Action::SearchNext);
+    let state = compass.act(Action::SearchEnter);
+
+    assert_eq!(state.search.view, None, "back to the normal view");
+    assert_eq!(hunting(state).as_deref(), Some("Orange Mushroom · Mushroom Hill"));
+}
+
+#[test]
+fn a_click_picks_a_suggested_mob_and_then_a_listed_map() {
+    let mut compass = crawled(mushroom_world());
+    compass.on_hotkey(SEARCH);
+    compass.search_query("mush");
+
+    let state = compass.search_pick("9");
+    assert_eq!(picked(state), Some("Orange Mushroom"), "not the highlighted Green Mushroom");
+    assert_eq!(state.search.view, Some(SearchView::Maps));
+
+    let state = compass.search_pick("100000004");
+    assert_eq!(state.search.view, None);
+    assert_eq!(hunting(state).as_deref(), Some("Orange Mushroom · Mushroom Hill"));
+}
+
+#[test]
+fn a_click_on_something_no_longer_listed_does_nothing() {
+    let mut compass = crawled(mushroom_world());
+    compass.on_hotkey(SEARCH);
+    compass.search_query("green");
+
+    let state = compass.search_pick("9").clone();
+    assert_eq!(state.search.view, Some(SearchView::Mobs), "the Orange Mushroom isn't suggested");
+
+    compass.search_pick("13");
+    let state = compass.search_pick("100000001");
+    assert_eq!(state.search.view, Some(SearchView::Maps), "no Green Mushrooms on the Mushroom Field");
+    assert_eq!(picked(state), Some("Green Mushroom"));
+    assert_eq!(maps(state), ["Green Hill"]);
+    assert_eq!(hunting(state), None);
+}
+
+#[test]
+fn the_search_hotkey_with_the_search_view_open_brings_the_overlay_back_in_front_as_it_is() {
+    let mut compass = crawled(mushroom_world());
+    assert_eq!(compass.on_hotkey(SEARCH), None, "opening the search view brings it in front");
     compass.search_query("mush");
     let before = compass.panel_state().clone();
 
@@ -66,7 +127,7 @@ fn picked(state: &PanelState) -> Option<&str> {
 }
 
 #[test]
-fn the_highlight_moves_through_the_suggestions_and_enter_picks_it_and_leaves_search_mode() {
+fn the_highlight_moves_through_the_suggestions_and_enter_lists_the_highlighted_mobs_maps() {
     let mut compass = crawled(mushroom_world());
     compass.on_hotkey(SEARCH);
     compass.search_query("mush");
@@ -79,7 +140,8 @@ fn the_highlight_moves_through_the_suggestions_and_enter_picks_it_and_leaves_sea
 
     assert_eq!(picked(state), Some("Horny Mushroom"));
     assert_eq!(state.search.picked.as_ref().map(|m| m.level), Some(22));
-    assert!(!state.search.search_mode, "focus goes back to the game");
+    assert_eq!(state.search.view, Some(SearchView::Maps));
+    assert_eq!(maps(state), ["Ant Tunnel"]);
 }
 
 #[test]
@@ -93,49 +155,74 @@ fn the_highlight_stays_at_the_top_going_up_and_a_new_query_starts_it_at_the_top_
     assert_eq!(highlighted(compass.search_query("mushr")), Some("Green Mushroom"));
 }
 
-#[test]
-fn esc_leaves_search_mode_and_keeps_the_current_search() {
-    let mut compass = crawled(mushroom_world());
-    search_for(&mut compass, "orange");
-
-    assert_eq!(compass.on_hotkey(SEARCH), None);
-    let state = compass.panel_state();
-    assert!(state.search.search_mode);
-    assert_eq!(state.search.query, "", "it opens with nothing typed");
-    compass.search_query("horny");
-    let state = compass.act(Action::SearchEscape);
-
-    assert!(!state.search.search_mode);
-    assert_eq!(picked(state), Some("Orange Mushroom"));
+/// The Orange Mushroom on the Mushroom Field made the Hunting Target.
+fn hunting_orange_on_the_field(compass: &mut Compass) {
+    search_for(compass, "orange");
+    compass.search_pick("100000001");
+    assert_eq!(hunting(compass.panel_state()).as_deref(), Some("Orange Mushroom · Mushroom Field"));
 }
 
 #[test]
-fn enter_with_nothing_typed_clears_the_search_and_leaves_search_mode() {
+fn esc_from_either_step_returns_to_the_normal_view_with_nothing_changed() {
     let mut compass = crawled(mushroom_world());
-    search_for(&mut compass, "orange");
-
-    let state = search_for(&mut compass, "  ");
-
-    assert!(!state.search.search_mode);
-    assert_eq!(picked(&state), None);
-}
-
-#[test]
-fn enter_on_a_query_that_matches_no_mob_does_nothing() {
-    let mut compass = crawled(mushroom_world());
-    search_for(&mut compass, "orange");
-
-    let state = search_for(&mut compass, "dragon");
-
-    assert!(state.search.search_mode, "the player can fix the typing");
-    assert_eq!(picked(&state), Some("Orange Mushroom"));
-}
-
-#[test]
-fn search_keys_do_nothing_outside_search_mode() {
-    let mut compass = crawled(mushroom_world());
-    search_for(&mut compass, "orange");
+    hunting_orange_on_the_field(&mut compass);
     let before = compass.panel_state().clone();
+
+    compass.on_hotkey(SEARCH);
+    compass.search_query("horny");
+    assert_eq!(*compass.act(Action::SearchEscape), before, "from the mobs");
+
+    search_for(&mut compass, "horny");
+    compass.act(Action::SearchNext);
+    assert_eq!(*compass.act(Action::SearchEscape), before, "from the map list");
+}
+
+#[test]
+fn reopened_the_search_view_starts_afresh() {
+    let mut compass = crawled(mushroom_world());
+    search_for(&mut compass, "orange");
+    compass.act(Action::SearchEscape);
+
+    compass.on_hotkey(SEARCH);
+
+    let search = &compass.panel_state().search;
+    assert_eq!(search.view, Some(SearchView::Mobs));
+    assert_eq!(search.query, "");
+    assert_eq!(search.picked, None);
+}
+
+#[test]
+fn collapsing_the_panel_closes_the_search_view_and_keeps_the_hunting_target() {
+    let mut compass = crawled(mushroom_world());
+    hunting_orange_on_the_field(&mut compass);
+    search_for(&mut compass, "horny");
+
+    let state = compass.act(Action::ToggleExpanded);
+
+    assert!(!state.expanded);
+    assert_eq!(state.search.view, None);
+    assert_eq!(hunting(state).as_deref(), Some("Orange Mushroom · Mushroom Field"));
+}
+
+#[test]
+fn enter_on_a_query_that_matches_no_mob_or_with_nothing_typed_does_nothing() {
+    let mut compass = crawled(mushroom_world());
+
+    for query in ["dragon", "  "] {
+        let state = search_for(&mut compass, query);
+
+        assert_eq!(state.search.view, Some(SearchView::Mobs), "the player can fix the typing");
+        assert_eq!(picked(&state), None);
+    }
+}
+
+#[test]
+fn search_keys_do_nothing_with_the_search_view_closed() {
+    let mut compass = crawled(mushroom_world());
+    search_for(&mut compass, "orange");
+    compass.act(Action::SearchEnter);
+    let before = compass.panel_state().clone();
+    assert_eq!(before.search.view, None);
 
     compass.act(Action::SearchEnter);
     compass.act(Action::SearchNext);
@@ -234,10 +321,6 @@ fn event_maps_are_left_out_and_dont_set_the_densest_map() {
     assert_eq!(ranked(&state), ["Mushroom Field: 1000, High", "Hidden Mushrooms: 400, Medium"]);
 }
 
-const KERNING: &str = "victoria-road__kerning-city--window";
-const SUNSET: &str = "victoria-road__sunset-sky--window";
-const HENESYS_HUNTING_GROUND_I: &str = "010001010";
-
 #[test]
 fn a_mob_found_only_on_event_maps_has_no_results_and_search_says_why() {
     let mut compass = crawled(vec![
@@ -253,59 +336,14 @@ fn a_mob_found_only_on_event_maps_has_no_results_and_search_says_why() {
     assert!(!state.search.only_on_event_maps, "the Blue Snail has results");
 }
 
-/// The panel's results, as "Map Name".
-fn top(state: &PanelState) -> Vec<&str> {
-    state.search.top_results.iter().map(|r| r.map_name.as_str()).collect()
-}
-
 #[test]
-fn the_panel_gets_the_top_five_results_and_how_many_more_there_are() {
-    let maps = (1..=7).map(|n| map(&format!("10000000{n}"), &format!("Field {n}"), 100, vec![orange(10 - n)])).collect();
-    let mut compass = crawled(maps);
+fn the_map_list_holds_every_map_the_mob_spawns_on_however_many() {
+    let fields = (1..=7).map(|n| map(&format!("10000000{n}"), &format!("Field {n}"), 100, vec![orange(10 - n)])).collect();
+    let mut compass = crawled(fields);
 
     let state = search_for(&mut compass, "orange");
 
-    assert_eq!(state.search.results.len(), 7);
-    assert_eq!(top(&state), ["Field 1", "Field 2", "Field 3", "Field 4", "Field 5"]);
-    assert_eq!(state.search.more_results, 2);
-}
-
-#[test]
-fn with_five_results_or_fewer_the_panel_gets_them_all() {
-    let mut compass = crawled(mushroom_world());
-
-    let state = search_for(&mut compass, "orange");
-
-    assert_eq!(top(&state), ["Mushroom Field", "Mushroom Hill"]);
-    assert_eq!(state.search.more_results, 0);
-}
-
-#[test]
-fn the_picked_mob_and_its_results_stay_as_the_player_changes_map_until_the_search_is_cleared() {
-    // MeowDB's saved pages: Orange Mushrooms live in Henesys Hunting Ground I.
-    let mut compass = Compass::new(FakeSource::meowdb());
-    tick_through(&mut compass, 0, 5_000);
-    let searched = search_for(&mut compass, "orange mushroom").search;
-    assert!(searched.results.iter().any(|r| r.map_id == HENESYS_HUNTING_GROUND_I), "{:?}", searched.results);
-
-    // The same maps, at a Distance from wherever the player is (tests/distance.rs).
-    let maps = |search: &SearchState| {
-        let mut maps: Vec<_> = search.results.iter().map(|r| (r.map_id.clone(), r.density_hundredths, r.tier)).collect();
-        maps.sort();
-        maps
-    };
-
-    let state = arrive(&mut compass, KERNING, 10_000);
-    assert_eq!(state.map.as_ref().map(|m| m.map_name.as_str()), Some("Kerning City"));
-    assert_eq!(state.search.picked, searched.picked);
-    assert_eq!(maps(&state.search), maps(&searched));
-    let state = arrive(&mut compass, SUNSET, 20_000);
-    assert_eq!(state.map.as_ref().map(|m| m.map_name.as_str()), Some("Sunset Sky"));
-    assert_eq!(maps(&state.search), maps(&searched));
-
-    let state = search_for(&mut compass, "");
-    assert_eq!(picked(&state), None);
-    assert!(state.search.results.is_empty());
+    assert_eq!(maps(&state),["Field 1", "Field 2", "Field 3", "Field 4", "Field 5", "Field 6", "Field 7"]);
 }
 
 #[test]
@@ -350,77 +388,37 @@ fn mid_crawl_the_suggestions_cover_the_mobs_known_so_far() {
 }
 
 #[test]
-fn without_a_search_there_are_no_results_and_no_credit() {
+fn until_a_mob_is_picked_there_is_no_map_list_and_no_credit() {
     let mut compass = crawled(mushroom_world());
-    search_for(&mut compass, "orange");
+    compass.on_hotkey(SEARCH);
 
-    let state = search_for(&mut compass, "");
+    let state = compass.search_query("orange");
 
     assert!(state.search.results.is_empty());
     assert_eq!(state.search.credit, None);
 }
 
 #[test]
-fn the_search_hotkey_enters_search_mode_with_nothing_typed() {
+fn the_search_hotkey_opens_the_search_view_with_nothing_typed() {
     let mut compass = crawled(mushroom_world());
-    assert!(!compass.panel_state().search.search_mode);
+    assert_eq!(compass.panel_state().search.view, None);
 
     compass.on_hotkey(SEARCH);
 
     let search = &compass.panel_state().search;
-    assert!(search.search_mode);
+    assert_eq!(search.view, Some(SearchView::Mobs));
     assert_eq!(search.query, "");
     assert!(search.suggestions.is_empty());
 }
 
 #[test]
-fn the_search_hotkey_expands_a_collapsed_panel_to_show_the_query_box() {
+fn the_search_hotkey_expands_a_collapsed_panel_to_show_the_search_view() {
     let mut compass = crawled(mushroom_world());
     assert!(!compass.act(Action::ToggleExpanded).expanded);
 
     compass.on_hotkey(SEARCH);
 
     let state = compass.panel_state();
-    assert!(state.search.search_mode);
+    assert_eq!(state.search.view, Some(SearchView::Mobs));
     assert!(state.expanded);
-}
-
-#[test]
-fn collapsing_the_panel_leaves_search_mode_and_keeps_the_search() {
-    let mut compass = crawled(mushroom_world());
-    search_for(&mut compass, "orange");
-    compass.on_hotkey(SEARCH);
-
-    let state = compass.act(Action::ToggleExpanded);
-
-    assert!(!state.expanded);
-    assert!(!state.search.search_mode, "the query box is hidden with the panel");
-    assert_eq!(picked(state), Some("Orange Mushroom"));
-}
-
-#[test]
-fn clearing_the_search_removes_the_picked_mob_and_its_results() {
-    let mut compass = crawled(mushroom_world());
-    assert!(!search_for(&mut compass, "orange").search.results.is_empty());
-
-    let state = compass.act(Action::ClearSearch);
-
-    assert_eq!(picked(state), None);
-    assert!(state.search.results.is_empty());
-    assert!(state.search.top_results.is_empty());
-    assert!(!state.search.search_mode);
-}
-
-#[test]
-fn clearing_the_search_in_search_mode_also_leaves_search_mode() {
-    let mut compass = crawled(mushroom_world());
-    search_for(&mut compass, "orange");
-    compass.on_hotkey(SEARCH);
-    compass.search_query("horny");
-
-    let state = compass.act(Action::ClearSearch);
-
-    assert!(!state.search.search_mode, "focus goes back to the game");
-    assert_eq!(picked(state), None);
-    assert!(state.search.results.is_empty());
 }
