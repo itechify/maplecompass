@@ -184,9 +184,9 @@ h2 {
   font-weight: 600;
 }
 
+/* The overlay's compact table type; the results table's columns, tiers and Distances
+   are in results.css, shared with the panel. */
 table {
-  width: 100%;
-  table-layout: fixed;
   border-collapse: collapse;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
@@ -200,45 +200,17 @@ th {
 
 td {
   text-align: right;
-  vertical-align: top;
 }
 
 th,
 td {
-  box-sizing: border-box;
-  padding: 2px 0 2px 6px;
+  padding: 2px 0;
 }
 
 th:first-child,
 td:first-child {
-  padding-left: 0;
   text-align: left;
 }
-
-th:nth-child(1) { width: 38%; }
-th:nth-child(2) { width: 14%; }
-th:nth-child(3) { width: 12%; }
-th:nth-child(4) { width: 17%; }
-th:nth-child(5) { width: 19%; }
-
-.result-map,
-.result-street {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.result-street {
-  color: var(--muted);
-}
-
-.tier.high { font-weight: 600; }
-.tier.medium { color: var(--secondary-text); }
-.tier.low { color: var(--muted); }
-
-/* "no route", "quest only" and "?" read as a lack of a number, not as one. */
-.distance.none { color: var(--muted); }
 
 /* The nearest map with the mob, whatever its tier. */
 .nearest {

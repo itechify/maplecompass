@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { hotkeyAvailable, keyLabel, type Hotkeys } from "./hotkeys";
-import { crawlLine, mobTitle, nearestLine, resultRow, resultsNote, type SearchState } from "./search-state";
+import { crawlLine, resultRow, showPicked, type PickedSection, type SearchState } from "./search-state";
 
 type PlacementMode = "inside" | "dockedRight" | "dockedLeft" | "detached";
 
@@ -110,11 +110,13 @@ const helpHint = byId("help-hint");
 const uncertainty = byId("uncertainty");
 const crawlProgress = byId("crawl-progress");
 const mobSearch = byId("mob-search");
-const searchTitle = byId("search-title");
-const searchNearest = byId("search-nearest");
-const searchNote = byId("search-note");
-const searchResults = byId("search-results");
-const searchRows = byId("search-rows");
+const searchSection: PickedSection = {
+  title: byId("search-title"),
+  nearest: byId("search-nearest"),
+  note: byId("search-note"),
+  table: byId("search-results") as HTMLTableElement,
+  rows: byId("search-rows"),
+};
 const searchMore = byId("search-more");
 const searchCredit = byId("search-credit");
 let draggable = false;
@@ -289,13 +291,7 @@ function renderSearch(panel: PanelState) {
   const { search } = panel;
   mobSearch.hidden = !panel.gameFound || !search.picked;
   if (!search.picked) return;
-  searchTitle.textContent = mobTitle(search.picked);
-  searchNearest.textContent = nearestLine(search);
-  searchNearest.hidden = searchNearest.textContent === "";
-  searchNote.textContent = resultsNote(search);
-  searchNote.hidden = searchNote.textContent === "";
-  searchResults.hidden = search.results.length === 0;
-  searchRows.replaceChildren(...search.topResults.map(resultRow));
+  showPicked(searchSection, search, search.picked, search.topResults.map(resultRow));
   const more = search.moreResults;
   const open = hotkeyAvailable(panel.hotkeys.search, panel.unavailableHotkeys)
     ? ` · ${keyLabel(panel.hotkeys.search)} shows all` : "";
