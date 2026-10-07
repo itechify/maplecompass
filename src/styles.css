@@ -50,6 +50,12 @@ body {
   color: #f0c674;
 }
 
+/* Background progress: present, but quieter than a status note. */
+.panel .note.crawl {
+  font-size: 12px;
+  color: #9fb6cc;
+}
+
 /* The maps sharing the title, each with what sets it apart; the shown one marked. */
 .candidates ol {
   margin: 4px 0 0;

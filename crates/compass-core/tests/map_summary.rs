@@ -14,8 +14,8 @@ const KERNING: &str = "victoria-road__kerning-city--window";
 const SUNSET_SKY: &str = "010003070";
 const DEAD_MINE_IV: &str = "020001067";
 
-fn mob(name: &str, level: u32, hp: u64, exp: u64, spawn_count: u32, spawn_share_percent: u32) -> Mob {
-    Mob { name: name.into(), level, hp, exp, spawn_count, spawn_share_percent }
+fn mob(id: &str, name: &str, level: u32, hp: u64, exp: u64, spawn_count: u32, spawn_share_percent: u32) -> Mob {
+    Mob { id: id.into(), name: name.into(), level, hp, exp, spawn_count, spawn_share_percent }
 }
 
 #[test]
@@ -35,11 +35,11 @@ fn arriving_on_sunset_sky_shows_its_map_summary_and_mobs_sorted_by_level() {
     assert_eq!(
         data.mobs,
         [
-            mob("Blue Snail", 2, 51, 4, 7, 16),
-            mob("Stump", 5, 133, 10, 15, 34),
-            mob("Orange Mushroom", 8, 142, 15, 8, 18),
-            mob("Dark Stump", 11, 236, 21, 7, 16),
-            mob("Green Mushroom", 14, 233, 26, 7, 16),
+            mob("3", "Blue Snail", 2, 51, 4, 7, 16),
+            mob("6", "Stump", 5, 133, 10, 15, 34),
+            mob("9", "Orange Mushroom", 8, 142, 15, 8, 18),
+            mob("11", "Dark Stump", 11, 236, 21, 7, 16),
+            mob("13", "Green Mushroom", 14, 233, 26, 7, 16),
         ]
     );
 }
@@ -61,12 +61,12 @@ fn arriving_on_construction_site_north_of_kerning_city_shows_its_map_summary_and
     assert_eq!(
         data.mobs,
         [
-            mob("Red Snail", 4, 68, 8, 23, 43),
-            mob("Orange Mushroom", 8, 142, 15, 9, 17),
-            mob("Dark Stump", 11, 236, 21, 11, 20),
-            mob("Octopus", 12, 191, 23, 8, 15),
-            mob("Axe Stump", 17, 371, 32, 2, 4),
-            mob("Blue Mushroom", 19, 342, 35, 1, 2),
+            mob("5", "Red Snail", 4, 68, 8, 23, 43),
+            mob("9", "Orange Mushroom", 8, 142, 15, 9, 17),
+            mob("11", "Dark Stump", 11, 236, 21, 11, 20),
+            mob("12", "Octopus", 12, 191, 23, 8, 15),
+            mob("15", "Axe Stump", 17, 371, 32, 2, 4),
+            mob("16", "Blue Mushroom", 19, 342, 35, 1, 2),
         ]
     );
 }
@@ -97,7 +97,7 @@ fn hp_in_the_thousands_is_read_in_full() {
     let MapDataStatus::Ready(data) = &state.data else { panic!("{:?}", state.data) };
     assert_eq!(
         data.mobs,
-        vec![mob("Flyeye", 41, 1419, 99, 18, 64), mob("Minor Zombie", 58, 3619, 197, 10, 36)]
+        vec![mob("1032", "Flyeye", 41, 1419, 99, 18, 64), mob("1059", "Minor Zombie", 58, 3619, 197, 10, 36)]
     );
 }
 

@@ -91,6 +91,7 @@ fn before_any_map_is_shown_no_page_is_asked_for_and_there_is_no_data() {
 #[test]
 fn mobs_are_sorted_by_level_then_name_whatever_order_the_source_gives() {
     let mob = |name: &str, level| Mob {
+        id: name.into(),
         name: name.into(),
         level,
         hp: 100,
