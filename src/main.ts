@@ -5,7 +5,10 @@ type PlacementMode = "inside" | "dockedRight" | "dockedLeft" | "detached";
 
 /** Mirror of `compass_core::PanelState`. */
 type PanelState = {
-  title: { streetName: string; mapName: string } | null;
+  recognition: "starting" | "ready" | "unavailable";
+  map: { id: string; streetName: string; mapName: string } | null;
+  confidence: number;
+  notSure: boolean;
   expanded: boolean;
   editMode: boolean;
   gameFound: boolean;
@@ -41,23 +44,27 @@ function keyLabel(accelerator: string): string {
 
 function render(state: OverlayState) {
   const { panel, hotkeys } = state;
-  const title = panel.title;
+  const { recognition, map: current, notSure } = panel;
   draggable = panel.draggable;
   // Hidden while the game is minimised or gone: the window stays, but draws nothing.
   document.body.classList.toggle("hidden", panel.layer === "hidden");
   document.body.classList.toggle("collapsed", !panel.expanded);
   document.body.classList.toggle("editing", panel.editMode);
   document.body.classList.toggle("draggable", panel.draggable);
-  document.body.classList.toggle("unreadable", !title);
+  document.body.classList.toggle("unreadable", !current);
+  document.body.classList.toggle("not-sure", !!current && notSure);
   if (!panel.gameFound) {
     street.textContent = "";
     map.textContent = "Looking for MapleStory…";
-  } else if (title) {
-    street.textContent = title.streetName;
-    map.textContent = title.mapName;
+  } else if (recognition === "unavailable") {
+    street.textContent = "Couldn't load the map list from MeowDB";
+    map.textContent = "Map recognition unavailable";
+  } else if (current) {
+    street.textContent = current.streetName;
+    map.textContent = current.mapName;
   } else {
     street.textContent = "";
-    map.textContent = "Can't read the minimap title";
+    map.textContent = "Reading the minimap title…";
   }
   if (panel.editMode) {
     const place = `${PLACEMENT_NAMES[panel.placementMode]} · ${keyLabel(hotkeys.cyclePlacement)} to change`;

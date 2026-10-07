@@ -8,12 +8,16 @@
 //! panel of 340x72 and a collapsed icon of 44x44. As measured on Windows 11, the game's
 //! visible frame adds 1 px at the sides and bottom of the client area and 31 px on top.
 
+mod common;
+
+use common::FakeSource;
 use compass_core::{
     Action, Compass, GameWindow, Layer, PanelSizes, PlacementMode, ScreenRect, Settings, Size,
 };
 
 fn compass() -> Compass {
-    let mut compass = Compass::new();
+    // Layout never asks for the map index, so any source will do.
+    let mut compass = Compass::new(FakeSource::offline());
     compass.set_panel_sizes(PanelSizes {
         expanded: Size { width: 340, height: 72 },
         collapsed: Size { width: 44, height: 44 },
