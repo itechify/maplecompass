@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { hotkeyAvailable, keyLabel, type Hotkeys } from "./hotkeys";
-import { PANEL_RESULTS, mobTitle, nearestLine, resultRow, resultsNote, type SearchState } from "./search-state";
+import { crawlLine, mobTitle, nearestLine, resultRow, resultsNote, type SearchState } from "./search-state";
 
 type PlacementMode = "inside" | "dockedRight" | "dockedLeft" | "detached";
 
@@ -295,8 +295,8 @@ function renderSearch(panel: PanelState) {
   searchNote.textContent = resultsNote(search);
   searchNote.hidden = searchNote.textContent === "";
   searchResults.hidden = search.results.length === 0;
-  searchRows.replaceChildren(...search.results.slice(0, PANEL_RESULTS).map(resultRow));
-  const more = search.results.length - PANEL_RESULTS;
+  searchRows.replaceChildren(...search.topResults.map(resultRow));
+  const more = search.moreResults;
   const open = hotkeyAvailable(panel.hotkeys.search, panel.unavailableHotkeys)
     ? ` · ${keyLabel(panel.hotkeys.search)} shows all` : "";
   searchMore.textContent = more > 0 ? `${more} more map${more === 1 ? "" : "s"}${open}` : "";
@@ -364,11 +364,11 @@ function render(panel: PanelState) {
       : ". Close the app using these shortcuts, or edit %APPDATA%\\com.itechify.maplecompass\\settings.json, then restart MapleCompass.";
   }
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
-  // The world crawl, while it runs: "Mapping the world: 312 of 422 maps known".
-  const { crawl } = panel.search;
-  // With a search on the panel, its section says how much of the world it covers.
-  crawlProgress.hidden = !panel.gameFound || crawl.total === 0 || crawl.done || !!panel.search.picked;
-  crawlProgress.textContent = `Mapping the world: ${crawl.known} of ${crawl.total} maps known`;
+  // The world crawl, while it runs, with or without a search: "Mapping the world: 312
+  // of 422 maps known". Search can only find mobs on the maps known so far.
+  const crawl = crawlLine(panel.search);
+  crawlProgress.textContent = crawl && `Mapping the world: ${crawl}`;
+  crawlProgress.hidden = !panel.gameFound || !crawl;
   renderData(panel);
   renderSearch(panel);
   reportHeight(panel.expanded);

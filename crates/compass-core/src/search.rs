@@ -85,8 +85,15 @@ pub struct SearchState {
     /// The mob the player picked, until they clear the search.
     pub picked: Option<MobChoice>,
     /// Every known map the picked mob spawns on (Event maps left out), by Density Tier
-    /// and then Density. The panel shows the first [`PANEL_RESULTS`].
+    /// and then Density: the search window's list.
     pub results: Vec<SearchResult>,
+    /// The first [`PANEL_RESULTS`] of the results: the panel's list.
+    pub top_results: Vec<SearchResult>,
+    /// How many results there are besides the panel's.
+    pub more_results: u32,
+    /// The picked mob spawns only on Event maps (of the maps known so far), which
+    /// search leaves out: why it has no results.
+    pub only_on_event_maps: bool,
     /// The result whose route the search window shows in full; `None` when there are
     /// no results.
     pub highlighted_result: Option<usize>,
@@ -192,6 +199,12 @@ impl MobSearch {
         let Searched { crawl, travel, .. } = *searched;
         let suggestions = self.suggestions(crawl);
         let results = self.results(searched);
+        let only_on_event_maps = match (&self.picked, crawl) {
+            (Some(mob), Some(crawl)) if results.is_empty() => {
+                crawl.known().any(|(entry, data)| entry.is_event() && data.mobs.iter().any(|m| m.id == mob.id))
+            }
+            _ => false,
+        };
         SearchState {
             window_open: self.window_open,
             query: self.query.clone(),
@@ -201,6 +214,9 @@ impl MobSearch {
             credit: (!results.is_empty()).then_some(MEOWDB_CREDIT),
             nearest: nearest(&results),
             highlighted_result: self.result_highlight_in(&results),
+            top_results: results.iter().take(PANEL_RESULTS).cloned().collect(),
+            more_results: results.len().saturating_sub(PANEL_RESULTS) as u32,
+            only_on_event_maps,
             results,
             crawl: crawl.map(Crawl::progress).unwrap_or_default(),
             taxis: travel.taxis,
