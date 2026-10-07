@@ -85,6 +85,11 @@ pub enum Action {
     SearchEnter,
     /// Esc in the search window: close it, keeping the current search.
     SearchEscape,
+    /// Turn taxis on or off for Distance (the Taxis checkbox in the search window).
+    ToggleTaxis,
+    /// Turn Teleport Scrolls on or off for Distance (the Teleport Scrolls checkbox in
+    /// the search window).
+    ToggleTeleportScrolls,
 }
 
 /// Where the player wants the panel.

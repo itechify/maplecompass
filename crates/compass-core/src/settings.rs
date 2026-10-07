@@ -31,6 +31,12 @@ pub struct Settings {
     /// The title of the game window the player picked by hand; `None` to look for the
     /// "MapleStory" window.
     pub game_window_title: Option<String>,
+    /// Distance counts taxi rides between towns (the Taxis checkbox in the search
+    /// window).
+    pub taxis: bool,
+    /// Distance counts Teleport Scrolls to towns (the Teleport Scrolls checkbox in the
+    /// search window).
+    pub teleport_scrolls: bool,
 }
 
 impl Default for Settings {
@@ -44,6 +50,8 @@ impl Default for Settings {
             hotkeys: Hotkeys::default(),
             title_region: None,
             game_window_title: None,
+            taxis: false,
+            teleport_scrolls: false,
         }
     }
 }

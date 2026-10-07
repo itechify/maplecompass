@@ -40,3 +40,14 @@ pub(crate) const TRAVEL_LINKS: &[TravelLink] = &[
     TravelLink { from: "020000010", to: "010002090", by: Step::Ship },
     TravelLink { from: "000000060", to: "010000000", by: Step::Ship },
 ];
+
+/// The towns the Victoria Island regular cab runs between, every one to every other,
+/// when the player has turned taxis on: Lith Harbor, Henesys, Ellinia, Kerning City
+/// and Perion. Sleepywood (010005000) is left out: it isn't known to have a cab.
+pub(crate) const TAXI_TOWNS: &[&str] = &["010000000", "010001000", "010002000", "010003000", "010004000"];
+
+/// The towns a named Teleport Scroll takes the player to from any map, when the player
+/// has turned Teleport Scrolls on: Henesys, Ellinia, Perion, Kerning City, Lith Harbor,
+/// Sleepywood, Orbis and El Nath.
+pub(crate) const TELEPORT_SCROLL_TOWNS: &[&str] =
+    &["010001000", "010002000", "010004000", "010003000", "010000000", "010005000", "020000000", "020001000"];

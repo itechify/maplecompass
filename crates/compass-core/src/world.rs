@@ -9,7 +9,7 @@
 
 use crate::crawl::Crawl;
 use crate::map_data::PortalKind;
-use crate::travel_links::{TRAVEL_LINKS, TravelLink};
+use crate::travel_links::{TAXI_TOWNS, TELEPORT_SCROLL_TOWNS, TRAVEL_LINKS, TravelLink};
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
 
@@ -42,6 +42,14 @@ pub enum Step {
     TeleportScroll,
 }
 
+/// The kinds of travel the player has turned on, besides portals and ships (which
+/// always count).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct Travel {
+    pub taxis: bool,
+    pub teleport_scrolls: bool,
+}
+
 /// Where each map leads in one map change, and how.
 type Exits<'a> = HashMap<&'a str, Vec<(&'a str, Step)>>;
 
@@ -51,12 +59,16 @@ pub(crate) struct World<'a> {
     exits: Exits<'a>,
     /// Through Quest Portals.
     quest_exits: Exits<'a>,
+    /// Where every map leads, crawled or not, after its own exits: the named-town
+    /// Teleport Scrolls, when they're on.
+    from_anywhere: Vec<(&'a str, Step)>,
 }
 
 impl<'a> World<'a> {
-    /// The graph of every map the crawl knows, and the travel links.
-    pub fn of(crawl: &'a Crawl) -> Self {
-        let mut world = Self { exits: HashMap::new(), quest_exits: HashMap::new() };
+    /// The graph of every map the crawl knows, the ships, and the `travel` the player
+    /// has turned on.
+    pub fn of(crawl: &'a Crawl, travel: Travel) -> Self {
+        let mut world = Self { exits: HashMap::new(), quest_exits: HashMap::new(), from_anywhere: Vec::new() };
         for (entry, data) in crawl.known() {
             for portal in &data.portals {
                 let exits = match portal.kind {
@@ -71,6 +83,21 @@ impl<'a> World<'a> {
         for &TravelLink { from, to, by } in TRAVEL_LINKS {
             world.exits.entry(from).or_default().push((to, by));
         }
+        if travel.taxis {
+            for &from in TAXI_TOWNS {
+                let to = TAXI_TOWNS.iter().filter(|&&to| to != from).map(|&to| (to, Step::Taxi));
+                world.exits.entry(from).or_default().extend(to);
+            }
+        }
+        if travel.teleport_scrolls {
+            // A nearest-town scroll goes to the map's own nearest town.
+            for (entry, data) in crawl.known() {
+                if let Some(town) = data.nearest_town.as_deref().filter(|&town| town != entry.id) {
+                    world.exits.entry(entry.id.as_str()).or_default().push((town, Step::TeleportScroll));
+                }
+            }
+            world.from_anywhere = TELEPORT_SCROLL_TOWNS.iter().map(|&to| (to, Step::TeleportScroll)).collect();
+        }
         world
     }
 
@@ -78,9 +105,27 @@ impl<'a> World<'a> {
     pub fn distances_from(&self, from: &str) -> Distances {
         let no_quests = HashMap::new();
         Distances {
-            routable: map_changes(from, &self.exits, &no_quests),
-            with_quests: map_changes(from, &self.exits, &self.quest_exits),
+            routable: self.map_changes(from, &no_quests),
+            with_quests: self.map_changes(from, &self.quest_exits),
         }
+    }
+
+    /// Breadth-first from `from` over the exits, `more` exits and the ways from
+    /// anywhere: each map reached, with the fewest map changes to it.
+    fn map_changes(&self, from: &str, more: &Exits) -> HashMap<String, Reached> {
+        let mut reached = HashMap::from([(from.to_string(), Reached { changes: 0, came_from: None })]);
+        let mut queue = VecDeque::from([(from.to_string(), 0)]);
+        while let Some((map, changes)) = queue.pop_front() {
+            let own = self.exits.get(map.as_str()).into_iter().chain(more.get(map.as_str())).flatten();
+            for &(to, step) in own.chain(&self.from_anywhere) {
+                if !reached.contains_key(to) {
+                    let came_from = Some((map.clone(), step));
+                    reached.insert(to.to_string(), Reached { changes: changes + 1, came_from });
+                    queue.push_back((to.to_string(), changes + 1));
+                }
+            }
+        }
+        reached
     }
 }
 
@@ -91,24 +136,6 @@ struct Reached {
     /// The map before it on a shortest route there, and how it leads on; `None` for
     /// the map the search started from.
     came_from: Option<(String, Step)>,
-}
-
-/// Breadth-first from `from` over both sets of exits: each map reached, with the fewest
-/// map changes to it.
-fn map_changes(from: &str, exits: &Exits, more: &Exits) -> HashMap<String, Reached> {
-    let mut reached = HashMap::from([(from.to_string(), Reached { changes: 0, came_from: None })]);
-    let mut queue = VecDeque::from([(from.to_string(), 0)]);
-    while let Some((map, changes)) = queue.pop_front() {
-        let next = exits.get(map.as_str()).into_iter().chain(more.get(map.as_str())).flatten();
-        for &(to, step) in next {
-            if !reached.contains_key(to) {
-                let came_from = Some((map.clone(), step));
-                reached.insert(to.to_string(), Reached { changes: changes + 1, came_from });
-                queue.push_back((to.to_string(), changes + 1));
-            }
-        }
-    }
-    reached
 }
 
 /// How far every map is from one map.
