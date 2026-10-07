@@ -1,6 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { mobTitle, nearestLine, resultRow, resultsNote, type SearchState } from "./search-state";
+import {
+  distanceText,
+  mobTitle,
+  nearestLine,
+  resultRow,
+  resultsNote,
+  routeStops,
+  type SearchResult,
+  type SearchState,
+} from "./search-state";
 
 /** What the shell sends the search window. */
 type SearchView = { search: SearchState };
@@ -16,6 +25,10 @@ const pickedNearest = byId("picked-nearest");
 const pickedNote = byId("picked-note");
 const results = byId("results");
 const resultRows = byId("result-rows");
+const route = byId("route");
+const routeTitle = byId("route-title");
+const routeList = byId("route-stops");
+const routeNone = byId("route-none");
 const credit = byId("credit");
 
 let open = false;
@@ -69,9 +82,31 @@ function update({ search }: SearchView) {
     pickedNote.textContent = resultsNote(search);
     pickedNote.hidden = pickedNote.textContent === "";
     results.hidden = search.results.length === 0;
-    resultRows.replaceChildren(...search.results.map(resultRow));
+    resultRows.replaceChildren(
+      ...search.results.map((result, i) => {
+        const row = resultRow(result);
+        const current = i === search.highlightedResult;
+        row.classList.toggle("current", current);
+        row.setAttribute("aria-selected", String(current));
+        return row;
+      }),
+    );
+    showRoute(search.highlightedResult === null ? null : search.results[search.highlightedResult]);
     credit.textContent = search.credit ? `Data: ${search.credit}` : "";
   }
+}
+
+/** The highlighted result's full route, under the table. */
+function showRoute(result: SearchResult | null) {
+  route.hidden = !result;
+  if (!result) return;
+  routeTitle.textContent = `Route to ${result.mapName}`;
+  routeList.replaceChildren(...routeStops(result));
+  routeList.hidden = result.route.length === 0;
+  // No route to show: say why ("No known route leads there"…).
+  routeNone.textContent = result.route.length === 0 ? distanceText(result.distance).title : "";
+  routeNone.hidden = result.route.length > 0;
+  resultRows.querySelector("tr.current")?.scrollIntoView({ block: "nearest" });
 }
 
 query.addEventListener("input", () => invoke("search_query", { query: query.value }));
