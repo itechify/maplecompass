@@ -9,8 +9,8 @@ Personal use only for now: see [ADR 0003](docs/adr/0003-fetch-meowdb-live-until-
 ## Layout
 
 - `crates/compass-core`: the headless core (no OS or UI dependencies). Title Region frames go in, a panel state comes out. It is the only test seam.
-- `src-tauri`: the Tauri v2 shell. It finds the "MapleStory" window, captures the Title Region about 3 times a second, feeds the core and moves the overlay. It also fetches MeowDB's map index once at startup, which the core snaps readings to, and a map's page only once you are confirmed on that map. Pages are cached for a day in `%LOCALAPPDATA%\com.itechify.maplecompass\cache`, so revisits don't refetch.
-- `src`, `index.html`: the overlay's web UI (vanilla TypeScript). It only renders the panel state.
+- `src-tauri`: the Tauri v2 shell. It finds the "MapleStory" window, captures the Title Region the player marked at setup about 3 times a second, feeds the core and moves the overlay. It also fetches MeowDB's map index once at startup, which the core snaps readings to, and a map's page only once you are confirmed on that map. Pages are cached for a day in `%LOCALAPPDATA%\com.itechify.maplecompass\cache`, so revisits don't refetch.
+- `src`, `index.html`, `setup.html`, `region.html`: the web UI (vanilla TypeScript) for the overlay, the setup window and the title-marking window. It only renders state from the core.
 - `samples/minimap`: test screenshots named `street-name__map-name[--variant].png`.
 
 ## Build, test, run (Windows)
@@ -27,19 +27,22 @@ cargo run -p maplecompass --example probe       # no UI: capture the title and p
 
 Run the game windowed or borderless, with the minimap open.
 
+On first run a setup window walks you through a ban-risk warning, finding the game window (or picking it by hand), the requirements, and marking the minimap title: drag a box around its two lines. A test read then shows the map it recognised; finish to start the overlay. Closing setup on first run quits. MapleCompass asks you to set up again when the game window changes size.
+
 The panel starts on the right edge of the game window, and clicks pass through it to the game. It sits just above the game rather than on top of everything, so an app you bring in front of the game covers it too, and it disappears while the game is minimised. Once it knows your map it shows the map's Map Summary (mobs and EXP per hour, solo and 6+, as MeowDB gives them) and its mobs sorted by level, from NiaMeowDB (meowdb.com). These hotkeys work while the game has focus:
 
 - **Ctrl+Shift+M** collapses the panel to an icon, or expands it again.
 - **Ctrl+Shift+E** enters edit mode: drag the panel where you want it, then press Ctrl+Shift+E again to make it click-through.
 - **Ctrl+Shift+D** switches placement: inside the game window, docked to its right edge, docked to its left edge, or detached.
 - **Ctrl+Shift+O** opens the current map's MeowDB page in your browser.
+- **Ctrl+Shift+S** opens setup again, to mark the minimap title anew.
 - **Ctrl+Shift+C** shows the next map with the same title, when the panel can't tell which one you're on.
 
 A few maps share a title, such as the two Maple Road / Mushroom Town maps. If they would show the same mobs anyway, the panel just shows them. Otherwise it picks the one connected to the map you came from, and failing that it shows the first and says so; Ctrl+Shift+C then steps through them, and your pick holds until you change maps.
 
 Inside, the panel keeps its spot relative to the game window. Docked, it follows the game window's outside edge, and goes inside when there is no room on screen. Detached, it is an ordinary window: drag it anywhere, such as onto another monitor, and it stays there.
 
-Settings, including the placement and the hotkeys, are saved in `%APPDATA%\com.itechify.maplecompass\settings.json`.
+Settings, including the placement, the marked title, a hand-picked game window and the hotkeys, are saved in `%APPDATA%\com.itechify.maplecompass\settings.json`.
 
 ## Credits
 
