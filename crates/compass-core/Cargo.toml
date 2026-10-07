@@ -1,0 +1,19 @@
+[package]
+name = "compass-core"
+version = "0.1.0"
+description = "Headless MapleCompass core: Title Region frames in, panel state out. No OS or UI dependencies."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+serde = { workspace = true }
+image = { workspace = true }
+# ocrs 0.13.1 needs rten 0.26 (it does not accept 0.27).
+ocrs = { version = "0.13.1", default-features = false, features = ["onnx"] }
+rten = "0.26"
+rten-imageproc = "0.26"
+
+[dev-dependencies]
+image = { workspace = true, features = ["png"] }
