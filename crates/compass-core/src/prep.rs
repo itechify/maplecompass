@@ -12,9 +12,12 @@
 
 use image::{GrayImage, Luma, RgbImage};
 
-/// Panel background colour and per-channel tolerance.
-const PANEL_RGB: [i32; 3] = [164, 200, 218];
-const PANEL_TOL: i32 = 10;
+/// Panel background colour (as in the sample screenshots) and per-channel tolerance.
+/// Live GDI captures show the same colour uniformly darker, (153,187,204) ≈ 0.935×, so
+/// the panel test matches the colour at any brightness within `PANEL_SCALE`.
+const PANEL_RGB: [f32; 3] = [164.0, 200.0, 218.0];
+const PANEL_TOL: f32 = 10.0;
+const PANEL_SCALE: std::ops::RangeInclusive<f32> = 0.8..=1.1;
 /// Search only this top-left area of a frame for the minimap.
 const SEARCH_W: u32 = 900;
 const SEARCH_H: u32 = 400;
@@ -67,7 +70,9 @@ fn luma(p: [u8; 3]) -> f32 {
 }
 
 fn is_panel(p: [u8; 3]) -> bool {
-    (0..3).all(|i| (p[i] as i32 - PANEL_RGB[i]).abs() <= PANEL_TOL)
+    // Brightness relative to the reference panel colour, taken from the blue channel.
+    let k = p[2] as f32 / PANEL_RGB[2];
+    PANEL_SCALE.contains(&k) && (0..2).all(|i| (p[i] as f32 - k * PANEL_RGB[i]).abs() <= PANEL_TOL)
 }
 
 /// 0.0 (background) ..= 1.0 (title text).
