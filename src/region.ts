@@ -9,7 +9,7 @@ type Target = "title" | "expBar";
 
 const HINTS: Record<Target, string> = {
   title: "Drag a box around the two lines of the minimap title · Esc to cancel",
-  expBar: "Drag a box around the EXP figures on the status bar, like EXP. 160 [3.81%] · Esc to cancel",
+  expBar: "Drag a box around the EXP figures on the EXP bar, like EXP. 160 [3.81%] · Esc to cancel",
 };
 
 const box = document.getElementById("box")!;
