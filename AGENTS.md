@@ -6,6 +6,7 @@
 - `cargo clippy --workspace --all-targets -- -D warnings`: lint everything.
 - `pnpm install` then `pnpm tauri build --debug --no-bundle`: build the app. `pnpm tauri dev` runs it.
 - `cargo run -p maplecompass --example probe [reads] [out.png]`: read-only smoke test against a running game, with no UI.
+- `cargo run -p maplecompass --example probe record <out-dir> <name>=<x>,<y>,<w>,<h>@<hz> ... [--seconds <n>]`: record timestamped crops of client-area regions from a running game, for samples.
 
 ## Code rules
 

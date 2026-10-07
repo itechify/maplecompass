@@ -471,3 +471,26 @@ fn a_panel_dragged_onto_the_minimap_title_is_moved_clear_of_the_exp_bar_too() {
     assert!(!overlaps(placement, state.title_region.unwrap()));
     assert!(!overlaps(placement, state.exp_bar_region.unwrap()));
 }
+
+#[test]
+fn a_panel_dragged_onto_the_exp_bar_is_moved_clear_of_it() {
+    let mut compass = compass();
+    let client = Size { width: 640, height: 400 };
+    compass.restore(Settings {
+        title_region: Some(TitleRegion { marked: Rect { x: 70, y: 40, width: 130, height: 48 }, client }),
+        exp_bar_region: Some(ExpBarRegion { marked: Rect { x: 100, y: 150, width: 120, height: 26 }, client }),
+        ..Settings::default()
+    });
+    compass.on_game_window(game(TALLER_SMALL_GAME));
+    compass.act(Action::ToggleEditMode);
+
+    // Client (150,140): over the EXP bar (client y 150..176) and clear of the title.
+    compass.act(Action::PanelMoved { x: 962, y: 250 });
+    let state = compass.act(Action::ToggleEditMode);
+
+    // Just below the EXP bar is the nearest clear spot.
+    let placement = state.placement.unwrap();
+    assert_eq!(placement, rect(962, 110 + 176, 340, 72));
+    assert!(!overlaps(placement, state.title_region.unwrap()));
+    assert!(!overlaps(placement, state.exp_bar_region.unwrap()));
+}

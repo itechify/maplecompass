@@ -16,7 +16,7 @@
 //! `exp-bar=1015,1150,200,22@1 pickup-log=1630,830,285,135@10`. Nothing is read or
 //! fetched: it only finds the game window and copies screen pixels.
 
-use compass_core::{Compass, GAME_WINDOW_TITLE, ScreenRect, TitleReader};
+use compass_core::{Compass, GAME_WINDOW_TITLE, Rect, TitleReader};
 use maplecompass_lib::{capture, capture_title_frame, gamewin, meowdb::MeowDbSource};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -80,10 +80,8 @@ const MAX_HZ: f64 = 30.0;
 /// One named rectangle of the client area, recorded at its own rate.
 struct Track {
     name: String,
-    x: u32,
-    y: u32,
-    width: u32,
-    height: u32,
+    /// Relative to the client area's top-left corner.
+    rect: Rect,
     period: Duration,
     dir: PathBuf,
     /// When the next crop is due.
@@ -107,10 +105,7 @@ fn parse_track(spec: &str, out: &Path, start: Instant) -> Result<Track, String> 
     }
     Ok(Track {
         name: name.into(),
-        x,
-        y,
-        width,
-        height,
+        rect: Rect { x, y, width, height },
         period: Duration::from_secs_f64(1.0 / hz),
         dir: out.join(name),
         next: start,
@@ -142,7 +137,8 @@ fn record(args: &[String]) -> Result<(), String> {
     let mut client = gamewin::find_game_client().ok_or(format!("No visible \"{GAME_WINDOW_TITLE}\" window found."))?;
     println!("Game client area: {client:?}");
     for t in &tracks {
-        if t.x + t.width > client.width || t.y + t.height > client.height {
+        let r = t.rect;
+        if r.x + r.width > client.width || r.y + r.height > client.height {
             return Err(format!("region {} doesn't fit the {}x{} client area", t.name, client.width, client.height));
         }
         std::fs::create_dir_all(&t.dir).map_err(|e| format!("{}: {e}", t.dir.display()))?;
@@ -190,12 +186,13 @@ fn record(args: &[String]) -> Result<(), String> {
                 t.dropped += 1;
                 continue;
             }
-            let rect = ScreenRect { x: client.x + t.x as i32, y: client.y + t.y as i32, width: t.width, height: t.height };
-            match capture::capture_rgba(rect.x, rect.y, rect.width as i32, rect.height as i32) {
+            let r = t.rect;
+            let (x, y) = (client.x + r.x as i32, client.y + r.y as i32);
+            match capture::capture_rgba(x, y, r.width as i32, r.height as i32) {
                 Ok(rgba) => {
                     let ms = (now - start).as_millis();
                     let path = t.dir.join(format!("{ms:08}.png"));
-                    let _ = crops.send((path, t.width, t.height, rgba));
+                    let _ = crops.send((path, r.width, r.height, rgba));
                     t.saved += 1;
                 }
                 Err(e) => {
