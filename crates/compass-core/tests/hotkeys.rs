@@ -1,12 +1,13 @@
 //! The player drives MapleCompass with global hotkeys: Ctrl+Shift+letter, because
 //! Windows and other apps already hold many Win+Alt letters (Win+Alt+F among them).
-//! The shell registers what the panel state lists and hands every press to the core,
-//! which decides what it does.
+//! They are live only while the game or MapleCompass is in front, so other apps keep
+//! their own Ctrl+Shift shortcuts. The shell registers what the panel state lists while
+//! it says they are live, and hands every press to the core, which decides what it does.
 
 mod common;
 
 use common::{FakeSource, arrive};
-use compass_core::{Compass, Hotkeys, PlacementMode, Request, Settings, SetupReason};
+use compass_core::{Compass, Foreground, Hotkeys, PlacementMode, Request, Settings, SetupReason};
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
 
@@ -193,4 +194,31 @@ fn a_rebound_search_hotkey_another_app_has_taken_is_shown_as_unavailable() {
     assert_eq!(state.hotkeys.search, "ctrl+shift+q");
     assert_eq!(state.hotkeys.all().last(), Some(&"ctrl+shift+q"));
     assert_eq!(state.unavailable_hotkeys, ["ctrl+shift+q"]);
+}
+
+#[test]
+fn the_hotkeys_are_live_only_while_the_game_or_maplecompass_is_in_front() {
+    let mut compass = Compass::new(FakeSource::meowdb());
+
+    assert!(compass.on_foreground(Foreground::Game).hotkeys_live);
+    assert!(!compass.on_foreground(Foreground::OtherApp).hotkeys_live, "other apps keep their Ctrl+Shift keys");
+    assert!(compass.on_foreground(Foreground::MapleCompass).hotkeys_live, "e.g. the search window or setup");
+}
+
+#[test]
+fn before_the_foreground_is_known_the_hotkeys_are_not_live() {
+    let compass = Compass::new(FakeSource::meowdb());
+
+    assert!(!compass.panel_state().hotkeys_live);
+}
+
+#[test]
+fn a_hotkey_reported_unavailable_stays_listed_while_the_hotkeys_are_not_live() {
+    let mut compass = Compass::new(FakeSource::meowdb());
+    compass.on_foreground(Foreground::Game);
+    compass.hotkeys_unavailable(vec!["ctrl+shift+e".into()]);
+
+    let state = compass.on_foreground(Foreground::OtherApp);
+
+    assert_eq!(state.unavailable_hotkeys, ["ctrl+shift+e"]);
 }

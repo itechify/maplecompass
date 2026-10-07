@@ -97,8 +97,8 @@ pub fn run() {
             // The core brings older settings up to date (hotkeys included).
             compass.restore(settings::load(&settings_path));
             let (commands, commands_rx) = mpsc::channel();
-            let unavailable = hotkeys::install(app, &compass.panel_state().hotkeys, commands.clone())?;
-            compass.hotkeys_unavailable(unavailable);
+            // Registered only while the game or one of our windows is in front.
+            let hotkeys = hotkeys::install(app, &compass.panel_state().hotkeys, commands.clone())?;
             app.manage(commands.clone());
             let (picks, picks_rx) = mpsc::channel();
             app.manage(Bridge {
@@ -122,7 +122,7 @@ pub fn run() {
             // Per-Monitor-V2 DPI aware.
             let reader = TitleReaderThread::spawn(app.state::<Sender<Command>>().inner().clone())?;
             let channels = Channels { commands: commands_rx, picks: picks_rx };
-            let windows = Windows { overlay, setup: setup_windows, search: search_window };
+            let windows = Windows { overlay, setup: setup_windows, search: search_window, hotkeys };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
                 compass_loop(handle, windows, compass, reader, channels, settings_path)
             })?;
@@ -155,6 +155,8 @@ struct Windows {
     overlay: WebviewWindow,
     setup: SetupWindows,
     search: SearchWindow,
+    /// Not a window, but registered and released as the foreground changes.
+    hotkeys: hotkeys::GlobalHotkeys,
 }
 
 /// What the compass loop hears from hotkeys, the overlay, the setup window and the
@@ -222,7 +224,7 @@ fn compass_loop(
     channels: Channels,
     settings_path: PathBuf,
 ) {
-    let Windows { overlay, setup: mut setup_windows, search: mut search_window } = windows;
+    let Windows { overlay, setup: mut setup_windows, search: mut search_window, mut hotkeys } = windows;
     let mut window = OverlayWindow::new(overlay);
     let mut saved = compass.settings();
     let mut pending = (saved.clone(), Instant::now());
@@ -273,6 +275,11 @@ fn compass_loop(
         if Instant::now() >= next_window_check {
             next_window_check = Instant::now() + WINDOW_TICK;
             game = find_game(&mut compass, &window.overlay, expanded);
+            // The hotkeys are live only while the game or one of our windows is in front.
+            compass.on_foreground(gamewin::foreground(game.map(|g| g.handle)));
+            if let Some(unavailable) = hotkeys.sync(&app, compass.panel_state().hotkeys_live) {
+                compass.hotkeys_unavailable(unavailable);
+            }
         }
         // Fetches in flight (map index, map pages) are checked on, never waited for.
         compass.tick(reader.now_ms());

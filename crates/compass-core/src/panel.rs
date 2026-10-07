@@ -33,6 +33,14 @@ pub struct GameWindow {
     pub screens: Vec<ScreenRect>,
 }
 
+/// Which window is in front: the game, one of MapleCompass's own, or another app's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Foreground {
+    Game,
+    MapleCompass,
+    OtherApp,
+}
+
 /// The overlay's size when expanded and when collapsed to an icon (physical px).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PanelSizes {
