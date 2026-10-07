@@ -133,6 +133,14 @@ impl ShownMap {
         }
     }
 
+    /// The maps the player could be on now, going by the map shown: that map, and
+    /// those it leads to (when the core is sure it's the player's and has its data).
+    pub fn within_reach(&self) -> Vec<String> {
+        let mut maps = self.connected_maps();
+        maps.extend(self.map().map(|m| m.id.clone()));
+        maps
+    }
+
     /// Show the next of the maps sharing the title, if the player may choose.
     pub fn choose_next(&mut self, source: &mut dyn MapDataSource) {
         if let Settling::Choosing { shown, .. } = self.settling {

@@ -47,6 +47,17 @@ const INK_MIN_LUMA: f32 = 170.0;
 const LINE_MIN_INK: f32 = 1.5;
 /// A column of a line counts as text if its summed ink exceeds this.
 const COL_MIN_INK: f32 = 0.3;
+/// Words are at least this many text-free columns apart (letters 1-2, words 4-6).
+const WORD_GAP: u32 = 4;
+/// A column is part of an upright stroke (the game font's "I": 2-3 px wide, 14 rows
+/// tall on a 15-18-row line) when at least this share of the line's rows have at
+/// least `STROKE_INK` ink.
+const STROKE_ROWS: f32 = 0.65;
+const STROKE_INK: f32 = 0.5;
+/// The widest upright stroke, in columns.
+const STROKE_MAX_W: u32 = 4;
+/// "III": the most strokes a trailing numeral is read from.
+const NUMERAL_MAX_STROKES: usize = 3;
 /// White padding around the masked text canvas.
 pub const PAD: u32 = 8;
 
@@ -63,6 +74,18 @@ pub struct Rect {
 pub struct Prepared {
     pub canvas: GrayImage,
     pub lines: [Rect; 2],
+    /// The map line ends in a Roman numeral I, II or III, counted from the mask.
+    pub numeral: Option<Numeral>,
+}
+
+/// A map line's last word made of nothing but upright strokes: "I", "II" or "III".
+/// ocrs can't read the game font's "II" and "III" (it gives an unknown glyph, or one
+/// "I"), so they are counted instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Numeral {
+    /// Where the word starts (canvas x).
+    pub x: u32,
+    pub strokes: usize,
 }
 
 fn luma(p: [u8; 3]) -> f32 {
@@ -171,6 +194,7 @@ pub fn prepare(img: &RgbImage) -> Option<Prepared> {
         Some(Rect { x: first + PAD, y: ly0 + PAD, w: last - first, h: ly1 - ly0 })
     };
     let lines = [line(row_runs[0])?, line(row_runs[1])?];
+    let numeral = trailing_numeral(&at, lines[1]);
 
     let mut canvas = GrayImage::from_pixel(tw + 2 * PAD, th + 2 * PAD, Luma([255]));
     for y in 0..th {
@@ -178,5 +202,33 @@ pub fn prepare(img: &RgbImage) -> Option<Prepared> {
             canvas.put_pixel(x + PAD, y + PAD, Luma([(255.0 * (1.0 - at(x, y))).round() as u8]));
         }
     }
-    Some(Prepared { canvas, lines })
+    Some(Prepared { canvas, lines, numeral })
+}
+
+/// The Roman numeral I, II or III ending a line (`line` in canvas coordinates; `at`
+/// gives ink by text coordinates): its last word, if every inked column of it is an
+/// upright stroke or right beside one.
+fn trailing_numeral(at: &impl Fn(u32, u32) -> f32, line: Rect) -> Option<Numeral> {
+    let (x0, x1) = (line.x - PAD, line.x - PAD + line.w);
+    let (y0, y1) = (line.y - PAD, line.y - PAD + line.h);
+    let inked = |x: u32| (y0..y1).map(|y| at(x, y)).sum::<f32>() > COL_MIN_INK;
+    let stroke = |x: u32| {
+        (y0..y1).filter(|&y| at(x, y) >= STROKE_INK).count() as f32 >= STROKE_ROWS * line.h as f32
+    };
+    // The last word starts after the last gap between words.
+    let mut gap = 0;
+    let word_start = (x0..x1).rev().find(|&x| {
+        gap = if inked(x) { 0 } else { gap + 1 };
+        gap == WORD_GAP
+    })? + WORD_GAP;
+    let word = word_start..x1;
+    let near_stroke = |x: u32| (x.saturating_sub(1)..=x + 1).any(|c| word.contains(&c) && stroke(c));
+    if !word.clone().all(|x| !inked(x) || near_stroke(x)) {
+        return None;
+    }
+    let on: Vec<bool> = word.clone().map(stroke).collect();
+    let strokes = runs(&on);
+    let fits = (1..=NUMERAL_MAX_STROKES).contains(&strokes.len())
+        && strokes.iter().all(|(a, b)| b - a <= STROKE_MAX_W);
+    fits.then_some(Numeral { x: word_start + PAD, strokes: strokes.len() })
 }
