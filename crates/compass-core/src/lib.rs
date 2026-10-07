@@ -177,11 +177,14 @@ pub struct PanelState {
     pub search: SearchState,
 }
 
-/// A page to open in the player's browser (the open-page hotkey asked for it): the one
-/// thing the shell does on the core's say beyond rendering the panel state.
+/// What a hotkey asks the shell to do at once, beyond rendering the panel state.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OpenInBrowser {
-    pub url: String,
+pub enum Request {
+    /// Open this page in the player's browser (the open-page hotkey).
+    OpenInBrowser { url: String },
+    /// Bring the search window, already open, back in front (the search hotkey): the
+    /// game may have come in front of it. Our own window only (ADR 0001).
+    RaiseSearchWindow,
 }
 
 /// The game window's title, unless the player picked another by hand.
@@ -387,8 +390,9 @@ impl Compass {
     }
 
     /// The player pressed one of the global hotkeys (an accelerator string, as listed
-    /// in the panel state's `hotkeys`). Returns the page to open, if it asks for one.
-    pub fn on_hotkey(&mut self, pressed: &str) -> Option<OpenInBrowser> {
+    /// in the panel state's `hotkeys`). Returns what the shell must do at once, if
+    /// anything: open a page, or bring the search window back in front.
+    pub fn on_hotkey(&mut self, pressed: &str) -> Option<Request> {
         let hotkeys = &self.settings.hotkeys;
         let is = |hotkey: &str| same_hotkey(hotkey, pressed);
         let action = if is(&hotkeys.toggle_panel) {
@@ -402,9 +406,13 @@ impl Compass {
         } else if is(&hotkeys.choose_candidate) {
             Action::ChooseCandidate
         } else if is(&hotkeys.search) {
+            // An open window stays as it is; the shell shows a newly opened one in front.
+            if self.state.search.window_open {
+                return Some(Request::RaiseSearchWindow);
+            }
             Action::OpenSearch
         } else if is(&hotkeys.open_meowdb_page) {
-            return self.state.map.as_ref().map(|map| OpenInBrowser { url: map.url.clone() });
+            return self.state.map.as_ref().map(|map| Request::OpenInBrowser { url: map.url.clone() });
         } else {
             return None;
         };

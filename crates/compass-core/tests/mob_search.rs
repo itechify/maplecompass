@@ -7,7 +7,7 @@ mod common;
 
 use common::world::{SEARCH, WorldMap, crawled, map, mob, orange, search_for, tick_through, world};
 use common::{FakeSource, arrive};
-use compass_core::{Action, Compass, DensityTier, MEOWDB_CREDIT, Mob, PanelState, SearchState};
+use compass_core::{Action, Compass, DensityTier, MEOWDB_CREDIT, Mob, PanelState, Request, SearchState};
 
 fn mushroom_world() -> Vec<WorldMap> {
     vec![
@@ -19,14 +19,16 @@ fn mushroom_world() -> Vec<WorldMap> {
 }
 
 #[test]
-fn the_search_hotkey_leaves_an_open_search_window_as_it_is() {
+fn the_search_hotkey_brings_an_open_search_window_back_in_front_as_it_is() {
     let mut compass = crawled(mushroom_world());
-    compass.on_hotkey(SEARCH);
+    assert_eq!(compass.on_hotkey(SEARCH), None, "opening it shows it in front");
     compass.search_query("mush");
     let before = compass.panel_state().clone();
 
-    compass.on_hotkey(SEARCH);
+    // The game may have come in front of it since.
+    let asked = compass.on_hotkey(SEARCH);
 
+    assert_eq!(asked, Some(Request::RaiseSearchWindow));
     assert_eq!(*compass.panel_state(), before);
 }
 
