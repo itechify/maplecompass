@@ -23,11 +23,28 @@ pub struct Game {
     pub frame: ScreenRect,
 }
 
-/// Exact title of the game window.
+/// Exact title of the game window, unless the player picked another by hand.
 pub const GAME_TITLE: &str = "MapleStory";
 
+/// The title [`find_game`] looks for: [`GAME_TITLE`], or the window picked by hand.
+static LOOK_FOR: std::sync::RwLock<String> = std::sync::RwLock::new(String::new());
+
+/// Look for windows titled exactly `title` from now on.
+pub fn look_for(title: &str) {
+    let mut current = LOOK_FOR.write().unwrap_or_else(|e| e.into_inner());
+    if *current != title {
+        *current = title.to_string();
+    }
+}
+
+/// The title [`find_game`] looks for.
+pub fn looking_for() -> String {
+    let current = LOOK_FOR.read().unwrap_or_else(|e| e.into_inner());
+    if current.is_empty() { GAME_TITLE.to_string() } else { current.clone() }
+}
+
 #[cfg(windows)]
-pub use win::{find_game, keep_above, monitor_work_areas};
+pub use win::{find_game, keep_above, monitor_work_areas, window_under_cursor};
 
 /// The game's client area, or `None` when it isn't running or is minimised.
 pub fn find_game_client() -> Option<ClientArea> {
@@ -40,13 +57,18 @@ pub fn find_game() -> Option<Game> {
 }
 
 #[cfg(not(windows))]
+pub fn window_under_cursor() -> Result<String, String> {
+    Err("picking a window is only implemented on Windows so far".into())
+}
+
+#[cfg(not(windows))]
 pub fn monitor_work_areas() -> Vec<ScreenRect> {
     Vec::new()
 }
 
 #[cfg(windows)]
 mod win {
-    use super::{ClientArea, GAME_TITLE, Game, ScreenRect};
+    use super::{ClientArea, Game, ScreenRect};
     use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
     use windows::Win32::Graphics::Dwm::{
         DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute,
@@ -56,40 +78,66 @@ mod win {
     };
     use windows::Win32::System::Threading::GetCurrentProcessId;
     use windows::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GW_HWNDPREV, GWL_EXSTYLE, GetClientRect, GetWindow, GetWindowLongPtrW,
-        GetWindowTextW, GetWindowThreadProcessId, HWND_NOTOPMOST, HWND_TOP, HWND_TOPMOST, IsIconic, IsWindowVisible,
-        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, WS_EX_TOPMOST,
+        EnumWindows, GA_ROOT, GW_HWNDPREV, GWL_EXSTYLE, GetAncestor, GetClientRect, GetCursorPos,
+        GetWindow, GetWindowLongPtrW, GetWindowTextW, GetWindowThreadProcessId, HWND_NOTOPMOST,
+        HWND_TOP, HWND_TOPMOST, IsIconic, IsWindowVisible, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+        SetWindowPos, WS_EX_TOPMOST, WindowFromPoint,
     };
     use windows::core::BOOL;
 
     /// The first visible, uncloaked, not minimised top-level window titled exactly
-    /// "MapleStory". `None` when the game isn't running or is minimised.
+    /// "MapleStory" (or as picked by hand). `None` when the game isn't running or is
+    /// minimised.
     pub fn find_game() -> Option<Game> {
-        let mut found: Vec<HWND> = Vec::new();
+        let title = super::looking_for();
+        let mut search: (&str, Vec<HWND>) = (&title, Vec::new());
         unsafe {
-            let _ = EnumWindows(Some(collect), LPARAM(&mut found as *mut Vec<HWND> as isize));
+            let _ = EnumWindows(Some(collect), LPARAM(&mut search as *mut (&str, Vec<HWND>) as isize));
         }
-        found.into_iter().find_map(game)
+        search.1.into_iter().find_map(game)
     }
 
     unsafe extern "system" fn collect(hwnd: HWND, lparam: LPARAM) -> BOOL {
-        let found = unsafe { &mut *(lparam.0 as *mut Vec<HWND>) };
-        if is_game_window(hwnd) {
+        let (title, found) = unsafe { &mut *(lparam.0 as *mut (&str, Vec<HWND>)) };
+        if is_game_window(hwnd, title) {
             found.push(hwnd);
         }
         BOOL(1) // keep enumerating
     }
 
-    fn is_game_window(hwnd: HWND) -> bool {
+    /// The title of the top-level window under the mouse pointer, for picking the game
+    /// window by hand. Only reads window-manager state: the pointer position, which
+    /// window is there, its root and its stored caption (ADR 0001).
+    pub fn window_under_cursor() -> Result<String, String> {
+        let mut at = POINT::default();
+        unsafe { GetCursorPos(&mut at) }.map_err(|e| format!("no pointer position: {e}"))?;
+        let root = unsafe { GetAncestor(WindowFromPoint(at), GA_ROOT) };
+        if root.is_invalid() {
+            return Err("no window under the pointer".into());
+        }
+        if is_ours(root) {
+            return Err("that is MapleCompass itself".into());
+        }
+        match caption(root) {
+            Some(title) if !title.trim().is_empty() => Ok(title),
+            _ => Err("the window under the pointer has no title".into()),
+        }
+    }
+
+    /// The caption stored by the window manager; no WM_GETTEXT is sent to another
+    /// process's window.
+    fn caption(hwnd: HWND) -> Option<String> {
+        let mut buf = [0u16; 256];
+        let n = unsafe { GetWindowTextW(hwnd, &mut buf) };
+        (n > 0).then(|| String::from_utf16_lossy(&buf[..n as usize]))
+    }
+
+    fn is_game_window(hwnd: HWND, title: &str) -> bool {
         unsafe {
             if !IsWindowVisible(hwnd).as_bool() {
                 return false;
             }
-            // Reads the caption stored by the window manager; no WM_GETTEXT is sent
-            // to another process's window.
-            let mut buf = [0u16; 64];
-            let n = GetWindowTextW(hwnd, &mut buf);
-            if n <= 0 || String::from_utf16_lossy(&buf[..n as usize]) != GAME_TITLE {
+            if caption(hwnd).as_deref() != Some(title) {
                 return false;
             }
             let mut cloaked: u32 = 0;

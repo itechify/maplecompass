@@ -52,12 +52,19 @@ type PanelState = {
   placementMode: PlacementMode;
   layer: "aboveGame" | "free" | "hidden";
   draggable: boolean;
+  setup: { needed: "firstRun" | "resolutionChanged" | "requested" | null };
 };
 
 /** Mirror of the shell's `OverlayState`. */
 type OverlayState = {
   panel: PanelState;
-  hotkeys: { togglePanel: string; editMode: string; cyclePlacement: string; openMeowdbPage: string };
+  hotkeys: {
+    togglePanel: string;
+    editMode: string;
+    cyclePlacement: string;
+    openMeowdbPage: string;
+    setup: string;
+  };
 };
 
 const byId = (id: string) => document.getElementById(id)!;
@@ -192,6 +199,11 @@ function render(state: OverlayState) {
   if (!panel.gameFound) {
     street.textContent = "";
     map.textContent = "Looking for MapleStory…";
+  } else if (panel.setup.needed === "firstRun" || panel.setup.needed === "resolutionChanged") {
+    // Nothing is read until the Title Region is marked (again).
+    street.textContent =
+      panel.setup.needed === "firstRun" ? "Finish setup to start" : "The game window changed size";
+    map.textContent = `Set up: ${keyLabel(state.hotkeys.setup)}`;
   } else if (recognition === "unavailable") {
     street.textContent = "Couldn't load the map list from MeowDB";
     map.textContent = "Map recognition unavailable";

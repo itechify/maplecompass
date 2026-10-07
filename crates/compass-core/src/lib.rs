@@ -13,6 +13,7 @@ mod portals;
 mod prep;
 mod recogniser;
 mod settings;
+mod setup;
 mod tracker;
 
 pub use map_data::{HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty};
@@ -23,10 +24,12 @@ pub use panel::{
     Size,
 };
 pub use settings::{Hotkeys, Settings};
+pub use setup::{SetupReason, SetupState, TestRead, TitleRegion};
 
 use map_data::MapDataLoader;
 use matcher::Matcher;
 use panel::Panel;
+use setup::Setup;
 use recogniser::Recogniser;
 use tracker::Tracker;
 use serde::Serialize;
@@ -42,7 +45,7 @@ pub struct Frame {
 }
 
 /// A rectangle in physical pixels, relative to the game window's client area.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Rect {
     pub x: u32,
@@ -51,8 +54,9 @@ pub struct Rect {
     pub height: u32,
 }
 
-/// The Title Region to capture before the player has marked one, for a game client
-/// area of the given size (physical px).
+/// A guess at the Title Region for a game client area of the given size (physical px),
+/// for the probe, which has no setup. The app captures the region the player marked
+/// (`PanelState::title_region`).
 ///
 /// On the samples (1920x1200 client, default UI size) the title band is 66 px tall at
 /// client (0..4, 31). The region keeps ~15 px of slack above and below it, and is wide
@@ -127,6 +131,11 @@ pub struct PanelState {
     /// position alone except when its size or layer changes. Otherwise clicks pass
     /// through to the game and the shell keeps the overlay at `placement`.
     pub draggable: bool,
+    /// First-run setup and re-setup.
+    pub setup: SetupState,
+    /// Where on screen to capture the Title Region (physical px); `None` while there
+    /// is no game window or the region isn't known to fit it.
+    pub title_region: Option<ScreenRect>,
 }
 
 /// How long to wait before asking for the map index again after a failure. MeowDB is
@@ -143,6 +152,7 @@ pub struct Compass {
     tracker: Tracker,
     map_data: MapDataLoader,
     panel: Panel,
+    setup: Setup,
     /// The last settings restored; the panel's own fields live in `panel`.
     settings: Settings,
     state: PanelState,
@@ -160,6 +170,7 @@ impl Compass {
             tracker: Tracker::default(),
             map_data: MapDataLoader::default(),
             panel: Panel::default(),
+            setup: Setup::default(),
             settings: Settings::default(),
             state: PanelState::default(),
         };
@@ -170,11 +181,14 @@ impl Compass {
     /// Read a captured Title Region frame and update the panel state.
     pub fn on_frame(&mut self, frame: Frame) -> &PanelState {
         self.load_map_index(frame.at_ms);
-        let Some(matcher) = &self.matcher else { return &self.state };
+        let Some(matcher) = &self.matcher else {
+            // Without the map index nothing can be recognised.
+            self.setup.on_read(None);
+            return self.sync_setup();
+        };
         let read = frame_to_rgb(&frame).and_then(|img| self.recogniser.read(&img));
         let snap = read.and_then(|raw| matcher.snap(&raw.street, &raw.map));
-        let tracked = self.tracker.update(snap);
-        self.state.map = tracked.current.map(|i| {
+        let current_map = |i: usize| {
             let entry = matcher.map(i);
             CurrentMap {
                 id: entry.id.clone(),
@@ -182,18 +196,24 @@ impl Compass {
                 map_name: entry.map_name.clone(),
                 url: meowdb::map_url(&entry.id),
             }
-        });
+        };
+        // A test read judges this one frame: the tracker would keep showing the last
+        // confident map through a badly marked region.
+        self.setup.on_read(snap.map(|s| current_map(s.index)));
+        let tracked = self.tracker.update(snap);
+        self.state.map = tracked.current.map(current_map);
         let shown = self.state.map.as_ref().map(|m| m.id.as_str());
         self.state.data = self.map_data.show(shown, &mut *self.source).clone();
         self.state.credit = shown.map(|_| MEOWDB_CREDIT);
         self.state.confidence = (tracked.confidence * 100.0).round() as u8;
         self.state.not_sure = tracked.not_sure;
-        &self.state
+        self.sync_setup()
     }
 
     /// The game window moved, resized, appeared or went away (`None`: not found, or
     /// minimised).
     pub fn on_game_window(&mut self, game: Option<GameWindow>) -> &PanelState {
+        self.setup.game = game.as_ref().map(|g| g.client);
         self.panel.game = game;
         self.sync_panel()
     }
@@ -207,6 +227,7 @@ impl Compass {
     /// Apply something the player did.
     pub fn act(&mut self, action: Action) -> &PanelState {
         self.panel.act(action);
+        self.setup.act(action);
         self.sync_panel()
     }
 
@@ -216,8 +237,15 @@ impl Compass {
         self.panel.inside_offset = settings.inside_offset;
         self.panel.mode = settings.placement;
         self.panel.detached_at = settings.detached_at;
+        self.setup.saved = settings.title_region;
         self.settings = settings;
         self.sync_panel()
+    }
+
+    /// The player picked the game window by hand: look for windows with this title
+    /// from now on (the shell's window locator reads it from [`Compass::settings`]).
+    pub fn pick_game_window(&mut self, title: String) {
+        self.settings.game_window_title = Some(title);
     }
 
     /// The settings to save: whatever the player has changed since [`Compass::restore`].
@@ -227,6 +255,7 @@ impl Compass {
             inside_offset: self.panel.inside_offset,
             placement: self.panel.mode,
             detached_at: self.panel.detached_at,
+            title_region: self.setup.saved,
             ..self.settings.clone()
         }
     }
@@ -263,6 +292,12 @@ impl Compass {
         self.state.placement = self.panel.placement();
         self.state.layer = self.panel.layer();
         self.state.draggable = self.panel.draggable();
+        self.sync_setup()
+    }
+
+    fn sync_setup(&mut self) -> &PanelState {
+        self.state.setup = self.setup.state();
+        self.state.title_region = self.setup.title_region(self.matcher.as_ref().map(Matcher::longest_name));
         &self.state
     }
 }
