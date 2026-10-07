@@ -304,7 +304,7 @@ impl Compass {
     pub fn on_exp_bar_reading(&mut self, reading: ExpBarReading) -> &PanelState {
         self.setup.on_exp_bar_read(reading.bar);
         match reading.bar {
-            Some(bar) if self.setup.exp_bar_region().is_some() => self.session.on_bar(bar, reading.at_ms),
+            Some(bar) if self.tracking_on() => self.session.on_bar(bar, reading.at_ms),
             _ => self.session.tick(reading.at_ms),
         }
         if reading.bar.is_some() {
@@ -501,16 +501,22 @@ impl Compass {
         self.state.setup = self.setup.state();
         self.state.title_region = self.setup.title_region(self.matcher.as_ref().map(Matcher::longest_name));
         self.state.exp_bar_region = self.setup.exp_bar_region();
-        if self.state.exp_bar_region.is_none() {
+        if !self.tracking_on() {
             self.exp_bar = None;
         }
         self.state.exp_bar = self.exp_bar;
         // Off while there is no region to read; the Session itself carries on.
-        let ceiling = self.state.data.data().and_then(|d| d.summary).map(|s| s.exp_per_hour.solo);
-        self.state.exp_tracking = match self.state.exp_bar_region {
-            Some(_) => self.session.tracking(ceiling),
-            None => ExpTracking::default(),
+        self.state.exp_tracking = if self.tracking_on() {
+            self.session.tracking(self.state.data.solo_exp_ceiling())
+        } else {
+            ExpTracking::default()
         };
+    }
+
+    /// Whether EXP tracking is on: there is an EXP Bar Region to read, kept and fitting
+    /// the game window.
+    fn tracking_on(&self) -> bool {
+        self.setup.exp_bar_region().is_some()
     }
 }
 

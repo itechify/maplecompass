@@ -80,7 +80,7 @@ body {
   color: #9fb6cc;
 }
 
-.tracking .ttl {
+.tracking .time-to-level {
   font-size: 17px;
   font-weight: 600;
 }
@@ -100,9 +100,9 @@ body {
 }
 
 /* Rates still settling, or held while paused: the figures show, quieter. */
-.tracking:has(.tag.warmingUp) .ttl,
+.tracking:has(.tag.warmingUp) .time-to-level,
 .tracking:has(.tag.warmingUp) .rates td,
-.tracking:has(.tag.paused) .ttl,
+.tracking:has(.tag.paused) .time-to-level,
 .tracking:has(.tag.paused) .rates td {
   color: #c3ccd6;
 }

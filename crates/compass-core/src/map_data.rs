@@ -106,6 +106,12 @@ impl MapDataStatus {
             _ => None,
         }
     }
+
+    /// The map's solo EXP-per-hour ceiling, from its Map Summary; `None` without data
+    /// or a Map Summary (a town).
+    pub fn solo_exp_ceiling(&self) -> Option<u64> {
+        self.data()?.summary.map(|s| s.exp_per_hour.solo)
+    }
 }
 
 impl MapData {
