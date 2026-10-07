@@ -83,6 +83,10 @@ High, Medium or Low: how a map's density for a mob compares with that mob's dens
 The fewest map changes it takes to get from the player's current map to another map. A map change is going through a portal (but not a Quest Portal) or a ship ride, and, if the player has turned them on, a taxi ride or a Teleport Scroll. MapleCompass knows only which map the player is on, never where on it they stand.
 _Avoid_: position, proximity
 
+**Hunting Target**:
+The mob and map the player picked from a mob search to go and hunt. MapleCompass shows the way there from the player's current map until they arrive or clear it.
+_Avoid_: destination, waypoint, goal
+
 **Ship**:
 An NPC-run crossing between regions (e.g. Ellinia, on Victoria Island, to Orbis, in Ossyria). The only way to reach Ossyria, so it always counts as a map change.
 
