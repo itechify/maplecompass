@@ -38,7 +38,7 @@ These hotkeys work while the game or one of MapleCompass's windows is in front; 
 - **Ctrl+Shift+C** collapses the panel to an icon, or expands it again.
 - **Ctrl+Shift+E** enters edit mode: drag the panel where you want it, then press Ctrl+Shift+E again to make it click-through.
 - **Ctrl+Shift+P** switches placement: inside the game window, docked to its right edge, docked to its left edge, or detached.
-- **Ctrl+Shift+O** opens the current map's MeowDB page in your browser.
+- **Ctrl+Shift+M** opens the current map's MeowDB page in your browser.
 - **Ctrl+Shift+S** opens setup again, to mark the minimap title anew or consult the Overlay guide.
 - **Ctrl+Shift+N** shows the next map with the same title, when the panel can't tell which one you're on.
 - **Ctrl+Shift+F** opens the mob search window (or brings it back in front), which takes your typing until you pick a mob (Enter) or press Esc; then the game has focus again. Type part of a mob's name, move the highlight with the arrow keys and press Enter. The panel then lists the top five maps for that mob as ranked (by Density Tier, then the nearest within a tier), and the search window lists them all. Press Enter with nothing typed to clear the search.

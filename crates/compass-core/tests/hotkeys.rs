@@ -25,7 +25,7 @@ fn the_hotkeys_are_ctrl_shift_letters() {
             toggle_panel: ctrl_shift("c"),
             edit_mode: ctrl_shift("e"),
             cycle_placement: ctrl_shift("p"),
-            open_meowdb_page: ctrl_shift("o"),
+            open_meowdb_page: ctrl_shift("m"),
             setup: ctrl_shift("s"),
             choose_candidate: ctrl_shift("n"),
             search: ctrl_shift("f"),
@@ -142,14 +142,14 @@ fn ctrl_shift_e_enters_and_leaves_edit_mode_and_ctrl_shift_p_cycles_the_placemen
 }
 
 #[test]
-fn ctrl_shift_o_opens_the_shown_maps_meowdb_page_and_nothing_without_a_map() {
+fn ctrl_shift_m_opens_the_shown_maps_meowdb_page_and_nothing_without_a_map() {
     let mut compass = Compass::new(FakeSource::meowdb());
-    assert_eq!(compass.on_hotkey("ctrl+shift+o"), None);
+    assert_eq!(compass.on_hotkey("ctrl+shift+m"), None);
 
     arrive(&mut compass, SUNSET, 0);
 
     assert_eq!(
-        compass.on_hotkey("ctrl+shift+o"),
+        compass.on_hotkey("ctrl+shift+m"),
         Some(Request::OpenInBrowser { url: "https://meowdb.com/msclassic/maps/010003070".into() })
     );
 }
@@ -208,7 +208,7 @@ fn every_hotkey_the_panel_lists_is_one_to_register_the_search_one_included() {
 
     assert_eq!(
         to_register,
-        ["ctrl+shift+c", "ctrl+shift+e", "ctrl+shift+p", "ctrl+shift+o", "ctrl+shift+s", "ctrl+shift+n", "ctrl+shift+f"]
+        ["ctrl+shift+c", "ctrl+shift+e", "ctrl+shift+p", "ctrl+shift+m", "ctrl+shift+s", "ctrl+shift+n", "ctrl+shift+f"]
     );
 }
 
