@@ -3,9 +3,13 @@
 //! Inputs are plain data (captured Title Region frames); the output is a [`PanelState`]
 //! holding everything the overlay renders. No OS or UI dependencies live here.
 
+mod map_index;
+mod matcher;
 mod prep;
 mod recogniser;
 
+pub use map_index::{MapDataSource, MapEntry, SourceError};
+use matcher::Matcher;
 use recogniser::Recogniser;
 use serde::Serialize;
 
@@ -45,48 +49,89 @@ pub fn default_title_region(client_width: u32, client_height: u32) -> Rect {
     Rect { x: 0, y, width: WIDTH.min(client_width), height: HEIGHT.min(client_height - y) }
 }
 
-/// The street name and map name read from the minimap title.
+/// The map the panel shows: a real map from the map index.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Title {
+pub struct CurrentMap {
+    /// MeowDB's 9-digit map ID, zero padding kept.
+    pub id: String,
     pub street_name: String,
     pub map_name: String,
+}
+
+/// Whether minimap titles can be recognised as real maps.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Recognition {
+    /// No frame seen yet, so the map index hasn't been asked for.
+    #[default]
+    Starting,
+    Ready,
+    /// The map index couldn't be had, so readings can't be snapped to real maps.
+    Unavailable,
 }
 
 /// Everything the overlay renders.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PanelState {
-    pub title: Option<Title>,
+    pub recognition: Recognition,
+    /// The last map the core was confident about.
+    pub map: Option<CurrentMap>,
+    /// How well the latest frame matched the map shown, 0..=100 (0 when it didn't).
+    pub confidence: u8,
+    /// The latest frame didn't confirm the map shown (unreadable, low confidence, or
+    /// a different map not yet confirmed).
+    pub not_sure: bool,
 }
 
 /// The compass core: feed it frames, render its [`PanelState`].
 pub struct Compass {
     recogniser: Recogniser,
+    source: Box<dyn MapDataSource + Send>,
+    matcher: Option<Matcher>,
     state: PanelState,
 }
 
 impl Compass {
-    /// A core using the bundled title recogniser.
-    pub fn new() -> Self {
-        Self { recogniser: Recogniser::bundled(), state: PanelState::default() }
+    /// A core using the bundled title recogniser and the given map data source. The
+    /// map index is asked for on the first frame.
+    pub fn new(source: impl MapDataSource + Send + 'static) -> Self {
+        Self {
+            recogniser: Recogniser::bundled(),
+            source: Box::new(source),
+            matcher: None,
+            state: PanelState::default(),
+        }
     }
 
     /// Read a captured Title Region frame and update the panel state.
     pub fn on_frame(&mut self, frame: Frame) -> &PanelState {
+        if self.matcher.is_none() {
+            match self.source.map_index() {
+                Ok(index) => {
+                    self.matcher = Some(Matcher::new(index));
+                    self.state.recognition = Recognition::Ready;
+                }
+                Err(_) => self.state.recognition = Recognition::Unavailable,
+            }
+        }
+        let Some(matcher) = &self.matcher else { return &self.state };
         let read = frame_to_rgb(&frame).and_then(|img| self.recogniser.read(&img));
-        self.state.title = read.map(|raw| Title { street_name: raw.street, map_name: raw.map });
+        let snap = read.and_then(|raw| matcher.snap(&raw.street, &raw.map));
+        if let Some(snap) = snap {
+            let entry = matcher.map(snap.index);
+            self.state.map = Some(CurrentMap {
+                id: entry.id.clone(),
+                street_name: entry.street_name.clone(),
+                map_name: entry.map_name.clone(),
+            });
+        }
         &self.state
     }
 
     pub fn panel_state(&self) -> &PanelState {
         &self.state
-    }
-}
-
-impl Default for Compass {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

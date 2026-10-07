@@ -17,3 +17,4 @@ rten-imageproc = "0.26"
 
 [dev-dependencies]
 image = { workspace = true, features = ["png"] }
+serde_json = { workspace = true }
