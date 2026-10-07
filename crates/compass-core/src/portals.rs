@@ -68,6 +68,9 @@ pub(crate) fn hidden_portals(map: &MapFacts, exits: Vec<Exit>) -> Vec<HiddenPort
 
 /// Roughly where (x, y) is on the map, in words: "far right, lower".
 fn position_hint(minimap: Minimap, x: f64, y: f64) -> String {
+    if minimap.width <= 0.0 || minimap.height <= 0.0 {
+        return "position unknown".into();
+    }
     let across = (x + minimap.center_x) / minimap.width;
     let down = (y + minimap.center_y) / minimap.height;
     let horizontal = match across {
