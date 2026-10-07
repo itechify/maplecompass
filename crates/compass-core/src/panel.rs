@@ -82,21 +82,26 @@ pub enum Action {
     /// The player closed setup without finishing it. On the first run that quits
     /// (`PanelState::quit`): there is nothing to read without a Title Region.
     CancelSetup,
-    /// Open the mob search window (the search hotkey), with nothing typed yet.
+    /// Put the overlay in search mode (the search hotkey), with nothing typed yet. A
+    /// collapsed panel expands to show the query box.
     OpenSearch,
-    /// Move the search window's highlight up the suggestions.
+    /// Move search mode's highlight up the suggestions (or the results).
     SearchPrevious,
-    /// Move the search window's highlight down the suggestions.
+    /// Move search mode's highlight down the suggestions (or the results).
     SearchNext,
-    /// Enter in the search window: pick the highlighted mob and close the window, or
-    /// with nothing typed, clear the search and close it.
+    /// Enter in search mode: pick the highlighted mob and leave search mode, or with
+    /// nothing typed, clear the search.
     SearchEnter,
-    /// Esc in the search window: close it, keeping the current search.
+    /// Esc in search mode, or focus moving to another window: leave search mode,
+    /// keeping the current search.
     SearchEscape,
-    /// Turn taxis on or off for Distance (the Taxis checkbox in the search window).
+    /// The mob search section's × button: remove the picked mob and its results, and
+    /// leave search mode if it is on.
+    ClearSearch,
+    /// Turn taxis on or off for Distance (the Taxis checkbox in search mode).
     ToggleTaxis,
     /// Turn Teleport Scrolls on or off for Distance (the Teleport Scrolls checkbox in
-    /// the search window).
+    /// search mode).
     ToggleTeleportScrolls,
 }
 
@@ -178,6 +183,10 @@ pub(crate) struct Panel {
     /// Where the Title Region is captured on screen. A panel inside the game is kept off
     /// it, or the capture would read the panel instead of the minimap title.
     pub avoid: Option<ScreenRect>,
+    /// Where the mouse pointer is on screen; `None` when the shell couldn't tell.
+    pub pointer: Option<ScreenPoint>,
+    /// Where the overlay's clickable controls are on screen, as the overlay reports them.
+    pub controls: Vec<ScreenRect>,
 }
 
 impl Default for Panel {
@@ -192,6 +201,8 @@ impl Default for Panel {
             mode: PlacementMode::Inside,
             detached_at: None,
             avoid: None,
+            pointer: None,
+            controls: Vec::new(),
         }
     }
 }
@@ -238,6 +249,15 @@ impl Panel {
             Layer::AboveGame => self.edit_mode && self.mode == PlacementMode::Inside,
             Layer::Hidden => false,
         }
+    }
+
+    /// The overlay takes the mouse when the player can drag it, in search mode, and
+    /// while the pointer is over one of its controls; otherwise clicks pass through to
+    /// the game. Hidden, it never does.
+    pub fn takes_mouse(&self, search_mode: bool) -> bool {
+        let over_a_control =
+            self.pointer.is_some_and(|at| self.controls.iter().any(|control| holds(*control, at)));
+        self.layer() != Layer::Hidden && (self.draggable() || search_mode || over_a_control)
     }
 
     fn size(&self) -> Size {
@@ -323,6 +343,15 @@ fn overlaps(a: ScreenRect, b: ScreenRect) -> bool {
     let right = |r: ScreenRect| r.x as i64 + r.width as i64;
     let bottom = |r: ScreenRect| r.y as i64 + r.height as i64;
     (a.x as i64) < right(b) && (b.x as i64) < right(a) && (a.y as i64) < bottom(b) && (b.y as i64) < bottom(a)
+}
+
+/// Whether pixel `at` lies inside `rect`.
+fn holds(rect: ScreenRect, at: ScreenPoint) -> bool {
+    let (x, y) = (at.x as i64, at.y as i64);
+    (rect.x as i64) <= x
+        && x < rect.x as i64 + rect.width as i64
+        && (rect.y as i64) <= y
+        && y < rect.y as i64 + rect.height as i64
 }
 
 /// Whether `inner` lies wholly inside `outer`.

@@ -244,7 +244,7 @@ fn compass_loop(
                 match compass.on_hotkey(&pressed) {
                     Some(Request::OpenInBrowser { url }) => open_in_browser(&app, &url),
                     // Right after our hotkey, so Windows lets us take the foreground.
-                    Some(Request::RaiseSearchWindow) => search_window.raise(),
+                    Some(Request::RaiseOverlay) => search_window.raise(),
                     None => {}
                 }
             }

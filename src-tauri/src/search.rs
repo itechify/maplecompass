@@ -58,7 +58,7 @@ impl SearchWindow {
 
     /// Follow the core's search state, and send the search window what it renders.
     pub fn sync(&mut self, state: &PanelState) {
-        match (self.shown, state.search.window_open) {
+        match (self.shown, state.search.search_mode) {
             (false, true) => {
                 let _ = self.window.show();
                 let _ = self.window.unminimize();
@@ -69,7 +69,7 @@ impl SearchWindow {
             }
             _ => {}
         }
-        self.shown = state.search.window_open;
+        self.shown = state.search.search_mode;
         self.view.send(&self.app, &SearchView { search: &state.search }, &self.app.state::<LastSearchView>().0);
     }
 
