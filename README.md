@@ -27,7 +27,7 @@ cargo run -p maplecompass --example probe       # no UI: capture the title and p
 
 Run the game windowed or borderless, with the minimap open.
 
-On first run a setup window walks you through a ban-risk warning, finding the game window (or picking it by hand), the requirements, and marking the minimap title: drag a box around its two lines. A test read then shows the map it recognised; finish to start the overlay. Closing setup on first run quits. MapleCompass asks you to set up again when the game window changes size.
+On first run a setup window walks you through a ban-risk warning, finding the game window (or picking it by hand), the requirements, and marking the minimap title. Drag a box around its two lines, or use Arrow keys to move the box and Alt+Arrow to resize it; hold Shift for ten-pixel steps. Enter starts the test read and Esc returns to setup without changing the previous mark. These keys act only in MapleCompass's own marking window. A test read then shows the map it recognised; finish to start the overlay. The final step teaches the overlay shortcuts, and **Overlay guide** in setup lists the current bindings and explains placement and hunting figures. Closing setup on first run quits. MapleCompass asks you to set up again when the game window changes size.
 
 The panel starts on the right edge of the game window, and clicks pass through it to the game. It shows up in your screenshots and streams, and it never covers the minimap title, which MapleCompass reads: dragged onto it, it moves just clear of it when you leave edit mode. It sits just above the game rather than on top of everything, so an app you bring in front of the game covers it too, and it disappears while the game is minimised. Once it knows your map it shows the map's Map Summary (mobs and EXP per hour, solo and 6+, as MeowDB gives them), its mobs sorted by level, and its Hidden Portals, from NiaMeowDB (meowdb.com).
 
@@ -39,12 +39,12 @@ These hotkeys work while the game has focus. They use Win+Alt rather than Ctrl o
 - **Win+Alt+E** enters edit mode: drag the panel where you want it, then press Win+Alt+E again to make it click-through.
 - **Win+Alt+P** switches placement: inside the game window, docked to its right edge, docked to its left edge, or detached.
 - **Win+Alt+O** opens the current map's MeowDB page in your browser.
-- **Win+Alt+S** opens setup again, to mark the minimap title anew.
+- **Win+Alt+S** opens setup again, to mark the minimap title anew or consult the Overlay guide.
 - **Win+Alt+N** shows the next map with the same title, when the panel can't tell which one you're on.
 
 They are ordinary registered hotkeys (no keyboard hook), so while MapleCompass runs the game never sees these combinations. If another app already has one, the panel and the setup window say so. Settings from earlier versions, which used Ctrl+Shift, are moved to these.
 
-A few maps share a title, such as the two Maple Road / Mushroom Town maps. If they would show the same Map Summary, mobs and hidden portals anyway, the panel just shows them. Otherwise it picks the one connected to the map you came from, and failing that it shows the first and lists them all, each with its map ID, mob levels, first mobs and hidden portal count; Win+Alt+N then steps through them, and your pick holds until you change maps.
+A few maps share a title, such as the two Maple Road / Mushroom Town maps. If they would show the same Map Summary, mobs and hidden portals anyway, the panel just shows them. Otherwise it picks the one connected to the map you came from, and failing that it shows the first and lists them all, each with its first mobs, mob levels and hidden portal count, with the map ID secondary; Win+Alt+N then steps through them, and your pick holds until you change maps.
 
 Many map names differ only in a Roman numeral, such as Rocky Road I, II and III. The recogniser can't read the game font's "II" and "III", so MapleCompass counts their strokes. When a numeral still can't be made out, the panel picks the map the one you came from leads to, if it leads to just one of them; otherwise it says it isn't sure rather than guess.
 

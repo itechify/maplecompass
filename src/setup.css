@@ -24,12 +24,15 @@ body {
   display: flex;
   flex-direction: column;
   padding: 18px 24px 20px;
+  overflow-y: auto;
+  scrollbar-color: var(--muted) var(--bg);
 }
 
 header {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 h1 {
@@ -37,6 +40,8 @@ h1 {
   font-weight: 600;
   margin: 0;
   flex: 1;
+  min-width: 0;
+  flex-basis: 170px;
 }
 
 h2 {
@@ -55,12 +60,28 @@ h2 {
   padding: 8px 12px;
   border-left: 3px solid var(--accent);
   background: rgba(245, 197, 66, 0.08);
+  overflow-wrap: anywhere;
+  user-select: text;
 }
+
+.notice.error { border-color: var(--bad); }
+[hidden] { display: none !important; }
+.guide-button { padding: 5px 8px; font-size: 12px; margin-left: auto; }
+.progress { white-space: nowrap; }
+h2:focus { outline: none; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+button:not(:disabled):hover { filter: brightness(1.1); }
+.shortcuts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; margin: 0 0 12px; }
+.shortcuts dt { color: var(--muted); }
+.shortcuts dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.shortcuts.compact { gap: 2px 12px; }
+h3 { font-size: 14px; font-weight: 600; margin: 12px 0 6px; }
 
 section {
   flex: 1;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 
 section[hidden] {
@@ -88,6 +109,8 @@ footer {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+  padding-top: 12px;
+  flex-wrap: wrap;
 }
 
 button {
@@ -116,6 +139,7 @@ button:disabled {
   border-radius: 8px;
   background: rgba(16, 24, 36, 0.9);
   border: 1px solid #2a3846;
+  overflow-wrap: anywhere;
 }
 
 .test-read p {
