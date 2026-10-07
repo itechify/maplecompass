@@ -11,18 +11,20 @@
     <main class="panel" id="panel">
       <header>
         <p class="street" id="street"></p>
-        <p class="map" id="map">Starting…</p>
+        <div class="map-line"><p class="map" id="map">Starting…</p><span id="uncertainty" aria-label="Current Map is uncertain" hidden>?</span></div>
       </header>
-      <p class="note problem" id="hotkey-problem" hidden></p>
+      <p class="note" id="edit-hint" hidden></p>
+      <p class="note" id="recovery" role="status" hidden></p>
+      <p class="note problem" id="hotkey-problem" role="status" hidden></p>
       <section id="data" hidden>
         <section class="candidates" id="candidates" hidden>
           <p class="note" id="candidates-note"></p>
           <ol id="candidate-rows"></ol>
         </section>
-        <p class="note" id="note"></p>
+        <p class="note" id="note" role="status"></p>
         <table class="summary" id="summary">
           <thead>
-            <tr><th></th><th>Solo</th><th>6+</th></tr>
+            <tr><th></th><th>Solo</th><th title="Party of six or more players" aria-label="Party of six or more players">6+</th></tr>
           </thead>
           <tbody>
             <tr><th>Mobs/h</th><td id="mobs-solo"></td><td id="mobs-party"></td></tr>
@@ -31,7 +33,7 @@
         </table>
         <table class="mobs" id="mobs">
           <thead>
-            <tr><th>Mob</th><th>Lv</th><th>HP</th><th>EXP</th><th>Count</th><th>Share</th></tr>
+            <tr><th>Mob</th><th>Lv</th><th>HP</th><th>EXP</th><th>Count</th><th title="Share of all mob spawns on this Map" aria-label="Spawn Share">Share</th></tr>
           </thead>
           <tbody id="mob-rows"></tbody>
         </table>
@@ -43,6 +45,7 @@
       </section>
       <footer id="footer" hidden>
         <span id="credit"></span><span class="hint" id="open-hint"></span>
+        <span class="hint" id="help-hint"></span>
       </footer>
     </main>
     <img class="icon" src="/assets/icon.svg" alt="MapleCompass" draggable="false" />

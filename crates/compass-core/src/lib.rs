@@ -26,7 +26,7 @@ pub use panel::{
     Size,
 };
 pub use settings::{Hotkeys, Settings};
-pub use setup::{SetupReason, SetupState, TestRead, TitleRegion};
+pub use setup::{SelectionDirection, SetupReason, SetupState, TestRead, TitleRegion};
 pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
 
 use shown_map::ShownMap;
@@ -301,6 +301,12 @@ impl Compass {
                 self.sync_shown_map();
             }
             Action::MarkTitleRegion(marked) => self.setup.mark(marked),
+            Action::BeginTitleSelection => self.setup.begin_selection(),
+            Action::AdjustTitleSelection { direction, resize, coarse } => {
+                self.setup.adjust_selection(direction, resize, coarse);
+            }
+            Action::ConfirmTitleSelection => self.setup.confirm_selection(),
+            Action::CancelTitleSelection => self.setup.cancel_selection(),
             Action::FinishSetup => self.setup.finish(),
             Action::RequestSetup => self.setup.request(),
             Action::CancelSetup => {
