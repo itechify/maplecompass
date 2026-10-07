@@ -10,6 +10,7 @@ type PerParty = { solo: number; fullParty: number };
 
 /** Mirror of `compass_core::Mob`. */
 type Mob = {
+  id: string;
   name: string;
   level: number;
   hp: number;
@@ -61,6 +62,12 @@ type Candidates = {
   chosen: boolean;
 };
 
+/** Mirror of `compass_core::CrawlProgress`. */
+type CrawlProgress = { known: number; total: number; done: boolean };
+
+/** Mirror of `compass_core::SearchState`. */
+type SearchState = { crawl: CrawlProgress };
+
 /** Mirror of `compass_core::PanelState`. */
 type PanelState = {
   recognition: Recognition;
@@ -80,6 +87,7 @@ type PanelState = {
   hotkeys: Hotkeys;
   unavailableHotkeys: string[];
   gameWindowTitle: string;
+  search: SearchState;
 };
 
 const byId = (id: string) => document.getElementById(id)!;
@@ -105,6 +113,7 @@ const recovery = byId("recovery");
 const editHint = byId("edit-hint");
 const helpHint = byId("help-hint");
 const uncertainty = byId("uncertainty");
+const crawlProgress = byId("crawl-progress");
 let draggable = false;
 
 const PLACEMENT_NAMES: Record<PlacementMode, string> = {
@@ -330,6 +339,10 @@ function render(panel: PanelState) {
       : ". Close the app using these shortcuts, or edit %APPDATA%\\com.itechify.maplecompass\\settings.json, then restart MapleCompass.";
   }
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
+  // The world crawl, while it runs: "Mapping the world: 312 of 422 maps known".
+  const { crawl } = panel.search;
+  crawlProgress.hidden = !panel.gameFound || crawl.total === 0 || crawl.done;
+  crawlProgress.textContent = `Mapping the world: ${crawl.known} of ${crawl.total} maps known`;
   renderData(panel);
   reportHeight(panel.expanded);
 }
