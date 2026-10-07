@@ -74,6 +74,17 @@ pub enum Action {
     /// The player closed setup without finishing it. On the first run that quits
     /// (`PanelState::quit`): there is nothing to read without a Title Region.
     CancelSetup,
+    /// Open the mob search window (the search hotkey), with nothing typed yet.
+    OpenSearch,
+    /// Move the search window's highlight up the suggestions.
+    SearchPrevious,
+    /// Move the search window's highlight down the suggestions.
+    SearchNext,
+    /// Enter in the search window: pick the highlighted mob and close the window, or
+    /// with nothing typed, clear the search and close it.
+    SearchEnter,
+    /// Esc in the search window: close it, keeping the current search.
+    SearchEscape,
 }
 
 /// Where the player wants the panel.
