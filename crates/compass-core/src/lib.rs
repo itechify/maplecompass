@@ -45,8 +45,9 @@ pub struct Rect {
     pub height: u32,
 }
 
-/// The Title Region to capture before the player has marked one, for a game client
-/// area of the given size (physical px).
+/// A guess at the Title Region for a game client area of the given size (physical px),
+/// for the probe, which has no setup. The app captures the region the player marked
+/// (`PanelState::title_region`).
 ///
 /// On the samples (1920x1200 client, default UI size) the title band is 66 px tall at
 /// client (0..4, 31). The region keeps ~15 px of slack above and below it, and is wide
