@@ -69,6 +69,27 @@ fn arriving_in_mushroom_town_shows_it_without_asking_since_both_mushroom_towns_s
     }
 }
 
+#[test]
+fn maps_sharing_a_title_are_fetched_one_at_a_time_and_the_panel_shows_loading_meanwhile() {
+    // Each page arrives on the second time the core checks on it.
+    let source = titled_like_kerning_city(&MUSHROOM_TOWNS).with_slow_pages(2);
+    let requests = source.map_requests.clone();
+    let mut compass = Compass::new(source);
+    compass.on_frame(sample_frame(KERNING, 0));
+
+    let state = compass.on_frame(sample_frame(KERNING, 333));
+    assert_eq!(state.data, MapDataStatus::Loading);
+    assert_eq!(state.candidates, None);
+    assert_eq!(requests_for(&requests, MUSHROOM_TOWNS[1]), 0);
+
+    let state = compass.on_frame(black_frame(666));
+    assert_eq!(state.data, MapDataStatus::Loading);
+
+    let state = compass.on_frame(black_frame(1000));
+    assert!(matches!(&state.data, MapDataStatus::Ready(data) if data.mobs.is_empty()));
+    assert_eq!(state.candidates, None);
+}
+
 const SUNSET_SKY: &str = "010003070";
 const CONSTRUCTION_SITE: &str = "010003080";
 const DEAD_MINE: &str = "020001067";
