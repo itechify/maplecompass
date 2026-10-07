@@ -32,10 +32,11 @@
     <p class="keys">↑ ↓ choose · Enter picks · Esc closes · Enter with nothing typed clears the search</p>
     <section class="picked" id="picked" hidden>
       <h2 id="picked-title"></h2>
+      <p class="nearest" id="picked-nearest" hidden></p>
       <p class="note" id="picked-note" role="status" hidden></p>
       <table class="results" id="results">
         <thead>
-          <tr><th>Map</th><th title="Spawn Count × Mob Rate">Density</th><th title="Share of all mob spawns on the Map" aria-label="Spawn Share">Share</th><th>Tier</th></tr>
+          <tr><th>Map</th><th title="Spawn Count × Mob Rate">Density</th><th title="Share of all mob spawns on the Map" aria-label="Spawn Share">Share</th><th>Tier</th><th title="Map changes from the map you're on">Distance</th></tr>
         </thead>
         <tbody id="result-rows"></tbody>
       </table>
