@@ -143,7 +143,8 @@ pub struct PanelState {
     /// Where the player wants the panel: inside, docked or detached.
     pub placement_mode: PlacementMode,
     /// Where the overlay goes on screen; `None` while there is no game window, unless
-    /// the panel is detached.
+    /// the panel is detached. Inside the game it never covers `title_region`: the
+    /// overlay shows in screen captures, ours included.
     pub placement: Option<ScreenRect>,
     /// Where the overlay sits in the z-order, or hidden.
     pub layer: Layer,
@@ -204,7 +205,7 @@ impl Compass {
         let Some(matcher) = &self.matcher else {
             // Without the map index nothing can be recognised.
             self.setup.on_read(None);
-            return self.sync_setup();
+            return self.sync_panel();
         };
         let read = frame_to_rgb(&frame).and_then(|img| self.recogniser.read(&img));
         let snap = read.and_then(|raw| matcher.snap(&raw.street, &raw.map));
@@ -227,7 +228,7 @@ impl Compass {
         self.sync_shown_map();
         self.state.confidence = (tracked.confidence * 100.0).round() as u8;
         self.state.not_sure = tracked.not_sure;
-        self.sync_setup()
+        self.sync_panel()
     }
 
     fn sync_shown_map(&mut self) {
@@ -316,6 +317,9 @@ impl Compass {
     }
 
     fn sync_panel(&mut self) -> &PanelState {
+        self.sync_setup();
+        // Never over the Title Region: the capture would read the panel.
+        self.panel.avoid = self.state.title_region;
         self.state.expanded = self.panel.expanded;
         self.state.edit_mode = self.panel.edit_mode;
         self.state.game_found = self.panel.game.is_some();
@@ -323,7 +327,7 @@ impl Compass {
         self.state.placement = self.panel.placement();
         self.state.layer = self.panel.layer();
         self.state.draggable = self.panel.draggable();
-        self.sync_setup()
+        &self.state
     }
 
     fn sync_setup(&mut self) -> &PanelState {

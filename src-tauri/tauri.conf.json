@@ -26,7 +26,7 @@
         "resizable": false,
         "focus": false,
         "focusable": false,
-        "contentProtected": true
+        "contentProtected": false
       },
       {
         "label": "setup",
@@ -52,7 +52,7 @@
         "skipTaskbar": true,
         "resizable": false,
         "visible": false,
-        "contentProtected": true
+        "contentProtected": false
       }
     ],
     "security": {

@@ -142,6 +142,9 @@ pub(crate) struct Panel {
     pub mode: PlacementMode,
     /// The detached panel's top-left corner; `None` until it is first detached.
     pub detached_at: Option<ScreenPoint>,
+    /// Where the Title Region is captured on screen. A panel inside the game is kept off
+    /// it, or the capture would read the panel instead of the minimap title.
+    pub avoid: Option<ScreenRect>,
 }
 
 impl Default for Panel {
@@ -155,6 +158,7 @@ impl Default for Panel {
             inside_offset: None,
             mode: PlacementMode::Inside,
             detached_at: None,
+            avoid: None,
         }
     }
 }
@@ -257,8 +261,39 @@ impl Panel {
         // Keep the whole panel inside the client (its top-left wins if it can't fit).
         let x = x.min(game.x + game.width as i32 - w).max(game.x);
         let y = y.min(game.y + game.height as i32 - h).max(game.y);
-        ScreenRect { x, y, width: size.width, height: size.height }
+        let panel = ScreenRect { x, y, width: size.width, height: size.height };
+        match self.avoid {
+            Some(title) => clear_of(panel, title, game),
+            None => panel,
+        }
     }
+}
+
+/// `panel`, moved the shortest way (below, above, right or left of `title`) so it no
+/// longer overlaps `title` while staying inside `within`. Left where it is when it
+/// doesn't overlap, or when no such spot fits.
+fn clear_of(panel: ScreenRect, title: ScreenRect, within: ScreenRect) -> ScreenRect {
+    if !overlaps(panel, title) {
+        return panel;
+    }
+    let (w, h) = (panel.width as i32, panel.height as i32);
+    let spots = [
+        ScreenRect { y: title.y + title.height as i32, ..panel },
+        ScreenRect { y: title.y - h, ..panel },
+        ScreenRect { x: title.x + title.width as i32, ..panel },
+        ScreenRect { x: title.x - w, ..panel },
+    ];
+    spots
+        .into_iter()
+        .filter(|spot| contains(within, *spot))
+        .min_by_key(|spot| (spot.x - panel.x).abs() + (spot.y - panel.y).abs())
+        .unwrap_or(panel)
+}
+
+fn overlaps(a: ScreenRect, b: ScreenRect) -> bool {
+    let right = |r: ScreenRect| r.x as i64 + r.width as i64;
+    let bottom = |r: ScreenRect| r.y as i64 + r.height as i64;
+    (a.x as i64) < right(b) && (b.x as i64) < right(a) && (a.y as i64) < bottom(b) && (b.y as i64) < bottom(a)
 }
 
 /// Whether `inner` lies wholly inside `outer`.

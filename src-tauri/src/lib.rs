@@ -83,8 +83,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let overlay = app.get_webview_window("overlay").expect("overlay window in tauri.conf.json");
-            // Keep our own panel out of our own (and any) screen capture.
-            overlay.set_content_protected(true)?;
+            // Not content-protected: the panel shows in the player's screenshots and
+            // streams. The core keeps it off the Title Region instead, so our own capture
+            // never reads it.
             // Clicks pass through to the game until the panel is draggable.
             overlay.set_ignore_cursor_events(true)?;
 
