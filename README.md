@@ -29,7 +29,11 @@ Run the game windowed or borderless, with the minimap open.
 
 On first run a setup window walks you through a ban-risk warning, finding the game window (or picking it by hand), the requirements, and marking the minimap title: drag a box around its two lines. A test read then shows the map it recognised; finish to start the overlay. Closing setup on first run quits. MapleCompass asks you to set up again when the game window changes size.
 
-The panel starts on the right edge of the game window, and clicks pass through it to the game. It sits just above the game rather than on top of everything, so an app you bring in front of the game covers it too, and it disappears while the game is minimised. Once it knows your map it shows the map's Map Summary (mobs and EXP per hour, solo and 6+, as MeowDB gives them) and its mobs sorted by level, from NiaMeowDB (meowdb.com). These hotkeys work while the game has focus:
+The panel starts on the right edge of the game window, and clicks pass through it to the game. It sits just above the game rather than on top of everything, so an app you bring in front of the game covers it too, and it disappears while the game is minimised. Once it knows your map it shows the map's Map Summary (mobs and EXP per hour, solo and 6+, as MeowDB gives them), its mobs sorted by level, and its Hidden Portals, from NiaMeowDB (meowdb.com).
+
+Hidden Portals are exits to other maps that MeowDB marks invisible (type 1), hidden (10) or script (11, shown as a Quest Portal). Each shows where it leads (tagged when that is a Hidden Street) and roughly where it is on the map. Invisible exits on a town are its building doors, which you can see, so they aren't listed. Walk-into portals (type 3) count as visible until checked in-game. When play shows a portal the rule gets wrong, add it to the override list in `crates/compass-core/src/portal_overrides.rs`, by map ID and MeowDB portal name.
+
+These hotkeys work while the game has focus:
 
 - **Ctrl+Shift+M** collapses the panel to an icon, or expands it again.
 - **Ctrl+Shift+E** enters edit mode: drag the panel where you want it, then press Ctrl+Shift+E again to make it click-through.
@@ -38,7 +42,7 @@ The panel starts on the right edge of the game window, and clicks pass through i
 - **Ctrl+Shift+S** opens setup again, to mark the minimap title anew.
 - **Ctrl+Shift+C** shows the next map with the same title, when the panel can't tell which one you're on.
 
-A few maps share a title, such as the two Maple Road / Mushroom Town maps. If they would show the same mobs anyway, the panel just shows them. Otherwise it picks the one connected to the map you came from, and failing that it shows the first and says so; Ctrl+Shift+C then steps through them, and your pick holds until you change maps.
+A few maps share a title, such as the two Maple Road / Mushroom Town maps. If they would show the same Map Summary, mobs and hidden portals anyway, the panel just shows them. Otherwise it picks the one connected to the map you came from, and failing that it shows the first and says so; Ctrl+Shift+C then steps through them, and your pick holds until you change maps.
 
 Inside, the panel keeps its spot relative to the game window. Docked, it follows the game window's outside edge, and goes inside when there is no room on screen. Detached, it is an ordinary window: drag it anywhere, such as onto another monitor, and it stays there.
 
