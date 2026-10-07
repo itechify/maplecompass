@@ -60,8 +60,8 @@ impl ShownMap {
             Which::Settled(_) | Which::Choosing { chosen: true, .. } => true,
             Which::Choosing { chosen: false, .. } | Which::Comparing => false,
         };
-        match (sure, self.data()) {
-            (true, MapDataStatus::Ready(data)) => data.connected_maps,
+        match (sure, self.data().data()) {
+            (true, Some(data)) => data.connected_maps.clone(),
             _ => Vec::new(),
         }
     }
@@ -106,6 +106,11 @@ impl ShownMap {
         }
     }
 
+    /// Check on the data asked for, and ask for whatever is needed next.
+    pub fn poll(&mut self, source: &mut dyn MapDataSource) {
+        self.load(source);
+    }
+
     fn load(&mut self, source: &mut dyn MapDataSource) {
         if let Which::Comparing = self.which {
             // Asks for the shown map's data too, once per frame like any other.
@@ -123,11 +128,9 @@ impl ShownMap {
             if *self.loader.load(&map.id, source) == MapDataStatus::Loading {
                 return;
             }
-            let first = self.loader.status(&self.maps[0].id);
-            let same = match (first, self.loader.status(&map.id)) {
-                (Some(MapDataStatus::Ready(first)), Some(MapDataStatus::Ready(this))) => {
-                    first.shows_same_as(this)
-                }
+            let data = |id: &str| self.loader.status(id).and_then(MapDataStatus::data);
+            let same = match (data(&self.maps[0].id), data(&map.id)) {
+                (Some(first), Some(this)) => first.shows_same_as(this),
                 _ => false,
             };
             if !same {

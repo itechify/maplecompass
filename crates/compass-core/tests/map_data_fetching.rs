@@ -139,3 +139,20 @@ fn the_hotkey_to_open_the_maps_meowdb_page_defaults_to_ctrl_shift_o_and_older_se
     assert_eq!(older.hotkeys.open_meowdb_page, "ctrl+shift+o");
     assert_eq!(Settings::default().hotkeys.open_meowdb_page, "ctrl+shift+o");
 }
+
+/// When a saved copy was made: 2026-10-01 00:00 UTC, in ms since the Unix epoch.
+const SAVED_AT: u64 = 1_790_812_800_000;
+
+#[test]
+fn when_meowdb_is_unreachable_a_saved_copy_of_the_page_is_shown_with_when_it_was_saved() {
+    let mut compass = Compass::new(FakeSource::meowdb().serving_saved_copies(SAVED_AT));
+    compass.on_frame(sample_frame(SUNSET, 0));
+
+    let state = compass.on_frame(sample_frame(SUNSET, 333));
+
+    assert_eq!(shown_map_name(state), Some("Sunset Sky"));
+    let MapDataStatus::SavedCopy { data, saved_at_unix_ms } = &state.data else { panic!("{:?}", state.data) };
+    assert_eq!(*saved_at_unix_ms, SAVED_AT);
+    assert_eq!(data.mobs.len(), 5);
+    assert_eq!(state.credit, Some(MEOWDB_CREDIT));
+}

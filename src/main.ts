@@ -28,22 +28,30 @@ type HiddenPortal = {
   position: string;
 };
 
+/** Mirror of `compass_core::MapData`. */
+type MapData = {
+  summary: { mobsPerHour: PerParty; expPerHour: PerParty } | null;
+  mobs: Mob[];
+  hiddenPortals: HiddenPortal[];
+};
+
 /** Mirror of `compass_core::MapDataStatus`. */
 type MapDataStatus =
   | { status: "noMap" | "loading" | "unavailable" | "formatChanged" }
-  | {
-      status: "ready";
-      summary: { mobsPerHour: PerParty; expPerHour: PerParty } | null;
-      mobs: Mob[];
-      hiddenPortals: HiddenPortal[];
-    };
+  | ({ status: "ready" } & MapData)
+  | ({ status: "savedCopy"; savedAtUnixMs: number } & MapData);
+
+/** Mirror of `compass_core::Recognition`. */
+type Recognition =
+  | { status: "starting" | "ready" | "unavailable" }
+  | { status: "savedCopy"; savedAtUnixMs: number };
 
 /** Mirror of `compass_core::Candidates`. */
 type Candidates = { ids: string[]; shown: number; chosen: boolean };
 
 /** Mirror of `compass_core::PanelState`. */
 type PanelState = {
-  recognition: "starting" | "ready" | "unavailable";
+  recognition: Recognition;
   map: { id: string; streetName: string; mapName: string; url: string } | null;
   confidence: number;
   notSure: boolean;
@@ -131,8 +139,13 @@ function portalRow(portal: HiddenPortal): HTMLLIElement {
   return row;
 }
 
+/** "7 Oct 2026", in the player's time zone. */
+const savedOn = (unixMs: number) =>
+  new Date(unixMs).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+
 /** The note shown in place of (or above) the map's data. */
-function dataNote(data: MapDataStatus): string {
+function dataNote(data: MapDataStatus, recognition: Recognition): string {
+  const noMobs = (data: MapData) => (data.mobs.length === 0 ? " · No mobs here" : "");
   switch (data.status) {
     case "loading":
       return "Loading MeowDB data…";
@@ -140,7 +153,12 @@ function dataNote(data: MapDataStatus): string {
       return "MeowDB data unavailable";
     case "formatChanged":
       return "MeowDB's page format has changed, so its data isn't shown";
+    case "savedCopy":
+      return `MeowDB unreachable — showing a saved copy from ${savedOn(data.savedAtUnixMs)}${noMobs(data)}`;
     case "ready":
+      if (recognition.status === "savedCopy") {
+        return `MeowDB unreachable — map list from a saved copy from ${savedOn(recognition.savedAtUnixMs)}${noMobs(data)}`;
+      }
       return data.mobs.length === 0 ? "No mobs here" : "";
     case "noMap":
       return "";
@@ -165,11 +183,12 @@ function renderData(state: OverlayState) {
     candidatesEl.classList.toggle("problem", !candidates.chosen);
   }
 
-  note.textContent = dataNote(data);
+  note.textContent = dataNote(data, state.panel.recognition);
   note.hidden = note.textContent === "";
-  note.classList.toggle("problem", data.status === "unavailable" || data.status === "formatChanged");
+  const problem = ["unavailable", "formatChanged", "savedCopy"].includes(data.status);
+  note.classList.toggle("problem", problem || state.panel.recognition.status === "savedCopy");
 
-  const ready = data.status === "ready" ? data : null;
+  const ready = data.status === "ready" || data.status === "savedCopy" ? data : null;
   summary.hidden = !ready?.summary;
   if (ready?.summary) {
     const { mobsPerHour, expPerHour } = ready.summary;
@@ -221,7 +240,7 @@ function render(state: OverlayState) {
     street.textContent =
       panel.setup.needed === "firstRun" ? "Finish setup to start" : "The game window changed size";
     map.textContent = `Set up: ${keyLabel(state.hotkeys.setup)}`;
-  } else if (recognition === "unavailable") {
+  } else if (recognition.status === "unavailable") {
     street.textContent = "Couldn't load the map list from MeowDB";
     map.textContent = "Map recognition unavailable";
   } else if (current) {
