@@ -3,9 +3,13 @@
 //! Inputs are plain data (captured Title Region frames); the output is a [`PanelState`]
 //! holding everything the overlay renders. No OS or UI dependencies live here.
 
+mod panel;
 mod prep;
 mod recogniser;
 
+pub use panel::{Action, PanelSizes, ScreenRect, Size};
+
+use panel::Panel;
 use recogniser::Recogniser;
 use serde::Serialize;
 
@@ -58,18 +62,29 @@ pub struct Title {
 #[serde(rename_all = "camelCase")]
 pub struct PanelState {
     pub title: Option<Title>,
+    /// Expanded to the full panel, or collapsed to a small icon.
+    pub expanded: bool,
+    /// The overlay takes the mouse so the player can drag it; otherwise clicks pass
+    /// through to the game.
+    pub edit_mode: bool,
+    /// Where the overlay goes on screen; `None` while there is no game window.
+    pub placement: Option<ScreenRect>,
 }
 
 /// The compass core: feed it frames, render its [`PanelState`].
 pub struct Compass {
     recogniser: Recogniser,
+    panel: Panel,
     state: PanelState,
 }
 
 impl Compass {
     /// A core using the bundled title recogniser.
     pub fn new() -> Self {
-        Self { recogniser: Recogniser::bundled(), state: PanelState::default() }
+        let mut compass =
+            Self { recogniser: Recogniser::bundled(), panel: Panel::default(), state: PanelState::default() };
+        compass.sync_panel();
+        compass
     }
 
     /// Read a captured Title Region frame and update the panel state.
@@ -79,7 +94,32 @@ impl Compass {
         &self.state
     }
 
+    /// The game window's client area moved, resized, appeared or went away.
+    pub fn on_game_window(&mut self, client: Option<ScreenRect>) -> &PanelState {
+        self.panel.game = client;
+        self.sync_panel()
+    }
+
+    /// The overlay's expanded and collapsed sizes, in physical px for the current display.
+    pub fn set_panel_sizes(&mut self, sizes: PanelSizes) -> &PanelState {
+        self.panel.sizes = sizes;
+        self.sync_panel()
+    }
+
+    /// Apply something the player did.
+    pub fn act(&mut self, action: Action) -> &PanelState {
+        self.panel.act(action);
+        self.sync_panel()
+    }
+
     pub fn panel_state(&self) -> &PanelState {
+        &self.state
+    }
+
+    fn sync_panel(&mut self) -> &PanelState {
+        self.state.expanded = self.panel.expanded;
+        self.state.edit_mode = self.panel.edit_mode;
+        self.state.placement = self.panel.placement();
         &self.state
     }
 }
