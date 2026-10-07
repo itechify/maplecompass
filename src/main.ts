@@ -159,7 +159,8 @@ function portalRow(portal: HiddenPortal): HTMLLIElement {
 
 /** "090040200 · Lv 2–14 · Blue Snail, Stump, Orange Mushroom · 1 hidden portal" */
 function candidateLine(id: string, outline: Outline | null): string {
-  if (!outline) return `${id} · loading…`;
+  // Its page is still on its way, or MeowDB can't give it.
+  if (!outline) return `${id} · no MeowDB data yet`;
   const parts = [id];
   const { mobLevels, firstMobs, hiddenPortals } = outline;
   if (mobLevels) {

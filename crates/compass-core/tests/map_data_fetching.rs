@@ -159,3 +159,20 @@ fn when_meowdb_is_unreachable_a_saved_copy_of_the_page_is_shown_with_when_it_was
     assert_eq!(data.mobs.len(), 5);
     assert_eq!(state.credit, Some(MEOWDB_CREDIT));
 }
+
+/// The overlay gets the panel state as JSON: a saved copy is the map's data with its
+/// status and date beside it, and a saved map index says so with its date.
+#[test]
+fn the_overlay_receives_a_saved_copy_with_its_date_beside_the_data() {
+    let mut compass = Compass::new(FakeSource::meowdb().serving_saved_copies(SAVED_AT));
+    compass.on_frame(sample_frame(SUNSET, 0));
+
+    let json = serde_json::to_value(compass.on_frame(sample_frame(SUNSET, 333))).unwrap();
+
+    assert_eq!(json["data"]["status"], "savedCopy");
+    assert_eq!(json["data"]["savedAtUnixMs"], SAVED_AT);
+    assert_eq!(json["data"]["mobs"].as_array().map(Vec::len), Some(5));
+    assert!(json["data"]["summary"].is_object() && json["data"]["hiddenPortals"].is_array());
+    assert!(json["data"].get("connectedMaps").is_none());
+    assert_eq!(json["recognition"], serde_json::json!({ "status": "savedCopy", "savedAtUnixMs": SAVED_AT }));
+}
