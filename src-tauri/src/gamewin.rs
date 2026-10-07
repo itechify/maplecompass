@@ -4,21 +4,13 @@
 
 use compass_core::ScreenRect;
 
-/// The game window's client area in physical screen pixels.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ClientArea {
-    pub x: i32,
-    pub y: i32,
-    pub width: u32,
-    pub height: u32,
-}
-
 /// The game window as found on screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Game {
     /// The window handle as a number, only used to stack our overlay against it.
     pub handle: isize,
-    pub client: ClientArea,
+    /// The client area (what the game draws in) in physical screen pixels.
+    pub client: ScreenRect,
     /// The visible frame (caption and borders, not the invisible resize borders).
     pub frame: ScreenRect,
 }
@@ -44,7 +36,7 @@ pub fn looking_for() -> String {
 pub use win::{find_game, keep_above, monitor_work_areas, window_under_cursor};
 
 /// The game's client area, or `None` when it isn't running or is minimised.
-pub fn find_game_client() -> Option<ClientArea> {
+pub fn find_game_client() -> Option<ScreenRect> {
     find_game().map(|game| game.client)
 }
 
@@ -65,7 +57,7 @@ pub fn monitor_work_areas() -> Vec<ScreenRect> {
 
 #[cfg(windows)]
 mod win {
-    use super::{ClientArea, Game, ScreenRect};
+    use super::{Game, ScreenRect};
     use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
     use windows::Win32::Graphics::Dwm::{
         DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute,
@@ -164,7 +156,7 @@ mod win {
             if width == 0 || height == 0 {
                 return None;
             }
-            let client = ClientArea { x: origin.x, y: origin.y, width, height };
+            let client = ScreenRect { x: origin.x, y: origin.y, width, height };
             // GetWindowRect would include the invisible resize borders (~7 px).
             let mut frame = RECT::default();
             let frame = match DwmGetWindowAttribute(

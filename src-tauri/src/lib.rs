@@ -16,7 +16,6 @@ use compass_core::{
     TitleReading,
     default_title_region,
 };
-use gamewin::ClientArea;
 use meowdb::MeowDbSource;
 use setup::{Bridge, SetupWindows};
 use std::path::PathBuf;
@@ -62,7 +61,7 @@ fn panel_height(height: f64, commands: tauri::State<'_, Sender<Command>>) {
 
 /// Capture the default Title Region of the game's client area (the probe's guess; the
 /// app captures the region the player marked at setup).
-pub fn capture_title_frame(client: ClientArea, at_ms: u64) -> Result<Frame, String> {
+pub fn capture_title_frame(client: ScreenRect, at_ms: u64) -> Result<Frame, String> {
     let r = default_title_region(client.width, client.height);
     let rgba = capture::capture_rgba(
         client.x + r.x as i32,
@@ -289,15 +288,11 @@ fn find_game(compass: &mut Compass, overlay: &WebviewWindow, expanded: (f64, f64
     set_panel_sizes(compass, overlay, expanded);
     let game = gamewin::find_game();
     compass.on_game_window(game.map(|g| GameWindow {
-        client: screen_rect(g.client),
+        client: g.client,
         frame: g.frame,
         screens: gamewin::monitor_work_areas(),
     }));
     game
-}
-
-fn screen_rect(a: ClientArea) -> ScreenRect {
-    ScreenRect { x: a.x, y: a.y, width: a.width, height: a.height }
 }
 
 /// Tell the core the panel's sizes in physical px, for the overlay's current display.
