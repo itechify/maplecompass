@@ -11,6 +11,7 @@ pub mod meowdb;
 mod search;
 mod settings;
 mod setup;
+mod view;
 
 use compass_core::{
     Action, Compass, Frame, GameWindow, Layer, PanelSizes, PanelState, Request, ScreenRect, Size, TitleReader,
@@ -104,7 +105,7 @@ pub fn run() {
                 commands: commands.clone(),
                 picks,
                 game: Mutex::new(None),
-                view: Mutex::new(None),
+                view: Default::default(),
             });
             let setup_windows = SetupWindows::new(app.handle())?;
             let search_window = SearchWindow::new(app.handle(), commands.clone());
