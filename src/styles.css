@@ -44,3 +44,37 @@ body {
   font-size: 14px;
   color: #c3ccd6;
 }
+
+/* Collapsed: only the icon shows; the window shrinks to fit it. */
+.icon {
+  display: none;
+  box-sizing: border-box;
+  width: 100vw;
+  height: 100vh;
+  border-radius: 10px;
+  opacity: 0.85;
+}
+
+.collapsed .panel {
+  display: none;
+}
+
+.collapsed .icon {
+  display: block;
+}
+
+/* Edit mode: the overlay takes the mouse and can be dragged anywhere on it. */
+.editing,
+.editing * {
+  cursor: move;
+}
+
+.editing .panel,
+.editing .icon {
+  outline: 2px dashed #f5c542;
+  outline-offset: -2px;
+}
+
+.editing .street {
+  color: #f5c542;
+}
