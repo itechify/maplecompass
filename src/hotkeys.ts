@@ -6,6 +6,7 @@ export type Hotkeys = {
   openMeowdbPage: string;
   setup: string;
   chooseCandidate: string;
+  search: string;
 };
 
 export function keyLabel(accelerator: string): string {

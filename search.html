@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/search.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MapleCompass mob search</title>
+    <script type="module" src="/src/search.ts" defer></script>
+  </head>
+  <body>
+    <header>
+      <img src="/assets/icon.svg" width="28" height="28" alt="" />
+      <h1>Mob search</h1>
+      <span class="progress" id="crawl" role="status"></span>
+    </header>
+    <label class="field">
+      <span class="label">Mob name</span>
+      <input
+        id="query"
+        type="text"
+        placeholder="Type part of a mob's name"
+        autocomplete="off"
+        spellcheck="false"
+        role="combobox"
+        aria-controls="suggestions"
+        aria-expanded="false"
+        aria-autocomplete="list"
+      />
+    </label>
+    <ul class="suggestions" id="suggestions" role="listbox" aria-label="Mobs" hidden></ul>
+    <p class="none" id="no-match" hidden>No known mob has that in its name.</p>
+    <p class="keys">↑ ↓ choose · Enter picks · Esc closes · Enter with nothing typed clears the search</p>
+    <section class="picked" id="picked" hidden>
+      <h2 id="picked-title"></h2>
+      <p class="note" id="picked-note" role="status" hidden></p>
+      <table class="results" id="results">
+        <thead>
+          <tr><th>Map</th><th title="Spawn Count × Mob Rate">Density</th><th title="Share of all mob spawns on the Map" aria-label="Spawn Share">Share</th><th>Tier</th></tr>
+        </thead>
+        <tbody id="result-rows"></tbody>
+      </table>
+      <p class="credit" id="credit"></p>
+    </section>
+  </body>
+</html>
