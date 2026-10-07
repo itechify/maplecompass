@@ -129,3 +129,15 @@ pub fn search_enter(commands: State<'_, Sender<Command>>) {
 pub fn search_escape(commands: State<'_, Sender<Command>>) {
     let _ = commands.send(Command::Act(Action::SearchEscape));
 }
+
+/// The Taxis checkbox: count taxi rides in Distance, or stop counting them.
+#[tauri::command]
+pub fn search_toggle_taxis(commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::Act(Action::ToggleTaxis));
+}
+
+/// The Teleport Scrolls checkbox: count Teleport Scrolls in Distance, or stop.
+#[tauri::command]
+pub fn search_toggle_teleport_scrolls(commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::Act(Action::ToggleTeleportScrolls));
+}

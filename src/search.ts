@@ -30,6 +30,8 @@ const routeTitle = byId("route-title");
 const routeList = byId("route-stops");
 const routeNone = byId("route-none");
 const credit = byId("credit");
+const taxis = byId("taxis") as HTMLInputElement;
+const teleportScrolls = byId("teleport-scrolls") as HTMLInputElement;
 
 let open = false;
 
@@ -43,6 +45,9 @@ function update({ search }: SearchView) {
 
   const { known, total, done } = search.crawl;
   crawl.textContent = total === 0 ? "Loading MeowDB's Map list…" : done ? "" : `${known} of ${total} maps known`;
+  // The core keeps the toggles (and saves them); the checkboxes follow it.
+  taxis.checked = search.taxis;
+  teleportScrolls.checked = search.teleportScrolls;
 
   suggestions.replaceChildren(
     ...search.suggestions.map((mob, i) => {
@@ -126,6 +131,15 @@ query.addEventListener("keydown", (e) => {
       e.preventDefault();
       invoke("search_escape");
       break;
+  }
+});
+taxis.addEventListener("change", () => invoke("search_toggle_taxis"));
+teleportScrolls.addEventListener("change", () => invoke("search_toggle_teleport_scrolls"));
+// Esc closes the window from the checkboxes too.
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && e.target !== query) {
+    e.preventDefault();
+    invoke("search_escape");
   }
 });
 // Whenever the window is in front, the typing goes to the search box.
