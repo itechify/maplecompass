@@ -5,7 +5,7 @@ use crate::MEOWDB_CREDIT;
 use crate::crawl::{Crawl, CrawlProgress};
 use crate::map_data::Mob;
 use crate::map_index::MapEntry;
-use crate::world::{Distance, World};
+use crate::world::{Distance, Distances, Step, World};
 use serde::Serialize;
 
 /// How many results the panel shows; the search window shows them all.
@@ -48,6 +48,26 @@ pub struct SearchResult {
     pub tier: DensityTier,
     /// How many map changes it is from the map the panel shows.
     pub distance: Distance,
+    /// A shortest route there (Quest Portals aside): the map the panel shows, then each
+    /// map in turn with how it is reached. Empty when the Distance isn't a number.
+    pub route: Vec<RouteStop>,
+    /// The kinds of travel besides portals that route takes, each once, in route order
+    /// ("5 · ship"). Empty for a route by portals alone.
+    pub travel: Vec<Step>,
+}
+
+/// One map on a route.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RouteStop {
+    pub map_id: String,
+    /// Empty for a map that isn't in the map index.
+    pub street_name: String,
+    /// The map's ID for a map that isn't in the map index.
+    pub map_name: String,
+    /// How the player gets here from the stop before; `None` for the first stop, the
+    /// map the panel shows.
+    pub by: Option<Step>,
 }
 
 /// Mob search, as the overlay renders it.
@@ -67,6 +87,9 @@ pub struct SearchState {
     /// Every known map the picked mob spawns on (Event maps left out), by Density Tier
     /// and then Density. The panel shows the first [`PANEL_RESULTS`].
     pub results: Vec<SearchResult>,
+    /// The result whose route the search window shows in full; `None` when there are
+    /// no results.
+    pub highlighted_result: Option<usize>,
     /// The headline: the nearest of the results with a route, whatever its tier (of
     /// those equally near, the densest). `None` with no map shown or no route to any.
     pub nearest: Option<SearchResult>,
@@ -86,6 +109,9 @@ pub(crate) struct MobSearch {
     /// suggestion. Kept by ID, so the highlight stays on it as the crawl adds mobs.
     highlighted: Option<String>,
     picked: Option<MobChoice>,
+    /// The ID of the map the player moved the result highlight to; `None` for the
+    /// first result. Kept by ID, so the highlight stays on it as the results reorder.
+    highlighted_result: Option<String>,
 }
 
 impl MobSearch {
@@ -104,11 +130,22 @@ impl MobSearch {
     }
 
     /// Move the highlight `by` suggestions (up when negative), stopping at either end.
-    pub fn move_highlight(&mut self, by: isize, crawl: Option<&Crawl>) {
+    /// With no suggestions listed, move it through the results instead (ranked by
+    /// Distance from map `from`).
+    pub fn move_highlight(&mut self, by: isize, crawl: Option<&Crawl>, from: Option<&str>) {
+        if !self.window_open {
+            return;
+        }
         let suggestions = self.suggestions(crawl);
         if let Some(at) = self.highlight_in(&suggestions) {
             let to = at.saturating_add_signed(by).min(suggestions.len() - 1);
             self.highlighted = Some(suggestions[to].id.clone());
+        } else {
+            let results = self.results(crawl, from);
+            if let Some(at) = self.result_highlight_in(&results) {
+                let to = at.saturating_add_signed(by).min(results.len() - 1);
+                self.highlighted_result = Some(results[to].map_id.clone());
+            }
         }
     }
 
@@ -120,12 +157,14 @@ impl MobSearch {
         }
         if self.query.trim().is_empty() {
             self.picked = None;
+            self.highlighted_result = None;
             self.window_open = false;
             return;
         }
         let suggestions = self.suggestions(crawl);
         if let Some(at) = self.highlight_in(&suggestions) {
             self.picked = Some(suggestions[at].clone());
+            self.highlighted_result = None;
             self.window_open = false;
         }
     }
@@ -139,10 +178,7 @@ impl MobSearch {
     /// from map `from` (the map the panel shows; `None`: no map).
     pub fn state(&self, crawl: Option<&Crawl>, from: Option<&str>) -> SearchState {
         let suggestions = self.suggestions(crawl);
-        let results = match (&self.picked, crawl) {
-            (Some(mob), Some(crawl)) => results(&mob.id, crawl, from),
-            _ => Vec::new(),
-        };
+        let results = self.results(crawl, from);
         SearchState {
             window_open: self.window_open,
             query: self.query.clone(),
@@ -151,9 +187,27 @@ impl MobSearch {
             suggestions,
             credit: (!results.is_empty()).then_some(MEOWDB_CREDIT),
             nearest: nearest(&results),
+            highlighted_result: self.result_highlight_in(&results),
             results,
             crawl: crawl.map(Crawl::progress).unwrap_or_default(),
         }
+    }
+
+    /// The picked mob's results, with Distances from map `from`; none with no mob
+    /// picked.
+    fn results(&self, crawl: Option<&Crawl>, from: Option<&str>) -> Vec<SearchResult> {
+        match (&self.picked, crawl) {
+            (Some(mob), Some(crawl)) => results(&mob.id, crawl, from),
+            _ => Vec::new(),
+        }
+    }
+
+    fn result_highlight_in(&self, results: &[SearchResult]) -> Option<usize> {
+        if results.is_empty() {
+            return None;
+        }
+        let moved_to = self.highlighted_result.as_ref().and_then(|id| results.iter().position(|r| &r.map_id == id));
+        Some(moved_to.unwrap_or(0))
     }
 
     /// The known mobs whose name contains the query, whatever the case: each once, by
@@ -194,6 +248,21 @@ fn nearest(results: &[SearchResult]) -> Option<SearchResult> {
         // `min_by_key` keeps the first of equals: the first ranked.
         .min_by_key(|&(changes, r)| (changes, std::cmp::Reverse(r.density_hundredths)))
         .map(|(_, r)| r.clone())
+}
+
+/// The shortest route to map `map_id` with its maps' names, or none.
+fn route(distances: &Distances, map_id: &str, crawl: &Crawl) -> Vec<RouteStop> {
+    distances
+        .route_to(map_id)
+        .into_iter()
+        .map(|(map_id, by)| {
+            let (street_name, map_name) = match crawl.entry(&map_id) {
+                Some(entry) => (entry.street_name.clone(), entry.map_name.clone()),
+                None => (String::new(), map_id.clone()),
+            };
+            RouteStop { map_id, street_name, map_name, by }
+        })
+        .collect()
 }
 
 /// MeowDB's display region for event maps, which the player can't normally enter.
@@ -237,6 +306,16 @@ fn results(mob_id: &str, crawl: &Crawl, from: Option<&str>) -> Vec<SearchResult>
             spawn_share_percent: mob.spawn_share_percent,
             tier: tier(density),
             distance: distance(&entry.id),
+            route: distances.as_ref().map(|d| route(d, &entry.id, crawl)).unwrap_or_default(),
+            travel: Vec::new(),
+        })
+        .map(|mut result| {
+            for step in result.route.iter().filter_map(|stop| stop.by) {
+                if step != Step::Portal && !result.travel.contains(&step) {
+                    result.travel.push(step);
+                }
+            }
+            result
         })
         .collect();
     results.sort_by(|a, b| {
