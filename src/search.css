@@ -214,3 +214,60 @@ th:nth-child(5) { width: 19%; }
   margin: 0;
   font-size: 13px;
 }
+
+/* The result whose route is shown below the table. */
+tr.current td {
+  background: var(--selection-fill);
+}
+
+tr.current .result-map {
+  font-weight: 600;
+}
+
+/* The highlighted result's route: each map in turn, with how it's reached. */
+.route {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--inset-border);
+  border-radius: 8px;
+  background: var(--inset);
+}
+
+h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.route-stops {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.route-stops li {
+  display: grid;
+  grid-template-columns: 7.5em 1fr;
+  column-gap: 8px;
+  padding: 1px 0;
+}
+
+.route-stops .step {
+  color: var(--muted);
+  text-align: right;
+}
+
+/* Anything but a portal is worth noticing on the way. */
+.route-stops .step.ship,
+.route-stops .step.taxi,
+.route-stops .step.teleportScroll {
+  color: var(--accent);
+}
+
+.route-stops .route-street {
+  grid-column: 2;
+  color: var(--muted);
+}
