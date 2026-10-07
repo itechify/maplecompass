@@ -3,7 +3,7 @@
 //! world. It has its own requests, and never touches the shown map's.
 
 use crate::map_data::MapData;
-use crate::map_index::{Fetched, MapDataSource, SourceError};
+use crate::map_index::{Fetched, MapDataSource, MapEntry, SourceError};
 use serde::Serialize;
 use std::task::Poll;
 
@@ -45,7 +45,7 @@ enum Page {
 /// The crawl over every map in the index.
 pub(crate) struct Crawl {
     /// Each map in the index, in index order.
-    maps: Vec<(String, Page)>,
+    maps: Vec<(MapEntry, Page)>,
     /// The map whose answer is awaited.
     in_flight: Option<usize>,
     /// When the last request that went to MeowDB (didn't answer at once) started.
@@ -54,9 +54,9 @@ pub(crate) struct Crawl {
 
 impl Crawl {
     /// A crawl over these maps' pages, none asked for yet.
-    pub fn new(ids: impl IntoIterator<Item = String>) -> Self {
+    pub fn new(index: Vec<MapEntry>) -> Self {
         Self {
-            maps: ids.into_iter().map(|id| (id, Page::Unasked)).collect(),
+            maps: index.into_iter().map(|entry| (entry, Page::Unasked)).collect(),
             in_flight: None,
             last_sent_ms: None,
         }
@@ -74,7 +74,7 @@ impl Crawl {
                     None => return,
                 },
             };
-            let answer = match source.crawl_data(&self.maps[at].0) {
+            let answer = match source.crawl_data(&self.maps[at].0.id) {
                 Poll::Pending => {
                     if first_ask {
                         self.last_sent_ms = Some(at_ms);
@@ -114,10 +114,10 @@ impl Crawl {
         })
     }
 
-    /// The maps whose page has been read so far, by ID.
-    pub fn known(&self) -> impl Iterator<Item = (&str, &MapData)> {
-        self.maps.iter().filter_map(|(id, page)| match page {
-            Page::Known(data) => Some((id.as_str(), &**data)),
+    /// The maps whose page has been read so far, with their index entry.
+    pub fn known(&self) -> impl Iterator<Item = (&MapEntry, &MapData)> {
+        self.maps.iter().filter_map(|(entry, page)| match page {
+            Page::Known(data) => Some((entry, &**data)),
             _ => None,
         })
     }

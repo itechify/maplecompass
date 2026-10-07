@@ -41,6 +41,7 @@ These hotkeys work while the game has focus. They use Win+Alt rather than Ctrl o
 - **Win+Alt+O** opens the current map's MeowDB page in your browser.
 - **Win+Alt+S** opens setup again, to mark the minimap title anew or consult the Overlay guide.
 - **Win+Alt+N** shows the next map with the same title, when the panel can't tell which one you're on.
+- **Win+Alt+F** opens the mob search window, which takes your typing until you pick a mob (Enter) or press Esc; then the game has focus again. Type part of a mob's name, move the highlight with the arrow keys and press Enter. The panel then lists the five densest maps for that mob, and the search window lists them all. Press Enter with nothing typed to clear the search.
 
 They are ordinary registered hotkeys (no keyboard hook), so while MapleCompass runs the game never sees these combinations. If another app already has one, the panel and the setup window say so. Settings from earlier versions, which used Ctrl+Shift, are moved to these.
 
