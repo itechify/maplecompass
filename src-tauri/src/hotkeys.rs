@@ -22,6 +22,7 @@ pub fn install(app: &tauri::App, hotkeys: &Hotkeys, commands: Sender<Command>) -
         &hotkeys.open_meowdb_page,
         &hotkeys.setup,
         &hotkeys.choose_candidate,
+        &hotkeys.reset_session,
     ];
     let mut unavailable = Vec::new();
     let mut bindings: Vec<(Shortcut, String)> = Vec::new();

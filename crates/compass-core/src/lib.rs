@@ -379,6 +379,8 @@ impl Compass {
             Action::RequestSetup
         } else if is(&hotkeys.choose_candidate) {
             Action::ChooseCandidate
+        } else if is(&hotkeys.reset_session) {
+            Action::ResetSession
         } else if is(&hotkeys.open_meowdb_page) {
             return self.state.map.as_ref().map(|map| OpenInBrowser { url: map.url.clone() });
         } else {
