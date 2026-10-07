@@ -46,6 +46,7 @@ use panel::Panel;
 use setup::Setup;
 pub use recogniser::{TitleLines, TitleReader, TitleReading};
 use tracker::Tracker;
+use world::Travel;
 use serde::Serialize;
 use std::task::Poll;
 
@@ -345,7 +346,7 @@ impl Compass {
             Action::SearchPrevious | Action::SearchNext => {
                 let by = if action == Action::SearchNext { 1 } else { -1 };
                 let from = self.state.map.as_ref().map(|m| m.id.as_str());
-                self.search.move_highlight(by, self.crawl.as_ref(), from);
+                self.search.move_highlight(by, self.crawl.as_ref(), from, self.travel());
                 self.sync_search();
             }
             Action::SearchEnter => {
@@ -354,6 +355,15 @@ impl Compass {
             }
             Action::SearchEscape => {
                 self.search.escape();
+                self.sync_search();
+            }
+            // Settings, so they count whether or not the window is open.
+            Action::ToggleTaxis => {
+                self.settings.taxis = !self.settings.taxis;
+                self.sync_search();
+            }
+            Action::ToggleTeleportScrolls => {
+                self.settings.teleport_scrolls = !self.settings.teleport_scrolls;
                 self.sync_search();
             }
         }
@@ -368,10 +378,15 @@ impl Compass {
     }
 
     /// Bring the panel's mob search up to date with the player's inputs, the maps the
-    /// crawl knows and the map shown.
+    /// crawl knows, the map shown and the travel toggles.
     fn sync_search(&mut self) {
         let from = self.state.map.as_ref().map(|m| m.id.as_str());
-        self.state.search = self.search.state(self.crawl.as_ref(), from);
+        self.state.search = self.search.state(self.crawl.as_ref(), from, self.travel());
+    }
+
+    /// The kinds of travel the player has turned on.
+    fn travel(&self) -> Travel {
+        Travel { taxis: self.settings.taxis, teleport_scrolls: self.settings.teleport_scrolls }
     }
 
     /// The player pressed one of the global hotkeys (an accelerator string, as listed
@@ -419,6 +434,8 @@ impl Compass {
         self.panel.detached_at = settings.detached_at;
         self.setup.saved = settings.title_region;
         self.settings = settings;
+        // The travel toggles change Distances.
+        self.sync_search();
         self.sync_panel()
     }
 
