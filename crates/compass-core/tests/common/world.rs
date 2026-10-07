@@ -6,7 +6,7 @@ use compass_core::{Action, Compass, MapData, MapEntry, Mob, PanelState, Portal, 
 use std::task::Poll;
 
 /// The search hotkey (the default).
-pub const SEARCH: &str = "super+alt+f";
+pub const SEARCH: &str = "ctrl+shift+f";
 
 /// A map in a hand-built world.
 pub struct WorldMap {

@@ -128,7 +128,7 @@ const PLACEMENT_NAMES: Record<PlacementMode, string> = {
   detached: "Detached",
 };
 
-/** "Win+Alt+E is taken by another app, so it does nothing here" */
+/** "Ctrl+Shift+E is taken by another app, so it does nothing here" */
 function takenHotkeys(hotkeys: string[]): string {
   if (hotkeys.length === 0) return "";
   const one = hotkeys.length === 1;
