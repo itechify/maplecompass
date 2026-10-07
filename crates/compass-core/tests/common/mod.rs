@@ -2,6 +2,8 @@
 //! serving MeowDB's saved map index and map pages (personal-use test data, ADR 0003).
 #![allow(dead_code)]
 
+pub mod world;
+
 use compass_core::{
     Compass, Fetched, Frame, MapData, MapDataSource, MapEntry, PanelState, Rect, ScreenRect, Size,
     SourceError, TitleRegion, default_title_region, meowdb,

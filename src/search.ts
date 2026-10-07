@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { mobTitle, resultRow, resultsNote, type SearchState } from "./search-state";
+import { mobTitle, nearestLine, resultRow, resultsNote, type SearchState } from "./search-state";
 
 /** What the shell sends the search window. */
 type SearchView = { search: SearchState };
@@ -12,6 +12,7 @@ const noMatch = byId("no-match");
 const crawl = byId("crawl");
 const picked = byId("picked");
 const pickedTitle = byId("picked-title");
+const pickedNearest = byId("picked-nearest");
 const pickedNote = byId("picked-note");
 const results = byId("results");
 const resultRows = byId("result-rows");
@@ -63,6 +64,8 @@ function update({ search }: SearchView) {
   picked.hidden = !search.picked;
   if (search.picked) {
     pickedTitle.textContent = mobTitle(search.picked);
+    pickedNearest.textContent = nearestLine(search);
+    pickedNearest.hidden = pickedNearest.textContent === "";
     pickedNote.textContent = resultsNote(search);
     pickedNote.hidden = pickedNote.textContent === "";
     results.hidden = search.results.length === 0;

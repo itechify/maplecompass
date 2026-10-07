@@ -5,52 +5,9 @@
 
 mod common;
 
+use common::world::{SEARCH, WorldMap, crawled, map, mob, orange, search_for, tick_through, world};
 use common::{FakeSource, arrive};
-use compass_core::{Action, Compass, DensityTier, MEOWDB_CREDIT, MapData, MapEntry, Mob, PanelState};
-use std::task::Poll;
-
-const SEARCH: &str = "super+alt+f";
-
-/// A map in a hand-built world.
-struct WorldMap {
-    entry: MapEntry,
-    page: MapData,
-}
-
-/// A map on Victoria Island with this Mob Rate (hundredths) and these mobs.
-fn map(id: &str, name: &str, mob_rate_percent: u32, mobs: Vec<Mob>) -> WorldMap {
-    WorldMap {
-        entry: MapEntry {
-            id: id.into(),
-            street_name: "Victoria Road".into(),
-            map_name: name.into(),
-            region: "Victoria Island".into(),
-        },
-        page: MapData { mobs, mob_rate_percent, ..MapData::default() },
-    }
-}
-
-/// A mob with MeowDB ID `id`, `spawn_count` of it on the map.
-fn mob(id: &str, name: &str, level: u32, spawn_count: u32) -> Mob {
-    Mob { id: id.into(), name: name.into(), level, hp: 0, exp: 0, spawn_count, spawn_share_percent: 0 }
-}
-
-/// A source serving a hand-built world: its index, and each map's page for the crawl.
-fn world(maps: Vec<WorldMap>) -> FakeSource {
-    let index = maps.iter().map(|m| m.entry.clone()).collect();
-    let pages: Vec<(String, MapData)> = maps.into_iter().map(|m| (m.entry.id, m.page)).collect();
-    FakeSource::with_index(index).with_pages(move |id| {
-        Poll::Ready(Ok(pages.iter().find(|(page_id, _)| page_id == id).map(|(_, p)| p.clone()).unwrap_or_default()))
-    })
-}
-
-/// A core over `maps`, crawled (every page cached, so at once).
-fn crawled(maps: Vec<WorldMap>) -> Compass {
-    let mut compass = Compass::new(world(maps));
-    compass.tick(0);
-    compass.tick(50);
-    compass
-}
+use compass_core::{Action, Compass, DensityTier, MEOWDB_CREDIT, Mob, PanelState, SearchState};
 
 fn mushroom_world() -> Vec<WorldMap> {
     vec![
@@ -134,13 +91,6 @@ fn the_highlight_stays_at_the_top_going_up_and_a_new_query_starts_it_at_the_top_
     assert_eq!(highlighted(compass.search_query("mushr")), Some("Green Mushroom"));
 }
 
-/// Open the search window, type `query` and press Enter.
-fn search_for(compass: &mut Compass, query: &str) -> PanelState {
-    compass.on_hotkey(SEARCH);
-    compass.search_query(query);
-    compass.act(Action::SearchEnter).clone()
-}
-
 #[test]
 fn esc_closes_the_search_window_and_keeps_the_current_search() {
     let mut compass = crawled(mushroom_world());
@@ -202,10 +152,6 @@ fn in_region(region: &str, mut map: WorldMap) -> WorldMap {
 fn sharing(share: u32, mut mob: Mob) -> Mob {
     mob.spawn_share_percent = share;
     mob
-}
-
-fn orange(spawn_count: u32) -> Mob {
-    mob("9", "Orange Mushroom", 8, spawn_count)
 }
 
 /// Each result as "Map Name: Density (hundredths), Tier".
@@ -292,14 +238,6 @@ fn event_maps_are_left_out_and_dont_set_the_densest_map() {
     assert_eq!(ranked(&state), ["Mushroom Field: 1000, High", "Hidden Mushrooms: 400, Medium"]);
 }
 
-/// Tick every 50 ms from `from_ms` up to `to_ms`.
-fn tick_through(compass: &mut Compass, from_ms: u64, to_ms: u64) -> PanelState {
-    for at in (from_ms..to_ms).step_by(50) {
-        compass.tick(at);
-    }
-    compass.tick(to_ms).clone()
-}
-
 const KERNING: &str = "victoria-road__kerning-city--window";
 const SUNSET: &str = "victoria-road__sunset-sky--window";
 const HENESYS_HUNTING_GROUND_I: &str = "010001010";
@@ -312,13 +250,20 @@ fn the_picked_mob_and_its_results_stay_as_the_player_changes_map_until_the_searc
     let searched = search_for(&mut compass, "orange mushroom").search;
     assert!(searched.results.iter().any(|r| r.map_id == HENESYS_HUNTING_GROUND_I), "{:?}", searched.results);
 
+    // The same maps, at a Distance from wherever the player is (tests/distance.rs).
+    let maps = |search: &SearchState| {
+        let mut maps: Vec<_> = search.results.iter().map(|r| (r.map_id.clone(), r.density_hundredths, r.tier)).collect();
+        maps.sort();
+        maps
+    };
+
     let state = arrive(&mut compass, KERNING, 10_000);
     assert_eq!(state.map.as_ref().map(|m| m.map_name.as_str()), Some("Kerning City"));
     assert_eq!(state.search.picked, searched.picked);
-    assert_eq!(state.search.results, searched.results);
+    assert_eq!(maps(&state.search), maps(&searched));
     let state = arrive(&mut compass, SUNSET, 20_000);
     assert_eq!(state.map.as_ref().map(|m| m.map_name.as_str()), Some("Sunset Sky"));
-    assert_eq!(state.search.results, searched.results);
+    assert_eq!(maps(&state.search), maps(&searched));
 
     let state = search_for(&mut compass, "");
     assert_eq!(picked(&state), None);
