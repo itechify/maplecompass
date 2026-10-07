@@ -2,7 +2,7 @@
 //! it never sends the game a message, opens its process or hooks it, and the only
 //! window it ever changes is our own overlay (ADR 0001).
 
-use compass_core::ScreenRect;
+use compass_core::{Foreground, ScreenRect};
 
 /// The game window as found on screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,11 +33,17 @@ pub fn looking_for() -> String {
 }
 
 #[cfg(windows)]
-pub use win::{find_game, foreground_is_ours, keep_above, monitor_work_areas, window_under_cursor};
+pub use win::{find_game, foreground, foreground_is_ours, keep_above, monitor_work_areas, window_under_cursor};
 
 #[cfg(not(windows))]
 pub fn foreground_is_ours() -> bool {
     false
+}
+
+/// Elsewhere the foreground can't be told apart yet, so the hotkeys stay live as before.
+#[cfg(not(windows))]
+pub fn foreground(_game: Option<isize>) -> Foreground {
+    Foreground::Game
 }
 
 /// The game's client area, or `None` when it isn't running or is minimised.
@@ -62,7 +68,7 @@ pub fn monitor_work_areas() -> Vec<ScreenRect> {
 
 #[cfg(windows)]
 mod win {
-    use super::{Game, ScreenRect};
+    use super::{Foreground, Game, ScreenRect};
     use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
     use windows::Win32::Graphics::Dwm::{
         DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute,
@@ -207,6 +213,21 @@ mod win {
         let mut pid = 0;
         unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
         pid == unsafe { GetCurrentProcessId() }
+    }
+
+    /// Which window is in front: the `game` (its handle, if it was found), one of ours,
+    /// or another app's. Only reads the window order.
+    pub fn foreground(game: Option<isize>) -> Foreground {
+        let foreground = unsafe { GetForegroundWindow() };
+        if foreground.is_invalid() {
+            Foreground::OtherApp
+        } else if game == Some(foreground.0 as isize) {
+            Foreground::Game
+        } else if is_ours(foreground) {
+            Foreground::MapleCompass
+        } else {
+            Foreground::OtherApp
+        }
     }
 
     /// Whether the foreground window is one of ours (e.g. focus only moved inside our
