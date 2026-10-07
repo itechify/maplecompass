@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
+  crawlLine,
   distanceText,
   mobTitle,
   nearestLine,
@@ -43,8 +44,7 @@ function update({ search }: SearchView) {
   }
   open = search.windowOpen;
 
-  const { known, total, done } = search.crawl;
-  crawl.textContent = total === 0 ? "Loading MeowDB's Map list…" : done ? "" : `${known} of ${total} maps known`;
+  crawl.textContent = search.crawl.total === 0 ? "Loading MeowDB's Map list…" : crawlLine(search);
   // The core keeps the toggles (and saves them); the checkboxes follow it.
   taxis.checked = search.taxis;
   teleportScrolls.checked = search.teleportScrolls;
@@ -133,8 +133,15 @@ query.addEventListener("keydown", (e) => {
       break;
   }
 });
-taxis.addEventListener("change", () => invoke("search_toggle_taxis"));
-teleportScrolls.addEventListener("change", () => invoke("search_toggle_teleport_scrolls"));
+// After a click on a checkbox, the typing goes back to the search box.
+taxis.addEventListener("change", () => {
+  invoke("search_toggle_taxis");
+  query.focus();
+});
+teleportScrolls.addEventListener("change", () => {
+  invoke("search_toggle_teleport_scrolls");
+  query.focus();
+});
 // Esc closes the window from the checkboxes too.
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && e.target !== query) {
