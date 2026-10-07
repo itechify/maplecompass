@@ -9,7 +9,7 @@
 mod common;
 
 use common::arrive;
-use common::world::{WorldMap, map, orange, search_for, world};
+use common::world::{WorldMap, map, nearest, orange, search_for, world};
 use compass_core::{Action, Compass, Distance, PanelState, SearchResult, Settings, Step};
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
@@ -231,19 +231,19 @@ fn flipping_a_toggle_reranks_the_results_and_moves_the_headline_straight_away() 
     let mut compass = searched_from_sunset_sky(near_field_and_far_perion());
     let state = compass.panel_state();
     assert_eq!(distances(state), ["Near Field: 2", "Perion: 4"]);
-    assert_eq!(state.search.nearest.as_ref().unwrap().map_name, "Near Field");
+    assert_eq!(nearest(&state).unwrap().map_name, "Near Field");
 
     let state = compass.act(Action::ToggleTeleportScrolls).clone();
 
     assert_eq!(distances(&state), ["Perion: 1", "Near Field: 2"]);
-    let nearest = state.search.nearest.as_ref().unwrap();
-    assert_eq!(nearest.map_name, "Perion");
-    assert_eq!(nearest.travel, [Step::TeleportScroll]);
+    let perion = nearest(&state).unwrap();
+    assert_eq!(perion.map_name, "Perion");
+    assert_eq!(perion.travel, [Step::TeleportScroll]);
 
     let state = compass.act(Action::ToggleTeleportScrolls);
 
     assert_eq!(distances(state), ["Near Field: 2", "Perion: 4"]);
-    assert_eq!(state.search.nearest.as_ref().unwrap().map_name, "Near Field");
+    assert_eq!(nearest(state).unwrap().map_name, "Near Field");
 }
 
 #[test]
@@ -278,7 +278,7 @@ fn a_nearest_town_scroll_takes_the_player_to_their_own_maps_nearest_town() {
     assert_eq!(distances(&state), ["Amherst: 1", "Other Town: NoRoute"]);
     assert_eq!(route(&state.search.results[0]), "Sunset Sky, TeleportScroll: Amherst");
     assert_eq!(state.search.results[0].travel, [Step::TeleportScroll]);
-    assert_eq!(state.search.nearest.as_ref().unwrap().map_name, "Amherst");
+    assert_eq!(nearest(&state).unwrap().map_name, "Amherst");
 }
 
 #[test]

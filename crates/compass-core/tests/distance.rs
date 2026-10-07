@@ -148,7 +148,7 @@ fn within_a_tier_maps_go_by_distance_then_density_then_no_route_then_quest_only(
 
 /// The headline: the nearest map with the mob, and its Distance.
 fn nearest(state: &PanelState) -> Option<String> {
-    state.search.nearest.as_ref().map(|r| format!("{}: {}", r.map_name, shown(r.distance)))
+    common::world::nearest(state).map(|r| format!("{}: {}", r.map_name, shown(r.distance)))
 }
 
 #[test]
