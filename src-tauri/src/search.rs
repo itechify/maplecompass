@@ -7,7 +7,7 @@
 //! Every decision is the core's; this only shows the window and relays the player's
 //! typing and keys.
 
-use crate::Command;
+use crate::{Command, gamewin};
 use compass_core::{Action, PanelState, SearchState};
 use serde::Serialize;
 use std::sync::Mutex;
@@ -45,7 +45,9 @@ impl SearchWindow {
                 api.prevent_close();
                 let _ = commands.send(Command::Act(Action::SearchEscape));
             }
-            WindowEvent::Focused(false) => {
+            // Not when focus only moved within our windows: the window reports losing
+            // focus when its own webview takes it, as it does on opening.
+            WindowEvent::Focused(false) if !gamewin::foreground_is_ours() => {
                 let _ = commands.send(Command::Act(Action::SearchEscape));
             }
             _ => {}
