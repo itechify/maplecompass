@@ -101,6 +101,7 @@ fn mobs_are_sorted_by_level_then_name_whatever_order_the_source_gives() {
     let unsorted = MapData {
         summary: None,
         mobs: vec![mob("Stump", 5), mob("Ice Sentinel", 30), mob("Fire Sentinel", 30), mob("Snail", 1)],
+        ..MapData::default()
     };
     let source = FakeSource::meowdb().with_pages(move |_| Poll::Ready(Ok(unsorted.clone())));
     let mut compass = Compass::new(source);
