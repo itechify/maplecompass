@@ -78,10 +78,13 @@ impl ShownMap {
         self.maps.get(self.shown())
     }
 
+    /// The shown map's data. While the maps sharing its title are being compared, it
+    /// is loading: it may yet turn out to be one of several.
     pub fn data(&self) -> MapDataStatus {
-        match self.map() {
-            None => MapDataStatus::NoMap,
-            Some(map) => self.loader.status(&map.id).cloned().unwrap_or(MapDataStatus::Loading),
+        match (self.map(), self.which) {
+            (None, _) => MapDataStatus::NoMap,
+            (Some(_), Which::Comparing) => MapDataStatus::Loading,
+            (Some(map), _) => self.loader.status(&map.id).cloned().unwrap_or(MapDataStatus::Loading),
         }
     }
 
@@ -105,9 +108,9 @@ impl ShownMap {
 
     fn load(&mut self, source: &mut dyn MapDataSource) {
         if let Which::Comparing = self.which {
+            // Asks for the shown map's data too, once per frame like any other.
             self.compare(source);
-        }
-        if let Some(map) = self.maps.get(self.shown()) {
+        } else if let Some(map) = self.maps.get(self.shown()) {
             self.loader.load(&map.id, source);
         }
     }
