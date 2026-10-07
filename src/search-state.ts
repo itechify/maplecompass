@@ -42,6 +42,10 @@ export type SearchState = {
   nearest: SearchResult | null;
   credit: string | null;
   crawl: CrawlProgress;
+  /** Distances count taxi rides between towns (the Taxis checkbox). */
+  taxis: boolean;
+  /** Distances count Teleport Scrolls to towns (the Teleport Scrolls checkbox). */
+  teleportScrolls: boolean;
 };
 
 /** Mirror of `compass_core::PANEL_RESULTS`: the panel shows this many results. */
@@ -79,11 +83,19 @@ export function distanceText(distance: Distance): { text: string; title: string 
   return { text: String(n), title: n === 0 ? "You're on this map" : `${n} map change${n === 1 ? "" : "s"} away` };
 }
 
-/** Each Step as a route and a travel marker name it. */
+/** Each Step as a route and a travel marker name it ("5 · taxi, scroll"). */
 export const STEP_NAMES: Record<Step, string> = {
   portal: "portal",
   ship: "ship",
   taxi: "taxi",
+  teleportScroll: "scroll",
+};
+
+/** Each Step in full, for tooltips. */
+export const STEP_TITLES: Record<Step, string> = {
+  portal: "Portal",
+  ship: "Ship",
+  taxi: "Taxi",
   teleportScroll: "Teleport Scroll",
 };
 
@@ -124,7 +136,8 @@ export function resultRow(result: SearchResult): HTMLTableRowElement {
     travel ? `${distance.text} · ${travel}` : distance.text,
     typeof result.distance === "string" ? "distance none" : "distance",
   );
-  distanceCell.title = travel ? `${distance.title}, by ${travel}` : distance.title;
+  const travelTitle = result.travel.map((step) => STEP_TITLES[step]).join(", ");
+  distanceCell.title = travel ? `${distance.title}, by ${travelTitle}` : distance.title;
   row.append(
     where,
     cell(density(result.densityHundredths)),
@@ -135,13 +148,14 @@ export function resultRow(result: SearchResult): HTMLTableRowElement {
   return row;
 }
 
-/** A route's maps in order, each with how it's reached: "You're here", "Portal", "Ship"… */
+/** A route's maps in order, each with how it's reached: "you're here", "portal", "taxi", "scroll"… */
 export function routeStops(result: SearchResult): HTMLLIElement[] {
   return result.route.map((stop) => {
     const item = document.createElement("li");
     const step = document.createElement("span");
     step.className = `step ${stop.by ?? "start"}`;
     step.textContent = stop.by ? STEP_NAMES[stop.by] : "you're here";
+    if (stop.by) step.title = STEP_TITLES[stop.by];
     const map = document.createElement("span");
     map.className = "route-map";
     map.textContent = stop.mapName;
