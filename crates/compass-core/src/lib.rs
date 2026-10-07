@@ -4,6 +4,7 @@
 //! window, the clock, the player's actions and hotkeys); the output is a [`PanelState`]
 //! holding everything the overlay renders. No OS or UI dependencies live here.
 
+mod crawl;
 mod map_data;
 mod map_index;
 mod matcher;
@@ -13,11 +14,13 @@ mod portal_overrides;
 mod portals;
 mod prep;
 mod recogniser;
+mod search;
 mod settings;
 mod setup;
 mod shown_map;
 mod tracker;
 
+pub use crawl::CrawlProgress;
 pub use map_data::{HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty};
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
@@ -25,10 +28,12 @@ pub use panel::{
     Action, GameWindow, InsideOffset, Layer, PanelSizes, PlacementMode, ScreenPoint, ScreenRect,
     Size,
 };
+pub use search::SearchState;
 pub use settings::{Hotkeys, Settings};
 pub use setup::{SelectionDirection, SetupReason, SetupState, TestRead, TitleRegion};
 pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
 
+use crawl::Crawl;
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
 use panel::Panel;
@@ -161,6 +166,8 @@ pub struct PanelState {
     /// The player closed first-run setup: with no Title Region there is nothing to
     /// read, so the app quits.
     pub quit: bool,
+    /// Mob search, and how far the world crawl behind it has got.
+    pub search: SearchState,
 }
 
 /// A page to open in the player's browser (the open-page hotkey asked for it): the one
@@ -188,6 +195,8 @@ pub struct Compass {
     index_failed_at: Option<u64>,
     tracker: Tracker,
     shown_map: ShownMap,
+    /// The world crawl, from when the map index arrives.
+    crawl: Option<Crawl>,
     panel: Panel,
     setup: Setup,
     /// The last settings restored; the panel's own fields live in `panel`.
@@ -206,6 +215,7 @@ impl Compass {
             index_failed_at: None,
             tracker: Tracker::default(),
             shown_map: ShownMap::default(),
+            crawl: None,
             panel: Panel::default(),
             setup: Setup::default(),
             settings: Settings::default(),
@@ -382,13 +392,19 @@ impl Compass {
         }
     }
 
-    /// Time passed: check on fetches in flight. The shell calls this many times a
-    /// second (`at_ms` on the same clock as frames), so nothing waits for the network.
+    /// Time passed: check on fetches in flight, and move the world crawl on. The shell
+    /// calls this many times a second (`at_ms` on the same clock as frames), so nothing
+    /// waits for the network.
     pub fn tick(&mut self, at_ms: u64) -> &PanelState {
         self.load_map_index(at_ms);
         if self.matcher.is_some() {
             self.shown_map.poll(&mut *self.source);
             self.sync_shown_map();
+        }
+        // After the shown map, which never waits for the crawl.
+        if let Some(crawl) = &mut self.crawl {
+            crawl.poll(&mut *self.source, at_ms);
+            self.state.search.crawl = crawl.progress();
         }
         self.sync_panel()
     }
@@ -405,20 +421,25 @@ impl Compass {
             Poll::Pending => return,
             Poll::Ready(index) => index,
         };
-        match index {
+        let index = match index {
             Ok(Fetched::Fresh(index)) => {
-                self.matcher = Some(Matcher::new(index));
                 self.state.recognition = Recognition::Ready;
+                index
             }
             Ok(Fetched::SavedCopy { data, saved_at_unix_ms }) => {
-                self.matcher = Some(Matcher::new(data));
                 self.state.recognition = Recognition::SavedCopy { saved_at_unix_ms };
+                data
             }
             Err(_) => {
                 self.index_failed_at = Some(at_ms);
                 self.state.recognition = Recognition::Unavailable;
+                return;
             }
-        }
+        };
+        let crawl = Crawl::new(index.iter().map(|m| m.id.clone()));
+        self.state.search.crawl = crawl.progress();
+        self.crawl = Some(crawl);
+        self.matcher = Some(Matcher::new(index));
     }
 
     pub fn panel_state(&self) -> &PanelState {
