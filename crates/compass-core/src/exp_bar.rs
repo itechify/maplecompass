@@ -9,8 +9,9 @@
 //!    The EXP is the cluster of ink just left of "[", stopping at the "EXP." label (taller
 //!    than the brackets) or a gap wider than between digits; the percentage is the ink
 //!    between the brackets.
-//! 3. ocrs reads both as black-on-white lines. Only their digits count: the percentage
-//!    always has two decimals, so its digits are hundredths of a percent.
+//! 3. ocrs reads both as black-on-white lines, enlarged twice over. Only their digits
+//!    count: the percentage always has two decimals, so its digits are hundredths of a
+//!    percent.
 
 use crate::Frame;
 use crate::prep::{PAD, Rect};
@@ -137,6 +138,10 @@ const GLYPH_GAP_PER_H: f32 = 0.2;
 const SPACE_PER_H: f32 = 0.6;
 /// The "EXP." label rises this many rows above the brackets; digits never do.
 const LABEL_RISE: u32 = 3;
+/// The masked figures are enlarged this many times before ocrs reads them. At their
+/// own 11-13 rows, ocrs read the 7 of "1.74%" as a 2 on the 2026-10-07 recording; every
+/// sample reads right enlarged anywhere from 1.25x to 2.25x.
+const UPSCALE: u32 = 2;
 
 /// A connected run of bracket-coloured pixels: its bounding box.
 #[derive(Debug, Clone, Copy)]
@@ -238,7 +243,14 @@ fn prepare(img: &RgbImage) -> Option<Prepared> {
             canvas.put_pixel(x + PAD, y + PAD, Luma([(255.0 * (1.0 - v)).round() as u8]));
         }
     }
-    let line = |x0: u32, x1: u32| Rect { x: x0 - cx0 + PAD, y: PAD, w: x1 - x0, h: ch };
+    let (w, h) = (canvas.width() * UPSCALE, canvas.height() * UPSCALE);
+    let canvas = image::imageops::resize(&canvas, w, h, image::imageops::FilterType::Triangle);
+    let line = |x0: u32, x1: u32| Rect {
+        x: (x0 - cx0 + PAD) * UPSCALE,
+        y: PAD * UPSCALE,
+        w: (x1 - x0) * UPSCALE,
+        h: ch * UPSCALE,
+    };
     Some(Prepared { canvas, exp: line(ex0, ex1), percent: line(px0, px1) })
 }
 

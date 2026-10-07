@@ -12,6 +12,7 @@
 
 - All logic goes in `crates/compass-core`, which takes plain data in and returns a `PanelState`. It has no OS, UI, network or file dependencies.
 - Tests drive the core's public inputs and assert on `PanelState` only, never on internals. Every file in `samples/minimap` must be recognised; there, `--window` samples go through `default_title_region` (the probe's capture). The app captures the Title Region the player marks at setup, which `tests/setup.rs` covers with marks on the `--window` samples.
+- Every file in `samples/exp-bar` must read as its name (or its recording's `readings.json`) says, or as unreadable, never as a wrong number. A frame that is ever read wrong becomes a sample there.
 - `src-tauri` only adapts window lookup, capture and rendering. It must follow ADR 0001: no `PrintWindow`, no messages, input, hooks or process access to the game.
 
 ## Agent skills
