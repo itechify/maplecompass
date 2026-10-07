@@ -11,6 +11,12 @@ use serde::{Deserialize, Serialize};
 pub enum SetupReason {
     /// No Title Region has been marked yet.
     FirstRun,
+    /// The game's client area is no longer the size it had when the Title Region was
+    /// marked, so the title has probably moved or changed size.
+    ResolutionChanged,
+    /// The player asked to redo setup. The saved Title Region is read until a new one
+    /// is finished.
+    Requested,
 }
 
 /// The test read of a freshly marked Title Region.
@@ -62,6 +68,8 @@ pub(crate) struct Setup {
     pub saved: Option<TitleRegion>,
     /// The region being test-read, and how that is going.
     marking: Option<(TitleRegion, TestRead)>,
+    /// The player asked to redo setup and hasn't finished or cancelled it.
+    requested: bool,
 }
 
 impl Setup {
@@ -77,7 +85,13 @@ impl Setup {
                 if let Some((region, TestRead::Recognised { .. })) = &self.marking {
                     self.saved = Some(*region);
                     self.marking = None;
+                    self.requested = false;
                 }
+            }
+            Action::RequestSetup => self.requested = true,
+            Action::CancelSetup => {
+                self.marking = None;
+                self.requested = false;
             }
             _ => {}
         }
@@ -101,18 +115,30 @@ impl Setup {
     fn needed(&self) -> Option<SetupReason> {
         match self.saved {
             None => Some(SetupReason::FirstRun),
+            Some(saved) if !self.fits(&saved) => Some(SetupReason::ResolutionChanged),
+            Some(_) if self.requested => Some(SetupReason::Requested),
             Some(_) => None,
         }
     }
 
+    /// Whether a region was marked on a client area the size of the game's now. Without
+    /// a game window there is nothing to compare, so it is taken to fit.
+    fn fits(&self, region: &TitleRegion) -> bool {
+        self.game.is_none_or(|g| (g.width, g.height) == (region.client.width, region.client.height))
+    }
+
     /// Where to capture the Title Region on screen: the region being marked, else the
-    /// saved one. `None` while there is no game window or no region.
+    /// saved one. `None` while there is no game window, or no region marked on a client
+    /// area of the game's current size: reading the wrong spot would go unnoticed.
     pub fn title_region(&self, longest_name: Option<usize>) -> Option<ScreenRect> {
         let game = self.game?;
         let region = match &self.marking {
             Some((region, _)) => region,
             None => self.saved.as_ref()?,
         };
+        if !self.fits(region) {
+            return None;
+        }
         let r = extend(region.marked, game, longest_name.unwrap_or(FALLBACK_LONGEST_NAME));
         Some(ScreenRect {
             x: game.x + r.x as i32,
