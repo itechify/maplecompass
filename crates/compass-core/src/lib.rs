@@ -1,6 +1,7 @@
 //! MapleCompass core: the single test seam.
 //!
-//! Inputs are plain data (captured Title Region frames); the output is a [`PanelState`]
+//! Inputs are plain data (captured Title Region frames or their readings, the game
+//! window, the clock, the player's actions and hotkeys); the output is a [`PanelState`]
 //! holding everything the overlay renders. No OS or UI dependencies live here.
 
 mod map_data;
@@ -32,7 +33,7 @@ use shown_map::ShownMap;
 use matcher::Matcher;
 use panel::Panel;
 use setup::Setup;
-use recogniser::Recogniser;
+pub use recogniser::{TitleLines, TitleReader, TitleReading};
 use tracker::Tracker;
 use serde::Serialize;
 use std::task::Poll;
@@ -178,7 +179,9 @@ const INDEX_RETRY_MS: u64 = 60_000;
 
 /// The compass core: feed it frames, render its [`PanelState`].
 pub struct Compass {
-    recogniser: Recogniser,
+    /// Reads frames fed to [`Compass::on_frame`]; loaded on the first one, so a shell
+    /// that reads on its own thread never loads it twice.
+    reader: Option<TitleReader>,
     source: Box<dyn MapDataSource + Send>,
     matcher: Option<Matcher>,
     /// When asking for the map index last failed (frame time).
@@ -193,11 +196,11 @@ pub struct Compass {
 }
 
 impl Compass {
-    /// A core using the bundled title recogniser, the given map data source and
-    /// default settings. The map index is asked for on the first frame.
+    /// A core using the given map data source and default settings. The map index is
+    /// asked for on the first tick or frame.
     pub fn new(source: impl MapDataSource + Send + 'static) -> Self {
         let mut compass = Self {
-            recogniser: Recogniser::bundled(),
+            reader: None,
             source: Box::new(source),
             matcher: None,
             index_failed_at: None,
@@ -212,16 +215,23 @@ impl Compass {
         compass
     }
 
-    /// Read a captured Title Region frame and update the panel state.
+    /// Read a captured Title Region frame and update the panel state: the same as
+    /// [`Compass::on_reading`] with what a [`TitleReader`] reads in the frame, here.
     pub fn on_frame(&mut self, frame: Frame) -> &PanelState {
-        self.load_map_index(frame.at_ms);
+        let reading = self.reader.get_or_insert_with(TitleReader::bundled).read(&frame);
+        self.on_reading(reading)
+    }
+
+    /// Take what a Title Region frame read as (read by a [`TitleReader`], possibly on
+    /// another thread) and update the panel state.
+    pub fn on_reading(&mut self, reading: TitleReading) -> &PanelState {
+        self.load_map_index(reading.at_ms);
         let Some(matcher) = &self.matcher else {
             // Without the map index nothing can be recognised.
             self.setup.on_read(None);
             return self.sync_panel();
         };
-        let read = frame_to_rgb(&frame).and_then(|img| self.recogniser.read(&img));
-        let snap = read.and_then(|raw| matcher.snap(&raw.street, &raw.map));
+        let snap = reading.lines.and_then(|lines| matcher.snap(&lines.street, &lines.map));
         let current_map = |i: usize| {
             let entry = matcher.map(i);
             CurrentMap {
@@ -427,13 +437,4 @@ fn same_hotkey(a: &str, b: &str) -> bool {
         keys
     };
     keys(a) == keys(b)
-}
-
-fn frame_to_rgb(frame: &Frame) -> Option<image::RgbImage> {
-    let (w, h) = (frame.width as usize, frame.height as usize);
-    if frame.rgba.len() != w * h * 4 {
-        return None;
-    }
-    let rgb = frame.rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
-    image::RgbImage::from_raw(frame.width, frame.height, rgb)
 }

@@ -1,6 +1,7 @@
 //! Title recogniser (ADR 0002): ocrs, recognition model only. We supply the two line
 //! boxes from our own mask and line split, so ocrs' detection model is not shipped.
 
+use crate::Frame;
 use crate::prep::{Prepared, prepare};
 use image::RgbImage;
 use ocrs::{ImageSource, OcrEngine, OcrEngineParams};
@@ -13,13 +14,51 @@ static RECOGNITION_MODEL: &[u8] = include_bytes!("../models/text-recognition.onn
 /// Margin around each line box handed to ocrs (it fills outside the box with black).
 const LINE_MARGIN: f32 = 3.0;
 
-/// The two raw text lines read from the minimap title.
-pub struct RawTitle {
+/// The two raw text lines read from the minimap title, before they are snapped to a
+/// real map.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TitleLines {
     pub street: String,
     pub map: String,
 }
 
-pub struct Recogniser {
+/// What one Title Region frame reads as.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TitleReading {
+    /// `None` when the frame is unreadable (loading screen, minimap hidden or covered).
+    pub lines: Option<TitleLines>,
+    /// When the frame was captured, as in [`Frame::at_ms`].
+    pub at_ms: u64,
+}
+
+/// Reads Title Region frames with the bundled recogniser (ADR 0002). Reading takes
+/// tens of milliseconds, so the shell keeps one on its own thread and hands the core
+/// each [`TitleReading`] (`Compass::on_reading`).
+pub struct TitleReader {
+    recogniser: Recogniser,
+}
+
+impl TitleReader {
+    pub fn bundled() -> Self {
+        Self { recogniser: Recogniser::bundled() }
+    }
+
+    pub fn read(&self, frame: &Frame) -> TitleReading {
+        let lines = frame_to_rgb(frame).and_then(|img| self.recogniser.read(&img));
+        TitleReading { lines, at_ms: frame.at_ms }
+    }
+}
+
+fn frame_to_rgb(frame: &Frame) -> Option<RgbImage> {
+    let (w, h) = (frame.width as usize, frame.height as usize);
+    if frame.rgba.len() != w * h * 4 {
+        return None;
+    }
+    let rgb = frame.rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
+    RgbImage::from_raw(frame.width, frame.height, rgb)
+}
+
+struct Recogniser {
     engine: OcrEngine,
 }
 
@@ -35,12 +74,12 @@ impl Recogniser {
     }
 
     /// Read the street line and the map line. `None` means unreadable.
-    pub fn read(&self, img: &RgbImage) -> Option<RawTitle> {
+    fn read(&self, img: &RgbImage) -> Option<TitleLines> {
         let prepared = prepare(img)?;
         self.read_prepared(&prepared)
     }
 
-    fn read_prepared(&self, p: &Prepared) -> Option<RawTitle> {
+    fn read_prepared(&self, p: &Prepared) -> Option<TitleLines> {
         let (w, h) = p.canvas.dimensions();
         let src = ImageSource::from_bytes(p.canvas.as_raw(), (w, h)).ok()?;
         let input = self.engine.prepare_input(src).ok()?;
@@ -63,6 +102,6 @@ impl Recogniser {
                 .map(|l| l.to_string().trim().to_string())
                 .filter(|s| !s.is_empty())
         };
-        Some(RawTitle { street: text(0)?, map: text(1)? })
+        Some(TitleLines { street: text(0)?, map: text(1)? })
     }
 }

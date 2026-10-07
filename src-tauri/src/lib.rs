@@ -12,7 +12,8 @@ mod settings;
 mod setup;
 
 use compass_core::{
-    Action, Compass, Frame, GameWindow, Layer, PanelSizes, PanelState, ScreenRect, Size,
+    Action, Compass, Frame, GameWindow, Layer, PanelSizes, PanelState, ScreenRect, Size, TitleReader,
+    TitleReading,
     default_title_region,
 };
 use gamewin::ClientArea;
@@ -48,6 +49,9 @@ pub(crate) enum Command {
     Hotkey(String),
     /// The expanded panel's content is this tall (CSS px).
     PanelHeight(f64),
+    /// The title reader is done with a capture of `region`: what it read, or `None`
+    /// if the capture failed.
+    Read { region: ScreenRect, reading: Option<TitleReading> },
 }
 
 /// The overlay reports how tall its expanded content is, so the window fits it.
@@ -109,11 +113,12 @@ pub fn run() {
             });
 
             let handle = app.handle().clone();
-            // Off the UI thread. Spawned from setup, so the process is already
+            // Both off the UI thread. Spawned from setup, so the process is already
             // Per-Monitor-V2 DPI aware.
+            let reader = TitleReaderThread::spawn(app.state::<Sender<Command>>().inner().clone())?;
             let channels = Channels { commands: commands_rx, picks: picks_rx };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
-                compass_loop(handle, overlay, setup_windows, compass, channels, settings_path)
+                compass_loop(handle, overlay, setup_windows, compass, reader, channels, settings_path)
             })?;
             Ok(())
         })
@@ -130,11 +135,61 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-/// What the compass loop hears from hotkeys, the overlay and the setup window.
+/// What the compass loop hears from hotkeys, the overlay, the setup window and the
+/// title reader.
 struct Channels {
     commands: Receiver<Command>,
     /// Titles of game windows the player picked by hand.
     picks: Receiver<String>,
+}
+
+/// Captures and reads the Title Region on its own thread. Reading a title takes tens of
+/// ms (far more in a debug build), so the compass loop never waits for it: it keeps
+/// following the game window at its own pace and takes each reading when it arrives.
+struct TitleReaderThread {
+    regions: Sender<ScreenRect>,
+    /// The clock frames and ticks are timed by.
+    start: Instant,
+    /// A capture was asked for and its reading hasn't come back yet.
+    busy: bool,
+}
+
+impl TitleReaderThread {
+    fn spawn(commands: Sender<Command>) -> std::io::Result<Self> {
+        let start = Instant::now();
+        let (regions, asked) = mpsc::channel::<ScreenRect>();
+        std::thread::Builder::new().name("title-reader".into()).spawn(move || {
+            let reader = TitleReader::bundled();
+            for region in asked {
+                let r = region;
+                let reading = match capture::capture_rgba(r.x, r.y, r.width as i32, r.height as i32) {
+                    Ok(rgba) => {
+                        let at_ms = start.elapsed().as_millis() as u64;
+                        Some(reader.read(&Frame { width: r.width, height: r.height, rgba, at_ms }))
+                    }
+                    Err(e) => {
+                        eprintln!("capture failed: {e}");
+                        None
+                    }
+                };
+                if commands.send(Command::Read { region, reading }).is_err() {
+                    return;
+                }
+            }
+        })?;
+        Ok(Self { regions, start, busy: false })
+    }
+
+    /// Capture and read `region`, unless the last capture is still being read.
+    fn read(&mut self, region: ScreenRect) {
+        if !self.busy {
+            self.busy = self.regions.send(region).is_ok();
+        }
+    }
+
+    fn now_ms(&self) -> u64 {
+        self.start.elapsed().as_millis() as u64
+    }
 }
 
 fn compass_loop(
@@ -142,6 +197,7 @@ fn compass_loop(
     overlay: WebviewWindow,
     mut setup_windows: SetupWindows,
     mut compass: Compass,
+    mut reader: TitleReaderThread,
     channels: Channels,
     settings_path: PathBuf,
 ) {
@@ -151,7 +207,6 @@ fn compass_loop(
     let mut emitted: Option<PanelState> = None;
     let mut game = None;
     let mut expanded = EXPANDED;
-    let start = Instant::now();
     let mut next_capture = Instant::now();
     let mut next_window_check = Instant::now();
     loop {
@@ -170,6 +225,14 @@ fn compass_loop(
                 expanded.1 = height.clamp(*EXPANDED_HEIGHTS.start(), *EXPANDED_HEIGHTS.end());
                 set_panel_sizes(&mut compass, &window.overlay, expanded);
             }
+            Ok(Command::Read { region, reading }) => {
+                reader.busy = false;
+                // A reading of a region no longer captured (setup marked a new one, or
+                // the game window moved) would judge the wrong spot.
+                if let (Some(reading), true) = (reading, compass.panel_state().title_region == Some(region)) {
+                    compass.on_reading(reading);
+                }
+            }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
         }
@@ -184,19 +247,13 @@ fn compass_loop(
             game = find_game(&mut compass, &window.overlay, expanded);
         }
         // Fetches in flight (map index, map pages) are checked on, never waited for.
-        compass.tick(start.elapsed().as_millis() as u64);
+        compass.tick(reader.now_ms());
         if Instant::now() >= next_capture {
             next_capture = Instant::now() + TICK;
             // The region the player marked; none until setup is done, nor after the
             // game's resolution changes.
-            if let Some(r) = compass.panel_state().title_region {
-                match capture::capture_rgba(r.x, r.y, r.width as i32, r.height as i32) {
-                    Ok(rgba) => {
-                        let at_ms = start.elapsed().as_millis() as u64;
-                        compass.on_frame(Frame { width: r.width, height: r.height, rgba, at_ms });
-                    }
-                    Err(e) => eprintln!("capture failed: {e}"),
-                }
+            if let Some(region) = compass.panel_state().title_region {
+                reader.read(region);
             }
         }
         let state = compass.panel_state();
@@ -279,8 +336,9 @@ impl OverlayWindow {
     fn new(overlay: WebviewWindow) -> Self {
         let above_game = Arc::new(AtomicBool::new(false));
         let (keeper_overlay, keeper_flag) = (overlay.clone(), above_game.clone());
-        // Its own thread: title recognition can hold the compass loop for a few hundred
-        // ms, and the overlay should be back above the game well before then.
+        // Its own thread, at its own steady pace: the overlay should be back above the
+        // game within a tick of the game coming to the front, whatever the compass loop
+        // is doing (setting window sizes and positions can take a while).
         let spawned = std::thread::Builder::new()
             .name("z-order".into())
             .spawn(move || keep_above_game(keeper_overlay, keeper_flag));
