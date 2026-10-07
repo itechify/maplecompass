@@ -1,9 +1,11 @@
 //! MapleCompass core: the single test seam.
 //!
-//! Inputs are plain data (captured Title Region frames or their readings, the game
-//! window, the clock, the player's actions and hotkeys); the output is a [`PanelState`]
-//! holding everything the overlay renders. No OS or UI dependencies live here.
+//! Inputs are plain data (captured Title Region and EXP Bar Region frames or their
+//! readings, the game window, the clock, the player's actions and hotkeys); the output
+//! is a [`PanelState`] holding everything the overlay renders. No OS or UI dependencies
+//! live here.
 
+mod exp_bar;
 mod map_data;
 mod map_index;
 mod matcher;
@@ -18,6 +20,7 @@ mod setup;
 mod shown_map;
 mod tracker;
 
+pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use map_data::{HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty};
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
@@ -26,7 +29,7 @@ pub use panel::{
     Size,
 };
 pub use settings::{Hotkeys, Settings};
-pub use setup::{SetupReason, SetupState, TestRead, TitleRegion};
+pub use setup::{ExpBarRegion, ExpBarTestRead, SetupReason, SetupState, TestRead, TitleRegion};
 pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
 
 use shown_map::ShownMap;
@@ -38,7 +41,7 @@ use tracker::Tracker;
 use serde::Serialize;
 use std::task::Poll;
 
-/// A captured Title Region image: tightly packed RGBA, top-down rows.
+/// A captured Title Region or EXP Bar Region image: tightly packed RGBA, top-down rows.
 #[derive(Debug, Clone)]
 pub struct Frame {
     pub width: u32,
@@ -137,8 +140,8 @@ pub struct PanelState {
     /// Where the player wants the panel: inside, docked or detached.
     pub placement_mode: PlacementMode,
     /// Where the overlay goes on screen; `None` while there is no game window, unless
-    /// the panel is detached. Inside the game it never covers `title_region`: the
-    /// overlay shows in screen captures, ours included.
+    /// the panel is detached. Inside the game it never covers `title_region` or
+    /// `exp_bar_region`: the overlay shows in screen captures, ours included.
     pub placement: Option<ScreenRect>,
     /// Where the overlay sits in the z-order, or hidden.
     pub layer: Layer,
@@ -151,6 +154,12 @@ pub struct PanelState {
     /// Where on screen to capture the Title Region (physical px); `None` while there
     /// is no game window or the region isn't known to fit it.
     pub title_region: Option<ScreenRect>,
+    /// Where on screen to capture the EXP Bar Region (physical px); `None` while EXP
+    /// tracking is off, there is no game window, or the region isn't known to fit it.
+    pub exp_bar_region: Option<ScreenRect>,
+    /// What the EXP bar showed when its figures last read whole; `None` while there is
+    /// no `exp_bar_region` or nothing has read yet.
+    pub exp_bar: Option<ExpBar>,
     /// The title of the game window to look for: "MapleStory", or one the player
     /// picked by hand.
     pub game_window_title: String,
@@ -182,6 +191,10 @@ pub struct Compass {
     /// Reads frames fed to [`Compass::on_frame`]; loaded on the first one, so a shell
     /// that reads on its own thread never loads it twice.
     reader: Option<TitleReader>,
+    /// Reads frames fed to [`Compass::on_exp_bar_frame`]; loaded on the first one.
+    exp_bar_reader: Option<ExpBarReader>,
+    /// What the EXP bar showed when its figures last read whole.
+    exp_bar: Option<ExpBar>,
     source: Box<dyn MapDataSource + Send>,
     matcher: Option<Matcher>,
     /// When asking for the map index last failed (frame time).
@@ -201,6 +214,8 @@ impl Compass {
     pub fn new(source: impl MapDataSource + Send + 'static) -> Self {
         let mut compass = Self {
             reader: None,
+            exp_bar_reader: None,
+            exp_bar: None,
             source: Box::new(source),
             matcher: None,
             index_failed_at: None,
@@ -268,6 +283,24 @@ impl Compass {
         self.sync_panel()
     }
 
+    /// Read a captured EXP Bar Region frame and update the panel state: the same as
+    /// [`Compass::on_exp_bar_reading`] with what an [`ExpBarReader`] reads in it, here.
+    pub fn on_exp_bar_frame(&mut self, frame: Frame) -> &PanelState {
+        let reading = self.exp_bar_reader.get_or_insert_with(ExpBarReader::bundled).read(&frame);
+        self.on_exp_bar_reading(reading)
+    }
+
+    /// Take what an EXP Bar Region frame read as (read by an [`ExpBarReader`], possibly
+    /// on another thread) and update the panel state. A frame whose figures don't read
+    /// whole keeps the last reading.
+    pub fn on_exp_bar_reading(&mut self, reading: ExpBarReading) -> &PanelState {
+        self.setup.on_exp_bar_read(reading.bar);
+        if reading.bar.is_some() {
+            self.exp_bar = reading.bar;
+        }
+        self.sync_panel()
+    }
+
     fn sync_shown_map(&mut self) {
         self.state.map = self.shown_map.map().cloned();
         self.state.data = self.shown_map.data();
@@ -301,6 +334,13 @@ impl Compass {
                 self.sync_shown_map();
             }
             Action::MarkTitleRegion(marked) => self.setup.mark(marked),
+            Action::MarkExpBarRegion(marked) => {
+                // The reading of the region marked before doesn't belong to this one.
+                self.exp_bar = None;
+                self.setup.mark_exp_bar(marked);
+            }
+            Action::DiscardExpBarMark => self.setup.discard_exp_bar_mark(),
+            Action::ClearExpBarRegion => self.setup.clear_exp_bar(),
             Action::FinishSetup => self.setup.finish(),
             Action::RequestSetup => self.setup.request(),
             Action::CancelSetup => {
@@ -342,17 +382,19 @@ impl Compass {
     }
 
     /// Pick up settings saved by an earlier session. Hotkeys from before version 2
-    /// (Ctrl+Shift, which players bind in the game) are replaced by the defaults.
+    /// (Ctrl+Shift, which players bind in the game) are replaced by the defaults; files
+    /// from before version 3 have no EXP Bar Region, so tracking starts off.
     pub fn restore(&mut self, mut settings: Settings) -> &PanelState {
-        if settings.version < settings::VERSION {
+        if settings.version < 2 {
             settings.hotkeys = Hotkeys::default();
-            settings.version = settings::VERSION;
         }
+        settings.version = settings::VERSION;
         self.panel.expanded = settings.expanded;
         self.panel.inside_offset = settings.inside_offset;
         self.panel.mode = settings.placement_mode;
         self.panel.detached_at = settings.detached_at;
         self.setup.saved = settings.title_region;
+        self.setup.saved_exp_bar = settings.exp_bar_region;
         self.settings = settings;
         self.sync_panel()
     }
@@ -372,6 +414,7 @@ impl Compass {
             placement_mode: self.panel.mode,
             detached_at: self.panel.detached_at,
             title_region: self.setup.saved,
+            exp_bar_region: self.setup.saved_exp_bar,
             ..self.settings.clone()
         }
     }
@@ -421,8 +464,8 @@ impl Compass {
 
     fn sync_panel(&mut self) -> &PanelState {
         self.sync_setup();
-        // Never over the Title Region: the capture would read the panel.
-        self.panel.avoid = self.state.title_region;
+        // Never over a captured region: the capture would read the panel.
+        self.panel.avoid = [self.state.title_region, self.state.exp_bar_region].into_iter().flatten().collect();
         self.state.expanded = self.panel.expanded;
         self.state.edit_mode = self.panel.edit_mode;
         self.state.game_found = self.panel.game.is_some();
@@ -440,6 +483,11 @@ impl Compass {
         self.setup.follow_needed();
         self.state.setup = self.setup.state();
         self.state.title_region = self.setup.title_region(self.matcher.as_ref().map(Matcher::longest_name));
+        self.state.exp_bar_region = self.setup.exp_bar_region();
+        if self.state.exp_bar_region.is_none() {
+            self.exp_bar = None;
+        }
+        self.state.exp_bar = self.exp_bar;
     }
 }
 

@@ -59,7 +59,17 @@ pub enum Action {
     /// The player marked the Title Region (relative to the game client area) and wants
     /// a test read of it.
     MarkTitleRegion(crate::Rect),
-    /// Keep the marked Title Region, if its test read recognised a map.
+    /// The player marked the EXP Bar Region (relative to the game client area) and wants
+    /// a test read of it.
+    MarkExpBarRegion(crate::Rect),
+    /// Drop the EXP Bar Region being marked (its test read failed, or the player skips
+    /// it); the one kept, if any, stays.
+    DiscardExpBarMark,
+    /// Turn EXP tracking off: forget the EXP Bar Region, kept or being marked.
+    ClearExpBarRegion,
+    /// Finish setup: keep the marked Title Region if its test read recognised a map (or,
+    /// with none marked, the saved one if it still fits), and likewise the EXP Bar
+    /// Region if its figures read whole. Refused while either test read hasn't succeeded.
     FinishSetup,
     /// The player wants to redo setup (the re-setup hotkey).
     RequestSetup,
@@ -143,9 +153,9 @@ pub(crate) struct Panel {
     pub mode: PlacementMode,
     /// The detached panel's top-left corner; `None` until it is first detached.
     pub detached_at: Option<ScreenPoint>,
-    /// Where the Title Region is captured on screen. A panel inside the game is kept off
-    /// it, or the capture would read the panel instead of the minimap title.
-    pub avoid: Option<ScreenRect>,
+    /// Where the Title Region and the EXP Bar Region are captured on screen. A panel
+    /// inside the game is kept off them, or the capture would read the panel instead.
+    pub avoid: Vec<ScreenRect>,
 }
 
 impl Default for Panel {
@@ -159,7 +169,7 @@ impl Default for Panel {
             inside_offset: None,
             mode: PlacementMode::Inside,
             detached_at: None,
-            avoid: None,
+            avoid: Vec::new(),
         }
     }
 }
@@ -259,30 +269,30 @@ impl Panel {
         let x = x.min(game.x + game.width as i32 - w).max(game.x);
         let y = y.min(game.y + game.height as i32 - h).max(game.y);
         let panel = ScreenRect { x, y, width: size.width, height: size.height };
-        match self.avoid {
-            Some(title) => clear_of(panel, title, game),
-            None => panel,
-        }
+        clear_of(panel, &self.avoid, game)
     }
 }
 
-/// `panel`, moved the shortest way (below, above, right or left of `title`) so it no
-/// longer overlaps `title` while staying inside `within`. Left where it is when it
-/// doesn't overlap, or when no such spot fits.
-fn clear_of(panel: ScreenRect, title: ScreenRect, within: ScreenRect) -> ScreenRect {
-    if !overlaps(panel, title) {
+/// `panel`, moved the shortest way (below, above, right or left of one of the `avoid`
+/// rectangles) so it overlaps none of them while staying inside `within`. Left where it
+/// is when it overlaps none, or when no such spot fits.
+fn clear_of(panel: ScreenRect, avoid: &[ScreenRect], within: ScreenRect) -> ScreenRect {
+    let clear = |spot: &ScreenRect| avoid.iter().all(|r| !overlaps(*spot, *r));
+    if clear(&panel) {
         return panel;
     }
     let (w, h) = (panel.width as i32, panel.height as i32);
-    let spots = [
-        ScreenRect { y: title.y + title.height as i32, ..panel },
-        ScreenRect { y: title.y - h, ..panel },
-        ScreenRect { x: title.x + title.width as i32, ..panel },
-        ScreenRect { x: title.x - w, ..panel },
-    ];
-    spots
-        .into_iter()
-        .filter(|spot| contains(within, *spot))
+    avoid
+        .iter()
+        .flat_map(|r| {
+            [
+                ScreenRect { y: r.y + r.height as i32, ..panel },
+                ScreenRect { y: r.y - h, ..panel },
+                ScreenRect { x: r.x + r.width as i32, ..panel },
+                ScreenRect { x: r.x - w, ..panel },
+            ]
+        })
+        .filter(|spot| contains(within, *spot) && clear(spot))
         .min_by_key(|spot| (spot.x - panel.x).abs() + (spot.y - panel.y).abs())
         .unwrap_or(panel)
 }

@@ -49,6 +49,13 @@ body {
   color: #f0c674;
 }
 
+/* The EXP bar's figures, as last read. */
+.exp {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #c3ccd6;
+}
+
 /* The maps sharing the title, each with what sets it apart; the shown one marked. */
 .candidates ol {
   margin: 4px 0 0;

@@ -8,11 +8,23 @@ type TestRead =
   | { status: "recognised"; map: { id: string; streetName: string; mapName: string } }
   | { status: "failed" };
 
+/** Mirror of `compass_core::ExpBarTestRead`. */
+type ExpBarTestRead =
+  | { status: "reading" }
+  | { status: "read"; bar: { exp: number; percentHundredths: number } }
+  | { status: "failed" };
+
 type SetupReason = "firstRun" | "resolutionChanged" | "requested";
 
 /** Mirror of the shell's `SetupView`. */
 type SetupView = {
-  setup: { needed: SetupReason | null; testRead: TestRead | null; credit: string | null };
+  setup: {
+    needed: SetupReason | null;
+    testRead: TestRead | null;
+    credit: string | null;
+    expBarTestRead: ExpBarTestRead | null;
+    expBarKept: boolean;
+  };
   unavailableHotkeys: string[];
   recognition: { status: "starting" | "ready" | "savedCopy" | "unavailable" };
   game: { width: number; height: number } | null;
@@ -20,7 +32,7 @@ type SetupView = {
   setupHotkey: string;
 };
 
-const STEPS = ["warning", "window", "requirements", "mark", "test"] as const;
+const STEPS = ["warning", "window", "requirements", "mark", "test", "exp", "expTest"] as const;
 type Step = (typeof STEPS)[number];
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -42,6 +54,8 @@ function show(next: Step) {
 }
 
 function move(by: number) {
+  // Back from EXP tracking after keeping the title goes to the title, not its test read.
+  if (step === "exp" && by < 0 && !view?.setup.testRead) return show("mark");
   show(STEPS[Math.min(Math.max(STEPS.indexOf(step) + by, 0), STEPS.length - 1)]);
 }
 
@@ -56,8 +70,9 @@ function keyLabel(accelerator: string): string {
 const NOTICES: Record<SetupReason, string> = {
   firstRun: "",
   resolutionChanged:
-    "The game window changed size since setup, so the minimap title has probably moved. Mark it again.",
-  requested: "Mark the minimap title again. Until you finish, MapleCompass keeps reading the old spot.",
+    "The game window changed size since setup, so the minimap title and the EXP bar have probably moved. Mark them again.",
+  requested:
+    "Mark the minimap title again, or keep it and change EXP tracking. Until you finish, MapleCompass keeps reading the old spots.",
 };
 
 function render() {
@@ -72,9 +87,11 @@ function render() {
     : `Can't find a window titled “${gameTitle}”. Start MapleStory, or pick its window by hand.`;
   ($("window-next") as HTMLButtonElement).disabled = !game;
   ($("pick") as HTMLButtonElement).disabled = picking;
-  for (const button of document.querySelectorAll<HTMLButtonElement>(".mark")) {
+  for (const button of document.querySelectorAll<HTMLButtonElement>(".mark, .mark-exp")) {
     button.disabled = !game;
   }
+  // On a requested setup the saved title still fits, and can be kept as it is.
+  $("keep-title").hidden = openedFor !== "requested" || setup.testRead !== null;
 
   const read = setup.testRead;
   const box = $("test-read");
@@ -99,10 +116,37 @@ function render() {
     box.textContent =
       "No map recognised in the marked box. Check that the minimap title is showing, then mark a box around both lines with a little of the blue panel around them.";
   }
-  ($("finish") as HTMLButtonElement).disabled = read?.status !== "recognised";
+  ($("title-next") as HTMLButtonElement).disabled = read?.status !== "recognised";
   $("test-credit").textContent = setup.credit ? `Map names from ${setup.credit}` : "";
+
+  // EXP tracking: kept from before, it can be marked again, kept as it is or turned off.
+  const kept = setup.expBarKept;
+  $("exp-status").textContent = kept
+    ? "EXP tracking is on. Mark the EXP bar again, keep it as it is, or turn tracking off."
+    : "You can skip this and turn it on later.";
+  $("exp-off").hidden = !kept;
+  $("exp-skip").textContent = kept ? "Keep and finish" : "Skip";
+  $("exp-test-skip").textContent = kept ? "Keep the one before" : "Skip";
+
+  const expRead = setup.expBarTestRead;
+  const expBox = $("exp-test-read");
+  expBox.className = `test-read ${expRead?.status === "read" ? "recognised" : (expRead?.status ?? "reading")}`;
+  if (!expRead || expRead.status === "reading") {
+    expBox.textContent = "Reading the EXP bar…";
+  } else if (expRead.status === "read") {
+    const { exp, percentHundredths } = expRead.bar;
+    const line = document.createElement("p");
+    line.className = "map";
+    line.textContent = `EXP ${exp.toLocaleString("en-US")} · ${(percentHundredths / 100).toFixed(2)}% ✓`;
+    expBox.replaceChildren(line);
+  } else {
+    expBox.textContent =
+      "Couldn't read the EXP figures in the marked box. Check that the status bar is showing, then mark a box around the EXP number and the percentage in brackets.";
+  }
+  ($("finish") as HTMLButtonElement).disabled = expRead?.status !== "read";
+
   $("resetup-hint").textContent =
-    `To mark the title again later, press ${keyLabel(view.setupHotkey)} while you play.`;
+    `To change setup later, press ${keyLabel(view.setupHotkey)} while you play.`;
   const taken = view.unavailableHotkeys.map(keyLabel);
   $("hotkey-problem").hidden = taken.length === 0;
   $("hotkey-problem").textContent =
@@ -130,6 +174,7 @@ invoke<SetupView | null>("setup_view").then((v) => {
 });
 
 listen("title-marked", () => show("test"));
+listen("exp-bar-marked", () => show("expTest"));
 
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-action]")) {
   button.addEventListener("click", () => {
@@ -142,10 +187,31 @@ for (const button of document.querySelectorAll<HTMLButtonElement>("[data-action]
 
 for (const button of document.querySelectorAll<HTMLButtonElement>(".mark")) {
   button.addEventListener("click", () => {
-    invoke("start_marking").catch((e) => alert(e));
+    invoke("start_marking", { target: "title" }).catch((e) => alert(e));
   });
 }
 
+for (const button of document.querySelectorAll<HTMLButtonElement>(".mark-exp")) {
+  button.addEventListener("click", () => {
+    invoke("start_marking", { target: "expBar" }).catch((e) => alert(e));
+  });
+}
+
+$("keep-title").addEventListener("click", () => show("exp"));
+$("title-next").addEventListener("click", () => show("exp"));
+
+/** Finish without a new EXP Bar Region: the one kept before (if any) stays. */
+async function finishWithoutExpMark() {
+  await invoke("discard_exp_bar_mark");
+  await invoke("finish_setup");
+}
+
+$("exp-skip").addEventListener("click", finishWithoutExpMark);
+$("exp-test-skip").addEventListener("click", finishWithoutExpMark);
+$("exp-off").addEventListener("click", async () => {
+  await invoke("clear_exp_bar_region");
+  await invoke("finish_setup");
+});
 $("finish").addEventListener("click", () => invoke("finish_setup"));
 
 // Picking by hand: the player has a few seconds to put the mouse over the game window.
