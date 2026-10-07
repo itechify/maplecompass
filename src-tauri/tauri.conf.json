@@ -27,6 +27,32 @@
         "focus": false,
         "focusable": false,
         "contentProtected": true
+      },
+      {
+        "label": "setup",
+        "title": "MapleCompass setup",
+        "url": "setup.html",
+        "width": 520,
+        "height": 560,
+        "center": true,
+        "resizable": false,
+        "maximizable": false,
+        "visible": false
+      },
+      {
+        "label": "region",
+        "title": "Mark the minimap title",
+        "url": "region.html",
+        "width": 800,
+        "height": 600,
+        "transparent": true,
+        "decorations": false,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "visible": false,
+        "contentProtected": true
       }
     ],
     "security": {
