@@ -37,6 +37,11 @@ pub enum Action {
     /// The overlay window was moved so its top-left corner is at (x, y), physical
     /// screen px. Only a drag in edit mode moves the panel; other moves are ignored.
     PanelMoved { x: i32, y: i32 },
+    /// The player marked the Title Region (relative to the game client area) and wants
+    /// a test read of it.
+    MarkTitleRegion(crate::Rect),
+    /// Keep the marked Title Region, if its test read recognised a map.
+    FinishSetup,
 }
 
 /// Where the inside panel sits: its top-right corner, relative to the game client's
@@ -85,6 +90,8 @@ impl Panel {
                     self.inside_offset = Some(InsideOffset { x: right - game.x, y: y - game.y });
                 }
             }
+            // Setup actions (see `setup.rs`).
+            _ => {}
         }
     }
 

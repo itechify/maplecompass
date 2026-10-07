@@ -2,7 +2,7 @@
 //! serving MeowDB's saved map index (personal-use test data, ADR 0003).
 #![allow(dead_code)]
 
-use compass_core::{Frame, MapDataSource, MapEntry, SourceError, default_title_region};
+use compass_core::{Frame, MapDataSource, MapEntry, ScreenRect, SourceError, default_title_region};
 use serde::Deserialize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -35,17 +35,25 @@ pub fn black_frame(at_ms: u64) -> Frame {
 /// bar (25–28 px, hand-cropped). The client area starts below it.
 const TITLE_BAR_PX: u32 = 27;
 
+/// The game's client area in a window screenshot: everything below the title bar.
+pub fn client_of(window: &image::RgbaImage) -> image::RgbaImage {
+    image::imageops::crop_imm(window, 0, TITLE_BAR_PX, window.width(), window.height() - TITLE_BAR_PX)
+        .to_image()
+}
+
+/// Capture `region` (physical screen px) from a game client area shown on screen at
+/// `game`, the way the shell captures the panel state's Title Region.
+pub fn capture(client: &image::RgbaImage, game: ScreenRect, region: ScreenRect, at_ms: u64) -> Frame {
+    let (x, y) = ((region.x - game.x) as u32, (region.y - game.y) as u32);
+    let crop = image::imageops::crop_imm(client, x, y, region.width, region.height).to_image();
+    assert_eq!(crop.dimensions(), (region.width, region.height), "region inside the client area");
+    frame(&crop, at_ms)
+}
+
 /// Crop the default Title Region out of a window screenshot, the way the shell crops
 /// it out of the game's client area.
 pub fn default_region_frame(window: &image::RgbaImage, at_ms: u64) -> Frame {
-    let client = image::imageops::crop_imm(
-        window,
-        0,
-        TITLE_BAR_PX,
-        window.width(),
-        window.height() - TITLE_BAR_PX,
-    )
-    .to_image();
+    let client = client_of(window);
     let r = default_title_region(client.width(), client.height());
     let crop = image::imageops::crop_imm(&client, r.x, r.y, r.width, r.height).to_image();
     frame(&crop, at_ms)
