@@ -21,7 +21,9 @@ mod shown_map;
 mod tracker;
 
 pub use crawl::CrawlProgress;
-pub use map_data::{HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty};
+pub use map_data::{
+    HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty, Portal, PortalKind,
+};
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 pub use panel::{
