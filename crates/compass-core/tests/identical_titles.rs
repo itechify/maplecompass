@@ -119,6 +119,28 @@ fn arriving_with_nothing_to_go_on_in_one_of_maps_that_differ_shows_the_first_and
 }
 
 #[test]
+fn coming_from_a_map_connected_to_just_one_of_them_shows_that_one_and_fetches_only_its_page() {
+    // Kerning City shares its title with Northern Top of Construction Site here. Sunset
+    // Sky's MeowDB page connects it to Kerning City (and Construction Site), not to
+    // Northern Top.
+    const KERNING_CITY: &str = "010003000";
+    const NORTHERN_TOP: &str = "010003081";
+    let source = titled_like_kerning_city(&[KERNING_CITY, NORTHERN_TOP]);
+    let requests = source.map_requests.clone();
+    let mut compass = Compass::new(source);
+    compass.on_frame(sample_frame(SUNSET, 0));
+    compass.on_frame(sample_frame(SUNSET, 333));
+
+    compass.on_frame(sample_frame(KERNING, 666));
+    let state = compass.on_frame(sample_frame(KERNING, 1000));
+
+    assert_eq!(shown_id(state), Some(KERNING_CITY));
+    assert_eq!(state.candidates, None);
+    assert!(matches!(state.data, MapDataStatus::Ready(_)));
+    assert_eq!(requests_for(&requests, NORTHERN_TOP), 0);
+}
+
+#[test]
 fn the_choose_candidate_hotkey_shows_each_candidate_in_turn_with_its_own_data() {
     let mut compass = Compass::new(coconut_harvests_that_differ());
     compass.on_frame(sample_frame(KERNING, 0));

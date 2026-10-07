@@ -38,11 +38,32 @@ impl ShownMap {
     /// Asks the source for whatever data is needed and not yet had.
     pub fn show(&mut self, maps: Vec<CurrentMap>, source: &mut dyn MapDataSource) {
         if maps != self.maps {
+            let came_from = self.connected_maps();
             self.loader.forget();
-            self.which = if maps.len() > 1 { Which::Comparing } else { Which::Settled(0) };
+            // The map the player came from settles it when it leads to just one of
+            // them, with no need to compare them.
+            let mut connected = maps.iter().enumerate().filter(|(_, m)| came_from.contains(&m.id));
+            self.which = match (maps.len(), connected.next(), connected.next()) {
+                (0 | 1, _, _) => Which::Settled(0),
+                (_, Some((i, _)), None) => Which::Settled(i),
+                _ => Which::Comparing,
+            };
             self.maps = maps;
         }
         self.load(source);
+    }
+
+    /// The maps the shown map leads to, if the core is sure it's the player's and has
+    /// its data; otherwise none.
+    fn connected_maps(&self) -> Vec<String> {
+        let sure = match self.which {
+            Which::Settled(_) | Which::Choosing { chosen: true, .. } => true,
+            Which::Choosing { chosen: false, .. } | Which::Comparing => false,
+        };
+        match (sure, self.data()) {
+            (true, MapDataStatus::Ready(data)) => data.connected_maps,
+            _ => Vec::new(),
+        }
     }
 
     /// Show the next of the maps sharing the title, if the player may choose.

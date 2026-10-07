@@ -81,6 +81,12 @@ fn read_page(html: &str, id: &str) -> Result<MapData, String> {
         return Err(format!("payload is for map {}", map["id"]));
     }
     let monsters = map["monsters"].as_array().ok_or("no monsters list")?;
+    let connected_maps = map["connectedMaps"]
+        .as_array()
+        .ok_or("no connectedMaps list")?
+        .iter()
+        .map(|c| c["mapId"].as_str().map(|id| id.trim().to_string()).ok_or("connected map without a mapId"))
+        .collect::<Result<Vec<_>, _>>()?;
     let total_spawns = uint(&map["totalMobCount"], "totalMobCount")?;
 
     let rates = props_at(&flight, r#"{"rates":{"id":""#)?;
@@ -138,7 +144,7 @@ fn read_page(html: &str, id: &str) -> Result<MapData, String> {
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
-    Ok(MapData { summary, mobs })
+    Ok(MapData { summary, mobs, connected_maps })
 }
 
 /// The page's flight stream: the strings of every `self.__next_f.push([1, "…"])`, joined

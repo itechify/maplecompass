@@ -12,6 +12,10 @@ pub struct MapData {
     pub summary: Option<MapSummary>,
     /// In the panel, sorted by level (then name); from a source, in any order.
     pub mobs: Vec<Mob>,
+    /// The IDs of the maps its portals lead to. They tell apart maps sharing a title
+    /// (the one the player came from is connected to the right one); not rendered.
+    #[serde(skip_serializing)]
+    pub connected_maps: Vec<String>,
 }
 
 /// The Map Summary: MeowDB's ceiling figures (every mob killed as soon as it spawns),

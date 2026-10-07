@@ -44,6 +44,7 @@ fn arriving_on_sunset_sky_shows_its_map_summary_and_mobs_sorted_by_level() {
                 mob("Dark Stump", 11, 236, 21, 7, 16),
                 mob("Green Mushroom", 14, 233, 26, 7, 16),
             ],
+            connected_maps: vec!["010003000".into(), "010003080".into()],
         })
     );
 }
@@ -69,6 +70,7 @@ fn arriving_on_construction_site_north_of_kerning_city_shows_its_map_summary_and
                 mob("Axe Stump", 17, 371, 32, 2, 4),
                 mob("Blue Mushroom", 19, 342, 35, 1, 2),
             ],
+            connected_maps: vec!["010003070".into(), "010003081".into(), "010004030".into()],
         })
     );
 }
@@ -79,7 +81,9 @@ fn a_town_has_no_mobs_and_no_map_summary_which_is_not_an_error() {
 
     let state = arrive(&mut compass, KERNING, 0);
 
-    assert_eq!(state.data, MapDataStatus::Ready(MapData { summary: None, mobs: vec![] }));
+    let MapDataStatus::Ready(data) = &state.data else { panic!("{:?}", state.data) };
+    assert_eq!(data.summary, None);
+    assert_eq!(data.mobs, []);
 }
 
 /// Dead Mine IV has no minimap sample, so the index here files the Sunset Sky title
@@ -110,6 +114,7 @@ fn a_page_whose_format_changed_is_reported_as_such_with_no_partial_data_and_the_
         ("summary's mob figures renamed", page.replace("perMob", "mobFigures")),
         ("no Map Summary although mobs spawn", page.replace(r#"\"rates\""#, r#"\"yields\""#)),
         ("no Monsters table", page.replace(">Monsters (", ">Mobs (")),
+        ("connected maps renamed", page.replace("connectedMaps", "linkedMaps")),
         ("a mob's HP not a number", page.replace(">133<", ">lots<")),
         ("cut off halfway", page[..half].to_string()),
         ("another map's page", saved_page("010003080").unwrap()),
