@@ -5,6 +5,7 @@
 //! on Windows. Every decision is the core's; this only shows windows and relays.
 
 use crate::gamewin::{self, ClientArea};
+use crate::Command;
 use compass_core::{Action, PanelState, Recognition, Rect, SetupReason, SetupState};
 use serde::Serialize;
 use std::sync::Mutex;
@@ -16,7 +17,7 @@ pub const REGION: &str = "region";
 
 /// What the setup commands share with the compass loop.
 pub struct Bridge {
-    pub actions: Sender<Action>,
+    pub commands: Sender<Command>,
     /// Titles of game windows the player picked by hand.
     pub picks: Sender<String>,
     /// The game's client area as last found, where the region window goes.
@@ -71,7 +72,7 @@ impl SetupWindows {
                 }
                 hide(&handle, SETUP);
                 hide(&handle, REGION);
-                let _ = bridge.actions.send(Action::CancelSetup);
+                let _ = bridge.commands.send(Command::Act(Action::CancelSetup));
             }
         });
         Ok(Self { app: app.clone(), setup, shown_for: None, emitted: None })
@@ -171,8 +172,8 @@ pub async fn mark_title_region(
     hide(&app, REGION);
     focus_setup(&app);
     bridge
-        .actions
-        .send(Action::MarkTitleRegion(Rect { x, y, width, height }))
+        .commands
+        .send(Command::Act(Action::MarkTitleRegion(Rect { x, y, width, height })))
         .map_err(|e| e.to_string())?;
     // The setup window moves on to the test read.
     app.emit_to(SETUP, "title-marked", ()).map_err(|e| e.to_string())
@@ -189,5 +190,5 @@ pub async fn cancel_marking(app: AppHandle) -> Result<(), String> {
 /// Keep the marked Title Region (the core only does if its test read recognised a map).
 #[tauri::command]
 pub async fn finish_setup(bridge: State<'_, Bridge>) -> Result<(), String> {
-    bridge.actions.send(Action::FinishSetup).map_err(|e| e.to_string())
+    bridge.commands.send(Command::Act(Action::FinishSetup)).map_err(|e| e.to_string())
 }

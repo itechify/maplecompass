@@ -65,7 +65,12 @@ fn mark_and_test_read(compass: &mut Compass, sample: &str) -> Option<TestRead> {
 }
 
 fn recognised(id: &str, street_name: &str, map_name: &str) -> Option<TestRead> {
-    let map = CurrentMap { id: id.into(), street_name: street_name.into(), map_name: map_name.into() };
+    let map = CurrentMap {
+        id: id.into(),
+        street_name: street_name.into(),
+        map_name: map_name.into(),
+        url: format!("https://meowdb.com/msclassic/maps/{id}"),
+    };
     Some(TestRead::Recognised { map })
 }
 

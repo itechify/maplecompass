@@ -57,6 +57,8 @@ pub struct Hotkeys {
     pub edit_mode: String,
     /// Switch placement: inside, docked right, docked left, detached, and round again.
     pub cycle_placement: String,
+    /// Open the shown map's MeowDB page in the browser.
+    pub open_meowdb_page: String,
     /// Open setup again, to mark the Title Region anew.
     pub setup: String,
 }
@@ -67,6 +69,7 @@ impl Default for Hotkeys {
             toggle_panel: "ctrl+shift+m".into(),
             edit_mode: "ctrl+shift+e".into(),
             cycle_placement: "ctrl+shift+d".into(),
+            open_meowdb_page: "ctrl+shift+o".into(),
             setup: "ctrl+shift+s".into(),
         }
     }
