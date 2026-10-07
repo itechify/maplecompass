@@ -35,10 +35,16 @@ pub struct Hotkeys {
     pub toggle_panel: String,
     /// Make the overlay draggable, or return it to click-through.
     pub edit_mode: String,
+    /// Open the shown map's MeowDB page in the browser.
+    pub open_meowdb_page: String,
 }
 
 impl Default for Hotkeys {
     fn default() -> Self {
-        Self { toggle_panel: "ctrl+shift+m".into(), edit_mode: "ctrl+shift+e".into() }
+        Self {
+            toggle_panel: "ctrl+shift+m".into(),
+            edit_mode: "ctrl+shift+e".into(),
+            open_meowdb_page: "ctrl+shift+o".into(),
+        }
     }
 }
