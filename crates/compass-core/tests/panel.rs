@@ -11,8 +11,9 @@
 mod common;
 
 use common::FakeSource;
+use common::world::SEARCH;
 use compass_core::{
-    Action, Compass, GameWindow, Layer, PanelSizes, PlacementMode, Rect, ScreenRect, Settings, Size,
+    Action, Compass, GameWindow, Layer, PanelSizes, PlacementMode, Rect, ScreenPoint, ScreenRect, Settings, Size,
     TitleRegion,
 };
 
@@ -354,6 +355,80 @@ fn clicks_pass_through_an_inside_panel_until_edit_mode() {
     assert!(!state.draggable);
 
     assert!(compass.act(Action::ToggleEditMode).draggable);
+}
+
+// The overlay's own controls (the mob search section's ×) are clickable at any time: the
+// overlay takes the mouse while the pointer is over one, and lets clicks through again
+// once it leaves. The default panel is at (2376,674) 340x72; its × at (2690,682) 20x20.
+
+const CLEAR_BUTTON: ScreenRect = ScreenRect { x: 2690, y: 682, width: 20, height: 20 };
+
+fn point(x: i32, y: i32) -> Option<ScreenPoint> {
+    Some(ScreenPoint { x, y })
+}
+
+#[test]
+fn clicks_pass_through_except_while_the_pointer_is_over_one_of_the_overlays_controls() {
+    let mut compass = compass();
+    compass.on_game_window(game(GAME));
+    compass.set_overlay_controls(vec![CLEAR_BUTTON]);
+
+    assert!(!compass.on_pointer(point(2400, 690)).takes_mouse, "over the panel, not the ×");
+    assert!(compass.on_pointer(point(2690, 682)).takes_mouse, "the ×'s top-left pixel");
+    assert!(compass.on_pointer(point(2709, 701)).takes_mouse, "its bottom-right pixel");
+    assert!(!compass.on_pointer(point(2710, 701)).takes_mouse, "just right of it");
+    assert!(!compass.on_pointer(None).takes_mouse, "no pointer position");
+}
+
+#[test]
+fn a_control_the_overlay_no_longer_reports_does_not_take_the_mouse() {
+    let mut compass = compass();
+    compass.on_game_window(game(GAME));
+    compass.set_overlay_controls(vec![CLEAR_BUTTON]);
+    assert!(compass.on_pointer(point(2700, 690)).takes_mouse);
+
+    // The search was cleared, so the × is gone.
+    let state = compass.set_overlay_controls(vec![]);
+
+    assert!(!state.takes_mouse);
+}
+
+#[test]
+fn a_dragged_panel_takes_the_mouse_wherever_the_pointer_is() {
+    let mut compass = compass();
+    compass.on_game_window(game(GAME));
+    compass.on_pointer(point(10, 10));
+
+    assert!(!compass.panel_state().takes_mouse);
+    assert!(compass.act(Action::ToggleEditMode).takes_mouse, "edit mode");
+    compass.act(Action::ToggleEditMode);
+    detach(&mut compass);
+    assert!(compass.panel_state().takes_mouse, "detached");
+}
+
+#[test]
+fn in_search_mode_the_overlay_takes_the_mouse_until_search_mode_ends() {
+    let mut compass = compass();
+    compass.on_game_window(game(GAME));
+    compass.on_pointer(point(10, 10));
+
+    compass.on_hotkey(SEARCH);
+    assert!(compass.panel_state().takes_mouse);
+
+    assert!(!compass.act(Action::SearchEscape).takes_mouse, "back to click-through");
+}
+
+#[test]
+fn a_hidden_overlay_never_takes_the_mouse_even_over_a_control() {
+    let mut compass = compass();
+    compass.on_game_window(game(GAME));
+    compass.set_overlay_controls(vec![CLEAR_BUTTON]);
+    compass.on_pointer(point(2700, 690));
+
+    let state = compass.on_game_window(None);
+
+    assert_eq!(state.layer, Layer::Hidden);
+    assert!(!state.takes_mouse);
 }
 
 #[test]

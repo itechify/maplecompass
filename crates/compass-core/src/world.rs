@@ -44,7 +44,7 @@ pub enum Step {
 }
 
 /// The kinds of travel the player has turned on for Distance, besides portals and
-/// ships (which always count): the search window's checkboxes, saved in the settings.
+/// ships (which always count): search mode's checkboxes, saved in the settings.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Travel {

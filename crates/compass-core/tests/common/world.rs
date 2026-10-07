@@ -73,7 +73,7 @@ pub fn crawled(maps: Vec<WorldMap>) -> Compass {
     compass
 }
 
-/// Open the search window, type `query` and press Enter.
+/// Enter search mode, type `query` and press Enter.
 pub fn search_for(compass: &mut Compass, query: &str) -> PanelState {
     compass.on_hotkey(SEARCH);
     compass.search_query(query);
