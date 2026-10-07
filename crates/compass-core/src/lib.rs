@@ -11,6 +11,7 @@ mod panel;
 mod prep;
 mod recogniser;
 mod settings;
+mod shown_map;
 mod tracker;
 
 pub use map_data::{MapData, MapDataStatus, MapSummary, Mob, PerParty};
@@ -21,7 +22,7 @@ pub use panel::{
 };
 pub use settings::{Hotkeys, Settings};
 
-use map_data::MapDataLoader;
+use shown_map::ShownMap;
 use matcher::Matcher;
 use panel::Panel;
 use recogniser::Recogniser;
@@ -76,6 +77,21 @@ pub struct CurrentMap {
     pub url: String,
 }
 
+/// Maps that share one Minimap Title and would show different content, with neither
+/// the map the player came from nor the player having settled which it is. The panel
+/// shows one of them; the choose-candidate hotkey shows the next.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Candidates {
+    /// Their 9-digit map IDs, in map index order.
+    pub ids: Vec<String>,
+    /// Which of them the panel shows (an index into `ids`).
+    pub shown: usize,
+    /// The player chose the shown one with the hotkey. The choice holds until the
+    /// map changes.
+    pub chosen: bool,
+}
+
 /// The credit for everything MapleCompass shows from MeowDB (ADR 0003).
 pub const MEOWDB_CREDIT: &str = "NiaMeowDB (meowdb.com)";
 
@@ -103,6 +119,9 @@ pub struct PanelState {
     /// The latest frame didn't confirm the map shown (unreadable, low confidence, or
     /// a different map not yet confirmed).
     pub not_sure: bool,
+    /// The maps sharing the shown map's title, when the core couldn't tell which of
+    /// them the player is on; `None` when it could.
+    pub candidates: Option<Candidates>,
     /// The shown map's Map Summary and mobs from MeowDB, or why they aren't there.
     pub data: MapDataStatus,
     /// [`MEOWDB_CREDIT`] whenever a map is shown: its names and data are MeowDB's.
@@ -138,7 +157,7 @@ pub struct Compass {
     /// When asking for the map index last failed (frame time).
     index_failed_at: Option<u64>,
     tracker: Tracker,
-    map_data: MapDataLoader,
+    shown_map: ShownMap,
     panel: Panel,
     /// The last settings restored; the panel's own fields live in `panel`.
     settings: Settings,
@@ -155,7 +174,7 @@ impl Compass {
             matcher: None,
             index_failed_at: None,
             tracker: Tracker::default(),
-            map_data: MapDataLoader::default(),
+            shown_map: ShownMap::default(),
             panel: Panel::default(),
             settings: Settings::default(),
             state: PanelState::default(),
@@ -171,21 +190,31 @@ impl Compass {
         let read = frame_to_rgb(&frame).and_then(|img| self.recogniser.read(&img));
         let snap = read.and_then(|raw| matcher.snap(&raw.street, &raw.map));
         let tracked = self.tracker.update(snap);
-        self.state.map = tracked.current.map(|i| {
-            let entry = matcher.map(i);
-            CurrentMap {
-                id: entry.id.clone(),
-                street_name: entry.street_name.clone(),
-                map_name: entry.map_name.clone(),
-                url: meowdb::map_url(&entry.id),
-            }
-        });
-        let shown = self.state.map.as_ref().map(|m| m.id.as_str());
-        self.state.data = self.map_data.show(shown, &mut *self.source).clone();
-        self.state.credit = shown.map(|_| MEOWDB_CREDIT);
+        let titled = tracked.current.map_or_else(Vec::new, |i| matcher.same_title_as(i));
+        let maps = titled
+            .into_iter()
+            .map(|i| {
+                let entry = matcher.map(i);
+                CurrentMap {
+                    id: entry.id.clone(),
+                    street_name: entry.street_name.clone(),
+                    map_name: entry.map_name.clone(),
+                    url: meowdb::map_url(&entry.id),
+                }
+            })
+            .collect();
+        self.shown_map.show(maps, &mut *self.source);
+        self.sync_shown_map();
         self.state.confidence = (tracked.confidence * 100.0).round() as u8;
         self.state.not_sure = tracked.not_sure;
         &self.state
+    }
+
+    fn sync_shown_map(&mut self) {
+        self.state.map = self.shown_map.map().cloned();
+        self.state.data = self.shown_map.data();
+        self.state.candidates = self.shown_map.candidates();
+        self.state.credit = self.state.map.as_ref().map(|_| MEOWDB_CREDIT);
     }
 
     /// The game window moved, resized, appeared or went away (`None`: not found, or
