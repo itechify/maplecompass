@@ -5,6 +5,7 @@
 
 mod map_index;
 mod matcher;
+pub mod meowdb;
 mod prep;
 mod recogniser;
 mod tracker;
