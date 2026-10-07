@@ -44,3 +44,13 @@ body {
   font-size: 14px;
   color: #c3ccd6;
 }
+
+/* The last confident map, while the latest frames don't confirm it. */
+.not-sure .map {
+  color: #c3ccd6;
+}
+
+.not-sure .map::after {
+  content: " ?";
+  color: #f0c674;
+}

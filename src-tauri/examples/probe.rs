@@ -1,12 +1,13 @@
 //! Read-only smoke test of the shell's adapters without any UI: find the "MapleStory"
 //! window, capture its default Title Region a few times, and print what the core shows.
-//! It only reads window geometry and screen pixels (ADR 0001).
+//! It only reads window geometry and screen pixels (ADR 0001), and fetches MeowDB's map
+//! index once (cached for a day, ADR 0003).
 //!
 //! `cargo run -p maplecompass --example probe [reads] [save.png]`
 //! With a path, the last captured Title Region is saved there for inspection.
 
 use compass_core::Compass;
-use maplecompass_lib::{capture_title_frame, gamewin};
+use maplecompass_lib::{capture_title_frame, gamewin, meowdb::MeowDbSource};
 use std::time::{Duration, Instant};
 
 fn main() {
@@ -18,7 +19,9 @@ fn main() {
         return;
     };
     println!("Game client area: {client:?}");
-    let mut compass = Compass::new();
+    // Its own cache, outside the app's: the probe has no Tauri path resolver.
+    let cache = std::env::temp_dir().join("maplecompass-probe-cache");
+    let mut compass = Compass::new(MeowDbSource::new(cache).expect("HTTP client"));
     let start = Instant::now();
     let mut last = None;
     for _ in 0..reads {
@@ -27,7 +30,7 @@ fn main() {
             Ok(frame) => {
                 last = Some(frame.clone());
                 let state = compass.on_frame(frame);
-                println!("{:>4} ms  {:?}", t.elapsed().as_millis(), state.title);
+                println!("{:>4} ms  {:?} {:?} not sure: {}", t.elapsed().as_millis(), state.recognition, state.map, state.not_sure);
             }
             Err(e) => println!("capture failed: {e}"),
         }

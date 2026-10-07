@@ -4,9 +4,11 @@
 
 pub mod capture;
 pub mod gamewin;
+pub mod meowdb;
 
 use compass_core::{Compass, Frame, PanelState, default_title_region};
 use gamewin::ClientArea;
+use meowdb::MeowDbSource;
 use serde::Serialize;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, WebviewWindow};
@@ -45,20 +47,23 @@ pub fn run() {
             overlay.set_content_protected(true)?;
             // Clicks pass through to the game.
             overlay.set_ignore_cursor_events(true)?;
+            // MeowDB pages are cached on disk (ADR 0003). WebView2 shares the app cache
+            // folder, hence the subfolder.
+            let source = MeowDbSource::new(app.path().app_cache_dir()?.join("cache"))?;
             let handle = app.handle().clone();
             // Capture + OCR are blocking and CPU-bound: run them on their own thread.
             // Spawned from setup, so the process is already Per-Monitor-V2 DPI aware.
             std::thread::Builder::new()
                 .name("compass-loop".into())
-                .spawn(move || compass_loop(handle, overlay))?;
+                .spawn(move || compass_loop(handle, overlay, source))?;
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
-fn compass_loop(app: AppHandle, overlay: WebviewWindow) {
-    let mut compass = Compass::new();
+fn compass_loop(app: AppHandle, overlay: WebviewWindow, source: MeowDbSource) {
+    let mut compass = Compass::new(source);
     let start = Instant::now();
     loop {
         let tick = Instant::now();
