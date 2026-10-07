@@ -63,10 +63,17 @@ body {
   display: block;
 }
 
-/* Edit mode: the overlay takes the mouse and can be dragged anywhere on it. */
-.editing,
-.editing * {
+/* Draggable (edit mode inside the game, or detached): the overlay takes the mouse and
+   can be dragged anywhere on it. */
+.draggable,
+.draggable * {
   cursor: move;
+}
+
+/* No game window (minimised or closed): the overlay window stays but draws nothing. */
+.hidden .panel,
+.hidden .icon {
+  display: none;
 }
 
 .editing .panel,
