@@ -27,6 +27,13 @@ cargo run -p maplecompass --example probe       # no UI: capture the title and p
 
 Run the game windowed or borderless, with the minimap open.
 
+The panel starts on the right edge of the game window, and clicks pass through it to the game. These hotkeys work while the game has focus:
+
+- **Ctrl+Shift+M** collapses the panel to an icon, or expands it again.
+- **Ctrl+Shift+E** enters edit mode: drag the panel where you want it, then press Ctrl+Shift+E again to make it click-through.
+
+The panel keeps its spot relative to the game window. Settings, including the hotkeys, are saved in `%APPDATA%\com.itechify.maplecompass\settings.json`.
+
 ## Credits
 
 Title recognition uses [ocrs](https://github.com/robertknight/ocrs). Its recognition model is CC BY-SA 4.0; see `crates/compass-core/models/NOTICE.md`.
