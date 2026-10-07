@@ -292,7 +292,7 @@ fn an_empty_settings_file_has_a_re_setup_hotkey_and_needs_setup() {
     let state = compass.on_game_window(window(game(KERNING)));
 
     assert_eq!(state.setup.needed, Some(SetupReason::FirstRun));
-    assert_eq!(state.hotkeys.setup, "super+alt+s");
+    assert_eq!(state.hotkeys.setup, "ctrl+shift+s");
 }
 
 // The setup window: the core says when it shows, and what closing it does.

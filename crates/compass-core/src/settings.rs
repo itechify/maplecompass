@@ -6,9 +6,10 @@ use crate::setup::TitleRegion;
 use crate::world::Travel;
 use serde::{Deserialize, Serialize};
 
-/// The settings version this core writes. Version 1 had Ctrl+Shift hotkeys, which
-/// [`crate::Compass::restore`] replaces with the defaults.
-pub(crate) const VERSION: u32 = 2;
+/// The settings version this core writes. Version 1 had other Ctrl+Shift letters and
+/// version 2 had Win+Alt hotkeys; [`crate::Compass::restore`] replaces both with the
+/// defaults.
+pub(crate) const VERSION: u32 = 3;
 
 /// The player's settings. Missing fields (an older or empty file) take their defaults.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -54,11 +55,12 @@ impl Default for Settings {
     }
 }
 
-/// Global hotkeys, as accelerator strings such as `"super+alt+c"`.
+/// Global hotkeys, as accelerator strings such as `"ctrl+shift+c"`.
 ///
-/// They fire while the game has focus and the game never sees them, so the defaults
-/// use Win+Alt+letter: MapleStory players commonly bind Ctrl and Shift, and the
-/// letters avoid Windows' own Win+Alt combinations (G, R, T, K, B, D, M, H).
+/// They fire while the game has focus and the game never sees them. The defaults use
+/// Ctrl+Shift+letter: Windows and other apps already hold many Win+Alt letters
+/// (Win+Alt+F among them), so a player who binds one of these in the game rebinds it
+/// here instead.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Hotkeys {
@@ -97,13 +99,13 @@ impl Hotkeys {
 impl Default for Hotkeys {
     fn default() -> Self {
         Self {
-            toggle_panel: "super+alt+c".into(),
-            edit_mode: "super+alt+e".into(),
-            cycle_placement: "super+alt+p".into(),
-            open_meowdb_page: "super+alt+o".into(),
-            setup: "super+alt+s".into(),
-            choose_candidate: "super+alt+n".into(),
-            search: "super+alt+f".into(),
+            toggle_panel: "ctrl+shift+c".into(),
+            edit_mode: "ctrl+shift+e".into(),
+            cycle_placement: "ctrl+shift+p".into(),
+            open_meowdb_page: "ctrl+shift+o".into(),
+            setup: "ctrl+shift+s".into(),
+            choose_candidate: "ctrl+shift+n".into(),
+            search: "ctrl+shift+f".into(),
         }
     }
 }
