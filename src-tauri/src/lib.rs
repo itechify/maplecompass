@@ -203,8 +203,9 @@ fn open_meowdb_page(app: &AppHandle, state: &PanelState) {
     }
 }
 
+/// CSS px to physical px, rounded up so the panel's content is never clipped.
 fn physical((width, height): (f64, f64), scale: f64) -> Size {
-    Size { width: (width * scale).round() as u32, height: (height * scale).round() as u32 }
+    Size { width: (width * scale).ceil() as u32, height: (height * scale).ceil() as u32 }
 }
 
 /// Move and size the overlay to the core's placement. While the player drags in edit

@@ -38,7 +38,9 @@ body {
   gap: 8px;
 }
 
-.note {
+/* Wraps rather than truncates: an error must be read in full. */
+.panel .note {
+  white-space: normal;
   font-size: 13px;
   color: #c3ccd6;
 }
