@@ -14,7 +14,28 @@
         <p class="map" id="map">Starting…</p>
       </header>
       <p class="note problem" id="hotkey-problem" hidden></p>
-      <p class="exp" id="exp" hidden></p>
+      <section class="tracking" id="tracking" hidden>
+        <p class="waiting" id="tracking-waiting">EXP tracking: waiting for EXP</p>
+        <div id="tracking-figures">
+          <p class="headline">
+            <span class="label">Time to Level</span>
+            <span class="ttl" id="ttl"></span>
+            <span class="tag" id="tracking-tag" hidden></span>
+          </p>
+          <table class="rates">
+            <thead>
+              <tr><th></th><th>Rolling 5 min</th><th>Session</th></tr>
+            </thead>
+            <!-- Meso and item rows come later, from the Pickup Log. -->
+            <tbody>
+              <tr><th>EXP/h</th><td id="rolling-exp"></td><td id="session-exp"></td></tr>
+              <tr><th>%/h</th><td id="rolling-percent"></td><td id="session-percent"></td></tr>
+            </tbody>
+          </table>
+          <p class="extra" id="tracking-extra" hidden></p>
+        </div>
+        <button type="button" class="reset" id="reset-session" hidden>Reset Session</button>
+      </section>
       <section id="data" hidden>
         <section class="candidates" id="candidates" hidden>
           <p class="note" id="candidates-note"></p>
@@ -47,5 +68,6 @@
       </footer>
     </main>
     <img class="icon" src="/assets/icon.svg" alt="MapleCompass" draggable="false" />
+    <span class="badge" id="badge" hidden></span>
   </body>
 </html>
