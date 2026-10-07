@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { hotkeyAvailable, keyLabel, type Hotkeys } from "./hotkeys";
 
 type PlacementMode = "inside" | "dockedRight" | "dockedLeft" | "detached";
 
@@ -76,14 +77,7 @@ type PanelState = {
   layer: "aboveGame" | "free" | "hidden";
   draggable: boolean;
   setup: { needed: "firstRun" | "resolutionChanged" | "requested" | null };
-  hotkeys: {
-    togglePanel: string;
-    editMode: string;
-    cyclePlacement: string;
-    openMeowdbPage: string;
-    setup: string;
-    chooseCandidate: string;
-  };
+  hotkeys: Hotkeys;
   unavailableHotkeys: string[];
   gameWindowTitle: string;
 };
@@ -107,6 +101,10 @@ const footer = byId("footer");
 const credit = byId("credit");
 const openHint = byId("open-hint");
 const hotkeyProblem = byId("hotkey-problem");
+const recovery = byId("recovery");
+const editHint = byId("edit-hint");
+const helpHint = byId("help-hint");
+const uncertainty = byId("uncertainty");
 let draggable = false;
 
 const PLACEMENT_NAMES: Record<PlacementMode, string> = {
@@ -115,14 +113,6 @@ const PLACEMENT_NAMES: Record<PlacementMode, string> = {
   dockedLeft: "Docked left",
   detached: "Detached",
 };
-
-/** "super+alt+e" -> "Win+Alt+E" */
-function keyLabel(accelerator: string): string {
-  return accelerator
-    .split("+")
-    .map((k) => (k.toLowerCase() === "super" ? "Win" : k.charAt(0).toUpperCase() + k.slice(1)))
-    .join("+");
-}
 
 /** "Win+Alt+E is taken by another app, so it does nothing here" */
 function takenHotkeys(hotkeys: string[]): string {
@@ -157,24 +147,30 @@ function portalRow(portal: HiddenPortal): HTMLLIElement {
   return row;
 }
 
-/** "090040200 · Lv 2–14 · Blue Snail, Stump, Orange Mushroom · 1 hidden portal" */
-function candidateLine(id: string, outline: Outline | null): string {
-  // Its page is still on its way, or MeowDB can't give it.
-  if (!outline) return `${id} · no MeowDB data yet`;
-  const parts = [id];
+/** Keep player-recognizable clues ahead of the secondary map ID. */
+function candidateRow(id: string, outline: Outline | null): HTMLLIElement {
+  const row = document.createElement("li");
+  const facts = document.createElement("div");
+  facts.className = "candidate-facts";
+  if (!outline) {
+    row.append(span("candidate-mobs", "Comparison data unavailable"));
+    facts.append(span("candidate-id", `Map ${id}`));
+    row.append(facts);
+    return row;
+  }
   const { mobLevels, firstMobs, hiddenPortals } = outline;
+  row.append(span("candidate-mobs", firstMobs.length ? firstMobs.join(", ") : "No mobs"));
   if (mobLevels) {
-    parts.push(
+    facts.append(span("candidate-levels",
       mobLevels.lowest === mobLevels.highest
         ? `Lv ${mobLevels.lowest}`
         : `Lv ${mobLevels.lowest}–${mobLevels.highest}`,
-      firstMobs.join(", "),
-    );
-  } else {
-    parts.push("no mobs");
+    ));
   }
-  parts.push(`${hiddenPortals} hidden portal${hiddenPortals === 1 ? "" : "s"}`);
-  return parts.join(" · ");
+  facts.append(span("candidate-portals", `${hiddenPortals} hidden portal${hiddenPortals === 1 ? "" : "s"}`));
+  facts.append(span("candidate-id", `Map ${id}`));
+  row.append(facts);
+  return row;
 }
 
 /** "7 Oct 2026", in the player's time zone. */
@@ -182,15 +178,15 @@ const savedOn = (unixMs: number) =>
   new Date(unixMs).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
 /** The note shown in place of (or above) the map's data. */
-function dataNote(data: MapDataStatus, recognition: Recognition): string {
+function dataNote(data: MapDataStatus, recognition: Recognition, sourceHint: string): string {
   const noMobs = (data: MapData) => (data.mobs.length === 0 ? " · No mobs here" : "");
   switch (data.status) {
     case "loading":
       return "Loading MeowDB data…";
     case "unavailable":
-      return "MeowDB data unavailable";
+      return `Couldn't reach MeowDB. Check your connection, then restart MapleCompass to retry.${sourceHint}`;
     case "formatChanged":
-      return "MeowDB's page format has changed, so its data isn't shown";
+      return `MeowDB's page format has changed. MapleCompass needs an update to read it.${sourceHint}`;
     case "savedCopy":
       return `MeowDB unreachable — showing a saved copy from ${savedOn(data.savedAtUnixMs)}${noMobs(data)}`;
     case "ready":
@@ -213,22 +209,26 @@ function renderData(panel: PanelState) {
   const { candidates } = panel;
   candidatesEl.hidden = !candidates;
   if (candidates) {
-    const next = `${keyLabel(panel.hotkeys.chooseCandidate)} for the next`;
+    const next = hotkeyAvailable(panel.hotkeys.chooseCandidate, panel.unavailableHotkeys)
+      ? `${keyLabel(panel.hotkeys.chooseCandidate)} for the next`
+      : "Candidate shortcut unavailable; check shortcut settings";
     candidatesNote.textContent = candidates.chosen
       ? `Your pick of ${candidates.maps.length} maps with this title · ${next}`
       : `${candidates.maps.length} maps share this title; not sure which you're on · ${next}`;
     candidatesNote.classList.toggle("problem", !candidates.chosen);
     candidateRows.replaceChildren(
       ...candidates.maps.map((candidate, i) => {
-        const row = document.createElement("li");
-        row.textContent = candidateLine(candidate.id, candidate.outline);
+        const row = candidateRow(candidate.id, candidate.outline);
         row.classList.toggle("current", i === candidates.shown);
+        if (i === candidates.shown) row.setAttribute("aria-current", "true");
         return row;
       }),
     );
   }
 
-  note.textContent = dataNote(data, panel.recognition);
+  const sourceAvailable = hotkeyAvailable(panel.hotkeys.openMeowdbPage, panel.unavailableHotkeys);
+  const sourceHint = sourceAvailable ? ` ${keyLabel(panel.hotkeys.openMeowdbPage)} opens the source page.` : "";
+  note.textContent = dataNote(data, panel.recognition, sourceHint);
   note.hidden = note.textContent === "";
   const problem = ["unavailable", "formatChanged", "savedCopy"].includes(data.status);
   note.classList.toggle("problem", problem || panel.recognition.status === "savedCopy");
@@ -254,6 +254,9 @@ function renderData(panel: PanelState) {
         cell(String(mob.spawnCount)),
         cell(`${mob.spawnSharePercent}%`),
       );
+      ["Mob", "Lv", "HP", "EXP", "Count", "Share"].forEach((label, i) => {
+        row.cells[i].dataset.label = label;
+      });
       return row;
     }),
   );
@@ -263,7 +266,10 @@ function renderData(panel: PanelState) {
   portalRows.replaceChildren(...(ready?.hiddenPortals ?? []).map(portalRow));
 
   credit.textContent = panel.credit ?? "";
-  openHint.textContent = `${keyLabel(panel.hotkeys.openMeowdbPage)} opens the page`;
+  openHint.textContent = sourceAvailable ? `${keyLabel(panel.hotkeys.openMeowdbPage)}: source page` : "";
+  helpHint.textContent = hotkeyAvailable(panel.hotkeys.setup, panel.unavailableHotkeys)
+    ? `${keyLabel(panel.hotkeys.setup)}: help & setup` : "";
+  helpHint.hidden = helpHint.textContent === "";
 }
 
 function render(panel: PanelState) {
@@ -277,6 +283,11 @@ function render(panel: PanelState) {
   document.body.classList.toggle("draggable", panel.draggable);
   document.body.classList.toggle("unreadable", !current);
   document.body.classList.toggle("not-sure", !!current && notSure);
+  uncertainty.hidden = !current || !notSure;
+  const setupHint = hotkeyAvailable(hotkeys.setup, panel.unavailableHotkeys)
+    ? `Re-mark with ${keyLabel(hotkeys.setup)}.`
+    : "Setup shortcut unavailable. Close the app using it, or change hotkeys in %APPDATA%\\com.itechify.maplecompass\\settings.json, then restart MapleCompass.";
+  recovery.textContent = "";
   if (!panel.gameFound) {
     street.textContent = "";
     map.textContent = `Looking for ${panel.gameWindowTitle}…`;
@@ -284,25 +295,40 @@ function render(panel: PanelState) {
     // Nothing is read until the Title Region is marked (again).
     street.textContent =
       panel.setup.needed === "firstRun" ? "Finish setup to start" : "The game window changed size";
-    map.textContent = `Set up: ${keyLabel(panel.hotkeys.setup)}`;
+    map.textContent = "Mark the minimap title";
+    recovery.textContent = setupHint;
   } else if (recognition.status === "unavailable") {
     street.textContent = "Couldn't load the map list from MeowDB";
     map.textContent = "Map recognition unavailable";
+    recovery.textContent = "Check your connection. The Map list retries every minute.";
   } else if (current) {
     street.textContent = current.streetName;
     map.textContent = current.mapName;
+    if (notSure && !panel.candidates) {
+      recovery.textContent = `Title not confirmed. Keep both minimap title lines visible. ${setupHint}`;
+    }
   } else {
     street.textContent = "";
     map.textContent = "Reading the minimap title…";
+    recovery.textContent = recognition.status === "starting"
+      ? "Loading MeowDB's Map list…"
+      : `Keep the minimap open with both title lines visible. If this persists, ${setupHint.charAt(0).toLowerCase() + setupHint.slice(1)}`;
   }
+  recovery.hidden = recovery.textContent === "";
+  editHint.hidden = !panel.editMode;
   if (panel.editMode) {
-    const place = `${PLACEMENT_NAMES[panel.placementMode]} · ${keyLabel(hotkeys.cyclePlacement)} to change`;
-    street.textContent =
-      panel.placementMode === "inside"
-        ? `Drag to move · ${keyLabel(hotkeys.editMode)} when done`
-        : place;
+    street.textContent = PLACEMENT_NAMES[panel.placementMode];
+    const hints = [panel.draggable ? "Drag to move" : "Docked panel stays beside the game"];
+    if (hotkeyAvailable(hotkeys.cyclePlacement, panel.unavailableHotkeys)) hints.push(`${keyLabel(hotkeys.cyclePlacement)}: placement`);
+    if (hotkeyAvailable(hotkeys.editMode, panel.unavailableHotkeys)) hints.push(`${keyLabel(hotkeys.editMode)}: done`);
+    editHint.textContent = hints.join(" · ");
   }
   hotkeyProblem.textContent = takenHotkeys(panel.unavailableHotkeys);
+  if (hotkeyProblem.textContent) {
+    hotkeyProblem.textContent += hotkeyAvailable(hotkeys.setup, panel.unavailableHotkeys)
+      ? `. ${keyLabel(hotkeys.setup)} opens setup; select Overlay guide for shortcut help.`
+      : ". Close the app using these shortcuts, or edit %APPDATA%\\com.itechify.maplecompass\\settings.json, then restart MapleCompass.";
+  }
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
   renderData(panel);
   reportHeight(panel.expanded);
