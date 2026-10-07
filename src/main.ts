@@ -63,6 +63,20 @@ type Candidates = {
 /** Mirror of `compass_core::ExpBar`. */
 type ExpBar = { exp: number; percentHundredths: number };
 
+/** Mirror of `compass_core::ExpRate`. */
+type ExpRate = { expPerHour: number; percentPerHourHundredths: number | null };
+
+/** Mirror of `compass_core::ExpTracking`. */
+type ExpTracking = {
+  state: "off" | "waiting" | "warmingUp" | "active" | "paused";
+  timeToLevelS: number | null;
+  timeToLevelBadge: string | null;
+  rolling: ExpRate | null;
+  session: ExpRate | null;
+  ceilingShareHundredths: number | null;
+  deaths: { count: number; expLost: number; percentLostHundredths: number };
+};
+
 /** Mirror of `compass_core::PanelState`. */
 type PanelState = {
   recognition: Recognition;
@@ -91,6 +105,7 @@ type PanelState = {
   gameWindowTitle: string;
   expBarRegion: { x: number; y: number; width: number; height: number } | null;
   expBar: ExpBar | null;
+  expTracking: ExpTracking;
 };
 
 const byId = (id: string) => document.getElementById(id)!;
@@ -112,7 +127,13 @@ const footer = byId("footer");
 const credit = byId("credit");
 const openHint = byId("open-hint");
 const hotkeyProblem = byId("hotkey-problem");
-const expEl = byId("exp");
+const trackingEl = byId("tracking");
+const trackingWaiting = byId("tracking-waiting");
+const trackingFigures = byId("tracking-figures");
+const trackingTag = byId("tracking-tag");
+const trackingExtra = byId("tracking-extra");
+const resetSession = byId("reset-session");
+const badge = byId("badge");
 let draggable = false;
 
 const PLACEMENT_NAMES: Record<PlacementMode, string> = {
@@ -272,13 +293,60 @@ function renderData(panel: PanelState) {
   openHint.textContent = `${keyLabel(panel.hotkeys.openMeowdbPage)} opens the page`;
 }
 
-/** "EXP 160 · 3.81%" while EXP tracking is on; hidden while it is off. */
-function renderExp(panel: PanelState) {
-  expEl.hidden = !panel.gameFound || !panel.expBarRegion;
-  const bar = panel.expBar;
-  expEl.textContent = bar
-    ? `EXP ${number(bar.exp)} · ${(bar.percentHundredths / 100).toFixed(2)}%`
-    : "Reading the EXP bar…";
+/** "−" (U+2212) for a negative figure, as the deaths counter writes it. */
+const signed = (text: string) => text.replace(/^-/, "−");
+
+/** 125 hundredths -> "1.25%". */
+const percent = (hundredths: number) => signed(`${(hundredths / 100).toFixed(2)}%`);
+
+const TRACKING_TAGS: Partial<Record<ExpTracking["state"], string>> = {
+  warmingUp: "warming up",
+  paused: "paused",
+};
+
+/** The EXP tracking section: nothing while tracking is off, a quiet line until the
+ *  Session starts, then Time to Level, the rates, and the ceiling and deaths when the
+ *  state carries them. "—" for any figure not there yet. */
+function renderTracking(panel: PanelState) {
+  const tracking = panel.expTracking;
+  trackingEl.hidden = tracking.state === "off";
+  const waiting = tracking.state === "waiting";
+  trackingWaiting.hidden = !waiting;
+  trackingFigures.hidden = waiting;
+  // Only while the overlay takes the mouse: edit mode inside the game, or detached.
+  resetSession.hidden = waiting || !(panel.editMode && panel.draggable);
+
+  byId("ttl").textContent = tracking.timeToLevelBadge ?? "—";
+  const tag = TRACKING_TAGS[tracking.state];
+  trackingTag.hidden = !tag;
+  trackingTag.textContent = tag ?? "";
+  trackingTag.className = `tag ${tracking.state}`;
+
+  const exp = (rate: ExpRate | null) => (rate ? signed(number(rate.expPerHour)) : "—");
+  const share = (rate: ExpRate | null) =>
+    rate?.percentPerHourHundredths != null ? percent(rate.percentPerHourHundredths) : "—";
+  byId("rolling-exp").textContent = exp(tracking.rolling);
+  byId("session-exp").textContent = exp(tracking.session);
+  byId("rolling-percent").textContent = share(tracking.rolling);
+  byId("session-percent").textContent = share(tracking.session);
+
+  const extra = [];
+  if (tracking.ceilingShareHundredths !== null) {
+    extra.push(`${percent(tracking.ceilingShareHundredths)} of the map's solo ceiling`);
+  }
+  const { deaths } = tracking;
+  if (deaths.count > 0) {
+    extra.push(`deaths: ${deaths.count} (${percent(-deaths.percentLostHundredths)})`);
+  }
+  trackingExtra.textContent = extra.join(" · ");
+  trackingExtra.hidden = extra.length === 0;
+}
+
+/** Time to Level on the collapsed icon, while there is one. */
+function renderBadge(panel: PanelState) {
+  const text = panel.expTracking.timeToLevelBadge;
+  badge.hidden = !text;
+  badge.textContent = text ?? "";
 }
 
 function render(panel: PanelState) {
@@ -319,8 +387,9 @@ function render(panel: PanelState) {
   }
   hotkeyProblem.textContent = takenHotkeys(panel.unavailableHotkeys);
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
-  renderExp(panel);
+  renderTracking(panel);
   renderData(panel);
+  renderBadge(panel);
   reportHeight(panel.expanded);
 }
 
@@ -336,11 +405,15 @@ function reportHeight(expanded: boolean) {
 }
 
 // A draggable overlay takes the mouse (the shell turns click-through off): in edit mode
-// inside the game, and always when detached. Otherwise it never sees a click.
+// inside the game, and always when detached. Otherwise it never sees a click. A button
+// keeps its click: a drag would swallow it.
 document.addEventListener("mousedown", (e) => {
-  if (draggable && e.button === 0) {
+  const onButton = e.target instanceof Element && e.target.closest("button");
+  if (draggable && e.button === 0 && !onButton) {
     getCurrentWindow().startDragging();
   }
 });
+
+resetSession.addEventListener("click", () => invoke("reset_session"));
 
 listen<PanelState>("overlay-state", (e) => render(e.payload));
