@@ -99,11 +99,13 @@ fn compass_loop(
             Ok(action) => {
                 compass.act(action);
             }
-            Err(RecvTimeoutError::Timeout) => {
-                next_tick = Instant::now() + TICK;
-                tick(&mut compass, &overlay, start);
-            }
+            Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
+        }
+        // Checked after every wake-up, so a stream of drag moves can't starve capture.
+        if Instant::now() >= next_tick {
+            next_tick = Instant::now() + TICK;
+            tick(&mut compass, &overlay, start);
         }
 
         let state = compass.panel_state();
