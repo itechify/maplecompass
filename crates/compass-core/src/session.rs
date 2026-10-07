@@ -22,6 +22,7 @@ use serde::Serialize;
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpTracking {
+    /// Off, waiting, warming up, active or paused.
     pub state: TrackingState,
     /// Time to Level in seconds at the net Rolling Rate; `None` ("—") while there is no
     /// rate yet, the net rate is zero or negative, or the level's total isn't known.
@@ -45,7 +46,9 @@ pub struct ExpTracking {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Deaths {
+    /// How many deaths.
     pub count: u32,
+    /// The EXP they cost, all told.
     pub exp_lost: u64,
     /// The EXP lost in hundredths of a percent of the level, as the bar showed it.
     pub percent_lost_hundredths: u32,
@@ -55,6 +58,7 @@ pub struct Deaths {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpRate {
+    /// Net EXP per hour of active time.
     pub exp_per_hour: i64,
     /// The same rate in hundredths of a percent of the current level per hour: 125 for
     /// "1.25%/h". `None` while the level's total isn't known (only 0.00% read yet).
@@ -72,6 +76,7 @@ pub enum TrackingState {
     Waiting,
     /// The first [`WARM_UP_MS`] of active time: the rates are still jumpy.
     WarmingUp,
+    /// Warmed up, and the EXP changed within the last [`IDLE_MS`].
     Active,
     /// No EXP change for more than [`IDLE_MS`]: the rates hold until the next change.
     Paused,
