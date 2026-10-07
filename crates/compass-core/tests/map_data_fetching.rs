@@ -130,16 +130,16 @@ fn the_shown_map_carries_its_meowdb_page_and_the_meowdb_credit() {
     assert_eq!(MEOWDB_CREDIT, "NiaMeowDB (meowdb.com)");
 }
 
-/// Settings from before this hotkey existed get Win+Alt+O.
+/// Settings from before this hotkey existed get Ctrl+Shift+O.
 #[test]
-fn win_alt_o_opens_the_shown_maps_page_even_with_settings_from_before_it_existed() {
+fn ctrl_shift_o_opens_the_shown_maps_page_even_with_settings_from_before_it_existed() {
     let older = r#"{"version":1,"expanded":true,"hotkeys":{"togglePanel":"ctrl+shift+m","editMode":"ctrl+shift+e"}}"#;
     let mut compass = Compass::new(FakeSource::meowdb());
     compass.restore(serde_json::from_str(older).unwrap());
     compass.on_frame(sample_frame(SUNSET, 0));
     compass.on_frame(sample_frame(SUNSET, 333));
 
-    let opened = compass.on_hotkey("super+alt+o");
+    let opened = compass.on_hotkey("ctrl+shift+o");
 
     assert_eq!(opened, Some(Request::OpenInBrowser { url: "https://meowdb.com/msclassic/maps/010003070".into() }));
 }

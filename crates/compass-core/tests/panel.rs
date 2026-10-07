@@ -150,9 +150,9 @@ fn an_empty_settings_file_gives_the_default_panel_and_hotkeys() {
     compass.restore(serde_json::from_str("{}").unwrap());
 
     let state = compass.on_game_window(game(GAME));
-    assert_eq!(state.hotkeys.toggle_panel, "super+alt+c");
-    assert_eq!(state.hotkeys.edit_mode, "super+alt+e");
-    assert_eq!(state.hotkeys.cycle_placement, "super+alt+p");
+    assert_eq!(state.hotkeys.toggle_panel, "ctrl+shift+c");
+    assert_eq!(state.hotkeys.edit_mode, "ctrl+shift+e");
+    assert_eq!(state.hotkeys.cycle_placement, "ctrl+shift+p");
     assert!(state.expanded);
     assert_eq!(state.placement_mode, PlacementMode::Inside);
     assert_eq!(state.placement, Some(rect(2376, 674, 340, 72)));

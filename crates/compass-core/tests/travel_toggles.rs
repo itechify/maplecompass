@@ -65,7 +65,7 @@ fn both_toggles_are_off_by_default() {
 
 #[test]
 fn a_settings_file_from_before_the_toggles_has_both_off() {
-    let before_toggles = r#"{"version":2,"hotkeys":{"togglePanel":"super+alt+x"}}"#;
+    let before_toggles = r#"{"version":3,"hotkeys":{"togglePanel":"ctrl+shift+x"}}"#;
     let mut compass = Compass::new(world(vec![]));
 
     let state = compass.restore(serde_json::from_str(before_toggles).unwrap()).clone();

@@ -426,8 +426,9 @@ impl Compass {
         self.sync_panel()
     }
 
-    /// Pick up settings saved by an earlier session. Hotkeys from before version 2
-    /// (Ctrl+Shift, which players bind in the game) are replaced by the defaults.
+    /// Pick up settings saved by an earlier session. Hotkeys from before version 3
+    /// (version 1's Ctrl+Shift letters, version 2's Win+Alt) are replaced by the
+    /// defaults.
     pub fn restore(&mut self, mut settings: Settings) -> &PanelState {
         if settings.version < settings::VERSION {
             settings.hotkeys = Hotkeys::default();
@@ -553,7 +554,7 @@ fn searched<'a>(crawl: &'a Option<Crawl>, state: &'a PanelState, settings: &Sett
     }
 }
 
-/// Whether two accelerator strings name the same keys ("Super+Alt+C", "super + alt + c").
+/// Whether two accelerator strings name the same keys ("Ctrl+Shift+C", "shift + ctrl + c").
 fn same_hotkey(a: &str, b: &str) -> bool {
     let keys = |s: &str| {
         let mut keys: Vec<String> = s.split('+').map(|k| k.trim().to_lowercase()).collect();
