@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mark the minimap title</title>
+    <title>Mark a region</title>
     <style>
       html,
       body {
@@ -28,6 +28,10 @@
         pointer-events: none;
         white-space: nowrap;
       }
+      .hint.top {
+        top: 12%;
+        bottom: auto;
+      }
       .box {
         position: fixed;
         border: 2px solid #f5c542;
@@ -39,7 +43,7 @@
     <script type="module" src="/src/region.ts" defer></script>
   </head>
   <body>
-    <div class="hint">Drag a box around the two lines of the minimap title · Esc to cancel</div>
+    <div class="hint" id="hint"></div>
     <div class="box" id="box" hidden></div>
   </body>
 </html>

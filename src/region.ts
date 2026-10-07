@@ -4,7 +4,17 @@ import { listen } from "@tauri-apps/api/event";
 // The shell lays this window exactly over the game's client area, so a point here in
 // CSS px times the device pixel ratio is the same point in client px.
 
+/** What the player marks: mirror of the shell's `setup::Target`. */
+type Target = "title" | "expBar";
+
+const HINTS: Record<Target, string> = {
+  title: "Drag a box around the two lines of the minimap title · Esc to cancel",
+  expBar: "Drag a box around the EXP figures on the status bar, like EXP. 160 [3.81%] · Esc to cancel",
+};
+
 const box = document.getElementById("box")!;
+const hint = document.getElementById("hint")!;
+let target: Target = "title";
 let start: { x: number; y: number } | null = null;
 
 function reset() {
@@ -46,7 +56,8 @@ document.addEventListener("mouseup", (e) => {
   // A click, not a drag.
   if (r.width < 8 || r.height < 8) return;
   const px = (v: number) => Math.round(v * window.devicePixelRatio);
-  invoke("mark_title_region", {
+  invoke("mark_region", {
+    target,
     x: px(r.left),
     y: px(r.top),
     width: px(r.width),
@@ -61,4 +72,10 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-listen("start-marking", reset);
+listen<Target>("start-marking", (e) => {
+  target = e.payload;
+  hint.textContent = HINTS[target];
+  // The EXP figures are at the bottom of the game, where the hint would cover them.
+  hint.classList.toggle("top", target === "expBar");
+  reset();
+});

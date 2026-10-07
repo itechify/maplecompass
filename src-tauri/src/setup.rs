@@ -1,17 +1,18 @@
 //! First-run setup windows. The overlay can't take input (it is click-through and
 //! never takes focus), so setup has its own normal window, plus a "region" window laid
-//! over the game's client area where the player drags the Title Region. Both are
-//! declared hidden in `tauri.conf.json`: creating windows inside commands can deadlock
-//! on Windows. Every decision is the core's; this only shows windows and relays.
+//! over the game's client area where the player drags the Title Region or the EXP Bar
+//! Region. Both are declared hidden in `tauri.conf.json`: creating windows inside
+//! commands can deadlock on Windows. Every decision is the core's; this only shows
+//! windows and relays.
 //!
 //! Unlike the overlay (ADR 0001), the region window is always-on-top: it is our own,
-//! shown only while the player marks the title, and the overlay's z-order keeper
+//! shown only while the player marks a region, and the overlay's z-order keeper
 //! ignores our own windows.
 
 use crate::gamewin;
 use crate::Command;
 use compass_core::{Action, PanelState, Recognition, Rect, ScreenRect, SetupState};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use std::sync::mpsc::Sender;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewWindow, WindowEvent};
@@ -140,26 +141,39 @@ pub async fn pick_game_window(bridge: State<'_, Bridge>) -> Result<String, Strin
     Ok(title)
 }
 
+/// What the player marks on the region window.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Target {
+    /// The minimap title: the Title Region.
+    Title,
+    /// The figures on the EXP bar: the EXP Bar Region.
+    ExpBar,
+}
+
 /// Lay the region window over the game's client area so the player can drag the
-/// Title Region on it. Its CSS px times the device pixel ratio are then client px.
+/// Title Region or the EXP Bar Region on it. Its CSS px times the device pixel ratio are
+/// then client px.
 #[tauri::command]
-pub async fn start_marking(app: AppHandle, bridge: State<'_, Bridge>) -> Result<(), String> {
+pub async fn start_marking(app: AppHandle, bridge: State<'_, Bridge>, target: Target) -> Result<(), String> {
     let client = (*bridge.game.lock().unwrap()).ok_or("The game window isn't showing.")?;
     let region = app.get_webview_window(REGION).ok_or("no region window")?;
     let fail = |e: tauri::Error| e.to_string();
     region.set_position(PhysicalPosition::new(client.x, client.y)).map_err(fail)?;
     region.set_size(PhysicalSize::new(client.width, client.height)).map_err(fail)?;
-    region.emit("start-marking", ()).map_err(fail)?;
+    region.emit("start-marking", target).map_err(fail)?;
     region.show().map_err(fail)?;
     region.set_focus().map_err(fail)?;
     Ok(())
 }
 
-/// The player dragged the Title Region (physical px, relative to the client area).
+/// The player dragged the Title Region or the EXP Bar Region (physical px, relative to
+/// the client area).
 #[tauri::command]
-pub async fn mark_title_region(
+pub async fn mark_region(
     app: AppHandle,
     bridge: State<'_, Bridge>,
+    target: Target,
     x: u32,
     y: u32,
     width: u32,
@@ -167,12 +181,26 @@ pub async fn mark_title_region(
 ) -> Result<(), String> {
     hide(&app, REGION);
     focus_setup(&app);
-    bridge
-        .commands
-        .send(Command::Act(Action::MarkTitleRegion(Rect { x, y, width, height })))
-        .map_err(|e| e.to_string())?;
+    let marked = Rect { x, y, width, height };
+    let (action, event) = match target {
+        Target::Title => (Action::MarkTitleRegion(marked), "title-marked"),
+        Target::ExpBar => (Action::MarkExpBarRegion(marked), "exp-bar-marked"),
+    };
+    bridge.commands.send(Command::Act(action)).map_err(|e| e.to_string())?;
     // The setup window moves on to the test read.
-    app.emit_to(SETUP, "title-marked", ()).map_err(|e| e.to_string())
+    app.emit_to(SETUP, event, ()).map_err(|e| e.to_string())
+}
+
+/// Drop the EXP Bar Region being marked (the player skips it, or keeps the one before).
+#[tauri::command]
+pub async fn discard_exp_bar_mark(bridge: State<'_, Bridge>) -> Result<(), String> {
+    bridge.commands.send(Command::Act(Action::DiscardExpBarMark)).map_err(|e| e.to_string())
+}
+
+/// Turn EXP tracking off: forget the EXP Bar Region.
+#[tauri::command]
+pub async fn clear_exp_bar_region(bridge: State<'_, Bridge>) -> Result<(), String> {
+    bridge.commands.send(Command::Act(Action::ClearExpBarRegion)).map_err(|e| e.to_string())
 }
 
 /// The player pressed Esc on the region window.
@@ -183,7 +211,7 @@ pub async fn cancel_marking(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Keep the marked Title Region (the core only does if its test read recognised a map).
+/// Finish setup (the core only does once the test reads of what was marked succeeded).
 #[tauri::command]
 pub async fn finish_setup(bridge: State<'_, Bridge>) -> Result<(), String> {
     bridge.commands.send(Command::Act(Action::FinishSetup)).map_err(|e| e.to_string())

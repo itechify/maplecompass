@@ -2,12 +2,13 @@
 //! JSON in the app's config directory and hands it back to the core at startup.
 
 use crate::panel::{InsideOffset, PlacementMode, ScreenPoint};
-use crate::setup::TitleRegion;
+use crate::setup::{ExpBarRegion, TitleRegion};
 use serde::{Deserialize, Serialize};
 
 /// The settings version this core writes. Version 1 had Ctrl+Shift hotkeys, which
-/// [`crate::Compass::restore`] replaces with the defaults.
-pub(crate) const VERSION: u32 = 2;
+/// [`crate::Compass::restore`] replaces with the defaults; version 2 had no EXP Bar
+/// Region (tracking off).
+pub(crate) const VERSION: u32 = 3;
 
 /// The player's settings. Missing fields (an older or empty file) take their defaults.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,6 +29,8 @@ pub struct Settings {
     pub hotkeys: Hotkeys,
     /// The Title Region marked at setup; `None` until setup is first finished.
     pub title_region: Option<TitleRegion>,
+    /// The EXP Bar Region marked at setup; `None` while EXP tracking is off.
+    pub exp_bar_region: Option<ExpBarRegion>,
     /// The title of the game window the player picked by hand; `None` to look for the
     /// "MapleStory" window.
     pub game_window_title: Option<String>,
@@ -43,6 +46,7 @@ impl Default for Settings {
             detached_at: None,
             hotkeys: Hotkeys::default(),
             title_region: None,
+            exp_bar_region: None,
             game_window_title: None,
         }
     }

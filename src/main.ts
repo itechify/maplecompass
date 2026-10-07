@@ -60,6 +60,9 @@ type Candidates = {
   chosen: boolean;
 };
 
+/** Mirror of `compass_core::ExpBar`. */
+type ExpBar = { exp: number; percentHundredths: number };
+
 /** Mirror of `compass_core::PanelState`. */
 type PanelState = {
   recognition: Recognition;
@@ -86,6 +89,8 @@ type PanelState = {
   };
   unavailableHotkeys: string[];
   gameWindowTitle: string;
+  expBarRegion: { x: number; y: number; width: number; height: number } | null;
+  expBar: ExpBar | null;
 };
 
 const byId = (id: string) => document.getElementById(id)!;
@@ -107,6 +112,7 @@ const footer = byId("footer");
 const credit = byId("credit");
 const openHint = byId("open-hint");
 const hotkeyProblem = byId("hotkey-problem");
+const expEl = byId("exp");
 let draggable = false;
 
 const PLACEMENT_NAMES: Record<PlacementMode, string> = {
@@ -266,6 +272,15 @@ function renderData(panel: PanelState) {
   openHint.textContent = `${keyLabel(panel.hotkeys.openMeowdbPage)} opens the page`;
 }
 
+/** "EXP 160 · 3.81%" while EXP tracking is on; hidden while it is off. */
+function renderExp(panel: PanelState) {
+  expEl.hidden = !panel.gameFound || !panel.expBarRegion;
+  const bar = panel.expBar;
+  expEl.textContent = bar
+    ? `EXP ${number(bar.exp)} · ${(bar.percentHundredths / 100).toFixed(2)}%`
+    : "Reading the EXP bar…";
+}
+
 function render(panel: PanelState) {
   const { hotkeys } = panel;
   const { recognition, map: current, notSure } = panel;
@@ -304,6 +319,7 @@ function render(panel: PanelState) {
   }
   hotkeyProblem.textContent = takenHotkeys(panel.unavailableHotkeys);
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
+  renderExp(panel);
   renderData(panel);
   reportHeight(panel.expanded);
 }
