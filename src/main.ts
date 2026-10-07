@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { hotkeyAvailable, keyLabel, type Hotkeys } from "./hotkeys";
+import { PANEL_RESULTS, mobTitle, resultRow, resultsNote, type SearchState } from "./search-state";
 
 type PlacementMode = "inside" | "dockedRight" | "dockedLeft" | "detached";
 
@@ -62,12 +63,6 @@ type Candidates = {
   chosen: boolean;
 };
 
-/** Mirror of `compass_core::CrawlProgress`. */
-type CrawlProgress = { known: number; total: number; done: boolean };
-
-/** Mirror of `compass_core::SearchState`. */
-type SearchState = { crawl: CrawlProgress };
-
 /** Mirror of `compass_core::PanelState`. */
 type PanelState = {
   recognition: Recognition;
@@ -114,6 +109,13 @@ const editHint = byId("edit-hint");
 const helpHint = byId("help-hint");
 const uncertainty = byId("uncertainty");
 const crawlProgress = byId("crawl-progress");
+const mobSearch = byId("mob-search");
+const searchTitle = byId("search-title");
+const searchNote = byId("search-note");
+const searchResults = byId("search-results");
+const searchRows = byId("search-rows");
+const searchMore = byId("search-more");
+const searchCredit = byId("search-credit");
 let draggable = false;
 
 const PLACEMENT_NAMES: Record<PlacementMode, string> = {
@@ -281,6 +283,26 @@ function renderData(panel: PanelState) {
   helpHint.hidden = helpHint.textContent === "";
 }
 
+/** The picked mob's top results, below the current map's info, until the search is cleared. */
+function renderSearch(panel: PanelState) {
+  const { search } = panel;
+  mobSearch.hidden = !panel.gameFound || !search.picked;
+  if (!search.picked) return;
+  searchTitle.textContent = mobTitle(search.picked);
+  searchNote.textContent = resultsNote(search);
+  searchNote.hidden = searchNote.textContent === "";
+  searchResults.hidden = search.results.length === 0;
+  searchRows.replaceChildren(...search.results.slice(0, PANEL_RESULTS).map(resultRow));
+  const more = search.results.length - PANEL_RESULTS;
+  const open = hotkeyAvailable(panel.hotkeys.search, panel.unavailableHotkeys)
+    ? ` · ${keyLabel(panel.hotkeys.search)} shows all` : "";
+  searchMore.textContent = more > 0 ? `${more} more map${more === 1 ? "" : "s"}${open}` : "";
+  searchMore.hidden = searchMore.textContent === "";
+  // The footer credits MeowDB whenever a map is shown; otherwise the results do here.
+  searchCredit.textContent = search.credit ?? "";
+  searchCredit.hidden = !search.credit || !!panel.credit;
+}
+
 function render(panel: PanelState) {
   const { hotkeys } = panel;
   const { recognition, map: current, notSure } = panel;
@@ -341,9 +363,11 @@ function render(panel: PanelState) {
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
   // The world crawl, while it runs: "Mapping the world: 312 of 422 maps known".
   const { crawl } = panel.search;
-  crawlProgress.hidden = !panel.gameFound || crawl.total === 0 || crawl.done;
+  // With a search on the panel, its section says how much of the world it covers.
+  crawlProgress.hidden = !panel.gameFound || crawl.total === 0 || crawl.done || !!panel.search.picked;
   crawlProgress.textContent = `Mapping the world: ${crawl.known} of ${crawl.total} maps known`;
   renderData(panel);
+  renderSearch(panel);
   reportHeight(panel.expanded);
 }
 
