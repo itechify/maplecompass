@@ -3,11 +3,13 @@
 //!
 //! It is directed, one node per known map. Every exit to another map is an edge
 //! (visible, Hidden Portal or Door, one-way or not), except Quest Portals, which are
-//! kept apart: a map reachable only through one is "quest only". Every edge is one map
-//! change, so Distance is the length of the shortest path, found breadth-first.
+//! kept apart: a map reachable only through one is "quest only". The hand-kept travel
+//! links (ships) are edges too. Every edge is one map change, so Distance is the length
+//! of the shortest path, found breadth-first.
 
 use crate::crawl::Crawl;
 use crate::map_data::PortalKind;
+use crate::travel_links::{TRAVEL_LINKS, TravelLink};
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
 
@@ -26,16 +28,33 @@ pub enum Distance {
     Unknown,
 }
 
+/// How a route goes from one map to the next, in one map change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Step {
+    /// Through a portal, Hidden Portal or Door (never a Quest Portal).
+    Portal,
+    /// A ship ride between continents.
+    Ship,
+    /// A taxi ride between towns.
+    Taxi,
+    /// A Teleport Scroll to a town.
+    TeleportScroll,
+}
+
+/// Where each map leads in one map change, and how.
+type Exits<'a> = HashMap<&'a str, Vec<(&'a str, Step)>>;
+
 /// The maps each known map leads to, in one map change.
 pub(crate) struct World<'a> {
-    /// Through any exit but a Quest Portal.
-    exits: HashMap<&'a str, Vec<&'a str>>,
+    /// Through any exit but a Quest Portal, then by the travel links.
+    exits: Exits<'a>,
     /// Through Quest Portals.
-    quest_exits: HashMap<&'a str, Vec<&'a str>>,
+    quest_exits: Exits<'a>,
 }
 
 impl<'a> World<'a> {
-    /// The graph of every map the crawl knows.
+    /// The graph of every map the crawl knows, and the travel links.
     pub fn of(crawl: &'a Crawl) -> Self {
         let mut world = Self { exits: HashMap::new(), quest_exits: HashMap::new() };
         for (entry, data) in crawl.known() {
@@ -44,8 +63,13 @@ impl<'a> World<'a> {
                     PortalKind::Quest => &mut world.quest_exits,
                     PortalKind::Visible | PortalKind::Hidden | PortalKind::Door => &mut world.exits,
                 };
-                exits.entry(entry.id.as_str()).or_default().push(portal.to_map_id.as_str());
+                exits.entry(entry.id.as_str()).or_default().push((portal.to_map_id.as_str(), Step::Portal));
             }
+        }
+        // After the portals, so that of equally short routes the one by portals is
+        // taken. A link counts whether or not its maps have been crawled yet.
+        for &TravelLink { from, to, by } in TRAVEL_LINKS {
+            world.exits.entry(from).or_default().push((to, by));
         }
         world
     }
@@ -60,16 +84,26 @@ impl<'a> World<'a> {
     }
 }
 
-/// Breadth-first from `from` over both sets of exits: the fewest map changes to each
-/// map reached.
-fn map_changes(from: &str, exits: &HashMap<&str, Vec<&str>>, more: &HashMap<&str, Vec<&str>>) -> HashMap<String, u32> {
-    let mut reached = HashMap::from([(from.to_string(), 0)]);
+/// A map a breadth-first search reached.
+struct Reached {
+    /// The fewest map changes to it.
+    changes: u32,
+    /// The map before it on a shortest route there, and how it leads on; `None` for
+    /// the map the search started from.
+    came_from: Option<(String, Step)>,
+}
+
+/// Breadth-first from `from` over both sets of exits: each map reached, with the fewest
+/// map changes to it.
+fn map_changes(from: &str, exits: &Exits, more: &Exits) -> HashMap<String, Reached> {
+    let mut reached = HashMap::from([(from.to_string(), Reached { changes: 0, came_from: None })]);
     let mut queue = VecDeque::from([(from.to_string(), 0)]);
     while let Some((map, changes)) = queue.pop_front() {
         let next = exits.get(map.as_str()).into_iter().chain(more.get(map.as_str())).flatten();
-        for &to in next {
+        for &(to, step) in next {
             if !reached.contains_key(to) {
-                reached.insert(to.to_string(), changes + 1);
+                let came_from = Some((map.clone(), step));
+                reached.insert(to.to_string(), Reached { changes: changes + 1, came_from });
                 queue.push_back((to.to_string(), changes + 1));
             }
         }
@@ -79,16 +113,33 @@ fn map_changes(from: &str, exits: &HashMap<&str, Vec<&str>>, more: &HashMap<&str
 
 /// How far every map is from one map.
 pub(crate) struct Distances {
-    routable: HashMap<String, u32>,
-    with_quests: HashMap<String, u32>,
+    routable: HashMap<String, Reached>,
+    with_quests: HashMap<String, Reached>,
 }
 
 impl Distances {
     pub fn to(&self, map_id: &str) -> Distance {
         match self.routable.get(map_id) {
-            Some(&changes) => Distance::MapChanges(changes),
+            Some(reached) => Distance::MapChanges(reached.changes),
             None if self.with_quests.contains_key(map_id) => Distance::QuestOnly,
             None => Distance::NoRoute,
         }
+    }
+
+    /// A shortest route to map `map_id` without Quest Portals: each map's ID in order,
+    /// from the map measured from, with how it is reached (`None` for the first).
+    /// Empty when there is no such route.
+    pub fn route_to(&self, map_id: &str) -> Vec<(String, Option<Step>)> {
+        let mut route = Vec::new();
+        let mut at = map_id;
+        while let Some(reached) = self.routable.get(at) {
+            route.push((at.to_string(), reached.came_from.as_ref().map(|&(_, step)| step)));
+            match &reached.came_from {
+                Some((before, _)) => at = before,
+                None => break,
+            }
+        }
+        route.reverse();
+        route
     }
 }
