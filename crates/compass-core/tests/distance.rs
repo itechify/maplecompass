@@ -95,6 +95,23 @@ fn doors_count_as_map_changes() {
     assert_eq!(distances(&state), ["Mushroom Shop: 1"]);
 }
 
+#[test]
+fn routes_never_pass_through_event_maps() {
+    // Through the Festival (an Event map) the Field is 2 away, but the player can't
+    // normally enter it: the long way round is 3. The Clearing is only past the
+    // Festival.
+    let state = searched_from_sunset_sky(vec![
+        sunset_sky("100000000").to(&["100000001", "100000002"]),
+        map("100000001", "Mushroom Festival", 100, vec![]).in_region("Event").to(&["100000004", "100000005"]),
+        map("100000002", "Road", 100, vec![]).to(&["100000003"]),
+        map("100000003", "Long Way Round", 100, vec![]).to(&["100000004"]),
+        map("100000004", "Mushroom Field", 100, vec![orange(10)]),
+        map("100000005", "Festival Clearing", 100, vec![orange(10)]),
+    ]);
+
+    assert_eq!(distances(&state), ["Mushroom Field: 3", "Festival Clearing: no route"]);
+}
+
 /// Each result as "Map Name: Distance, Tier".
 fn ranked(state: &PanelState) -> Vec<String> {
     state.search.results.iter().map(|r| format!("{}: {}, {:?}", r.map_name, shown(r.distance), r.tier)).collect()

@@ -44,6 +44,12 @@ impl WorldMap {
         self
     }
 
+    /// The same map in another region of MeowDB's index ("Event", "Hidden Street", …).
+    pub fn in_region(mut self, region: &str) -> Self {
+        self.entry.region = region.into();
+        self
+    }
+
     /// The same map with a portal the player can see to each of the maps `to`.
     pub fn to(self, to: &[&str]) -> Self {
         to.iter().fold(self, |map, to| map.exit(PortalKind::Visible, to))
