@@ -61,6 +61,9 @@ pub struct Hotkeys {
     pub open_meowdb_page: String,
     /// Open setup again, to mark the Title Region anew.
     pub setup: String,
+    /// Show the next of the maps sharing the shown map's title, when the core couldn't
+    /// tell which one the player is on.
+    pub choose_candidate: String,
 }
 
 impl Default for Hotkeys {
@@ -71,6 +74,7 @@ impl Default for Hotkeys {
             cycle_placement: "ctrl+shift+d".into(),
             open_meowdb_page: "ctrl+shift+o".into(),
             setup: "ctrl+shift+s".into(),
+            choose_candidate: "ctrl+shift+c".into(),
         }
     }
 }

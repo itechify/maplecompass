@@ -53,6 +53,9 @@ pub enum Action {
     PanelMoved { x: i32, y: i32 },
     /// Switch to the next placement: inside, docked right, docked left, detached.
     CyclePlacement,
+    /// Show the next of the maps sharing the shown map's title, when the core couldn't
+    /// tell which one the player is on (see [`crate::Candidates`]).
+    ChooseCandidate,
     /// The player marked the Title Region (relative to the game client area) and wants
     /// a test read of it.
     MarkTitleRegion(crate::Rect),
@@ -180,7 +183,8 @@ impl Panel {
                     self.detached_at = was.map(|r| ScreenPoint { x: r.x, y: r.y });
                 }
             }
-            // Setup actions (see `setup.rs`).
+            // Not about layout: setup actions (see `setup.rs`), and choosing between
+            // maps sharing a title (see `shown_map.rs`).
             _ => {}
         }
     }

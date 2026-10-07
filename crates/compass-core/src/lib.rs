@@ -14,6 +14,7 @@ mod prep;
 mod recogniser;
 mod settings;
 mod setup;
+mod shown_map;
 mod tracker;
 
 pub use map_data::{HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty};
@@ -26,7 +27,7 @@ pub use panel::{
 pub use settings::{Hotkeys, Settings};
 pub use setup::{SetupReason, SetupState, TestRead, TitleRegion};
 
-use map_data::MapDataLoader;
+use shown_map::ShownMap;
 use matcher::Matcher;
 use panel::Panel;
 use setup::Setup;
@@ -83,6 +84,21 @@ pub struct CurrentMap {
     pub url: String,
 }
 
+/// Maps that share one Minimap Title and would show different content, with neither
+/// the map the player came from nor the player having settled which it is. The panel
+/// shows one of them; the choose-candidate hotkey shows the next.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Candidates {
+    /// Their 9-digit map IDs, in map index order.
+    pub ids: Vec<String>,
+    /// Which of them the panel shows (an index into `ids`).
+    pub shown: usize,
+    /// The player chose the shown one with the hotkey. The choice holds until the
+    /// map changes.
+    pub chosen: bool,
+}
+
 /// The credit for everything MapleCompass shows from MeowDB (ADR 0003).
 pub const MEOWDB_CREDIT: &str = "NiaMeowDB (meowdb.com)";
 
@@ -110,6 +126,9 @@ pub struct PanelState {
     /// The latest frame didn't confirm the map shown (unreadable, low confidence, or
     /// a different map not yet confirmed).
     pub not_sure: bool,
+    /// The maps sharing the shown map's title, when the core couldn't tell which of
+    /// them the player is on; `None` when it could.
+    pub candidates: Option<Candidates>,
     /// The shown map's Map Summary, mobs and Hidden Portals from MeowDB, or why they
     /// aren't there.
     pub data: MapDataStatus,
@@ -151,7 +170,7 @@ pub struct Compass {
     /// When asking for the map index last failed (frame time).
     index_failed_at: Option<u64>,
     tracker: Tracker,
-    map_data: MapDataLoader,
+    shown_map: ShownMap,
     panel: Panel,
     setup: Setup,
     /// The last settings restored; the panel's own fields live in `panel`.
@@ -169,7 +188,7 @@ impl Compass {
             matcher: None,
             index_failed_at: None,
             tracker: Tracker::default(),
-            map_data: MapDataLoader::default(),
+            shown_map: ShownMap::default(),
             panel: Panel::default(),
             setup: Setup::default(),
             settings: Settings::default(),
@@ -202,13 +221,20 @@ impl Compass {
         // confident map through a badly marked region.
         self.setup.on_read(snap.map(|s| current_map(s.index)));
         let tracked = self.tracker.update(snap);
-        self.state.map = tracked.current.map(current_map);
-        let shown = self.state.map.as_ref().map(|m| m.id.as_str());
-        self.state.data = self.map_data.show(shown, &mut *self.source).clone();
-        self.state.credit = shown.map(|_| MEOWDB_CREDIT);
+        let titled = tracked.current.map_or_else(Vec::new, |i| matcher.same_title_as(i));
+        let maps = titled.into_iter().map(current_map).collect();
+        self.shown_map.show(maps, &mut *self.source);
+        self.sync_shown_map();
         self.state.confidence = (tracked.confidence * 100.0).round() as u8;
         self.state.not_sure = tracked.not_sure;
         self.sync_setup()
+    }
+
+    fn sync_shown_map(&mut self) {
+        self.state.map = self.shown_map.map().cloned();
+        self.state.data = self.shown_map.data();
+        self.state.candidates = self.shown_map.candidates();
+        self.state.credit = self.state.map.as_ref().map(|_| MEOWDB_CREDIT);
     }
 
     /// The game window moved, resized, appeared or went away (`None`: not found, or
@@ -227,6 +253,10 @@ impl Compass {
 
     /// Apply something the player did.
     pub fn act(&mut self, action: Action) -> &PanelState {
+        if action == Action::ChooseCandidate {
+            self.shown_map.choose_next(&mut *self.source);
+            self.sync_shown_map();
+        }
         self.panel.act(action);
         self.setup.act(action);
         self.sync_panel()
