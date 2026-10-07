@@ -3,6 +3,10 @@
 //! over the game's client area where the player drags the Title Region. Both are
 //! declared hidden in `tauri.conf.json`: creating windows inside commands can deadlock
 //! on Windows. Every decision is the core's; this only shows windows and relays.
+//!
+//! Unlike the overlay (ADR 0001), the region window is always-on-top: it is our own,
+//! shown only while the player marks the title, and the overlay's z-order keeper
+//! ignores our own windows.
 
 use crate::gamewin::{self, ClientArea};
 use crate::Command;
