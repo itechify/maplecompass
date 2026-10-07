@@ -9,7 +9,7 @@ Personal use only for now: see [ADR 0003](docs/adr/0003-fetch-meowdb-live-until-
 ## Layout
 
 - `crates/compass-core`: the headless core (no OS or UI dependencies). Title Region frames go in, a panel state comes out. It is the only test seam.
-- `src-tauri`: the Tauri v2 shell. It finds the "MapleStory" window, captures the Title Region about 3 times a second, feeds the core and moves the overlay. It also fetches MeowDB's map index once at startup, which the core snaps readings to. Pages are cached for a day in `%LOCALAPPDATA%\com.itechify.maplecompass\cache`.
+- `src-tauri`: the Tauri v2 shell. It finds the "MapleStory" window, captures the Title Region about 3 times a second, feeds the core and moves the overlay. It also fetches MeowDB's map index once at startup, which the core snaps readings to, and a map's page only once you are confirmed on that map. Pages are cached for a day in `%LOCALAPPDATA%\com.itechify.maplecompass\cache`, so revisits don't refetch.
 - `src`, `index.html`: the overlay's web UI (vanilla TypeScript). It only renders the panel state.
 - `samples/minimap`: test screenshots named `street-name__map-name[--variant].png`.
 
@@ -27,10 +27,11 @@ cargo run -p maplecompass --example probe       # no UI: capture the title and p
 
 Run the game windowed or borderless, with the minimap open.
 
-The panel starts on the right edge of the game window, and clicks pass through it to the game. These hotkeys work while the game has focus:
+The panel starts on the right edge of the game window, and clicks pass through it to the game. Once it knows your map it shows the map's Map Summary (mobs and EXP per hour, solo and 6+, as MeowDB gives them) and its mobs sorted by level, from NiaMeowDB (meowdb.com). These hotkeys work while the game has focus:
 
 - **Ctrl+Shift+M** collapses the panel to an icon, or expands it again.
 - **Ctrl+Shift+E** enters edit mode: drag the panel where you want it, then press Ctrl+Shift+E again to make it click-through.
+- **Ctrl+Shift+O** opens the current map's MeowDB page in your browser.
 
 The panel keeps its spot relative to the game window. Settings, including the hotkeys, are saved in `%APPDATA%\com.itechify.maplecompass\settings.json`.
 

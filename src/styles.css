@@ -8,9 +8,9 @@ body {
   cursor: default;
 }
 
+/* As tall as its content: the overlay reports this height and the window fits it. */
 .panel {
   box-sizing: border-box;
-  height: 100vh;
   padding: 10px 14px;
   border-radius: 10px;
   background: rgba(16, 24, 36, 0.82);
@@ -18,7 +18,7 @@ body {
   font-family: "Segoe UI", system-ui, sans-serif;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  gap: 8px;
 }
 
 .panel p {
@@ -26,6 +26,77 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+#data {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.note {
+  font-size: 13px;
+  color: #c3ccd6;
+}
+
+.note.problem {
+  color: #f0c674;
+}
+
+table {
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+th {
+  font-weight: 400;
+  color: #9fb6cc;
+  text-align: right;
+}
+
+td {
+  text-align: right;
+}
+
+th,
+td {
+  padding: 1px 0 1px 10px;
+  white-space: nowrap;
+}
+
+th:first-child,
+td:first-child {
+  padding-left: 0;
+  text-align: left;
+}
+
+.summary td {
+  font-weight: 600;
+  min-width: 72px;
+}
+
+.mobs {
+  width: 100%;
+}
+
+.mobs td:first-child {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+footer {
+  font-size: 11px;
+  color: #8293a5;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  white-space: nowrap;
 }
 
 .street {

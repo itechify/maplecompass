@@ -15,7 +15,7 @@
         "label": "overlay",
         "title": "MapleCompass",
         "url": "index.html",
-        "width": 340,
+        "width": 380,
         "height": 72,
         "center": true,
         "transparent": true,
