@@ -142,12 +142,6 @@ fn search_keys_do_nothing_while_the_search_window_is_closed() {
     assert_eq!(*state, before);
 }
 
-/// The same map in another region of MeowDB's index ("Event", "Hidden Street", …).
-fn in_region(region: &str, mut map: WorldMap) -> WorldMap {
-    map.entry.region = region.into();
-    map
-}
-
 /// A mob with this Spawn Share (whole percent).
 fn sharing(share: u32, mut mob: Mob) -> Mob {
     mob.spawn_share_percent = share;
@@ -229,8 +223,8 @@ fn results_are_ordered_by_tier_then_density_with_spawn_count_and_mob_rate_both_c
 fn event_maps_are_left_out_and_dont_set_the_densest_map() {
     let mut compass = crawled(vec![
         map("100000001", "Mushroom Field", 100, vec![orange(10)]),
-        in_region("Event", map("100000002", "Mushroom Festival", 200, vec![orange(30)])),
-        in_region("Hidden Street", map("100000003", "Hidden Mushrooms", 100, vec![orange(4)])),
+        map("100000002", "Mushroom Festival", 200, vec![orange(30)]).in_region("Event"),
+        map("100000003", "Hidden Mushrooms", 100, vec![orange(4)]).in_region("Hidden Street"),
     ]);
 
     let state = search_for(&mut compass, "orange");

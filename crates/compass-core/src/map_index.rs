@@ -15,6 +15,17 @@ pub struct MapEntry {
     pub region: String,
 }
 
+/// MeowDB's display region for event maps.
+const EVENT_REGION: &str = "Event";
+
+impl MapEntry {
+    /// An Event map: the player can't normally enter it, so mob search neither lists
+    /// it nor routes through it.
+    pub(crate) fn is_event(&self) -> bool {
+        self.region == EVENT_REGION
+    }
+}
+
 /// Why map data could not be had.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SourceError {
