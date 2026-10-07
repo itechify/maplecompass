@@ -80,13 +80,18 @@ pub fn saved_index() -> Vec<MapEntry> {
 
 /// A map data source that answers from memory and counts index requests.
 pub struct FakeSource {
-    index: Result<Vec<MapEntry>, SourceError>,
+    /// Answers for successive index requests; the last one repeats.
+    answers: Vec<Result<Vec<MapEntry>, SourceError>>,
     pub index_requests: Arc<AtomicU32>,
 }
 
 impl FakeSource {
+    fn answering(answers: Vec<Result<Vec<MapEntry>, SourceError>>) -> Self {
+        Self { answers, index_requests: Arc::default() }
+    }
+
     pub fn with_index(index: Vec<MapEntry>) -> Self {
-        Self { index: Ok(index), index_requests: Arc::default() }
+        Self::answering(vec![Ok(index)])
     }
 
     /// The saved MeowDB index.
@@ -96,13 +101,22 @@ impl FakeSource {
 
     /// MeowDB can't be reached.
     pub fn offline() -> Self {
-        Self { index: Err(SourceError::Unreachable("offline".into())), index_requests: Arc::default() }
+        Self::answering(vec![Err(unreachable())])
     }
+
+    /// MeowDB can't be reached at first, then serves this index.
+    pub fn offline_then(index: Vec<MapEntry>) -> Self {
+        Self::answering(vec![Err(unreachable()), Ok(index)])
+    }
+}
+
+fn unreachable() -> SourceError {
+    SourceError::Unreachable("offline".into())
 }
 
 impl MapDataSource for FakeSource {
     fn map_index(&mut self) -> Result<Vec<MapEntry>, SourceError> {
-        self.index_requests.fetch_add(1, Ordering::SeqCst);
-        self.index.clone()
+        let n = self.index_requests.fetch_add(1, Ordering::SeqCst) as usize;
+        self.answers[n.min(self.answers.len() - 1)].clone()
     }
 }

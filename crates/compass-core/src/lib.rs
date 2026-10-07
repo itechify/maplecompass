@@ -87,11 +87,17 @@ pub struct PanelState {
     pub not_sure: bool,
 }
 
+/// How long to wait before asking for the map index again after a failure. MeowDB is
+/// asked politely (ADR 0003): never on every frame.
+const INDEX_RETRY_MS: u64 = 60_000;
+
 /// The compass core: feed it frames, render its [`PanelState`].
 pub struct Compass {
     recogniser: Recogniser,
     source: Box<dyn MapDataSource + Send>,
     matcher: Option<Matcher>,
+    /// When asking for the map index last failed (frame time).
+    index_failed_at: Option<u64>,
     tracker: Tracker,
     state: PanelState,
 }
@@ -104,6 +110,7 @@ impl Compass {
             recogniser: Recogniser::bundled(),
             source: Box::new(source),
             matcher: None,
+            index_failed_at: None,
             tracker: Tracker::default(),
             state: PanelState::default(),
         }
@@ -111,15 +118,7 @@ impl Compass {
 
     /// Read a captured Title Region frame and update the panel state.
     pub fn on_frame(&mut self, frame: Frame) -> &PanelState {
-        if self.matcher.is_none() {
-            match self.source.map_index() {
-                Ok(index) => {
-                    self.matcher = Some(Matcher::new(index));
-                    self.state.recognition = Recognition::Ready;
-                }
-                Err(_) => self.state.recognition = Recognition::Unavailable,
-            }
-        }
+        self.load_map_index(frame.at_ms);
         let Some(matcher) = &self.matcher else { return &self.state };
         let read = frame_to_rgb(&frame).and_then(|img| self.recogniser.read(&img));
         let snap = read.and_then(|raw| matcher.snap(&raw.street, &raw.map));
@@ -135,6 +134,26 @@ impl Compass {
         self.state.confidence = (tracked.confidence * 100.0).round() as u8;
         self.state.not_sure = tracked.not_sure;
         &self.state
+    }
+
+    /// Ask the source for the map index on the first frame, and after a failure, again
+    /// no sooner than [`INDEX_RETRY_MS`] later.
+    fn load_map_index(&mut self, at_ms: u64) {
+        if self.matcher.is_some()
+            || self.index_failed_at.is_some_and(|t| at_ms.saturating_sub(t) < INDEX_RETRY_MS)
+        {
+            return;
+        }
+        match self.source.map_index() {
+            Ok(index) => {
+                self.matcher = Some(Matcher::new(index));
+                self.state.recognition = Recognition::Ready;
+            }
+            Err(_) => {
+                self.index_failed_at = Some(at_ms);
+                self.state.recognition = Recognition::Unavailable;
+            }
+        }
     }
 
     pub fn panel_state(&self) -> &PanelState {
