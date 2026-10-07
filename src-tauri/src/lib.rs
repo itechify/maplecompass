@@ -142,6 +142,8 @@ pub fn run() {
             search::search_move,
             search::search_enter,
             search::search_escape,
+            search::search_toggle_taxis,
+            search::search_toggle_teleport_scrolls,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
