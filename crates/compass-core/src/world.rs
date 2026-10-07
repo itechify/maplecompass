@@ -9,7 +9,7 @@
 //! shortest path, found breadth-first.
 
 use crate::crawl::Crawl;
-use crate::map_data::PortalKind;
+use crate::map_data::{MapData, PortalKind};
 use crate::travel_links::{TAXI_TOWNS, TELEPORT_SCROLL_TOWNS, TRAVEL_LINKS, TravelLink};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -51,6 +51,14 @@ pub(crate) struct Travel {
     pub teleport_scrolls: bool,
 }
 
+/// The map the panel shows: where Distances are measured from.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Here<'a> {
+    pub id: &'a str,
+    /// Its page, once the panel has it: its exits count before the crawl gets to it.
+    pub page: Option<&'a MapData>,
+}
+
 /// Where each map leads in one map change, and how.
 type Exits<'a> = HashMap<&'a str, Vec<(&'a str, Step)>>;
 
@@ -68,22 +76,29 @@ pub(crate) struct World<'a> {
 }
 
 impl<'a> World<'a> {
-    /// The graph of every map the crawl knows, the ships, and the `travel` the player
-    /// has turned on.
-    pub fn of(crawl: &'a Crawl, travel: Travel) -> Self {
+    /// The graph of every map the crawl knows, and of the map the player is on (`here`)
+    /// even if the crawl hasn't got to it yet, with the ships and the `travel` the
+    /// player has turned on.
+    pub fn of(crawl: &'a Crawl, here: Option<Here<'a>>, travel: Travel) -> Self {
         let mut world = Self {
             exits: HashMap::new(),
             quest_exits: HashMap::new(),
             from_anywhere: Vec::new(),
             event_maps: crawl.entries().filter(|entry| entry.is_event()).map(|entry| entry.id.as_str()).collect(),
         };
-        for (entry, data) in crawl.known() {
+        let mut pages: Vec<(&str, &MapData)> = crawl.known().map(|(entry, data)| (entry.id.as_str(), data)).collect();
+        if let Some(Here { id, page: Some(page) }) = here {
+            if !pages.iter().any(|&(known, _)| known == id) {
+                pages.push((id, page));
+            }
+        }
+        for &(id, data) in &pages {
             for portal in &data.portals {
                 let exits = match portal.kind {
                     PortalKind::Quest => &mut world.quest_exits,
                     PortalKind::Visible | PortalKind::Hidden | PortalKind::Door => &mut world.exits,
                 };
-                exits.entry(entry.id.as_str()).or_default().push((portal.to_map_id.as_str(), Step::Portal));
+                exits.entry(id).or_default().push((portal.to_map_id.as_str(), Step::Portal));
             }
         }
         // After the portals, so that of equally short routes the one by portals is
@@ -99,9 +114,9 @@ impl<'a> World<'a> {
         }
         if travel.teleport_scrolls {
             // A nearest-town scroll goes to the map's own nearest town.
-            for (entry, data) in crawl.known() {
-                if let Some(town) = data.nearest_town.as_deref().filter(|&town| town != entry.id) {
-                    world.exits.entry(entry.id.as_str()).or_default().push((town, Step::TeleportScroll));
+            for &(id, data) in &pages {
+                if let Some(town) = data.nearest_town.as_deref().filter(|&town| town != id) {
+                    world.exits.entry(id).or_default().push((town, Step::TeleportScroll));
                 }
             }
             world.from_anywhere = TELEPORT_SCROLL_TOWNS.iter().map(|&to| (to, Step::TeleportScroll)).collect();
