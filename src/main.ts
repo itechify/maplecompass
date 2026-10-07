@@ -26,12 +26,16 @@ type MapDataStatus =
       mobs: Mob[];
     };
 
+/** Mirror of `compass_core::Candidates`. */
+type Candidates = { ids: string[]; shown: number; chosen: boolean };
+
 /** Mirror of `compass_core::PanelState`. */
 type PanelState = {
   recognition: "starting" | "ready" | "unavailable";
   map: { id: string; streetName: string; mapName: string; url: string } | null;
   confidence: number;
   notSure: boolean;
+  candidates: Candidates | null;
   data: MapDataStatus;
   credit: string | null;
   expanded: boolean;
@@ -45,7 +49,13 @@ type PanelState = {
 /** Mirror of the shell's `OverlayState`. */
 type OverlayState = {
   panel: PanelState;
-  hotkeys: { togglePanel: string; editMode: string; cyclePlacement: string; openMeowdbPage: string };
+  hotkeys: {
+    togglePanel: string;
+    editMode: string;
+    cyclePlacement: string;
+    openMeowdbPage: string;
+    chooseCandidate: string;
+  };
 };
 
 const byId = (id: string) => document.getElementById(id)!;
@@ -54,6 +64,7 @@ const street = byId("street");
 const map = byId("map");
 const dataEl = byId("data");
 const note = byId("note");
+const candidatesEl = byId("candidates");
 const summary = byId("summary");
 const mobsTable = byId("mobs");
 const mobRows = byId("mob-rows");
@@ -107,6 +118,17 @@ function renderData(state: OverlayState) {
   dataEl.hidden = !shown;
   footer.hidden = !shown;
   if (!shown) return;
+
+  const { candidates } = state.panel;
+  candidatesEl.hidden = !candidates;
+  if (candidates) {
+    const which = `${candidates.shown + 1} of ${candidates.ids.length}`;
+    const next = `${keyLabel(state.hotkeys.chooseCandidate)} for the next`;
+    candidatesEl.textContent = candidates.chosen
+      ? `Your pick: map ${which} with this title · ${next}`
+      : `Showing map ${which} with this title; not sure which you're on · ${next}`;
+    candidatesEl.classList.toggle("problem", !candidates.chosen);
+  }
 
   note.textContent = dataNote(data);
   note.hidden = note.textContent === "";

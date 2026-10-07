@@ -17,6 +17,7 @@ pub fn install(app: &tauri::App, hotkeys: &Hotkeys, commands: Sender<Command>) -
         (parse(&hotkeys.edit_mode, &defaults.edit_mode), Command::Act(Action::ToggleEditMode)),
         (parse(&hotkeys.cycle_placement, &defaults.cycle_placement), Command::Act(Action::CyclePlacement)),
         (parse(&hotkeys.open_meowdb_page, &defaults.open_meowdb_page), Command::OpenMeowDbPage),
+        (parse(&hotkeys.choose_candidate, &defaults.choose_candidate), Command::Act(Action::ChooseCandidate)),
     ];
     app.handle().plugin(
         tauri_plugin_global_shortcut::Builder::new()
