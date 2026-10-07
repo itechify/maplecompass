@@ -19,6 +19,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  container-type: inline-size;
 }
 
 .panel p {
@@ -56,19 +57,22 @@ body {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
   font-size: 12px;
   color: #9fb6cc;
 }
 
 .candidates li {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  position: relative;
+  padding-left: 14px;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
 }
 
 .candidates li::before {
-  content: "\00a0\00a0 ";
+  position: absolute;
+  left: 0;
+  top: 0;
 }
 
 .candidates li.current {
@@ -79,6 +83,11 @@ body {
 .candidates li.current::before {
   content: "▶ ";
 }
+
+.candidate-mobs { display: block; }
+.candidate-facts { display: flex; flex-wrap: wrap; gap: 2px 8px; }
+.candidate-id { margin-left: auto; color: #9fb6cc; font-weight: 400; }
+.candidate-levels, .candidate-portals { white-space: nowrap; }
 
 table {
   border-collapse: collapse;
@@ -115,7 +124,17 @@ td:first-child {
 
 .mobs {
   width: 100%;
+  table-layout: fixed;
 }
+
+.mobs th:nth-child(1) { width: 32%; }
+.mobs th:nth-child(2) { width: 8%; }
+.mobs th:nth-child(3), .mobs th:nth-child(4) { width: 17%; }
+.mobs th:nth-child(5) { width: 11%; }
+.mobs th:nth-child(6) { width: 15%; }
+.mobs th, .mobs td { box-sizing: border-box; padding-left: 6px; }
+.mobs th:first-child, .mobs td:first-child { padding-left: 0; }
+.mobs td:not(:first-child) { white-space: normal; overflow-wrap: anywhere; }
 
 .mobs td:first-child {
   max-width: 140px;
@@ -162,7 +181,7 @@ td:first-child {
   flex: none;
   padding: 0 5px;
   border-radius: 3px;
-  font-size: 10px;
+  font-size: 11px;
   background: rgba(159, 182, 204, 0.2);
   color: #c3d4e4;
 }
@@ -182,13 +201,22 @@ td:first-child {
 }
 
 footer {
-  font-size: 11px;
-  color: #8293a5;
+  font-size: 12px;
+  color: #c3ccd6;
   display: flex;
   justify-content: space-between;
-  gap: 8px;
-  white-space: nowrap;
+  gap: 4px 8px;
+  flex-wrap: wrap;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
+
+#help-hint { flex-basis: 100%; }
+
+.map-line { display: flex; align-items: baseline; gap: 6px; }
+.map-line .map { min-width: 0; }
+#uncertainty { flex: none; color: #f0c674; font-size: 17px; }
+.panel #edit-hint { color: #f5c542; }
 
 .street {
   font-size: 12px;
@@ -210,11 +238,6 @@ footer {
 /* The last confident map, while the latest frames don't confirm it. */
 .not-sure .map {
   color: #c3ccd6;
-}
-
-.not-sure .map::after {
-  content: " ?";
-  color: #f0c674;
 }
 
 /* Collapsed: only the icon shows; the window shrinks to fit it. */
@@ -256,4 +279,19 @@ footer {
 
 .editing .street {
   color: #f5c542;
+}
+
+/* Increased text scale can leave less inline space in the fixed-width window. */
+@container (max-width: 300px) {
+  .summary td { min-width: 0; }
+  .summary th, .summary td { white-space: normal; padding-left: 4px; overflow-wrap: anywhere; }
+  .summary th:first-child { padding-left: 0; }
+  .mobs, .mobs tbody { display: block; width: 100%; }
+  .mobs thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .mobs tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 8px; margin-bottom: 8px; }
+  .mobs td { display: block; text-align: left; padding: 0; white-space: normal; overflow-wrap: anywhere; }
+  .mobs td:first-child { grid-column: 1 / -1; max-width: none; font-weight: 600; }
+  .mobs td:not(:first-child)::before { content: attr(data-label); display: block; color: #9fb6cc; }
+  .portals li div { flex-wrap: wrap; }
+  .portals .to { flex-basis: 100%; white-space: normal; }
 }
