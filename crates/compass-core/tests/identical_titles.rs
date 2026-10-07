@@ -11,7 +11,9 @@ mod common;
 use common::{
     FakeSource, black_frame, index_with_title, requests_for, sample_frame, saved_index, saved_page,
 };
-use compass_core::{Action, Candidates, Compass, MapDataStatus, PanelState, SourceError, meowdb};
+use compass_core::{
+    Action, Candidates, Compass, MapDataStatus, PanelState, Settings, SourceError, meowdb,
+};
 use std::task::Poll;
 
 /// The titles MeowDB gives to more than one map (index saved 2026-10-07).
@@ -202,6 +204,17 @@ fn a_chosen_candidate_holds_through_unreadable_frames_until_the_map_changes() {
     let state = compass.on_frame(sample_frame(KERNING, 2333));
     assert_eq!(shown_id(state), Some("090040200"));
     assert_eq!(state.candidates, coconut_candidates(0, false));
+}
+
+#[test]
+fn the_choose_candidate_hotkey_defaults_to_ctrl_shift_c_and_older_settings_get_it() {
+    let older: Settings = serde_json::from_str(
+        r#"{"version":1,"expanded":true,"hotkeys":{"togglePanel":"ctrl+shift+m","openMeowdbPage":"ctrl+shift+o"}}"#,
+    )
+    .unwrap();
+
+    assert_eq!(older.hotkeys.choose_candidate, "ctrl+shift+c");
+    assert_eq!(Settings::default().hotkeys.choose_candidate, "ctrl+shift+c");
 }
 
 #[test]

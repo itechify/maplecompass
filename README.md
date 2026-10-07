@@ -33,6 +33,9 @@ The panel starts on the right edge of the game window, and clicks pass through i
 - **Ctrl+Shift+E** enters edit mode: drag the panel where you want it, then press Ctrl+Shift+E again to make it click-through.
 - **Ctrl+Shift+D** switches placement: inside the game window, docked to its right edge, docked to its left edge, or detached.
 - **Ctrl+Shift+O** opens the current map's MeowDB page in your browser.
+- **Ctrl+Shift+C** shows the next map with the same title, when the panel can't tell which one you're on.
+
+A few maps share a title, such as the two Maple Road / Mushroom Town maps. If they would show the same mobs anyway, the panel just shows them. Otherwise it picks the one connected to the map you came from, and failing that it shows the first and says so; Ctrl+Shift+C then steps through them, and your pick holds until you change maps.
 
 Inside, the panel keeps its spot relative to the game window. Docked, it follows the game window's outside edge, and goes inside when there is no room on screen. Detached, it is an ordinary window: drag it anywhere, such as onto another monitor, and it stays there.
 
