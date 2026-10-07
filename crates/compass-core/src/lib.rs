@@ -15,6 +15,7 @@ mod portal_overrides;
 mod portals;
 mod prep;
 mod recogniser;
+mod session;
 mod settings;
 mod setup;
 mod shown_map;
@@ -28,6 +29,7 @@ pub use panel::{
     Action, GameWindow, InsideOffset, Layer, PanelSizes, PlacementMode, ScreenPoint, ScreenRect,
     Size,
 };
+pub use session::{Deaths, ExpRate, ExpTracking, TrackingState};
 pub use settings::{Hotkeys, Settings};
 pub use setup::{ExpBarRegion, ExpBarTestRead, SetupReason, SetupState, TestRead, TitleRegion};
 pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
@@ -35,6 +37,7 @@ pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
 use panel::Panel;
+use session::Session;
 use setup::Setup;
 pub use recogniser::{TitleLines, TitleReader, TitleReading};
 use tracker::Tracker;
@@ -160,6 +163,8 @@ pub struct PanelState {
     /// What the EXP bar showed when its figures last read whole; `None` while there is
     /// no `exp_bar_region` or nothing has read yet.
     pub exp_bar: Option<ExpBar>,
+    /// EXP tracking: the Session's state, Time to Level, rates and deaths.
+    pub exp_tracking: ExpTracking,
     /// The title of the game window to look for: "MapleStory", or one the player
     /// picked by hand.
     pub game_window_title: String,
@@ -195,6 +200,8 @@ pub struct Compass {
     exp_bar_reader: Option<ExpBarReader>,
     /// What the EXP bar showed when its figures last read whole.
     exp_bar: Option<ExpBar>,
+    /// The Session measured from the EXP bar's readings.
+    session: Session,
     source: Box<dyn MapDataSource + Send>,
     matcher: Option<Matcher>,
     /// When asking for the map index last failed (frame time).
@@ -216,6 +223,7 @@ impl Compass {
             reader: None,
             exp_bar_reader: None,
             exp_bar: None,
+            session: Session::default(),
             source: Box::new(source),
             matcher: None,
             index_failed_at: None,
@@ -292,9 +300,13 @@ impl Compass {
 
     /// Take what an EXP Bar Region frame read as (read by an [`ExpBarReader`], possibly
     /// on another thread) and update the panel state. A frame whose figures don't read
-    /// whole keeps the last reading.
+    /// whole keeps the last reading; time still passes for the Session.
     pub fn on_exp_bar_reading(&mut self, reading: ExpBarReading) -> &PanelState {
         self.setup.on_exp_bar_read(reading.bar);
+        match reading.bar {
+            Some(bar) if self.setup.exp_bar_region().is_some() => self.session.on_bar(bar, reading.at_ms),
+            _ => self.session.tick(reading.at_ms),
+        }
         if reading.bar.is_some() {
             self.exp_bar = reading.bar;
         }
@@ -347,6 +359,7 @@ impl Compass {
                 self.state.quit |= self.setup.state().needed == Some(SetupReason::FirstRun);
                 self.setup.cancel();
             }
+            Action::ResetSession => self.session.reset(),
         }
         self.sync_panel()
     }
@@ -419,9 +432,11 @@ impl Compass {
         }
     }
 
-    /// Time passed: check on fetches in flight. The shell calls this many times a
-    /// second (`at_ms` on the same clock as frames), so nothing waits for the network.
+    /// Time passed: check on fetches in flight, and let the Session pause. The shell
+    /// calls this many times a second (`at_ms` on the same clock as frames), so nothing
+    /// waits for the network.
     pub fn tick(&mut self, at_ms: u64) -> &PanelState {
+        self.session.tick(at_ms);
         self.load_map_index(at_ms);
         if self.matcher.is_some() {
             self.shown_map.poll(&mut *self.source);
@@ -488,6 +503,12 @@ impl Compass {
             self.exp_bar = None;
         }
         self.state.exp_bar = self.exp_bar;
+        // Off while there is no region to read; the Session itself carries on.
+        let ceiling = self.state.data.data().and_then(|d| d.summary).map(|s| s.exp_per_hour.solo);
+        self.state.exp_tracking = match self.state.exp_bar_region {
+            Some(_) => self.session.tracking(ceiling),
+            None => ExpTracking::default(),
+        };
     }
 }
 
