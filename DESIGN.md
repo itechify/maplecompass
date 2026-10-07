@@ -288,7 +288,11 @@ A crosshair cursor over the marking scrim, a centered inset instruction, and a C
 
 ### Text field
 
-The mob search window's query box, the app's one text field. It fills its row on the `inset` fill, with a Slate border (1px), the `button` corner token and Clear Frost text; a small Blue Grey label sits above it, and its placeholder is Blue Grey. Keyboard focus uses the buttons' two-pixel Compass Gold outline with a three-pixel offset. Its suggestions drop below in an inset, bordered list with the `inset` corner token: rows are Blue Grey with the level right-aligned, and the highlighted row, the one Enter picks, is Clear Frost and semibold on the `selection-fill` wash. It is a keyboard-controlled combobox: the arrow keys move the highlight while the text box keeps the focus.
+The query box of the overlay's mob search, shown in search mode: the app's one text field. It fills its row on the `inset` fill, with a Slate border (1px), the `button` corner token and Clear Frost text; a small Blue Grey label sits above it, and its placeholder is Blue Grey. Keyboard focus uses the buttons' two-pixel Compass Gold outline with a three-pixel offset. Its suggestions drop below in an inset, bordered list with the `inset` corner token: rows are Blue Grey with the level right-aligned, and the highlighted row, the one Enter picks, is Clear Frost and semibold on the `selection-fill` wash. It is a keyboard-controlled combobox: the arrow keys move the highlight while the text box keeps the focus.
+
+### Mob search section
+
+Its own section of the overlay panel, below the current map's info and divided from it by a Slate rule (1px) above. A semibold note-size heading names it ("Mob search · Green Mushroom", the level in Blue Grey), and a small × at its right clears it: a secondary button (transparent fill, Slate border, `button` corner) and the overlay's one control that takes a click while the rest of the panel lets clicks through. In search mode the section holds the text field, its suggestions, the travel checkboxes, every result in a scrolling list with the highlighted one on the `selection-fill` wash, and that result's route in an inset, bordered box. Outside search mode it keeps the top five results.
 
 ### App icon
 

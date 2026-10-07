@@ -1,4 +1,4 @@
-//! Sending one of our pages (setup, search) the view it renders: only when it changed,
+//! Sending one of our pages (setup) the view it renders: only when it changed,
 //! since the loop wakes up 20 times a second, and kept for a page that loads after it
 //! was sent.
 
