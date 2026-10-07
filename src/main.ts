@@ -3,7 +3,10 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 /** Mirror of `compass_core::PanelState`. */
 type PanelState = {
-  title: { streetName: string; mapName: string } | null;
+  recognition: "starting" | "ready" | "unavailable";
+  map: { id: string; streetName: string; mapName: string } | null;
+  confidence: number;
+  notSure: boolean;
   expanded: boolean;
   editMode: boolean;
 };
@@ -29,20 +32,24 @@ function keyLabel(accelerator: string): string {
 
 function render(state: OverlayState) {
   const { panel } = state;
-  const title = panel.title;
+  const { recognition, map: current, notSure } = panel;
   editMode = panel.editMode;
   document.body.classList.toggle("collapsed", !panel.expanded);
   document.body.classList.toggle("editing", panel.editMode);
-  document.body.classList.toggle("unreadable", !title);
+  document.body.classList.toggle("unreadable", !current);
+  document.body.classList.toggle("not-sure", !!current && notSure);
   if (!state.gameFound) {
     street.textContent = "";
     map.textContent = "Looking for MapleStory…";
-  } else if (title) {
-    street.textContent = title.streetName;
-    map.textContent = title.mapName;
+  } else if (recognition === "unavailable") {
+    street.textContent = "Couldn't load the map list from MeowDB";
+    map.textContent = "Map recognition unavailable";
+  } else if (current) {
+    street.textContent = current.streetName;
+    map.textContent = current.mapName;
   } else {
     street.textContent = "";
-    map.textContent = "Can't read the minimap title";
+    map.textContent = "Reading the minimap title…";
   }
   if (panel.editMode) {
     street.textContent = `Drag to move · ${keyLabel(state.hotkeys.editMode)} when done`;

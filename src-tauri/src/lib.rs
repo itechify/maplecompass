@@ -5,6 +5,7 @@
 pub mod capture;
 pub mod gamewin;
 mod hotkeys;
+pub mod meowdb;
 mod settings;
 
 use compass_core::{
@@ -12,6 +13,7 @@ use compass_core::{
     default_title_region,
 };
 use gamewin::ClientArea;
+use meowdb::MeowDbSource;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
@@ -67,11 +69,14 @@ pub fn run() {
                 }
             });
 
+            // MeowDB pages are cached on disk (ADR 0003). WebView2 shares the app cache
+            // folder, hence the subfolder.
+            let source = MeowDbSource::new(app.path().app_cache_dir()?.join("cache"))?;
             let handle = app.handle().clone();
             // Capture + OCR are blocking and CPU-bound: run them on their own thread.
             // Spawned from setup, so the process is already Per-Monitor-V2 DPI aware.
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
-                compass_loop(handle, overlay, actions_rx, settings, settings_path)
+                compass_loop(handle, overlay, source, actions_rx, settings, settings_path)
             })?;
             Ok(())
         })
@@ -82,12 +87,13 @@ pub fn run() {
 fn compass_loop(
     app: AppHandle,
     overlay: WebviewWindow,
+    source: MeowDbSource,
     actions: Receiver<Action>,
     settings: Settings,
     settings_path: PathBuf,
 ) {
     let hotkeys = settings.hotkeys.clone();
-    let mut compass = Compass::new();
+    let mut compass = Compass::new(source);
     compass.restore(settings);
     let mut saved = compass.settings();
     let mut click_through = true;

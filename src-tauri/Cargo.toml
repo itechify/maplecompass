@@ -23,6 +23,9 @@ tauri = { version = "2.12", features = [] }
 tauri-plugin-global-shortcut = "2.4"
 serde = { workspace = true }
 serde_json = { workspace = true }
+# MeowDB pages (ADR 0003). OS TLS (SChannel on Windows): reqwest's default rustls
+# backend builds aws-lc, which needs NASM/CMake.
+reqwest = { version = "0.13", default-features = false, features = ["native-tls", "http2", "charset", "system-proxy", "gzip"] }
 
 [dev-dependencies]
 image = { workspace = true, features = ["png"] }
