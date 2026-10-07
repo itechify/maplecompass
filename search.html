@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="/src/search.css" />
+    <link rel="stylesheet" href="/src/results.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MapleCompass mob search</title>
     <script type="module" src="/src/search.ts" defer></script>
@@ -44,9 +45,6 @@
       <p class="nearest" id="picked-nearest" hidden></p>
       <p class="note" id="picked-note" role="status" hidden></p>
       <table class="results" id="results">
-        <thead>
-          <tr><th>Map</th><th title="Spawn Count × Mob Rate">Density</th><th title="Share of all mob spawns on the Map" aria-label="Spawn Share">Share</th><th>Tier</th><th title="Map changes from the map you're on">Distance</th></tr>
-        </thead>
         <tbody id="result-rows"></tbody>
       </table>
       <section class="route" id="route" aria-live="polite" hidden>
