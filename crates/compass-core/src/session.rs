@@ -13,6 +13,10 @@
 //! - Active time runs while the EXP keeps changing. A gap of up to [`IDLE_MS`] between
 //!   changes counts; a longer one is a break, which pauses the Session and counts for
 //!   nothing, from the last change to the next, so the rates hold while paused.
+//! - The figures shown hold still for each [`REFRESH_MS`] of capture time, rather than
+//!   jumping with every kill. Events show at once: the state changing (the Session
+//!   starting, warming up, pausing or resuming), the first figures there are, a death, a
+//!   level-up, a reset or a character switch, and a map with another ceiling.
 
 use crate::ExpBar;
 use serde::Serialize;
@@ -24,10 +28,12 @@ use serde::Serialize;
 pub struct ExpTracking {
     /// Off, waiting, warming up, active or paused.
     pub state: TrackingState,
-    /// Time to Level in seconds at the net Rolling Rate; `None` ("—") while there is no
-    /// rate yet, the net rate is zero or negative, or the level's total isn't known.
+    /// Time to Level in seconds at the net Rolling Rate, rounded more coarsely the
+    /// further off it is (see [`rounded_time_to_level`]); `None` ("—") while there is
+    /// no rate yet, the net rate is zero or negative, or the level's total isn't known.
     pub time_to_level_s: Option<u64>,
-    /// Time to Level, short, for the collapsed icon's badge: "47m", "3h 10m".
+    /// Time to Level, short, for the headline and the collapsed icon's badge: "47m",
+    /// "3h 10m", "14h".
     pub time_to_level_badge: Option<String>,
     /// The Rolling Rate: over the last 5 minutes of active play. `None` until the
     /// Session has some active time.
@@ -98,6 +104,9 @@ const HUNDRED_PERCENT: u32 = 10_000;
 const SWITCH_READINGS: u32 = 3;
 /// A level-up needs the bar within at least this many hundredths of 100% before it.
 const NEAR_LEVEL_UP_HUNDREDTHS: u32 = 1000;
+/// The figures shown are measured afresh once in each stretch of this much capture time
+/// (counted from capture time 0), unless an event shows them sooner.
+const REFRESH_MS: u64 = 30_000;
 
 /// The level's total EXP as far as readings tell: `lo..=hi`, `hi` unbounded
 /// (`u64::MAX`) while only 0.00% has been read.
@@ -159,6 +168,24 @@ pub(crate) struct Session {
     now: u64,
     /// The figures since the Session started; `None` while waiting.
     figures: Option<Figures>,
+    /// Level-ups this Session.
+    level_ups: u32,
+    /// What the panel shows, and what it was measured for; `None` until it is first
+    /// measured, and after a reset.
+    shown: Option<Shown>,
+}
+
+/// The figures the panel shows, held for the rest of the [`REFRESH_MS`] stretch they
+/// were measured in.
+#[derive(Debug)]
+struct Shown {
+    /// Which stretch of capture time they were measured in.
+    stretch: u64,
+    /// The solo ceiling they were measured against.
+    ceiling: Option<u64>,
+    /// The Session's level-ups by then.
+    level_ups: u32,
+    tracking: ExpTracking,
 }
 
 /// Where a started Session stood at an EXP change.
@@ -302,6 +329,7 @@ impl Session {
             let gain = (doubled_total as i64 - 2 * last.exp as i64 + 1) / 2 + bar.exp as i64;
             self.accept(allowed, bar);
             self.change(gain, at_ms);
+            self.level_ups += 1;
         } else {
             // A misread, or another character's level: that takes readings in a row
             // that fit it.
@@ -337,6 +365,8 @@ impl Session {
         self.figures = None;
         self.misfits = None;
         self.largest_gain_hundredths = 0;
+        self.level_ups = 0;
+        self.shown = None;
     }
 
     /// Time passed without a reading.
@@ -358,8 +388,28 @@ impl Session {
     }
 
     /// What the panel shows, with tracking on, on a map whose solo EXP/h ceiling is
-    /// `ceiling` (if it is known).
-    pub fn tracking(&self, ceiling: Option<u64>) -> ExpTracking {
+    /// `ceiling` (if it is known): the figures measured earlier in this [`REFRESH_MS`]
+    /// stretch, unless an event since asks for them afresh.
+    pub fn tracking(&mut self, ceiling: Option<u64>) -> ExpTracking {
+        let fresh = self.measure(ceiling);
+        let stretch = self.now / REFRESH_MS;
+        let holds = self.shown.as_ref().is_some_and(|shown| {
+            shown.stretch == stretch
+                && shown.ceiling == ceiling
+                && shown.level_ups == self.level_ups
+                && shown.tracking.state == fresh.state
+                && shown.tracking.deaths == fresh.deaths
+                // The first figures show as soon as there are any.
+                && shown.tracking.rolling.is_some() == fresh.rolling.is_some()
+        });
+        if !holds {
+            self.shown = Some(Shown { stretch, ceiling, level_ups: self.level_ups, tracking: fresh });
+        }
+        self.shown.as_ref().map(|shown| shown.tracking.clone()).unwrap_or_default()
+    }
+
+    /// The figures as they stand now.
+    fn measure(&self, ceiling: Option<u64>) -> ExpTracking {
         let Some(figures) = &self.figures else {
             return ExpTracking { state: TrackingState::Waiting, ..ExpTracking::default() };
         };
@@ -378,7 +428,7 @@ impl Session {
             (Some(t), Some(last)) if gaining => {
                 let doubled_to_go = i128::from(t.saturating_sub(2 * last.exp));
                 let doubled_ms = doubled_to_go * i128::from(rolling.over_ms);
-                Some(div_round(doubled_ms, 2 * i128::from(rolling.exp) * 1000) as u64)
+                Some(rounded_time_to_level(div_round(doubled_ms, 2 * i128::from(rolling.exp) * 1000) as u64))
             }
             _ => None,
         };
@@ -396,12 +446,26 @@ impl Session {
     }
 }
 
-/// Time to Level for the badge: "<1m", "47m", "3h 10m".
+/// Time to Level rounded no finer than it can be trusted: to the minute under an hour,
+/// to 5 minutes under 10 hours, and to the hour beyond.
+fn rounded_time_to_level(seconds: u64) -> u64 {
+    let step = if seconds < 3_600 {
+        60
+    } else if seconds < 36_000 {
+        300
+    } else {
+        3_600
+    };
+    div_round(i128::from(seconds), step) as u64 * step as u64
+}
+
+/// Time to Level (already rounded) for the badge: "<1m", "47m", "3h 10m", "14h".
 fn badge(seconds: u64) -> String {
     let minutes = seconds / 60;
     match (minutes / 60, minutes % 60) {
         (0, 0) => "<1m".into(),
         (0, m) => format!("{m}m"),
+        (h, 0) => format!("{h}h"),
         (h, m) => format!("{h}h {m}m"),
     }
 }

@@ -92,8 +92,9 @@ fn the_session_starts_on_the_first_exp_change_and_warms_up_for_a_minute() {
     let later = compass.tick(130 * S).clone();
     assert_eq!(later.exp_tracking.state, TrackingState::Active);
     assert_eq!(later.exp_tracking.session_average.map(|r| r.exp_per_hour), Some(2070));
-    assert_eq!(later.exp_tracking.time_to_level_s, Some(6721));
-    assert_eq!(later.exp_tracking.time_to_level_badge.as_deref(), Some("1h 52m"));
+    // 6,721 s, rounded to 5 minutes over an hour.
+    assert_eq!(later.exp_tracking.time_to_level_s, Some(6600));
+    assert_eq!(later.exp_tracking.time_to_level_badge.as_deref(), Some("1h 50m"));
 }
 
 /// A Session on the ~4,199.5 EXP level that started at 10 s on 266 [6.33%] and gained
@@ -166,7 +167,7 @@ fn the_rolling_rate_covers_the_last_five_minutes_of_active_time_and_drives_time_
     // 700 EXP in 15 minutes over the Session; 500 in the last 5.
     assert_eq!(exp_per_hour(state), (Some(6000), Some(2800)));
     // ~4,200 - 976 = ~3,224 EXP to go at 6,000 EXP/h.
-    assert_eq!(state.exp_tracking.time_to_level_s, Some(1934));
+    assert_eq!(state.exp_tracking.time_to_level_s, Some(1920), "1,934 s, to the minute");
     assert_eq!(state.exp_tracking.time_to_level_badge.as_deref(), Some("32m"));
 }
 
@@ -231,10 +232,11 @@ fn misreads_in_the_middle_of_a_session_move_nothing() {
         read(&mut misread, at * S, exp, percent);
     }
 
-    let clean = clean.tick(110 * S).clone();
-    let misread = misread.tick(110 * S).clone();
+    // The first moment of a new half minute, so the figures are measured afresh.
+    let clean = clean.tick(120 * S).clone();
+    let misread = misread.tick(120 * S).clone();
     assert_eq!(misread.exp_tracking, clean.exp_tracking);
-    assert_eq!(exp_per_hour(&misread), (Some(5184), Some(5184)), "144 EXP in 100 s");
+    assert_eq!(exp_per_hour(&misread), (Some(4713), Some(4713)), "144 EXP in 110 s");
 }
 
 /// The percentage the game shows for `exp` on the recording's ~16,682 EXP level.
@@ -258,15 +260,17 @@ fn a_level_up_counts_what_was_left_of_the_old_level_and_what_is_in_the_new() {
     assert_eq!(levelled.exp_tracking.deaths, Deaths::default());
     assert_eq!(levelled.exp_tracking.state, TrackingState::Active);
 
-    for (k, exp) in [40, 70, 100].into_iter().enumerate() {
+    for (k, exp) in [40, 70, 100, 130].into_iter().enumerate() {
         read(&mut compass, (80 + k as u64 * 10) * S, exp, percent_lv15(exp));
     }
-    let after = compass.panel_state();
-    assert_eq!(exp_per_hour(after), (Some(10_800), Some(10_800)));
-    // The new level's readings so far allow 16,529..=16,806 EXP: ~16,667.5, of which
-    // 10,800 EXP/h is 64.80%/h, with ~16,567.5 EXP to go.
-    assert_eq!(after.exp_tracking.rolling.and_then(|r| r.percent_per_hour_hundredths), Some(6480));
-    assert_eq!(after.exp_tracking.time_to_level_badge.as_deref(), Some("1h 32m"));
+    // 130 at 110 s, measured at 120 s, the start of a half minute.
+    let after = compass.tick(120 * S).clone();
+    // 300 EXP in the Session's 110 s: 150 to 4,180, 30 over the level-up, 120 since.
+    assert_eq!(exp_per_hour(&after), (Some(9818), Some(9818)));
+    // The new level's readings so far put it at ~16,667 EXP, of which 9,818 EXP/h is
+    // 58.91%/h, with ~16,537 EXP to go: 6,064 s, rounded to 5 minutes.
+    assert_eq!(after.exp_tracking.rolling.and_then(|r| r.percent_per_hour_hundredths), Some(5891));
+    assert_eq!(after.exp_tracking.time_to_level_badge.as_deref(), Some("1h 40m"));
 }
 
 #[test]
@@ -424,9 +428,9 @@ fn the_rolling_rate_is_compared_with_the_map_s_solo_ceiling_and_a_map_change_kee
     // A town has no Map Summary, so no ceiling.
     let town = arrive(&mut compass, KERNING, 72 * S);
     assert_eq!(town.exp_tracking, unrecognised.exp_tracking);
-    let on = read(&mut compass, 80 * S, 360, 857);
+    let on = read(&mut compass, 90 * S, 360, 857);
     assert_eq!(on.exp_tracking.state, TrackingState::Active);
-    assert_eq!(exp_per_hour(&on), (Some(4834), Some(4834)), "94 EXP in 70 s");
+    assert_eq!(exp_per_hour(&on), (Some(4230), Some(4230)), "94 EXP in 80 s");
 }
 
 #[test]
@@ -473,16 +477,20 @@ fn replaying_the_2026_10_07_recording_waits_warms_up_and_then_shows_its_rates() 
     assert_eq!(at[&61_000].state, TrackingState::Active);
     assert_eq!(at[&61_000].session_average.map(|r| r.exp_per_hour), Some(7260));
 
-    // 492 [2.95%] at 149 s: 335 EXP in 148 s. Every reading fits a level of
-    // 16,677..=16,682 EXP (~16,679.5), so that is 48.85%/h, with ~16,187.5 EXP to go.
-    let end = &at[&149_000];
-    let rate = ExpRate { exp_per_hour: 8149, percent_per_hour_hundredths: Some(4885) };
-    assert_eq!(end.state, TrackingState::Active);
-    assert_eq!(end.session_average, Some(rate));
-    assert_eq!(end.rolling, Some(rate), "under 5 minutes, the Rolling Rate is the whole Session");
-    assert_eq!(end.time_to_level_s, Some(7151));
-    assert_eq!(end.time_to_level_badge.as_deref(), Some("1h 59m"));
-    assert_eq!(end.deaths, Deaths::default());
+    // 456 [2.73%] since 118 s, measured at 120 s: 299 EXP in 119 s. The level's total is
+    // ~16,679.5 EXP, so that is 54.23%/h, with ~16,223.5 EXP to go.
+    let measured = &at[&120_000];
+    let rate = ExpRate { exp_per_hour: 9045, percent_per_hour_hundredths: Some(5423) };
+    assert_eq!(measured.state, TrackingState::Active);
+    assert_eq!(measured.session_average, Some(rate));
+    assert_eq!(measured.rolling, Some(rate), "under 5 minutes, the Rolling Rate is the whole Session");
+    // 6,457 s, rounded to 5 minutes.
+    assert_eq!(measured.time_to_level_s, Some(6600));
+    assert_eq!(measured.time_to_level_badge.as_deref(), Some("1h 50m"));
+    assert_eq!(measured.deaths, Deaths::default());
+    // The EXP rose to 492 [2.95%] by 149 s, but the panel holds what it measured at 120 s
+    // for the rest of that half minute.
+    assert_eq!(&at[&149_000], measured);
 }
 
 #[test]
@@ -527,4 +535,62 @@ fn a_session_paused_while_warming_up_shows_paused_and_warms_up_only_with_active_
     let resumed = read(&mut compass, 10 * MIN + 10 * S, 360, 857);
     assert_eq!(resumed.exp_tracking.state, TrackingState::WarmingUp);
     assert_eq!(exp_per_hour(&resumed), (Some(33_840), Some(33_840)), "94 EXP in 10 s");
+}
+
+// The figures hold still for each half minute of capture time, so they don't jump with
+// every kill; events show at once.
+
+/// A Session on the 4,200 EXP level that started at 5 s and gains faster and faster: 1
+/// EXP in the first 5 s, 2 in the next, and so on, read every 5 s up to `until_s`.
+fn speeding_up(until_s: u64) -> Compass {
+    let mut compass = tracking();
+    let mut exp = 160;
+    read(&mut compass, 0, exp, percent(exp));
+    for k in 1..=until_s / 5 {
+        exp += k;
+        read(&mut compass, k * 5 * S, exp, percent(exp));
+    }
+    compass
+}
+
+#[test]
+fn the_figures_hold_for_the_rest_of_each_half_minute_then_refresh() {
+    let compass = speeding_up(150);
+    let measured = speeding_up(120).panel_state().exp_tracking.clone();
+    assert_eq!(measured.state, TrackingState::Active);
+
+    // Read on to 145 s, the EXP climbing faster: the panel holds the figures of 120 s.
+    let mut held = speeding_up(145);
+    assert_eq!(held.tick(149 * S).exp_tracking, measured);
+
+    // The next half minute measures them afresh.
+    let refreshed = &compass.panel_state().exp_tracking;
+    assert!(
+        refreshed.rolling.unwrap().exp_per_hour > measured.rolling.unwrap().exp_per_hour,
+        "{refreshed:?} after {measured:?}"
+    );
+}
+
+#[test]
+fn a_death_shows_at_once_with_the_figures_measured_then() {
+    let mut compass = a_minute_in();
+    // 360 [8.57%] at 80 s, in the half minute whose figures were measured at 70 s...
+    read(&mut compass, 80 * S, 360, 857);
+
+    // ...then a death to 266 [6.33%] at 85 s takes it all back, and shows straight away.
+    let died = read(&mut compass, 85 * S, 266, 633);
+    assert_eq!(died.exp_tracking.deaths.count, 1);
+    assert_eq!(exp_per_hour(&died), (Some(0), Some(0)));
+}
+
+#[test]
+fn time_to_level_is_rounded_to_the_hour_beyond_ten_hours() {
+    let mut compass = tracking();
+    read(&mut compass, 0, 149, percent_lv15(149));
+    read(&mut compass, 10 * S, 150, percent_lv15(150));
+
+    // 20 EXP a minute, with ~16,500 EXP of the ~16,682 EXP level to go: ~13.8 hours.
+    let state = read(&mut compass, 70 * S, 170, percent_lv15(170));
+    assert_eq!(state.exp_tracking.time_to_level_s, Some(14 * 3600));
+    assert_eq!(state.exp_tracking.time_to_level_badge.as_deref(), Some("14h"));
 }
