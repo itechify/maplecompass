@@ -1,12 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
+  crawlLine,
   distanceText,
-  mobTitle,
-  nearestLine,
   resultRow,
-  resultsNote,
   routeStops,
+  showPicked,
+  type PickedSection,
   type SearchResult,
   type SearchState,
 } from "./search-state";
@@ -20,11 +20,14 @@ const suggestions = byId("suggestions");
 const noMatch = byId("no-match");
 const crawl = byId("crawl");
 const picked = byId("picked");
-const pickedTitle = byId("picked-title");
-const pickedNearest = byId("picked-nearest");
-const pickedNote = byId("picked-note");
-const results = byId("results");
 const resultRows = byId("result-rows");
+const pickedSection: PickedSection = {
+  title: byId("picked-title"),
+  nearest: byId("picked-nearest"),
+  note: byId("picked-note"),
+  table: byId("results") as HTMLTableElement,
+  rows: resultRows,
+};
 const route = byId("route");
 const routeTitle = byId("route-title");
 const routeList = byId("route-stops");
@@ -43,11 +46,10 @@ function update({ search }: SearchView) {
   }
   open = search.windowOpen;
 
-  const { known, total, done } = search.crawl;
-  crawl.textContent = total === 0 ? "Loading MeowDB's Map list…" : done ? "" : `${known} of ${total} maps known`;
+  crawl.textContent = search.crawl.total === 0 ? "Loading MeowDB's Map list…" : crawlLine(search);
   // The core keeps the toggles (and saves them); the checkboxes follow it.
-  taxis.checked = search.taxis;
-  teleportScrolls.checked = search.teleportScrolls;
+  taxis.checked = search.travel.taxis;
+  teleportScrolls.checked = search.travel.teleportScrolls;
 
   suggestions.replaceChildren(
     ...search.suggestions.map((mob, i) => {
@@ -81,21 +83,14 @@ function update({ search }: SearchView) {
 
   picked.hidden = !search.picked;
   if (search.picked) {
-    pickedTitle.textContent = mobTitle(search.picked);
-    pickedNearest.textContent = nearestLine(search);
-    pickedNearest.hidden = pickedNearest.textContent === "";
-    pickedNote.textContent = resultsNote(search);
-    pickedNote.hidden = pickedNote.textContent === "";
-    results.hidden = search.results.length === 0;
-    resultRows.replaceChildren(
-      ...search.results.map((result, i) => {
-        const row = resultRow(result);
-        const current = i === search.highlightedResult;
-        row.classList.toggle("current", current);
-        row.setAttribute("aria-selected", String(current));
-        return row;
-      }),
-    );
+    const rows = search.results.map((result, i) => {
+      const row = resultRow(result);
+      const current = i === search.highlightedResult;
+      row.classList.toggle("current", current);
+      row.setAttribute("aria-selected", String(current));
+      return row;
+    });
+    showPicked(pickedSection, search, search.picked, rows);
     showRoute(search.highlightedResult === null ? null : search.results[search.highlightedResult]);
     credit.textContent = search.credit ? `Data: ${search.credit}` : "";
   }
@@ -133,8 +128,15 @@ query.addEventListener("keydown", (e) => {
       break;
   }
 });
-taxis.addEventListener("change", () => invoke("search_toggle_taxis"));
-teleportScrolls.addEventListener("change", () => invoke("search_toggle_teleport_scrolls"));
+// After a click on a checkbox, the typing goes back to the search box.
+taxis.addEventListener("change", () => {
+  invoke("search_toggle_taxis");
+  query.focus();
+});
+teleportScrolls.addEventListener("change", () => {
+  invoke("search_toggle_teleport_scrolls");
+  query.focus();
+});
 // Esc closes the window from the checkboxes too.
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && e.target !== query) {

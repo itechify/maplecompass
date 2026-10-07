@@ -2,7 +2,7 @@
 //! served by a [`FakeSource`] for both the shown map and the world crawl.
 
 use super::FakeSource;
-use compass_core::{Action, Compass, MapData, MapEntry, Mob, PanelState, Portal, PortalKind};
+use compass_core::{Action, Compass, MapData, MapEntry, Mob, PanelState, Portal, PortalKind, SearchResult};
 use std::task::Poll;
 
 /// The search hotkey (the default).
@@ -44,6 +44,12 @@ impl WorldMap {
         self
     }
 
+    /// The same map in another region of MeowDB's index ("Event", "Hidden Street", …).
+    pub fn in_region(mut self, region: &str) -> Self {
+        self.entry.region = region.into();
+        self
+    }
+
     /// The same map with a portal the player can see to each of the maps `to`.
     pub fn to(self, to: &[&str]) -> Self {
         to.iter().fold(self, |map, to| map.exit(PortalKind::Visible, to))
@@ -72,6 +78,11 @@ pub fn search_for(compass: &mut Compass, query: &str) -> PanelState {
     compass.on_hotkey(SEARCH);
     compass.search_query(query);
     compass.act(Action::SearchEnter).clone()
+}
+
+/// The result the headline names as the nearest.
+pub fn nearest(state: &PanelState) -> Option<&SearchResult> {
+    state.search.nearest.map(|at| &state.search.results[at])
 }
 
 /// Tick every 50 ms from `from_ms` up to `to_ms`.
