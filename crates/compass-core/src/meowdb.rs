@@ -79,6 +79,9 @@ pub fn read_map_page(html: &str, id: &str) -> Result<MapData, SourceError> {
 }
 
 /// [`read_map_page`], with these portal overrides in place of [`PORTAL_OVERRIDES`].
+/// Only for tests of the override list (integration tests can't see test-only items);
+/// the app reads with [`read_map_page`].
+#[doc(hidden)]
 pub fn read_map_page_with(
     html: &str,
     id: &str,

@@ -8,9 +8,9 @@
 //! shown only while the player marks the title, and the overlay's z-order keeper
 //! ignores our own windows.
 
-use crate::gamewin::{self, ClientArea};
+use crate::gamewin;
 use crate::Command;
-use compass_core::{Action, PanelState, Recognition, Rect, SetupState};
+use compass_core::{Action, PanelState, Recognition, Rect, ScreenRect, SetupState};
 use serde::Serialize;
 use std::sync::Mutex;
 use std::sync::mpsc::Sender;
@@ -25,7 +25,7 @@ pub struct Bridge {
     /// Titles of game windows the player picked by hand.
     pub picks: Sender<String>,
     /// The game's client area as last found, where the region window goes.
-    pub game: Mutex<Option<ClientArea>>,
+    pub game: Mutex<Option<ScreenRect>>,
     /// The last view sent to the setup window, for when it loads after it was sent.
     pub view: Mutex<Option<serde_json::Value>>,
 }
@@ -78,7 +78,7 @@ impl SetupWindows {
     }
 
     /// Follow the core's setup state, and send the setup window what it renders.
-    pub fn sync(&mut self, state: &PanelState, game: Option<ClientArea>) {
+    pub fn sync(&mut self, state: &PanelState, game: Option<ScreenRect>) {
         *self.app.state::<Bridge>().game.lock().unwrap() = game;
         match (self.shown, state.setup.window_open) {
             (false, true) => {

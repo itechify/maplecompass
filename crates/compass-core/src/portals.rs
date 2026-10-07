@@ -4,6 +4,9 @@
 use crate::map_data::HiddenPortal;
 use crate::portal_overrides::PortalOverride;
 
+/// The street name of a Hidden Street.
+const HIDDEN_STREET: &str = "Hidden Street";
+
 /// MeowDB's dead-end destination: a portal that goes nowhere.
 const DEAD_END: &str = "999999999";
 
@@ -66,7 +69,7 @@ pub(crate) fn hidden_portals(
         })
         .map(|e| HiddenPortal {
             position: position_hint(map.minimap, e.x, e.y),
-            to_hidden_street: e.to_street_name == "Hidden Street",
+            to_hidden_street: e.to_street_name == HIDDEN_STREET,
             quest: e.kind == SCRIPT,
             name: e.name,
             to_map_id: e.to_map_id,
