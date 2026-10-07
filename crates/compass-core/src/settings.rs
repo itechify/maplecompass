@@ -3,6 +3,7 @@
 
 use crate::panel::{InsideOffset, PlacementMode, ScreenPoint};
 use crate::setup::TitleRegion;
+use crate::world::Travel;
 use serde::{Deserialize, Serialize};
 
 /// The settings version this core writes. Version 1 had Ctrl+Shift hotkeys, which
@@ -31,12 +32,10 @@ pub struct Settings {
     /// The title of the game window the player picked by hand; `None` to look for the
     /// "MapleStory" window.
     pub game_window_title: Option<String>,
-    /// Distance counts taxi rides between towns (the Taxis checkbox in the search
-    /// window).
-    pub taxis: bool,
-    /// Distance counts Teleport Scrolls to towns (the Teleport Scrolls checkbox in the
-    /// search window).
-    pub teleport_scrolls: bool,
+    /// What Distance counts besides portals and ships (the search window's
+    /// checkboxes). Saved as top-level `taxis` and `teleportScrolls`.
+    #[serde(flatten)]
+    pub travel: Travel,
 }
 
 impl Default for Settings {
@@ -50,8 +49,7 @@ impl Default for Settings {
             hotkeys: Hotkeys::default(),
             title_region: None,
             game_window_title: None,
-            taxis: false,
-            teleport_scrolls: false,
+            travel: Travel::default(),
         }
     }
 }
