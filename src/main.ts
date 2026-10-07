@@ -302,8 +302,19 @@ function renderData(panel: PanelState) {
 /** "−" (U+2212) for a negative figure, as the deaths counter writes it. */
 const signed = (text: string) => text.replace(/^-/, "−");
 
-/** 125 hundredths -> "1.25%". */
-const percent = (hundredths: number) => signed(`${(hundredths / 100).toFixed(2)}%`);
+/** 1234 hundredths -> "12.3%" with one decimal, "12%" with none: no finer than the
+ *  figure can be trusted, so it doesn't flicker. */
+const percent = (hundredths: number, decimals = 1) =>
+  signed(`${(hundredths / 100).toFixed(decimals)}%`);
+
+/** An EXP rate to 3 significant figures: 840, 6,120, 61.2k, 1.23M. */
+function compact(n: number): string {
+  const abs = Math.abs(n);
+  if (abs < 10_000) return signed(Number(n.toPrecision(3)).toLocaleString("en-US"));
+  // 999,999 rounds to 1,000k: write it 1M.
+  const [value, unit] = Number((abs / 1_000).toPrecision(3)) < 1_000 ? [n / 1_000, "k"] : [n / 1_000_000, "M"];
+  return signed(`${Number(value.toPrecision(3))}${unit}`);
+}
 
 const TRACKING_TAGS: Partial<Record<ExpTracking["state"], string>> = {
   warmingUp: "warming up",
@@ -328,7 +339,7 @@ function renderTracking(panel: PanelState) {
   trackingTag.textContent = tag ?? "";
   trackingTag.className = `tag ${tracking.state}`;
 
-  const exp = (rate: ExpRate | null) => (rate ? signed(number(rate.expPerHour)) : "—");
+  const exp = (rate: ExpRate | null) => (rate ? compact(rate.expPerHour) : "—");
   const share = (rate: ExpRate | null) =>
     rate?.percentPerHourHundredths != null ? percent(rate.percentPerHourHundredths) : "—";
   rollingExp.textContent = exp(tracking.rolling);
@@ -338,7 +349,7 @@ function renderTracking(panel: PanelState) {
 
   const extra = [];
   if (tracking.ceilingShareHundredths !== null) {
-    extra.push(`${percent(tracking.ceilingShareHundredths)} of the map's solo ceiling`);
+    extra.push(`${percent(tracking.ceilingShareHundredths, 0)} of the map's solo ceiling`);
   }
   const { deaths } = tracking;
   if (deaths.count > 0) {
