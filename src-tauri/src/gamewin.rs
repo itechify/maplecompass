@@ -10,56 +10,89 @@ pub struct ClientArea {
     pub height: u32,
 }
 
-/// Exact title of the game window.
+/// Exact title of the game window, unless the player picked another by hand.
 pub const GAME_TITLE: &str = "MapleStory";
 
 #[cfg(windows)]
-pub use win::find_game_client;
+pub use win::{find_game_client, window_under_cursor};
 
 #[cfg(not(windows))]
-pub fn find_game_client() -> Option<ClientArea> {
+pub fn find_game_client(_title: &str) -> Option<ClientArea> {
     None
+}
+
+#[cfg(not(windows))]
+pub fn window_under_cursor() -> Result<String, String> {
+    Err("picking a window is only implemented on Windows so far".into())
 }
 
 #[cfg(windows)]
 mod win {
-    use super::{ClientArea, GAME_TITLE};
+    use super::ClientArea;
     use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
     use windows::Win32::Graphics::Dwm::{DWMWA_CLOAKED, DwmGetWindowAttribute};
     use windows::Win32::Graphics::Gdi::ClientToScreen;
     use windows::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GetClientRect, GetWindowTextW, IsIconic, IsWindowVisible,
+        EnumWindows, GA_ROOT, GetAncestor, GetClientRect, GetCursorPos, GetWindowTextW,
+        GetWindowThreadProcessId, IsIconic, IsWindowVisible, WindowFromPoint,
     };
     use windows::core::BOOL;
 
-    /// The first visible, uncloaked top-level window titled exactly "MapleStory".
-    /// `None` when the game isn't running or is minimised.
-    pub fn find_game_client() -> Option<ClientArea> {
-        let mut found: Vec<HWND> = Vec::new();
+    /// The first visible, uncloaked top-level window titled exactly `title`. `None`
+    /// when the game isn't running or is minimised.
+    pub fn find_game_client(title: &str) -> Option<ClientArea> {
+        let mut search: (&str, Vec<HWND>) = (title, Vec::new());
         unsafe {
-            let _ = EnumWindows(Some(collect), LPARAM(&mut found as *mut Vec<HWND> as isize));
+            let _ = EnumWindows(Some(collect), LPARAM(&mut search as *mut (&str, Vec<HWND>) as isize));
         }
-        found.into_iter().find_map(client_area)
+        search.1.into_iter().find_map(client_area)
     }
 
     unsafe extern "system" fn collect(hwnd: HWND, lparam: LPARAM) -> BOOL {
-        let found = unsafe { &mut *(lparam.0 as *mut Vec<HWND>) };
-        if is_game_window(hwnd) {
+        let (title, found) = unsafe { &mut *(lparam.0 as *mut (&str, Vec<HWND>)) };
+        if is_game_window(hwnd, title) {
             found.push(hwnd);
         }
         BOOL(1) // keep enumerating
     }
 
-    fn is_game_window(hwnd: HWND) -> bool {
+    /// The title of the top-level window under the mouse pointer, for picking the game
+    /// window by hand. Only reads window-manager state: the pointer position, which
+    /// window is there, its root and its stored caption (ADR 0001).
+    pub fn window_under_cursor() -> Result<String, String> {
+        unsafe {
+            let mut at = POINT::default();
+            GetCursorPos(&mut at).map_err(|e| format!("no pointer position: {e}"))?;
+            let root = GetAncestor(WindowFromPoint(at), GA_ROOT);
+            if root.is_invalid() {
+                return Err("no window under the pointer".into());
+            }
+            let mut pid = 0u32;
+            GetWindowThreadProcessId(root, Some(&mut pid));
+            if pid == std::process::id() {
+                return Err("that is MapleCompass itself".into());
+            }
+            match caption(root) {
+                Some(title) if !title.trim().is_empty() => Ok(title),
+                _ => Err("the window under the pointer has no title".into()),
+            }
+        }
+    }
+
+    /// The caption stored by the window manager; no WM_GETTEXT is sent to another
+    /// process's window.
+    fn caption(hwnd: HWND) -> Option<String> {
+        let mut buf = [0u16; 256];
+        let n = unsafe { GetWindowTextW(hwnd, &mut buf) };
+        (n > 0).then(|| String::from_utf16_lossy(&buf[..n as usize]))
+    }
+
+    fn is_game_window(hwnd: HWND, title: &str) -> bool {
         unsafe {
             if !IsWindowVisible(hwnd).as_bool() {
                 return false;
             }
-            // Reads the caption stored by the window manager; no WM_GETTEXT is sent
-            // to another process's window.
-            let mut buf = [0u16; 64];
-            let n = GetWindowTextW(hwnd, &mut buf);
-            if n <= 0 || String::from_utf16_lossy(&buf[..n as usize]) != GAME_TITLE {
+            if caption(hwnd).as_deref() != Some(title) {
                 return false;
             }
             let mut cloaked: u32 = 0;
