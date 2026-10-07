@@ -100,6 +100,7 @@ type PanelState = {
     openMeowdbPage: string;
     setup: string;
     chooseCandidate: string;
+    resetSession: string;
   };
   unavailableHotkeys: string[];
   gameWindowTitle: string;
