@@ -79,7 +79,7 @@ mod win {
     use windows::Win32::System::Threading::GetCurrentProcessId;
     use windows::Win32::UI::WindowsAndMessaging::{
         EnumWindows, GA_ROOT, GW_HWNDPREV, GWL_EXSTYLE, GetAncestor, GetClientRect, GetCursorPos,
-        GetWindow, GetWindowLongPtrW, GetWindowTextW, GetWindowThreadProcessId, HWND_NOTOPMOST,
+        GetForegroundWindow, GetWindow, GetWindowLongPtrW, GetWindowTextW, GetWindowThreadProcessId, HWND_NOTOPMOST,
         HWND_TOP, HWND_TOPMOST, IsIconic, IsWindowVisible, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
         SetWindowPos, WS_EX_TOPMOST, WindowFromPoint,
     };
@@ -215,34 +215,49 @@ mod win {
         pid == unsafe { GetCurrentProcessId() }
     }
 
-    /// Keep our `overlay` just above the game in the z-order, without making it
-    /// topmost (unless the game itself is): an app in front of the game then covers
-    /// the overlay too. Only our own window is moved, only when the order is wrong,
-    /// and never relative to the game's own windows (Windows refuses that when the
-    /// game runs elevated). Returns whether it had to move the overlay.
+    /// Keep our `overlay` just above the game in the z-order: an app in front of the
+    /// game then covers the overlay too. Only our own window is moved, only when the
+    /// order is wrong, and never relative to the game's own windows (Windows refuses
+    /// that when the game runs elevated). Returns whether it had to move the overlay.
+    ///
+    /// While the game is the foreground window the overlay joins the topmost band:
+    /// Windows silently ignores a background process raising a normal window above
+    /// the foreground one (`HWND_TOP` returns success and does nothing), but any
+    /// process may make its window topmost. Once another app takes the foreground,
+    /// the overlay leaves the topmost band again and sits just above the game.
     ///
     /// No owner/parent link to the game (that would attach input queues across the
     /// processes, ADR 0001) and no event hook: the caller polls this.
     pub fn keep_above(overlay: HWND, game: isize) -> windows::core::Result<bool> {
         let game = HWND(game as *mut _);
         unsafe {
+            let foreground = GetForegroundWindow();
+            if foreground == game || (!foreground.is_invalid() && is_ours(foreground)) {
+                if is_topmost(overlay) {
+                    return Ok(false);
+                }
+                SetWindowPos(overlay, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE)?;
+                return Ok(true);
+            }
+            let game_topmost = is_topmost(game);
             // Walk up from the game. Invisible windows (the game's IME windows sit
             // right above it) and our own helper windows don't count: the overlay
-            // must come before any other visible window.
+            // must come before any other visible window, and only counts as in place
+            // when it is in the game's band (a topmost overlay left over from when
+            // the game had the foreground would float above every other app).
             let mut above = GetWindow(game, GW_HWNDPREV).ok();
             let mut first_other = None;
             for _ in 0..1024 {
                 let Some(w) = above else { break };
-                if w == overlay {
+                if w == overlay && is_topmost(overlay) == game_topmost {
                     return Ok(false);
                 }
-                if IsWindowVisible(w).as_bool() && !is_ours(w) {
+                if w != overlay && IsWindowVisible(w).as_bool() && !is_ours(w) {
                     first_other = Some(w);
                     break;
                 }
                 above = GetWindow(w, GW_HWNDPREV).ok();
             }
-            let game_topmost = is_topmost(game);
             // Inserting after that window puts ours between it and the game. If it is
             // topmost and the game isn't, the game leads its band, so go to the top of
             // the band: HWND_TOP, or HWND_NOTOPMOST to bring a topmost overlay down.
