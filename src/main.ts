@@ -2,7 +2,17 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { hotkeyAvailable, keyLabel, type Hotkeys } from "./hotkeys";
-import { crawlLine, resultRow, showPicked, type PickedSection, type SearchState } from "./search-state";
+import {
+  crawlLine,
+  distanceText,
+  nearestLine,
+  resultRow,
+  resultsHead,
+  resultsNote,
+  routeStops,
+  type SearchResult,
+  type SearchState,
+} from "./search-state";
 
 type PlacementMode = "inside" | "dockedRight" | "dockedLeft" | "detached";
 
@@ -78,6 +88,8 @@ type PanelState = {
   placementMode: PlacementMode;
   layer: "aboveGame" | "free" | "hidden";
   draggable: boolean;
+  /** The overlay takes the mouse (draggable, search mode, or the pointer on a control). */
+  takesMouse: boolean;
   setup: { needed: "firstRun" | "resolutionChanged" | "requested" | null };
   hotkeys: Hotkeys;
   unavailableHotkeys: string[];
@@ -112,16 +124,28 @@ const helpHint = byId("help-hint");
 const uncertainty = byId("uncertainty");
 const crawlProgress = byId("crawl-progress");
 const mobSearch = byId("mob-search");
-const searchSection: PickedSection = {
-  title: byId("search-title"),
-  nearest: byId("search-nearest"),
-  note: byId("search-note"),
-  table: byId("search-results") as HTMLTableElement,
-  rows: byId("search-rows"),
-};
+const searchTitle = byId("search-title");
+const searchClear = byId("search-clear");
+const searchModeEl = byId("search-mode");
+const query = byId("query") as HTMLInputElement;
+const suggestions = byId("suggestions");
+const noMatch = byId("no-match");
+const taxis = byId("taxis") as HTMLInputElement;
+const teleportScrolls = byId("teleport-scrolls") as HTMLInputElement;
+const searchNearest = byId("search-nearest");
+const searchNote = byId("search-note");
+const resultsBox = byId("results-box");
+const resultsTable = byId("search-results") as HTMLTableElement;
+const resultRows = byId("search-rows");
+const route = byId("route");
+const routeTitle = byId("route-title");
+const routeList = byId("route-stops");
+const routeNone = byId("route-none");
 const searchMore = byId("search-more");
 const searchCredit = byId("search-credit");
+resultsTable.prepend(resultsHead());
 let draggable = false;
+let searching = false;
 
 const PLACEMENT_NAMES: Record<PlacementMode, string> = {
   inside: "Inside",
@@ -288,20 +312,106 @@ function renderData(panel: PanelState) {
   helpHint.hidden = helpHint.textContent === "";
 }
 
-/** The picked mob's top results, below the current map's info, until the search is cleared. */
+/**
+ * Mob search, in its own section below the current map's info: in search mode the query
+ * box, suggestions, travel toggles, every result and the highlighted one's route; after
+ * that the picked mob's top results, until the player clears the search (× or Enter
+ * with nothing typed).
+ */
 function renderSearch(panel: PanelState) {
   const { search } = panel;
-  mobSearch.hidden = !panel.gameFound || !search.picked;
-  if (!search.picked) return;
-  showPicked(searchSection, search, search.picked, search.topResults.map(resultRow));
-  const more = search.moreResults;
-  const open = hotkeyAvailable(panel.hotkeys.search, panel.unavailableHotkeys)
+  const mode = search.searchMode;
+  mobSearch.hidden = !mode && (!panel.gameFound || !search.picked);
+  searchModeEl.hidden = !mode;
+  // Search mode starts afresh: nothing typed yet, and the typing goes to the query box.
+  if (mode && !searching) {
+    query.value = search.query;
+    query.focus();
+  }
+  searching = mode;
+  searchTitle.textContent = search.picked ? `Mob search · ${search.picked.name}` : "Mob search";
+  if (search.picked) searchTitle.append(span("level", `Lv ${search.picked.level}`));
+  if (mode) renderQuery(search);
+
+  // Search mode lists every result, highlighting the one whose route it shows.
+  const results = mode ? search.results : search.topResults;
+  const rows = results.map((result, i) => {
+    const row = resultRow(result);
+    const current = mode && i === search.highlightedResult;
+    row.classList.toggle("current", current);
+    if (mode) row.setAttribute("aria-selected", String(current));
+    return row;
+  });
+  searchNearest.textContent = search.picked ? nearestLine(search) : "";
+  searchNearest.hidden = searchNearest.textContent === "";
+  searchNote.textContent = search.picked ? resultsNote(search) : "";
+  searchNote.hidden = searchNote.textContent === "";
+  resultsBox.hidden = rows.length === 0;
+  resultsBox.classList.toggle("all", mode);
+  resultRows.replaceChildren(...rows);
+  showRoute(mode && search.highlightedResult !== null ? search.results[search.highlightedResult] : null);
+
+  const more = mode ? 0 : search.moreResults;
+  const all = hotkeyAvailable(panel.hotkeys.search, panel.unavailableHotkeys)
     ? ` · ${keyLabel(panel.hotkeys.search)} shows all` : "";
-  searchMore.textContent = more > 0 ? `${more} more map${more === 1 ? "" : "s"}${open}` : "";
+  searchMore.textContent = more > 0 ? `${more} more map${more === 1 ? "" : "s"}${all}` : "";
   searchMore.hidden = searchMore.textContent === "";
   // The footer credits MeowDB whenever a map is shown; otherwise the results do here.
   searchCredit.textContent = search.credit ?? "";
   searchCredit.hidden = !search.credit || !!panel.credit;
+}
+
+/** Search mode's query box: the suggestions (the highlighted one is what Enter picks) and the travel toggles. */
+function renderQuery(search: SearchState) {
+  // The core keeps the toggles (and saves them); the checkboxes follow it.
+  taxis.checked = search.travel.taxis;
+  teleportScrolls.checked = search.travel.teleportScrolls;
+  suggestions.replaceChildren(
+    ...search.suggestions.map((mob, i) => {
+      const row = document.createElement("li");
+      row.id = `mob-${mob.id}`;
+      row.setAttribute("role", "option");
+      row.append(span("name", mob.name), span("level", `Lv ${mob.level}`));
+      const current = i === search.highlighted;
+      row.classList.toggle("current", current);
+      row.setAttribute("aria-selected", String(current));
+      return row;
+    }),
+  );
+  const listed = search.suggestions.length > 0;
+  suggestions.hidden = !listed;
+  query.setAttribute("aria-expanded", String(listed));
+  const highlighted = search.highlighted === null ? null : search.suggestions[search.highlighted];
+  if (highlighted) {
+    query.setAttribute("aria-activedescendant", `mob-${highlighted.id}`);
+    scrollWithin(suggestions, byId(`mob-${highlighted.id}`));
+  } else {
+    query.removeAttribute("aria-activedescendant");
+  }
+  noMatch.textContent = search.crawl.total === 0 ? "Loading MeowDB's Map list…" : "No known mob has that in its name.";
+  noMatch.hidden = listed || search.query.trim() === "";
+}
+
+/** The highlighted result's full route, under the results (search mode only). */
+function showRoute(result: SearchResult | null) {
+  route.hidden = !result;
+  if (!result) return;
+  routeTitle.textContent = `Route to ${result.mapName}`;
+  routeList.replaceChildren(...routeStops(result));
+  routeList.hidden = result.route.length === 0;
+  // No route to show: say why ("No known route leads there"…).
+  routeNone.textContent = result.route.length === 0 ? distanceText(result.distance).title : "";
+  routeNone.hidden = result.route.length > 0;
+  const current = resultRows.querySelector<HTMLElement>("tr.current");
+  if (current) scrollWithin(resultsBox, current);
+}
+
+/** Scroll `box` just enough to show `item`. Not `scrollIntoView`, which would scroll the overlay's page too. */
+function scrollWithin(box: HTMLElement, item: HTMLElement) {
+  const outer = box.getBoundingClientRect();
+  const inner = item.getBoundingClientRect();
+  if (inner.top < outer.top) box.scrollTop -= outer.top - inner.top;
+  else if (inner.bottom > outer.bottom) box.scrollTop += inner.bottom - outer.bottom;
 }
 
 function render(panel: PanelState) {
@@ -370,6 +480,7 @@ function render(panel: PanelState) {
   renderData(panel);
   renderSearch(panel);
   reportHeight(panel.expanded);
+  reportControls();
 }
 
 // The shell sizes the window to the expanded panel's content.
@@ -383,12 +494,72 @@ function reportHeight(expanded: boolean) {
   }
 }
 
-// A draggable overlay takes the mouse (the shell turns click-through off): in edit mode
-// inside the game, and always when detached. Otherwise it never sees a click.
+// The shell lets clicks through the overlay except over its controls (marked
+// `data-control`), so it needs to know where they are: wherever they are shown.
+let reportedControls = "";
+function reportControls() {
+  const controls = [...document.querySelectorAll<HTMLElement>("[data-control]")]
+    .filter((control) => control.getClientRects().length > 0)
+    .map((control) => {
+      const { x, y, width, height } = control.getBoundingClientRect();
+      return { x, y, width, height };
+    });
+  const json = JSON.stringify(controls);
+  if (json !== reportedControls) {
+    reportedControls = json;
+    invoke("overlay_controls", { controls });
+  }
+}
+window.addEventListener("resize", reportControls);
+
+// A draggable overlay (edit mode inside the game, and always when detached) is dragged
+// from anywhere but its controls, so the × and the query box still work there.
 document.addEventListener("mousedown", (e) => {
-  if (draggable && e.button === 0) {
+  const onControl = e.target instanceof Element && e.target.closest("button, input, label, .suggestions, .route");
+  if (draggable && e.button === 0 && !onControl) {
     getCurrentWindow().startDragging();
   }
+});
+
+searchClear.addEventListener("click", () => invoke("search_clear"));
+query.addEventListener("input", () => invoke("search_query", { query: query.value }));
+query.addEventListener("keydown", (e) => {
+  if (e.isComposing) return;
+  switch (e.key) {
+    case "ArrowDown":
+    case "ArrowUp":
+      e.preventDefault();
+      invoke("search_move", { down: e.key === "ArrowDown" });
+      break;
+    case "Enter":
+      e.preventDefault();
+      invoke("search_enter");
+      break;
+    case "Escape":
+      e.preventDefault();
+      invoke("search_escape");
+      break;
+  }
+});
+// After a click on a checkbox, the typing goes back to the query box.
+taxis.addEventListener("change", () => {
+  invoke("search_toggle_taxis");
+  query.focus();
+});
+teleportScrolls.addEventListener("change", () => {
+  invoke("search_toggle_teleport_scrolls");
+  query.focus();
+});
+// Esc leaves search mode from the checkboxes and the × too.
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && searching && e.target !== query) {
+    e.preventDefault();
+    invoke("search_escape");
+  }
+});
+// Whenever the overlay comes in front in search mode, the typing goes to the query box.
+window.addEventListener("focus", () => {
+  if (searching) query.focus();
 });
 
 listen<PanelState>("overlay-state", (e) => render(e.payload));
