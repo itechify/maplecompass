@@ -73,7 +73,7 @@ pub fn map_url(id: &str) -> String {
 /// and without a summary (a town) is valid.
 ///
 /// The map's Hidden Portals follow the Hidden Portal rule and the app's hand-kept
-/// [`PORTAL_OVERRIDES`].
+/// [`PORTAL_OVERRIDES`]. Its connected maps come from the map's `connectedMaps`.
 pub fn read_map_page(html: &str, id: &str) -> Result<MapData, SourceError> {
     read_map_page_with(html, id, PORTAL_OVERRIDES)
 }
