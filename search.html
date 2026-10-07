@@ -30,6 +30,15 @@
     <ul class="suggestions" id="suggestions" role="listbox" aria-label="Mobs" hidden></ul>
     <p class="none" id="no-match" hidden>No known mob has that in its name.</p>
     <p class="keys">↑ ↓ choose a mob, or with nothing typed a map's route · Enter picks · Esc closes · Enter with nothing typed clears the search</p>
+    <fieldset class="travel">
+      <legend>Distance also counts</legend>
+      <label title="Taxi rides between Lith Harbor, Henesys, Ellinia, Kerning City and Perion, one map change each">
+        <input type="checkbox" id="taxis" /> Taxis
+      </label>
+      <label title="A scroll to the map's nearest town, or to Henesys, Ellinia, Perion, Kerning City, Lith Harbor, Sleepywood, Orbis or El Nath, one map change each">
+        <input type="checkbox" id="teleport-scrolls" /> Teleport Scrolls
+      </label>
+    </fieldset>
     <section class="picked" id="picked" hidden>
       <h2 id="picked-title"></h2>
       <p class="nearest" id="picked-nearest" hidden></p>
