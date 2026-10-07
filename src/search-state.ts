@@ -30,6 +30,9 @@ export type SearchResult = {
   travel: Step[];
 };
 
+/** Mirror of `compass_core::Travel`: taxi rides between towns, and Teleport Scrolls to towns. */
+export type Travel = { taxis: boolean; teleportScrolls: boolean };
+
 /** Mirror of `compass_core::SearchState`. */
 export type SearchState = {
   windowOpen: boolean;
@@ -49,10 +52,8 @@ export type SearchState = {
   nearest: number | null;
   credit: string | null;
   crawl: CrawlProgress;
-  /** Distances count taxi rides between towns (the Taxis checkbox). */
-  taxis: boolean;
-  /** Distances count Teleport Scrolls to towns (the Teleport Scrolls checkbox). */
-  teleportScrolls: boolean;
+  /** What Distances count besides portals and ships (the checkboxes). */
+  travel: Travel;
 };
 
 export const TIER_NAMES: Record<DensityTier, string> = { high: "High", medium: "Medium", low: "Low" };

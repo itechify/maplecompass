@@ -46,8 +46,8 @@ function update({ search }: SearchView) {
 
   crawl.textContent = search.crawl.total === 0 ? "Loading MeowDB's Map list…" : crawlLine(search);
   // The core keeps the toggles (and saves them); the checkboxes follow it.
-  taxis.checked = search.taxis;
-  teleportScrolls.checked = search.teleportScrolls;
+  taxis.checked = search.travel.taxis;
+  teleportScrolls.checked = search.travel.teleportScrolls;
 
   suggestions.replaceChildren(
     ...search.suggestions.map((mob, i) => {

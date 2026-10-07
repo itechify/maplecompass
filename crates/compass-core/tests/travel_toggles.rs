@@ -10,7 +10,7 @@ mod common;
 
 use common::arrive;
 use common::world::{WorldMap, map, nearest, orange, search_for, world};
-use compass_core::{Action, Compass, Distance, PanelState, SearchResult, Settings, Step};
+use compass_core::{Action, Compass, Distance, PanelState, SearchResult, Settings, Step, Travel};
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
 
@@ -56,11 +56,11 @@ fn both_toggles_are_off_by_default() {
     let compass = Compass::new(world(vec![]));
 
     let settings = compass.settings();
-    assert!(!settings.taxis);
-    assert!(!settings.teleport_scrolls);
+    assert!(!settings.travel.taxis);
+    assert!(!settings.travel.teleport_scrolls);
     let state = compass.panel_state();
-    assert!(!state.search.taxis);
-    assert!(!state.search.teleport_scrolls);
+    assert!(!state.search.travel.taxis);
+    assert!(!state.search.travel.teleport_scrolls);
 }
 
 #[test]
@@ -70,9 +70,9 @@ fn a_settings_file_from_before_the_toggles_has_both_off() {
 
     let state = compass.restore(serde_json::from_str(before_toggles).unwrap()).clone();
 
-    assert!(!state.search.taxis && !state.search.teleport_scrolls);
+    assert!(!state.search.travel.taxis && !state.search.travel.teleport_scrolls);
     let settings = compass.settings();
-    assert!(!settings.taxis && !settings.teleport_scrolls, "and saved off");
+    assert!(!settings.travel.taxis && !settings.travel.teleport_scrolls, "and saved off");
 }
 
 #[test]
@@ -81,18 +81,19 @@ fn flipped_toggles_are_saved_and_restored_next_session() {
     compass.act(Action::ToggleTaxis);
     compass.act(Action::ToggleTeleportScrolls);
     let json = serde_json::to_string(&compass.settings()).unwrap();
+    assert!(json.contains(r#""taxis":true"#) && json.contains(r#""teleportScrolls":true"#), "{json}");
 
     let mut restarted = Compass::new(world(vec![]));
     let state = restarted.restore(serde_json::from_str::<Settings>(&json).unwrap()).clone();
 
-    assert!(state.search.taxis);
-    assert!(state.search.teleport_scrolls);
-    assert!(restarted.settings().taxis && restarted.settings().teleport_scrolls);
+    assert!(state.search.travel.taxis);
+    assert!(state.search.travel.teleport_scrolls);
+    assert!(restarted.settings().travel.taxis && restarted.settings().travel.teleport_scrolls);
 
     let state = restarted.act(Action::ToggleTaxis);
-    assert!(!state.search.taxis, "flipped back off");
-    assert!(state.search.teleport_scrolls);
-    assert!(!restarted.settings().taxis);
+    assert!(!state.search.travel.taxis, "flipped back off");
+    assert!(state.search.travel.teleport_scrolls);
+    assert!(!restarted.settings().travel.taxis);
 }
 
 const LITH_HARBOR: &str = "010000000";
@@ -231,7 +232,7 @@ fn flipping_a_toggle_reranks_the_results_and_moves_the_headline_straight_away() 
     let mut compass = searched_from_sunset_sky(near_field_and_far_perion());
     let state = compass.panel_state();
     assert_eq!(distances(state), ["Near Field: 2", "Perion: 4"]);
-    assert_eq!(nearest(&state).unwrap().map_name, "Near Field");
+    assert_eq!(nearest(state).unwrap().map_name, "Near Field");
 
     let state = compass.act(Action::ToggleTeleportScrolls).clone();
 
@@ -250,9 +251,9 @@ fn flipping_a_toggle_reranks_the_results_and_moves_the_headline_straight_away() 
 fn restored_toggles_count_in_the_distances_at_once() {
     let mut compass = searched_from_sunset_sky(near_field_and_far_perion());
 
-    let state = compass.restore(Settings { teleport_scrolls: true, ..Settings::default() });
+    let state = compass.restore(Settings { travel: Travel { teleport_scrolls: true, taxis: false }, ..Settings::default() });
 
-    assert!(state.search.teleport_scrolls);
+    assert!(state.search.travel.teleport_scrolls);
     assert_eq!(distances(state), ["Perion: 1", "Near Field: 2"]);
 }
 

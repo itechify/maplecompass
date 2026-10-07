@@ -106,10 +106,8 @@ pub struct SearchState {
     /// How many of the index's maps the world crawl knows so far ("312 of 422 maps
     /// known"): search can only find mobs on those.
     pub crawl: CrawlProgress,
-    /// Distances count taxi rides between towns (the Taxis checkbox).
-    pub taxis: bool,
-    /// Distances count Teleport Scrolls to towns (the Teleport Scrolls checkbox).
-    pub teleport_scrolls: bool,
+    /// What Distances count besides portals and ships (the checkboxes).
+    pub travel: Travel,
 }
 
 /// What mob search works over: the maps the crawl knows (`None` before the map index
@@ -214,8 +212,7 @@ impl MobSearch {
             only_on_event_maps,
             results,
             crawl: crawl.map(Crawl::progress).unwrap_or_default(),
-            taxis: travel.taxis,
-            teleport_scrolls: travel.teleport_scrolls,
+            travel,
         }
     }
 

@@ -36,7 +36,7 @@ pub use search::{DensityTier, MobChoice, PANEL_RESULTS, RouteStop, SearchResult,
 pub use settings::{Hotkeys, Settings};
 pub use setup::{SelectionDirection, SetupReason, SetupState, TestRead, TitleRegion};
 pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
-pub use world::{Distance, Step};
+pub use world::{Distance, Step, Travel};
 
 use crawl::Crawl;
 use search::{MobSearch, Searched};
@@ -46,7 +46,7 @@ use panel::Panel;
 use setup::Setup;
 pub use recogniser::{TitleLines, TitleReader, TitleReading};
 use tracker::Tracker;
-use world::{Here, Travel};
+use world::Here;
 use serde::Serialize;
 use std::task::Poll;
 
@@ -364,11 +364,11 @@ impl Compass {
             }
             // Settings, so they count whether or not the window is open.
             Action::ToggleTaxis => {
-                self.settings.taxis = !self.settings.taxis;
+                self.settings.travel.taxis = !self.settings.travel.taxis;
                 self.sync_search();
             }
             Action::ToggleTeleportScrolls => {
-                self.settings.teleport_scrolls = !self.settings.teleport_scrolls;
+                self.settings.travel.teleport_scrolls = !self.settings.travel.teleport_scrolls;
                 self.sync_search();
             }
         }
@@ -549,7 +549,7 @@ fn searched<'a>(crawl: &'a Option<Crawl>, state: &'a PanelState, settings: &Sett
     Searched {
         crawl: crawl.as_ref(),
         here: state.map.as_ref().map(|map| Here { id: &map.id, page: state.data.data() }),
-        travel: Travel { taxis: settings.taxis, teleport_scrolls: settings.teleport_scrolls },
+        travel: settings.travel,
     }
 }
 
