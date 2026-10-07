@@ -1,8 +1,8 @@
 //! First-run setup: the Title Region the player marks, its test read, and when to ask
 //! for setup again.
 
-use crate::{CurrentMap, Rect};
-use crate::panel::{Action, ScreenRect, Size};
+use crate::panel::{ScreenRect, Size};
+use crate::{CurrentMap, MEOWDB_CREDIT, Rect};
 use serde::{Deserialize, Serialize};
 
 /// Why the player needs to (re)do setup.
@@ -40,6 +40,11 @@ pub struct SetupState {
     pub needed: Option<SetupReason>,
     /// The test read of the region just marked; `None` when none is being marked.
     pub test_read: Option<TestRead>,
+    /// [`MEOWDB_CREDIT`] when the test read shows a map: its names are MeowDB's.
+    pub credit: Option<&'static str>,
+    /// The setup window shows: when setup becomes needed, and when the player asks
+    /// for it, until it is finished or closed.
+    pub window_open: bool,
 }
 
 /// A marked Title Region and the size of the game client area it was marked on.
@@ -70,31 +75,53 @@ pub(crate) struct Setup {
     marking: Option<(TitleRegion, TestRead)>,
     /// The player asked to redo setup and hasn't finished or cancelled it.
     requested: bool,
+    /// The setup window is showing.
+    window_open: bool,
+    /// Why setup was needed when the window was last opened for it (or closed).
+    opened_for: Option<SetupReason>,
 }
 
 impl Setup {
-    pub fn act(&mut self, action: Action) {
-        match action {
-            Action::MarkTitleRegion(marked) => {
-                if let Some(game) = self.game {
-                    let client = Size { width: game.width, height: game.height };
-                    self.marking = Some((TitleRegion { marked, client }, TestRead::Reading));
-                }
-            }
-            Action::FinishSetup => {
-                if let Some((region, TestRead::Recognised { .. })) = &self.marking {
-                    self.saved = Some(*region);
-                    self.marking = None;
-                    self.requested = false;
-                }
-            }
-            Action::RequestSetup => self.requested = true,
-            Action::CancelSetup => {
-                self.marking = None;
-                self.requested = false;
-            }
-            _ => {}
+    /// The player marked the Title Region: test-read it.
+    pub fn mark(&mut self, marked: Rect) {
+        if let Some(game) = self.game {
+            let client = Size { width: game.width, height: game.height };
+            self.marking = Some((TitleRegion { marked, client }, TestRead::Reading));
         }
+    }
+
+    /// Keep the marked region, if its test read recognised a map.
+    pub fn finish(&mut self) {
+        if let Some((region, TestRead::Recognised { .. })) = &self.marking {
+            self.saved = Some(*region);
+            self.marking = None;
+            self.requested = false;
+        }
+    }
+
+    /// The re-setup hotkey: open setup, even if it was needed before and closed.
+    pub fn request(&mut self) {
+        self.requested = true;
+        self.window_open = true;
+    }
+
+    /// The player closed setup without finishing it.
+    pub fn cancel(&mut self) {
+        self.marking = None;
+        self.requested = false;
+        self.window_open = false;
+    }
+
+    /// Open the setup window when setup becomes needed (or needed for a new reason),
+    /// and close it once it isn't.
+    pub fn follow_needed(&mut self) {
+        let needed = self.needed();
+        if needed.is_none() {
+            self.window_open = false;
+        } else if needed != self.opened_for {
+            self.window_open = true;
+        }
+        self.opened_for = needed;
     }
 
     /// The map a frame snapped to (`None`: unreadable or not confident). While a region
@@ -106,9 +133,12 @@ impl Setup {
     }
 
     pub fn state(&self) -> SetupState {
+        let test_read = self.marking.as_ref().map(|(_, read)| read.clone());
         SetupState {
             needed: self.needed(),
-            test_read: self.marking.as_ref().map(|(_, read)| read.clone()),
+            credit: matches!(test_read, Some(TestRead::Recognised { .. })).then_some(MEOWDB_CREDIT),
+            test_read,
+            window_open: self.window_open,
         }
     }
 

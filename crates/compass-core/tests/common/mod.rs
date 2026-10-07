@@ -3,7 +3,8 @@
 #![allow(dead_code)]
 
 use compass_core::{
-    Frame, MapData, MapDataSource, MapEntry, ScreenRect, SourceError, default_title_region, meowdb,
+    Compass, Fetched, Frame, MapData, MapDataSource, MapEntry, PanelState, Rect, ScreenRect, Size,
+    SourceError, TitleRegion, default_title_region, meowdb,
 };
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -70,6 +71,21 @@ pub fn sample_frame(name: &str, at_ms: u64) -> Frame {
     if name.ends_with("--window") { default_region_frame(&img, at_ms) } else { frame(&img, at_ms) }
 }
 
+/// Two confident reads of a sample: the panel switches to its map.
+pub fn arrive(compass: &mut Compass, sample: &str, at_ms: u64) -> PanelState {
+    compass.on_frame(sample_frame(sample, at_ms));
+    compass.on_frame(sample_frame(sample, at_ms + 333)).clone()
+}
+
+/// A Title Region marked around the minimap title of the Kerning City window sample,
+/// whose client area is 1916x1197.
+pub fn kerning_title_region() -> TitleRegion {
+    TitleRegion {
+        marked: Rect { x: 70, y: 40, width: 130, height: 48 },
+        client: Size { width: 1916, height: 1197 },
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SavedEntry {
@@ -117,27 +133,55 @@ pub fn saved_page(id: &str) -> Option<String> {
 }
 
 type PageAnswer = Poll<Result<MapData, SourceError>>;
+type IndexAnswer = Poll<Result<Vec<MapEntry>, SourceError>>;
 
 /// A map data source that answers from memory and counts index and map data requests.
 pub struct FakeSource {
     /// Answers for successive index requests; the last one repeats.
-    answers: Vec<Result<Vec<MapEntry>, SourceError>>,
+    answers: Vec<IndexAnswer>,
     pub index_requests: Arc<AtomicU32>,
     /// Answers a map data request for a map ID. Defaults to the saved pages, read with
     /// the core's MeowDB reader; a map without a saved page is unreachable.
     pages: Box<dyn FnMut(&str) -> PageAnswer + Send>,
     /// The map ID of every map data request, in order.
     pub map_requests: Arc<Mutex<Vec<String>>>,
+    /// MeowDB is unreachable and the answers are copies saved at this time (ms since the
+    /// Unix epoch); `None`: they are fresh.
+    saved_at: Option<u64>,
 }
 
 impl FakeSource {
-    fn answering(answers: Vec<Result<Vec<MapEntry>, SourceError>>) -> Self {
+    fn answering(answers: Vec<IndexAnswer>) -> Self {
         Self {
             answers,
             index_requests: Arc::default(),
             pages: Box::new(|id| Poll::Ready(read_saved_page(id))),
             map_requests: Arc::default(),
+            saved_at: None,
         }
+    }
+
+    /// MeowDB can't be reached, and every answer (index and pages) is a copy saved at
+    /// `saved_at_unix_ms`.
+    pub fn serving_saved_copies(self, saved_at_unix_ms: u64) -> Self {
+        Self { saved_at: Some(saved_at_unix_ms), ..self }
+    }
+
+    /// The map index arrives only on the `polls`-th request for it; until then the
+    /// fetch is still in flight.
+    pub fn with_slow_index(index: Vec<MapEntry>, polls: usize) -> Self {
+        let mut answers: Vec<IndexAnswer> = (1..polls).map(|_| Poll::Pending).collect();
+        answers.push(Poll::Ready(Ok(index)));
+        Self::answering(answers)
+    }
+
+    fn fetched<T>(&self, answer: Poll<Result<T, SourceError>>) -> Poll<Result<Fetched<T>, SourceError>> {
+        answer.map(|result| {
+            result.map(|data| match self.saved_at {
+                Some(saved_at_unix_ms) => Fetched::SavedCopy { data, saved_at_unix_ms },
+                None => Fetched::Fresh(data),
+            })
+        })
     }
 
     /// Answer map data requests with `pages` instead of the saved pages.
@@ -171,7 +215,7 @@ impl FakeSource {
     }
 
     pub fn with_index(index: Vec<MapEntry>) -> Self {
-        Self::answering(vec![Ok(index)])
+        Self::answering(vec![Poll::Ready(Ok(index))])
     }
 
     /// The saved MeowDB index.
@@ -186,12 +230,12 @@ impl FakeSource {
 
     /// Every index request fails this way.
     pub fn failing(error: SourceError) -> Self {
-        Self::answering(vec![Err(error)])
+        Self::answering(vec![Poll::Ready(Err(error))])
     }
 
     /// MeowDB can't be reached at first, then serves this index.
     pub fn offline_then(index: Vec<MapEntry>) -> Self {
-        Self::answering(vec![Err(unreachable()), Ok(index)])
+        Self::answering(vec![Poll::Ready(Err(unreachable())), Poll::Ready(Ok(index))])
     }
 }
 
@@ -212,13 +256,15 @@ fn read_saved_page(id: &str) -> Result<MapData, SourceError> {
 }
 
 impl MapDataSource for FakeSource {
-    fn map_index(&mut self) -> Result<Vec<MapEntry>, SourceError> {
+    fn map_index(&mut self) -> Poll<Result<Fetched<Vec<MapEntry>>, SourceError>> {
         let n = self.index_requests.fetch_add(1, Ordering::SeqCst) as usize;
-        self.answers[n.min(self.answers.len() - 1)].clone()
+        let answer = self.answers[n.min(self.answers.len() - 1)].clone();
+        self.fetched(answer)
     }
 
-    fn map_data(&mut self, id: &str) -> PageAnswer {
+    fn map_data(&mut self, id: &str) -> Poll<Result<Fetched<MapData>, SourceError>> {
         self.map_requests.lock().unwrap().push(id.to_string());
-        (self.pages)(id)
+        let answer = (self.pages)(id);
+        self.fetched(answer)
     }
 }

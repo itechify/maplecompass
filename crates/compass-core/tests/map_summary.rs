@@ -4,21 +4,15 @@
 
 mod common;
 
-use common::{FakeSource, sample_frame, saved_index, saved_page};
+use common::{FakeSource, arrive, saved_index, saved_page};
 use compass_core::{
-    Compass, MapDataStatus, MapEntry, MapSummary, Mob, PanelState, PerParty,
+    Compass, MapDataStatus, MapEntry, MapSummary, Mob, PerParty,
 };
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
 const KERNING: &str = "victoria-road__kerning-city--window";
 const SUNSET_SKY: &str = "010003070";
 const DEAD_MINE_IV: &str = "020001067";
-
-/// Two confident reads of a sample: the panel switches to its map.
-fn arrive(compass: &mut Compass, sample: &str, at_ms: u64) -> PanelState {
-    compass.on_frame(sample_frame(sample, at_ms));
-    compass.on_frame(sample_frame(sample, at_ms + 333)).clone()
-}
 
 fn mob(name: &str, level: u32, hp: u64, exp: u64, spawn_count: u32, spawn_share_percent: u32) -> Mob {
     Mob { name: name.into(), level, hp, exp, spawn_count, spawn_share_percent }

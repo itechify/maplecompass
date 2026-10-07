@@ -74,3 +74,48 @@ fn recognition_starts_working_once_a_retried_map_index_fetch_succeeds() {
     assert_eq!(state.recognition, Recognition::Ready);
     assert_eq!(state.map.as_ref().map(|m| m.id.as_str()), Some("010003000"));
 }
+
+/// When a saved copy was made: 2026-10-01 00:00 UTC, in ms since the Unix epoch.
+const SAVED_AT: u64 = 1_790_812_800_000;
+
+#[test]
+fn when_meowdb_is_unreachable_a_saved_copy_of_the_map_index_still_recognises_maps_and_says_so() {
+    let mut compass = Compass::new(FakeSource::meowdb().serving_saved_copies(SAVED_AT));
+    compass.on_frame(sample_frame(KERNING, 0));
+
+    let state = compass.on_frame(sample_frame(KERNING, 333));
+
+    assert_eq!(state.recognition, Recognition::SavedCopy { saved_at_unix_ms: SAVED_AT });
+    assert_eq!(state.map.as_ref().map(|m| m.id.as_str()), Some("010003000"));
+}
+
+/// Setup's test read needs the map index before the first frame: there are no frames
+/// until a Title Region is marked.
+#[test]
+fn the_map_index_is_asked_for_at_startup_before_any_frame() {
+    let source = FakeSource::meowdb();
+    let requests = source.index_requests.clone();
+    let mut compass = Compass::new(source);
+
+    let state = compass.tick(0);
+
+    assert_eq!(requests.load(Ordering::SeqCst), 1);
+    assert_eq!(state.recognition, Recognition::Ready);
+}
+
+/// The index arrives on the third time the core checks on it. Nothing waits for it
+/// meanwhile, and frames read before it arrives aren't recognised.
+#[test]
+fn a_slow_map_index_never_holds_up_the_panel_and_recognition_starts_once_it_arrives() {
+    let mut compass = Compass::new(FakeSource::with_slow_index(saved_index(), 3));
+
+    assert_eq!(compass.tick(0).recognition, Recognition::Starting);
+    let state = compass.on_frame(sample_frame(KERNING, 333));
+    assert_eq!(state.recognition, Recognition::Starting);
+    assert_eq!(state.map, None);
+    assert_eq!(compass.tick(400).recognition, Recognition::Ready);
+
+    compass.on_frame(sample_frame(KERNING, 666));
+    let state = compass.on_frame(sample_frame(KERNING, 1000));
+    assert_eq!(state.map.as_ref().map(|m| m.id.as_str()), Some("010003000"));
+}

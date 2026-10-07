@@ -5,18 +5,18 @@
 
 pub mod capture;
 pub mod gamewin;
+mod files;
 mod hotkeys;
 pub mod meowdb;
 mod settings;
 mod setup;
 
 use compass_core::{
-    Action, Compass, Frame, GameWindow, Hotkeys, Layer, PanelSizes, PanelState, ScreenRect,
-    Settings, Size, default_title_region,
+    Action, Compass, Frame, GameWindow, Layer, PanelSizes, PanelState, ScreenRect, Size, TitleReader,
+    TitleReading,
+    default_title_region,
 };
-use gamewin::ClientArea;
 use meowdb::MeowDbSource;
-use serde::Serialize;
 use setup::{Bridge, SetupWindows};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -40,14 +40,17 @@ const EXPANDED_HEIGHTS: std::ops::RangeInclusive<f64> = 44.0..=900.0;
 const COLLAPSED: (f64, f64) = (44.0, 44.0);
 
 /// What the compass loop is asked to do.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) enum Command {
-    /// Something the player did, for the core.
+    /// Something the player did in the overlay or the setup window, for the core.
     Act(Action),
-    /// Open the shown map's MeowDB page in the browser.
-    OpenMeowDbPage,
+    /// The player pressed this hotkey (its accelerator string), for the core.
+    Hotkey(String),
     /// The expanded panel's content is this tall (CSS px).
     PanelHeight(f64),
+    /// The title reader is done with a capture of `region`: what it read, or `None`
+    /// if the capture failed.
+    Read { region: ScreenRect, reading: Option<TitleReading> },
 }
 
 /// The overlay reports how tall its expanded content is, so the window fits it.
@@ -58,7 +61,7 @@ fn panel_height(height: f64, commands: tauri::State<'_, Sender<Command>>) {
 
 /// Capture the default Title Region of the game's client area (the probe's guess; the
 /// app captures the region the player marked at setup).
-pub fn capture_title_frame(client: ClientArea, at_ms: u64) -> Result<Frame, String> {
+pub fn capture_title_frame(client: ScreenRect, at_ms: u64) -> Result<Frame, String> {
     let r = default_title_region(client.width, client.height);
     let rgba = capture::capture_rgba(
         client.x + r.x as i32,
@@ -69,36 +72,34 @@ pub fn capture_title_frame(client: ClientArea, at_ms: u64) -> Result<Frame, Stri
     Ok(Frame { width: r.width, height: r.height, rgba, at_ms })
 }
 
-/// What the overlay webview renders.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct OverlayState<'a> {
-    panel: &'a PanelState,
-    hotkeys: &'a Hotkeys,
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let overlay = app.get_webview_window("overlay").expect("overlay window in tauri.conf.json");
-            // Keep our own panel out of our own (and any) screen capture.
-            overlay.set_content_protected(true)?;
+            // Not content-protected: the panel shows in the player's screenshots and
+            // streams. The core keeps it off the Title Region instead, so our own capture
+            // never reads it.
             // Clicks pass through to the game until the panel is draggable.
             overlay.set_ignore_cursor_events(true)?;
 
+            // MeowDB pages are cached on disk (ADR 0003). WebView2 shares the app cache
+            // folder, hence the subfolder.
+            let source = MeowDbSource::new(app.path().app_cache_dir()?.join("cache"))?;
+            let mut compass = Compass::new(source);
             let settings_path = settings::path(app.handle())?;
-            let settings = settings::load(&settings_path);
+            // The core brings older settings up to date (hotkeys included).
+            compass.restore(settings::load(&settings_path));
             let (commands, commands_rx) = mpsc::channel();
-            hotkeys::install(app, &settings.hotkeys, commands.clone())?;
+            let unavailable = hotkeys::install(app, &compass.panel_state().hotkeys, commands.clone())?;
+            compass.hotkeys_unavailable(unavailable);
             app.manage(commands.clone());
             let (picks, picks_rx) = mpsc::channel();
             app.manage(Bridge {
                 commands: commands.clone(),
                 picks,
                 game: Mutex::new(None),
-                needed: Mutex::new(None),
                 view: Mutex::new(None),
             });
             let setup_windows = SetupWindows::new(app.handle())?;
@@ -110,15 +111,13 @@ pub fn run() {
                 }
             });
 
-            // MeowDB pages are cached on disk (ADR 0003). WebView2 shares the app cache
-            // folder, hence the subfolder.
-            let source = MeowDbSource::new(app.path().app_cache_dir()?.join("cache"))?;
             let handle = app.handle().clone();
-            // Capture + OCR are blocking and CPU-bound: run them on their own thread.
-            // Spawned from setup, so the process is already Per-Monitor-V2 DPI aware.
+            // Both off the UI thread. Spawned from setup, so the process is already
+            // Per-Monitor-V2 DPI aware.
+            let reader = TitleReaderThread::spawn(app.state::<Sender<Command>>().inner().clone())?;
             let channels = Channels { commands: commands_rx, picks: picks_rx };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
-                compass_loop(handle, overlay, setup_windows, source, channels, settings, settings_path)
+                compass_loop(handle, overlay, setup_windows, compass, reader, channels, settings_path)
             })?;
             Ok(())
         })
@@ -135,32 +134,78 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-/// What the compass loop hears from hotkeys, the overlay and the setup window.
+/// What the compass loop hears from hotkeys, the overlay, the setup window and the
+/// title reader.
 struct Channels {
     commands: Receiver<Command>,
     /// Titles of game windows the player picked by hand.
     picks: Receiver<String>,
 }
 
+/// Captures and reads the Title Region on its own thread. Reading a title takes tens of
+/// ms (far more in a debug build), so the compass loop never waits for it: it keeps
+/// following the game window at its own pace and takes each reading when it arrives.
+struct TitleReaderThread {
+    regions: Sender<ScreenRect>,
+    /// The clock frames and ticks are timed by.
+    start: Instant,
+    /// A capture was asked for and its reading hasn't come back yet.
+    busy: bool,
+}
+
+impl TitleReaderThread {
+    fn spawn(commands: Sender<Command>) -> std::io::Result<Self> {
+        let start = Instant::now();
+        let (regions, asked) = mpsc::channel::<ScreenRect>();
+        std::thread::Builder::new().name("title-reader".into()).spawn(move || {
+            let reader = TitleReader::bundled();
+            for region in asked {
+                let r = region;
+                let reading = match capture::capture_rgba(r.x, r.y, r.width as i32, r.height as i32) {
+                    Ok(rgba) => {
+                        let at_ms = start.elapsed().as_millis() as u64;
+                        Some(reader.read(&Frame { width: r.width, height: r.height, rgba, at_ms }))
+                    }
+                    Err(e) => {
+                        eprintln!("capture failed: {e}");
+                        None
+                    }
+                };
+                if commands.send(Command::Read { region, reading }).is_err() {
+                    return;
+                }
+            }
+        })?;
+        Ok(Self { regions, start, busy: false })
+    }
+
+    /// Capture and read `region`, unless the last capture is still being read.
+    fn read(&mut self, region: ScreenRect) {
+        if !self.busy {
+            self.busy = self.regions.send(region).is_ok();
+        }
+    }
+
+    fn now_ms(&self) -> u64 {
+        self.start.elapsed().as_millis() as u64
+    }
+}
+
 fn compass_loop(
     app: AppHandle,
     overlay: WebviewWindow,
     mut setup_windows: SetupWindows,
-    source: MeowDbSource,
+    mut compass: Compass,
+    mut reader: TitleReaderThread,
     channels: Channels,
-    settings: Settings,
     settings_path: PathBuf,
 ) {
-    let hotkeys = settings.hotkeys.clone();
-    let mut compass = Compass::new(source);
-    compass.restore(settings);
     let mut window = OverlayWindow::new(overlay);
     let mut saved = compass.settings();
     let mut pending = (saved.clone(), Instant::now());
     let mut emitted: Option<PanelState> = None;
     let mut game = None;
     let mut expanded = EXPANDED;
-    let start = Instant::now();
     let mut next_capture = Instant::now();
     let mut next_window_check = Instant::now();
     loop {
@@ -169,14 +214,23 @@ fn compass_loop(
         match channels.commands.recv_timeout(due.saturating_duration_since(Instant::now())) {
             Ok(Command::Act(action)) => {
                 compass.act(action);
-                if action == Action::RequestSetup {
-                    setup_windows.open();
+            }
+            Ok(Command::Hotkey(pressed)) => {
+                if let Some(page) = compass.on_hotkey(&pressed) {
+                    open_in_browser(&app, &page.url);
                 }
             }
-            Ok(Command::OpenMeowDbPage) => open_meowdb_page(&app, compass.panel_state()),
             Ok(Command::PanelHeight(height)) => {
                 expanded.1 = height.clamp(*EXPANDED_HEIGHTS.start(), *EXPANDED_HEIGHTS.end());
                 set_panel_sizes(&mut compass, &window.overlay, expanded);
+            }
+            Ok(Command::Read { region, reading }) => {
+                reader.busy = false;
+                // A reading of a region no longer captured (setup marked a new one, or
+                // the game window moved) would judge the wrong spot.
+                if let (Some(reading), true) = (reading, compass.panel_state().title_region == Some(region)) {
+                    compass.on_reading(reading);
+                }
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
@@ -185,33 +239,30 @@ fn compass_loop(
             compass.pick_game_window(title);
             next_window_check = Instant::now(); // look for it at once
         }
-        let game_title = compass.settings().game_window_title.unwrap_or_else(|| gamewin::GAME_TITLE.into());
-        gamewin::look_for(&game_title);
+        gamewin::look_for(&compass.panel_state().game_window_title);
         // Checked after every wake-up, so a stream of drag moves can't starve them.
         if Instant::now() >= next_window_check {
             next_window_check = Instant::now() + WINDOW_TICK;
             game = find_game(&mut compass, &window.overlay, expanded);
         }
+        // Fetches in flight (map index, map pages) are checked on, never waited for.
+        compass.tick(reader.now_ms());
         if Instant::now() >= next_capture {
             next_capture = Instant::now() + TICK;
             // The region the player marked; none until setup is done, nor after the
             // game's resolution changes.
-            if let Some(r) = compass.panel_state().title_region {
-                match capture::capture_rgba(r.x, r.y, r.width as i32, r.height as i32) {
-                    Ok(rgba) => {
-                        let at_ms = start.elapsed().as_millis() as u64;
-                        compass.on_frame(Frame { width: r.width, height: r.height, rgba, at_ms });
-                    }
-                    Err(e) => eprintln!("capture failed: {e}"),
-                }
+            if let Some(region) = compass.panel_state().title_region {
+                reader.read(region);
             }
         }
-        setup_windows.sync(compass.panel_state(), game.map(|g| g.client), &game_title, &hotkeys.setup);
-
         let state = compass.panel_state();
+        if state.quit {
+            app.exit(0);
+            return;
+        }
+        setup_windows.sync(state, game.map(|g| g.client));
         if emitted.as_ref() != Some(state) {
-            let overlay_state = OverlayState { panel: state, hotkeys: &hotkeys };
-            if let Err(e) = app.emit_to("overlay", "overlay-state", &overlay_state) {
+            if let Err(e) = app.emit_to("overlay", "overlay-state", state) {
                 eprintln!("emit failed: {e}");
             }
             emitted = Some(state.clone());
@@ -237,15 +288,11 @@ fn find_game(compass: &mut Compass, overlay: &WebviewWindow, expanded: (f64, f64
     set_panel_sizes(compass, overlay, expanded);
     let game = gamewin::find_game();
     compass.on_game_window(game.map(|g| GameWindow {
-        client: screen_rect(g.client),
+        client: g.client,
         frame: g.frame,
         screens: gamewin::monitor_work_areas(),
     }));
     game
-}
-
-fn screen_rect(a: ClientArea) -> ScreenRect {
-    ScreenRect { x: a.x, y: a.y, width: a.width, height: a.height }
 }
 
 /// Tell the core the panel's sizes in physical px, for the overlay's current display.
@@ -258,11 +305,10 @@ fn set_panel_sizes(compass: &mut Compass, overlay: &WebviewWindow, expanded: (f6
     }
 }
 
-/// Open the shown map's MeowDB page in the player's browser; without a map, nothing.
-fn open_meowdb_page(app: &AppHandle, state: &PanelState) {
-    let Some(map) = &state.map else { return };
-    if let Err(e) = app.opener().open_url(&map.url, None::<&str>) {
-        eprintln!("couldn't open {}: {e}", map.url);
+/// Open a page (the shown map's on MeowDB) in the player's browser.
+fn open_in_browser(app: &AppHandle, url: &str) {
+    if let Err(e) = app.opener().open_url(url, None::<&str>) {
+        eprintln!("couldn't open {url}: {e}");
     }
 }
 
@@ -285,8 +331,9 @@ impl OverlayWindow {
     fn new(overlay: WebviewWindow) -> Self {
         let above_game = Arc::new(AtomicBool::new(false));
         let (keeper_overlay, keeper_flag) = (overlay.clone(), above_game.clone());
-        // Its own thread: title recognition can hold the compass loop for a few hundred
-        // ms, and the overlay should be back above the game well before then.
+        // Its own thread, at its own steady pace: the overlay should be back above the
+        // game within a tick of the game coming to the front, whatever the compass loop
+        // is doing (setting window sizes and positions can take a while).
         let spawned = std::thread::Builder::new()
             .name("z-order".into())
             .spawn(move || keep_above_game(keeper_overlay, keeper_flag));

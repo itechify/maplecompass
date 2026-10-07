@@ -5,6 +5,10 @@ use crate::panel::{InsideOffset, PlacementMode, ScreenPoint};
 use crate::setup::TitleRegion;
 use serde::{Deserialize, Serialize};
 
+/// The settings version this core writes. Version 1 had Ctrl+Shift hotkeys, which
+/// [`crate::Compass::restore`] replaces with the defaults.
+pub(crate) const VERSION: u32 = 2;
+
 /// The player's settings. Missing fields (an older or empty file) take their defaults.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -15,8 +19,9 @@ pub struct Settings {
     pub expanded: bool,
     /// Where the player dragged the inside panel; `None` for the default position.
     pub inside_offset: Option<InsideOffset>,
-    /// Inside, docked right or left, or detached.
-    pub placement: PlacementMode,
+    /// Inside, docked right or left, or detached. (Version 1 called it `placement`.)
+    #[serde(alias = "placement")]
+    pub placement_mode: PlacementMode,
     /// Where the player put the detached panel (its top-left corner, physical screen
     /// px); `None` if it was never detached.
     pub detached_at: Option<ScreenPoint>,
@@ -31,10 +36,10 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            version: 1,
+            version: VERSION,
             expanded: true,
             inside_offset: None,
-            placement: PlacementMode::Inside,
+            placement_mode: PlacementMode::Inside,
             detached_at: None,
             hotkeys: Hotkeys::default(),
             title_region: None,
@@ -43,11 +48,11 @@ impl Default for Settings {
     }
 }
 
-/// Global hotkeys, as accelerator strings such as `"ctrl+shift+m"`.
+/// Global hotkeys, as accelerator strings such as `"super+alt+c"`.
 ///
 /// They fire while the game has focus and the game never sees them, so the defaults
-/// use Ctrl+Shift+letter, which MapleStory doesn't bind (it uses plain letters,
-/// F-keys and the number row).
+/// use Win+Alt+letter: MapleStory players commonly bind Ctrl and Shift, and the
+/// letters avoid Windows' own Win+Alt combinations (G, R, T, K, B, D, M, H).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Hotkeys {
@@ -69,12 +74,12 @@ pub struct Hotkeys {
 impl Default for Hotkeys {
     fn default() -> Self {
         Self {
-            toggle_panel: "ctrl+shift+m".into(),
-            edit_mode: "ctrl+shift+e".into(),
-            cycle_placement: "ctrl+shift+d".into(),
-            open_meowdb_page: "ctrl+shift+o".into(),
-            setup: "ctrl+shift+s".into(),
-            choose_candidate: "ctrl+shift+c".into(),
+            toggle_panel: "super+alt+c".into(),
+            edit_mode: "super+alt+e".into(),
+            cycle_placement: "super+alt+p".into(),
+            open_meowdb_page: "super+alt+o".into(),
+            setup: "super+alt+s".into(),
+            choose_candidate: "super+alt+n".into(),
         }
     }
 }

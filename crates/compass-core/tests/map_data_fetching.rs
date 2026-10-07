@@ -5,7 +5,7 @@
 mod common;
 
 use common::{FakeSource, black_frame, requests_for, sample_frame};
-use compass_core::{Compass, MEOWDB_CREDIT, MapData, MapDataStatus, Mob, PanelState, Settings};
+use compass_core::{Compass, MEOWDB_CREDIT, MapData, MapDataStatus, Mob, OpenInBrowser, PanelState};
 use std::task::Poll;
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
@@ -129,13 +129,50 @@ fn the_shown_map_carries_its_meowdb_page_and_the_meowdb_credit() {
     assert_eq!(MEOWDB_CREDIT, "NiaMeowDB (meowdb.com)");
 }
 
+/// Settings from before this hotkey existed get Win+Alt+O.
 #[test]
-fn the_hotkey_to_open_the_maps_meowdb_page_defaults_to_ctrl_shift_o_and_older_settings_get_it() {
-    let older: Settings = serde_json::from_str(
-        r#"{"version":1,"expanded":true,"hotkeys":{"togglePanel":"ctrl+shift+m","editMode":"ctrl+shift+e"}}"#,
-    )
-    .unwrap();
+fn win_alt_o_opens_the_shown_maps_page_even_with_settings_from_before_it_existed() {
+    let older = r#"{"version":1,"expanded":true,"hotkeys":{"togglePanel":"ctrl+shift+m","editMode":"ctrl+shift+e"}}"#;
+    let mut compass = Compass::new(FakeSource::meowdb());
+    compass.restore(serde_json::from_str(older).unwrap());
+    compass.on_frame(sample_frame(SUNSET, 0));
+    compass.on_frame(sample_frame(SUNSET, 333));
 
-    assert_eq!(older.hotkeys.open_meowdb_page, "ctrl+shift+o");
-    assert_eq!(Settings::default().hotkeys.open_meowdb_page, "ctrl+shift+o");
+    let opened = compass.on_hotkey("super+alt+o");
+
+    assert_eq!(opened, Some(OpenInBrowser { url: "https://meowdb.com/msclassic/maps/010003070".into() }));
+}
+
+/// When a saved copy was made: 2026-10-01 00:00 UTC, in ms since the Unix epoch.
+const SAVED_AT: u64 = 1_790_812_800_000;
+
+#[test]
+fn when_meowdb_is_unreachable_a_saved_copy_of_the_page_is_shown_with_when_it_was_saved() {
+    let mut compass = Compass::new(FakeSource::meowdb().serving_saved_copies(SAVED_AT));
+    compass.on_frame(sample_frame(SUNSET, 0));
+
+    let state = compass.on_frame(sample_frame(SUNSET, 333));
+
+    assert_eq!(shown_map_name(state), Some("Sunset Sky"));
+    let MapDataStatus::SavedCopy { data, saved_at_unix_ms } = &state.data else { panic!("{:?}", state.data) };
+    assert_eq!(*saved_at_unix_ms, SAVED_AT);
+    assert_eq!(data.mobs.len(), 5);
+    assert_eq!(state.credit, Some(MEOWDB_CREDIT));
+}
+
+/// The overlay gets the panel state as JSON: a saved copy is the map's data with its
+/// status and date beside it, and a saved map index says so with its date.
+#[test]
+fn the_overlay_receives_a_saved_copy_with_its_date_beside_the_data() {
+    let mut compass = Compass::new(FakeSource::meowdb().serving_saved_copies(SAVED_AT));
+    compass.on_frame(sample_frame(SUNSET, 0));
+
+    let json = serde_json::to_value(compass.on_frame(sample_frame(SUNSET, 333))).unwrap();
+
+    assert_eq!(json["data"]["status"], "savedCopy");
+    assert_eq!(json["data"]["savedAtUnixMs"], SAVED_AT);
+    assert_eq!(json["data"]["mobs"].as_array().map(Vec::len), Some(5));
+    assert!(json["data"]["summary"].is_object() && json["data"]["hiddenPortals"].is_array());
+    assert!(json["data"].get("connectedMaps").is_none());
+    assert_eq!(json["recognition"], serde_json::json!({ "status": "savedCopy", "savedAtUnixMs": SAVED_AT }));
 }

@@ -3,7 +3,6 @@
 
 use compass_core::Settings;
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
@@ -24,13 +23,5 @@ pub fn load(path: &Path) -> Settings {
 
 /// Write the settings atomically: a temp file renamed over the old one.
 pub fn save(path: &Path, settings: &Settings) -> std::io::Result<()> {
-    if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir)?;
-    }
-    let tmp = path.with_extension("json.tmp");
-    let mut file = fs::File::create(&tmp)?;
-    file.write_all(serde_json::to_string_pretty(settings)?.as_bytes())?;
-    file.sync_all()?;
-    drop(file);
-    fs::rename(&tmp, path)
+    crate::files::write_atomically(path, serde_json::to_string_pretty(settings)?.as_bytes())
 }

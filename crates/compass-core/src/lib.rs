@@ -1,6 +1,7 @@
 //! MapleCompass core: the single test seam.
 //!
-//! Inputs are plain data (captured Title Region frames); the output is a [`PanelState`]
+//! Inputs are plain data (captured Title Region frames or their readings, the game
+//! window, the clock, the player's actions and hotkeys); the output is a [`PanelState`]
 //! holding everything the overlay renders. No OS or UI dependencies live here.
 
 mod map_data;
@@ -18,7 +19,7 @@ mod shown_map;
 mod tracker;
 
 pub use map_data::{HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty};
-pub use map_index::{MapDataSource, MapEntry, SourceError};
+pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 pub use panel::{
     Action, GameWindow, InsideOffset, Layer, PanelSizes, PlacementMode, ScreenPoint, ScreenRect,
@@ -26,14 +27,16 @@ pub use panel::{
 };
 pub use settings::{Hotkeys, Settings};
 pub use setup::{SetupReason, SetupState, TestRead, TitleRegion};
+pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
 
 use shown_map::ShownMap;
 use matcher::Matcher;
 use panel::Panel;
 use setup::Setup;
-use recogniser::Recogniser;
+pub use recogniser::{TitleLines, TitleReader, TitleReading};
 use tracker::Tracker;
 use serde::Serialize;
+use std::task::Poll;
 
 /// A captured Title Region image: tightly packed RGBA, top-down rows.
 #[derive(Debug, Clone)]
@@ -84,32 +87,23 @@ pub struct CurrentMap {
     pub url: String,
 }
 
-/// Maps that share one Minimap Title and would show different content, with neither
-/// the map the player came from nor the player having settled which it is. The panel
-/// shows one of them; the choose-candidate hotkey shows the next.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Candidates {
-    /// Their 9-digit map IDs, in map index order.
-    pub ids: Vec<String>,
-    /// Which of them the panel shows (an index into `ids`).
-    pub shown: usize,
-    /// The player chose the shown one with the hotkey. The choice holds until the
-    /// map changes.
-    pub chosen: bool,
-}
-
 /// The credit for everything MapleCompass shows from MeowDB (ADR 0003).
 pub const MEOWDB_CREDIT: &str = "NiaMeowDB (meowdb.com)";
 
 /// Whether minimap titles can be recognised as real maps.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(tag = "status", rename_all = "camelCase")]
 pub enum Recognition {
-    /// No frame seen yet, so the map index hasn't been asked for.
+    /// The map index hasn't arrived yet (it is asked for at startup).
     #[default]
     Starting,
     Ready,
+    /// MeowDB couldn't be reached, so titles are snapped to a copy of the map index
+    /// saved at `saved_at_unix_ms` (ms since the Unix epoch).
+    SavedCopy {
+        #[serde(rename = "savedAtUnixMs")]
+        saved_at_unix_ms: u64,
+    },
     /// The map index couldn't be had, so readings can't be snapped to real maps.
     Unavailable,
 }
@@ -143,7 +137,8 @@ pub struct PanelState {
     /// Where the player wants the panel: inside, docked or detached.
     pub placement_mode: PlacementMode,
     /// Where the overlay goes on screen; `None` while there is no game window, unless
-    /// the panel is detached.
+    /// the panel is detached. Inside the game it never covers `title_region`: the
+    /// overlay shows in screen captures, ours included.
     pub placement: Option<ScreenRect>,
     /// Where the overlay sits in the z-order, or hidden.
     pub layer: Layer,
@@ -156,7 +151,27 @@ pub struct PanelState {
     /// Where on screen to capture the Title Region (physical px); `None` while there
     /// is no game window or the region isn't known to fit it.
     pub title_region: Option<ScreenRect>,
+    /// The title of the game window to look for: "MapleStory", or one the player
+    /// picked by hand.
+    pub game_window_title: String,
+    /// The global hotkeys to register, as the overlay names them.
+    pub hotkeys: Hotkeys,
+    /// Hotkeys the shell couldn't register (another app has them), to tell the player.
+    pub unavailable_hotkeys: Vec<String>,
+    /// The player closed first-run setup: with no Title Region there is nothing to
+    /// read, so the app quits.
+    pub quit: bool,
 }
+
+/// A page to open in the player's browser (the open-page hotkey asked for it): the one
+/// thing the shell does on the core's say beyond rendering the panel state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenInBrowser {
+    pub url: String,
+}
+
+/// The game window's title, unless the player picked another by hand.
+pub const GAME_WINDOW_TITLE: &str = "MapleStory";
 
 /// How long to wait before asking for the map index again after a failure. MeowDB is
 /// asked politely (ADR 0003): never on every frame.
@@ -164,7 +179,9 @@ const INDEX_RETRY_MS: u64 = 60_000;
 
 /// The compass core: feed it frames, render its [`PanelState`].
 pub struct Compass {
-    recogniser: Recogniser,
+    /// Reads frames fed to [`Compass::on_frame`]; loaded on the first one, so a shell
+    /// that reads on its own thread never loads it twice.
+    reader: Option<TitleReader>,
     source: Box<dyn MapDataSource + Send>,
     matcher: Option<Matcher>,
     /// When asking for the map index last failed (frame time).
@@ -179,11 +196,11 @@ pub struct Compass {
 }
 
 impl Compass {
-    /// A core using the bundled title recogniser, the given map data source and
-    /// default settings. The map index is asked for on the first frame.
+    /// A core using the given map data source and default settings. The map index is
+    /// asked for on the first tick or frame.
     pub fn new(source: impl MapDataSource + Send + 'static) -> Self {
         let mut compass = Self {
-            recogniser: Recogniser::bundled(),
+            reader: None,
             source: Box::new(source),
             matcher: None,
             index_failed_at: None,
@@ -198,16 +215,23 @@ impl Compass {
         compass
     }
 
-    /// Read a captured Title Region frame and update the panel state.
+    /// Read a captured Title Region frame and update the panel state: the same as
+    /// [`Compass::on_reading`] with what a [`TitleReader`] reads in the frame, here.
     pub fn on_frame(&mut self, frame: Frame) -> &PanelState {
-        self.load_map_index(frame.at_ms);
+        let reading = self.reader.get_or_insert_with(TitleReader::bundled).read(&frame);
+        self.on_reading(reading)
+    }
+
+    /// Take what a Title Region frame read as (read by a [`TitleReader`], possibly on
+    /// another thread) and update the panel state.
+    pub fn on_reading(&mut self, reading: TitleReading) -> &PanelState {
+        self.load_map_index(reading.at_ms);
         let Some(matcher) = &self.matcher else {
             // Without the map index nothing can be recognised.
             self.setup.on_read(None);
-            return self.sync_setup();
+            return self.sync_panel();
         };
-        let read = frame_to_rgb(&frame).and_then(|img| self.recogniser.read(&img));
-        let snap = read.and_then(|raw| matcher.snap(&raw.street, &raw.map));
+        let snap = reading.lines.and_then(|lines| matcher.snap(&lines.street, &lines.map));
         let current_map = |i: usize| {
             let entry = matcher.map(i);
             CurrentMap {
@@ -227,7 +251,7 @@ impl Compass {
         self.sync_shown_map();
         self.state.confidence = (tracked.confidence * 100.0).round() as u8;
         self.state.not_sure = tracked.not_sure;
-        self.sync_setup()
+        self.sync_panel()
     }
 
     fn sync_shown_map(&mut self) {
@@ -253,20 +277,66 @@ impl Compass {
 
     /// Apply something the player did.
     pub fn act(&mut self, action: Action) -> &PanelState {
-        if action == Action::ChooseCandidate {
-            self.shown_map.choose_next(&mut *self.source);
-            self.sync_shown_map();
+        match action {
+            Action::ToggleExpanded => self.panel.expanded = !self.panel.expanded,
+            Action::ToggleEditMode => self.panel.edit_mode = !self.panel.edit_mode,
+            Action::PanelMoved { x, y } => self.panel.moved_to(x, y),
+            Action::CyclePlacement => self.panel.cycle_placement(),
+            Action::ChooseCandidate => {
+                self.shown_map.choose_next(&mut *self.source);
+                self.sync_shown_map();
+            }
+            Action::MarkTitleRegion(marked) => self.setup.mark(marked),
+            Action::FinishSetup => self.setup.finish(),
+            Action::RequestSetup => self.setup.request(),
+            Action::CancelSetup => {
+                self.state.quit |= self.setup.state().needed == Some(SetupReason::FirstRun);
+                self.setup.cancel();
+            }
         }
-        self.panel.act(action);
-        self.setup.act(action);
         self.sync_panel()
     }
 
-    /// Pick up settings saved by an earlier session.
-    pub fn restore(&mut self, settings: Settings) -> &PanelState {
+    /// The player pressed one of the global hotkeys (an accelerator string, as listed
+    /// in the panel state's `hotkeys`). Returns the page to open, if it asks for one.
+    pub fn on_hotkey(&mut self, pressed: &str) -> Option<OpenInBrowser> {
+        let hotkeys = &self.settings.hotkeys;
+        let is = |hotkey: &str| same_hotkey(hotkey, pressed);
+        let action = if is(&hotkeys.toggle_panel) {
+            Action::ToggleExpanded
+        } else if is(&hotkeys.edit_mode) {
+            Action::ToggleEditMode
+        } else if is(&hotkeys.cycle_placement) {
+            Action::CyclePlacement
+        } else if is(&hotkeys.setup) {
+            Action::RequestSetup
+        } else if is(&hotkeys.choose_candidate) {
+            Action::ChooseCandidate
+        } else if is(&hotkeys.open_meowdb_page) {
+            return self.state.map.as_ref().map(|map| OpenInBrowser { url: map.url.clone() });
+        } else {
+            return None;
+        };
+        self.act(action);
+        None
+    }
+
+    /// These hotkeys couldn't be registered (another app has them).
+    pub fn hotkeys_unavailable(&mut self, hotkeys: Vec<String>) -> &PanelState {
+        self.state.unavailable_hotkeys = hotkeys;
+        self.sync_panel()
+    }
+
+    /// Pick up settings saved by an earlier session. Hotkeys from before version 2
+    /// (Ctrl+Shift, which players bind in the game) are replaced by the defaults.
+    pub fn restore(&mut self, mut settings: Settings) -> &PanelState {
+        if settings.version < settings::VERSION {
+            settings.hotkeys = Hotkeys::default();
+            settings.version = settings::VERSION;
+        }
         self.panel.expanded = settings.expanded;
         self.panel.inside_offset = settings.inside_offset;
-        self.panel.mode = settings.placement;
+        self.panel.mode = settings.placement_mode;
         self.panel.detached_at = settings.detached_at;
         self.setup.saved = settings.title_region;
         self.settings = settings;
@@ -274,9 +344,10 @@ impl Compass {
     }
 
     /// The player picked the game window by hand: look for windows with this title
-    /// from now on (the shell's window locator reads it from [`Compass::settings`]).
-    pub fn pick_game_window(&mut self, title: String) {
+    /// from now on.
+    pub fn pick_game_window(&mut self, title: String) -> &PanelState {
         self.settings.game_window_title = Some(title);
+        self.sync_panel()
     }
 
     /// The settings to save: whatever the player has changed since [`Compass::restore`].
@@ -284,25 +355,44 @@ impl Compass {
         Settings {
             expanded: self.panel.expanded,
             inside_offset: self.panel.inside_offset,
-            placement: self.panel.mode,
+            placement_mode: self.panel.mode,
             detached_at: self.panel.detached_at,
             title_region: self.setup.saved,
             ..self.settings.clone()
         }
     }
 
-    /// Ask the source for the map index on the first frame, and after a failure, again
-    /// no sooner than [`INDEX_RETRY_MS`] later.
+    /// Time passed: check on fetches in flight. The shell calls this many times a
+    /// second (`at_ms` on the same clock as frames), so nothing waits for the network.
+    pub fn tick(&mut self, at_ms: u64) -> &PanelState {
+        self.load_map_index(at_ms);
+        if self.matcher.is_some() {
+            self.shown_map.poll(&mut *self.source);
+            self.sync_shown_map();
+        }
+        self.sync_panel()
+    }
+
+    /// Ask the source for the map index at startup (the first tick or frame) until it
+    /// answers, and after a failure, again no sooner than [`INDEX_RETRY_MS`] later.
     fn load_map_index(&mut self, at_ms: u64) {
         if self.matcher.is_some()
             || self.index_failed_at.is_some_and(|t| at_ms.saturating_sub(t) < INDEX_RETRY_MS)
         {
             return;
         }
-        match self.source.map_index() {
-            Ok(index) => {
+        let index = match self.source.map_index() {
+            Poll::Pending => return,
+            Poll::Ready(index) => index,
+        };
+        match index {
+            Ok(Fetched::Fresh(index)) => {
                 self.matcher = Some(Matcher::new(index));
                 self.state.recognition = Recognition::Ready;
+            }
+            Ok(Fetched::SavedCopy { data, saved_at_unix_ms }) => {
+                self.matcher = Some(Matcher::new(data));
+                self.state.recognition = Recognition::SavedCopy { saved_at_unix_ms };
             }
             Err(_) => {
                 self.index_failed_at = Some(at_ms);
@@ -316,6 +406,9 @@ impl Compass {
     }
 
     fn sync_panel(&mut self) -> &PanelState {
+        self.sync_setup();
+        // Never over the Title Region: the capture would read the panel.
+        self.panel.avoid = self.state.title_region;
         self.state.expanded = self.panel.expanded;
         self.state.edit_mode = self.panel.edit_mode;
         self.state.game_found = self.panel.game.is_some();
@@ -323,21 +416,25 @@ impl Compass {
         self.state.placement = self.panel.placement();
         self.state.layer = self.panel.layer();
         self.state.draggable = self.panel.draggable();
-        self.sync_setup()
+        self.state.hotkeys = self.settings.hotkeys.clone();
+        self.state.game_window_title =
+            self.settings.game_window_title.clone().unwrap_or_else(|| GAME_WINDOW_TITLE.into());
+        &self.state
     }
 
-    fn sync_setup(&mut self) -> &PanelState {
+    fn sync_setup(&mut self) {
+        self.setup.follow_needed();
         self.state.setup = self.setup.state();
         self.state.title_region = self.setup.title_region(self.matcher.as_ref().map(Matcher::longest_name));
-        &self.state
     }
 }
 
-fn frame_to_rgb(frame: &Frame) -> Option<image::RgbImage> {
-    let (w, h) = (frame.width as usize, frame.height as usize);
-    if frame.rgba.len() != w * h * 4 {
-        return None;
-    }
-    let rgb = frame.rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
-    image::RgbImage::from_raw(frame.width, frame.height, rgb)
+/// Whether two accelerator strings name the same keys ("Super+Alt+C", "super + alt + c").
+fn same_hotkey(a: &str, b: &str) -> bool {
+    let keys = |s: &str| {
+        let mut keys: Vec<String> = s.split('+').map(|k| k.trim().to_lowercase()).collect();
+        keys.sort();
+        keys
+    };
+    keys(a) == keys(b)
 }
