@@ -29,8 +29,8 @@ pub use map_data::{
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 pub use panel::{
-    Action, GameWindow, InsideOffset, Layer, PanelSizes, PlacementMode, ScreenPoint, ScreenRect,
-    Size,
+    Action, Foreground, GameWindow, InsideOffset, Layer, PanelSizes, PlacementMode, ScreenPoint,
+    ScreenRect, Size,
 };
 pub use search::{DensityTier, MobChoice, PANEL_RESULTS, RouteStop, SearchResult, SearchState};
 pub use settings::{Hotkeys, Settings};
@@ -170,6 +170,9 @@ pub struct PanelState {
     pub hotkeys: Hotkeys,
     /// Hotkeys the shell couldn't register (another app has them), to tell the player.
     pub unavailable_hotkeys: Vec<String>,
+    /// The shell keeps the hotkeys registered only while this is set: while the game or
+    /// one of our windows is in front. Other apps keep their own Ctrl+Shift shortcuts.
+    pub hotkeys_live: bool,
     /// The player closed first-run setup: with no Title Region there is nothing to
     /// read, so the app quits.
     pub quit: bool,
@@ -418,6 +421,13 @@ impl Compass {
         };
         self.act(action);
         None
+    }
+
+    /// Another window came to the front. The hotkeys are live while the game or one of
+    /// our windows is in front, and nowhere else.
+    pub fn on_foreground(&mut self, foreground: Foreground) -> &PanelState {
+        self.state.hotkeys_live = foreground != Foreground::OtherApp;
+        self.sync_panel()
     }
 
     /// These hotkeys couldn't be registered (another app has them).

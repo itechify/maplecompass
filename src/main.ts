@@ -81,6 +81,8 @@ type PanelState = {
   setup: { needed: "firstRun" | "resolutionChanged" | "requested" | null };
   hotkeys: Hotkeys;
   unavailableHotkeys: string[];
+  /** The shell has the hotkeys registered: the game or one of our windows is in front. */
+  hotkeysLive: boolean;
   gameWindowTitle: string;
   search: SearchState;
 };

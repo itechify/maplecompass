@@ -33,7 +33,7 @@ The panel starts on the right edge of the game window, and clicks pass through i
 
 Hidden Portals are exits to other maps that MeowDB marks invisible (type 1), hidden (10) or script (11, shown as a Quest Portal). Each shows where it leads (tagged when that is a Hidden Street) and roughly where it is on the map. Invisible exits on a town are its building doors, which you can see, so they aren't listed. Walk-into portals (type 3) count as visible until checked in-game. When play shows a portal the rule gets wrong, add it to the override list in `crates/compass-core/src/portal_overrides.rs`, by map ID and MeowDB portal name.
 
-These hotkeys work while the game has focus:
+These hotkeys work while the game or one of MapleCompass's windows is in front; in any other app the same keys do what that app makes them do:
 
 - **Ctrl+Shift+C** collapses the panel to an icon, or expands it again.
 - **Ctrl+Shift+E** enters edit mode: drag the panel where you want it, then press Ctrl+Shift+E again to make it click-through.
@@ -43,7 +43,7 @@ These hotkeys work while the game has focus:
 - **Ctrl+Shift+N** shows the next map with the same title, when the panel can't tell which one you're on.
 - **Ctrl+Shift+F** opens the mob search window (or brings it back in front), which takes your typing until you pick a mob (Enter) or press Esc; then the game has focus again. Type part of a mob's name, move the highlight with the arrow keys and press Enter. The panel then lists the top five maps for that mob as ranked (by Density Tier, then the nearest within a tier), and the search window lists them all. Press Enter with nothing typed to clear the search.
 
-They are ordinary registered hotkeys (no keyboard hook), so while MapleCompass runs neither the game nor any other app sees these combinations. If one clashes with a key you bind in the game, change it under `hotkeys` in the settings file (below). If another app already has one, the panel and the setup window say so. Win+Alt hotkeys saved by an earlier version are moved to these.
+They are ordinary registered hotkeys (no keyboard hook), registered only while the game or one of MapleCompass's windows is in front, so other apps keep their own shortcuts, but the game never sees these combinations. If one clashes with a key you bind in the game, change it under `hotkeys` in the settings file (below). If another app already has one, the panel and the setup window say so. Win+Alt hotkeys saved by an earlier version are moved to these.
 
 A few maps share a title, such as the two Maple Road / Mushroom Town maps. If they would show the same Map Summary, mobs and hidden portals anyway, the panel just shows them. Otherwise it picks the one connected to the map you came from, and failing that it shows the first and lists them all, each with its first mobs, mob levels and hidden portal count, with the map ID secondary; Ctrl+Shift+N then steps through them, and your pick holds until you change maps.
 
