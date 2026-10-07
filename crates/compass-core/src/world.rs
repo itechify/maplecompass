@@ -11,7 +11,7 @@
 use crate::crawl::Crawl;
 use crate::map_data::{MapData, PortalKind};
 use crate::travel_links::{TAXI_TOWNS, TELEPORT_SCROLL_TOWNS, TRAVEL_LINKS, TravelLink};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 
 /// How far a map is from the map the panel shows. Ordered as results are within a
@@ -43,11 +43,14 @@ pub enum Step {
     TeleportScroll,
 }
 
-/// The kinds of travel the player has turned on, besides portals and ships (which
-/// always count).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) struct Travel {
+/// The kinds of travel the player has turned on for Distance, besides portals and
+/// ships (which always count): the search window's checkboxes, saved in the settings.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Travel {
+    /// Taxi rides between towns (the Taxis checkbox).
     pub taxis: bool,
+    /// Teleport Scrolls to towns (the Teleport Scrolls checkbox).
     pub teleport_scrolls: bool,
 }
 
