@@ -5,7 +5,7 @@ use crate::MEOWDB_CREDIT;
 use crate::crawl::{Crawl, CrawlProgress};
 use crate::map_data::Mob;
 use crate::map_index::MapEntry;
-use crate::world::{Distance, Distances, Step, Travel, World};
+use crate::world::{Distance, Distances, Here, Step, Travel, World};
 use serde::Serialize;
 
 /// How many results the panel shows; the search window shows them all.
@@ -104,6 +104,16 @@ pub struct SearchState {
     pub teleport_scrolls: bool,
 }
 
+/// What mob search works over: the maps the crawl knows (`None` before the map index
+/// arrives), the map the panel shows (`None`: no map, so no Distances), and the kinds
+/// of travel the player has turned on.
+#[derive(Clone, Copy)]
+pub(crate) struct Searched<'a> {
+    pub crawl: Option<&'a Crawl>,
+    pub here: Option<Here<'a>>,
+    pub travel: Travel,
+}
+
 /// The player's side of mob search: what they typed, highlighted and picked.
 #[derive(Default)]
 pub(crate) struct MobSearch {
@@ -134,18 +144,17 @@ impl MobSearch {
     }
 
     /// Move the highlight `by` suggestions (up when negative), stopping at either end.
-    /// With no suggestions listed, move it through the results instead (ranked by
-    /// Distance from map `from`, by the `travel` turned on).
-    pub fn move_highlight(&mut self, by: isize, crawl: Option<&Crawl>, from: Option<&str>, travel: Travel) {
+    /// With no suggestions listed, move it through the results instead.
+    pub fn move_highlight(&mut self, by: isize, searched: &Searched) {
         if !self.window_open {
             return;
         }
-        let suggestions = self.suggestions(crawl);
+        let suggestions = self.suggestions(searched.crawl);
         if let Some(at) = self.highlight_in(&suggestions) {
             let to = at.saturating_add_signed(by).min(suggestions.len() - 1);
             self.highlighted = Some(suggestions[to].id.clone());
         } else {
-            let results = self.results(crawl, from, travel);
+            let results = self.results(searched);
             if let Some(at) = self.result_highlight_in(&results) {
                 let to = at.saturating_add_signed(by).min(results.len() - 1);
                 self.highlighted_result = Some(results[to].map_id.clone());
@@ -178,12 +187,11 @@ impl MobSearch {
         self.window_open = false;
     }
 
-    /// The search state for the panel, over the maps the crawl knows, with Distances
-    /// from map `from` (the map the panel shows; `None`: no map) by portals, ships and
-    /// the `travel` the player has turned on.
-    pub fn state(&self, crawl: Option<&Crawl>, from: Option<&str>, travel: Travel) -> SearchState {
+    /// The search state for the panel.
+    pub fn state(&self, searched: &Searched) -> SearchState {
+        let Searched { crawl, travel, .. } = *searched;
         let suggestions = self.suggestions(crawl);
-        let results = self.results(crawl, from, travel);
+        let results = self.results(searched);
         SearchState {
             window_open: self.window_open,
             query: self.query.clone(),
@@ -200,11 +208,10 @@ impl MobSearch {
         }
     }
 
-    /// The picked mob's results, with Distances from map `from` by the `travel` turned
-    /// on; none with no mob picked.
-    fn results(&self, crawl: Option<&Crawl>, from: Option<&str>, travel: Travel) -> Vec<SearchResult> {
-        match (&self.picked, crawl) {
-            (Some(mob), Some(crawl)) => results(&mob.id, crawl, from, travel),
+    /// The picked mob's results; none with no mob picked.
+    fn results(&self, searched: &Searched) -> Vec<SearchResult> {
+        match (&self.picked, searched.crawl) {
+            (Some(mob), Some(crawl)) => results(&mob.id, crawl, searched.here, searched.travel),
             _ => Vec::new(),
         }
     }
@@ -273,11 +280,11 @@ fn route(distances: &Distances, map_id: &str, crawl: &Crawl) -> Vec<RouteStop> {
 }
 
 /// Every known, non-Event map mob `mob_id` spawns on, ranked: by Density Tier; within a
-/// tier, maps with a route by Distance from map `from` (by portals, ships and the
-/// `travel` turned on), then those with no known route, then the quest-only ones; then
-/// by Density (densest first), then name.
-fn results(mob_id: &str, crawl: &Crawl, from: Option<&str>, travel: Travel) -> Vec<SearchResult> {
-    let distances = from.map(|from| World::of(crawl, travel).distances_from(from));
+/// tier, maps with a route by Distance from the map the player is on (by portals, ships
+/// and the `travel` turned on), then those with no known route, then the quest-only
+/// ones; then by Density (densest first), then name.
+fn results(mob_id: &str, crawl: &Crawl, here: Option<Here>, travel: Travel) -> Vec<SearchResult> {
+    let distances = here.map(|here| World::of(crawl, Some(here), travel).distances_from(here.id));
     let distance = |map_id: &str| distances.as_ref().map_or(Distance::Unknown, |d| d.to(map_id));
     let found: Vec<(&MapEntry, &Mob, u32)> = crawl
         .known()

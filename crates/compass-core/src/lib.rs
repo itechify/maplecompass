@@ -39,14 +39,14 @@ pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
 pub use world::{Distance, Step};
 
 use crawl::Crawl;
-use search::MobSearch;
+use search::{MobSearch, Searched};
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
 use panel::Panel;
 use setup::Setup;
 pub use recogniser::{TitleLines, TitleReader, TitleReading};
 use tracker::Tracker;
-use world::Travel;
+use world::{Here, Travel};
 use serde::Serialize;
 use std::task::Poll;
 
@@ -290,13 +290,16 @@ impl Compass {
 
     fn sync_shown_map(&mut self) {
         let map = self.shown_map.map().cloned();
-        // Distances are measured from the map shown (with Candidates, the one shown).
+        let data = self.shown_map.data();
+        // Distances are measured from the map shown (with Candidates, the one shown),
+        // and its page's exits count before the crawl gets to it.
         let moved = map.as_ref().map(|m| &m.id) != self.state.map.as_ref().map(|m| &m.id);
+        let paged = data.data() != self.state.data.data();
         self.state.map = map;
-        if moved {
+        self.state.data = data;
+        if moved || paged {
             self.sync_search();
         }
-        self.state.data = self.shown_map.data();
         self.state.candidates = self.shown_map.candidates();
         self.state.credit = self.state.map.as_ref().map(|_| MEOWDB_CREDIT);
     }
@@ -345,8 +348,7 @@ impl Compass {
             }
             Action::SearchPrevious | Action::SearchNext => {
                 let by = if action == Action::SearchNext { 1 } else { -1 };
-                let from = self.state.map.as_ref().map(|m| m.id.as_str());
-                self.search.move_highlight(by, self.crawl.as_ref(), from, self.travel());
+                self.search.move_highlight(by, &searched(&self.crawl, &self.state, &self.settings));
                 self.sync_search();
             }
             Action::SearchEnter => {
@@ -380,13 +382,8 @@ impl Compass {
     /// Bring the panel's mob search up to date with the player's inputs, the maps the
     /// crawl knows, the map shown and the travel toggles.
     fn sync_search(&mut self) {
-        let from = self.state.map.as_ref().map(|m| m.id.as_str());
-        self.state.search = self.search.state(self.crawl.as_ref(), from, self.travel());
-    }
-
-    /// The kinds of travel the player has turned on.
-    fn travel(&self) -> Travel {
-        Travel { taxis: self.settings.taxis, teleport_scrolls: self.settings.teleport_scrolls }
+        let search = self.search.state(&searched(&self.crawl, &self.state, &self.settings));
+        self.state.search = search;
     }
 
     /// The player pressed one of the global hotkeys (an accelerator string, as listed
@@ -535,6 +532,16 @@ impl Compass {
         self.setup.follow_needed();
         self.state.setup = self.setup.state();
         self.state.title_region = self.setup.title_region(self.matcher.as_ref().map(Matcher::longest_name));
+    }
+}
+
+/// What mob search works over: the maps the crawl knows, the map the panel shows with
+/// its page (once it has it), and the travel the player has turned on.
+fn searched<'a>(crawl: &'a Option<Crawl>, state: &'a PanelState, settings: &Settings) -> Searched<'a> {
+    Searched {
+        crawl: crawl.as_ref(),
+        here: state.map.as_ref().map(|map| Here { id: &map.id, page: state.data.data() }),
+        travel: Travel { taxis: settings.taxis, teleport_scrolls: settings.teleport_scrolls },
     }
 }
 

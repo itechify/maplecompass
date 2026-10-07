@@ -267,6 +267,27 @@ fn distances_are_worked_out_again_as_the_crawl_adds_maps() {
 }
 
 #[test]
+fn the_shown_maps_own_page_gives_its_exits_before_the_crawl_reaches_it() {
+    // Crawled in index order, one page every 2 s: Sunset Sky, where the player is, last.
+    let mut compass = Compass::new(
+        world(vec![
+            map("100000001", "Mushroom Field", 100, vec![orange(10)]),
+            map("100000002", "Road", 100, vec![]).to(&["100000001"]),
+            sunset_sky("100000000").to(&["100000002"]),
+        ])
+        .crawling_uncached(),
+    );
+    tick_through(&mut compass, 0, 100);
+    arrive(&mut compass, SUNSET, 100);
+    tick_through(&mut compass, 500, 2_200);
+
+    let state = search_for(&mut compass, "orange");
+
+    assert_eq!(state.search.crawl.known, 2);
+    assert_eq!(distances(&state), ["Mushroom Field: 2"]);
+}
+
+#[test]
 fn with_no_map_recognised_every_distance_is_unknown_and_maps_go_by_tier_then_density() {
     let mut compass = Compass::new(world(vec![
         sunset_sky("100000000").to(&["100000001"]),
