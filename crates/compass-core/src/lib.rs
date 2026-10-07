@@ -3,19 +3,26 @@
 //! Inputs are plain data (captured Title Region frames); the output is a [`PanelState`]
 //! holding everything the overlay renders. No OS or UI dependencies live here.
 
+mod map_index;
+mod matcher;
+pub mod meowdb;
 mod panel;
 mod prep;
 mod recogniser;
 mod settings;
+mod tracker;
 
+pub use map_index::{MapDataSource, MapEntry, SourceError};
 pub use panel::{
     Action, GameWindow, InsideOffset, Layer, PanelSizes, PlacementMode, ScreenPoint, ScreenRect,
     Size,
 };
 pub use settings::{Hotkeys, Settings};
 
+use matcher::Matcher;
 use panel::Panel;
 use recogniser::Recogniser;
+use tracker::Tracker;
 use serde::Serialize;
 
 /// A captured Title Region image: tightly packed RGBA, top-down rows.
@@ -54,19 +61,40 @@ pub fn default_title_region(client_width: u32, client_height: u32) -> Rect {
     Rect { x: 0, y, width: WIDTH.min(client_width), height: HEIGHT.min(client_height - y) }
 }
 
-/// The street name and map name read from the minimap title.
+/// The map the panel shows: a real map from the map index.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Title {
+pub struct CurrentMap {
+    /// MeowDB's 9-digit map ID, zero padding kept.
+    pub id: String,
     pub street_name: String,
     pub map_name: String,
+}
+
+/// Whether minimap titles can be recognised as real maps.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Recognition {
+    /// No frame seen yet, so the map index hasn't been asked for.
+    #[default]
+    Starting,
+    Ready,
+    /// The map index couldn't be had, so readings can't be snapped to real maps.
+    Unavailable,
 }
 
 /// Everything the overlay renders.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PanelState {
-    pub title: Option<Title>,
+    pub recognition: Recognition,
+    /// The last map the core was confident about.
+    pub map: Option<CurrentMap>,
+    /// How well the latest frame matched the map shown, 0..=100 (0 when it didn't).
+    pub confidence: u8,
+    /// The latest frame didn't confirm the map shown (unreadable, low confidence, or
+    /// a different map not yet confirmed).
+    pub not_sure: bool,
     /// Expanded to the full panel, or collapsed to a small icon.
     pub expanded: bool,
     /// The player asked to move the panel (the edit-mode hotkey).
@@ -86,9 +114,18 @@ pub struct PanelState {
     pub draggable: bool,
 }
 
+/// How long to wait before asking for the map index again after a failure. MeowDB is
+/// asked politely (ADR 0003): never on every frame.
+const INDEX_RETRY_MS: u64 = 60_000;
+
 /// The compass core: feed it frames, render its [`PanelState`].
 pub struct Compass {
     recogniser: Recogniser,
+    source: Box<dyn MapDataSource + Send>,
+    matcher: Option<Matcher>,
+    /// When asking for the map index last failed (frame time).
+    index_failed_at: Option<u64>,
+    tracker: Tracker,
     panel: Panel,
     /// The last settings restored; the panel's own fields live in `panel`.
     settings: Settings,
@@ -96,10 +133,15 @@ pub struct Compass {
 }
 
 impl Compass {
-    /// A core using the bundled title recogniser and default settings.
-    pub fn new() -> Self {
+    /// A core using the bundled title recogniser, the given map data source and
+    /// default settings. The map index is asked for on the first frame.
+    pub fn new(source: impl MapDataSource + Send + 'static) -> Self {
         let mut compass = Self {
             recogniser: Recogniser::bundled(),
+            source: Box::new(source),
+            matcher: None,
+            index_failed_at: None,
+            tracker: Tracker::default(),
             panel: Panel::default(),
             settings: Settings::default(),
             state: PanelState::default(),
@@ -110,8 +152,21 @@ impl Compass {
 
     /// Read a captured Title Region frame and update the panel state.
     pub fn on_frame(&mut self, frame: Frame) -> &PanelState {
+        self.load_map_index(frame.at_ms);
+        let Some(matcher) = &self.matcher else { return &self.state };
         let read = frame_to_rgb(&frame).and_then(|img| self.recogniser.read(&img));
-        self.state.title = read.map(|raw| Title { street_name: raw.street, map_name: raw.map });
+        let snap = read.and_then(|raw| matcher.snap(&raw.street, &raw.map));
+        let tracked = self.tracker.update(snap);
+        self.state.map = tracked.current.map(|i| {
+            let entry = matcher.map(i);
+            CurrentMap {
+                id: entry.id.clone(),
+                street_name: entry.street_name.clone(),
+                map_name: entry.map_name.clone(),
+            }
+        });
+        self.state.confidence = (tracked.confidence * 100.0).round() as u8;
+        self.state.not_sure = tracked.not_sure;
         &self.state
     }
 
@@ -155,6 +210,26 @@ impl Compass {
         }
     }
 
+    /// Ask the source for the map index on the first frame, and after a failure, again
+    /// no sooner than [`INDEX_RETRY_MS`] later.
+    fn load_map_index(&mut self, at_ms: u64) {
+        if self.matcher.is_some()
+            || self.index_failed_at.is_some_and(|t| at_ms.saturating_sub(t) < INDEX_RETRY_MS)
+        {
+            return;
+        }
+        match self.source.map_index() {
+            Ok(index) => {
+                self.matcher = Some(Matcher::new(index));
+                self.state.recognition = Recognition::Ready;
+            }
+            Err(_) => {
+                self.index_failed_at = Some(at_ms);
+                self.state.recognition = Recognition::Unavailable;
+            }
+        }
+    }
+
     pub fn panel_state(&self) -> &PanelState {
         &self.state
     }
@@ -168,12 +243,6 @@ impl Compass {
         self.state.layer = self.panel.layer();
         self.state.draggable = self.panel.draggable();
         &self.state
-    }
-}
-
-impl Default for Compass {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
