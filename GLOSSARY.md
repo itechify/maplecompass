@@ -84,7 +84,7 @@ The fewest map changes it takes to get from the player's current map to another 
 _Avoid_: position, proximity
 
 **Ship**:
-An NPC-run crossing between continents (e.g. Ellinia to Orbis). The only way to reach Ossyria, so it always counts as a map change.
+An NPC-run crossing between regions (e.g. Ellinia, on Victoria Island, to Orbis, in Ossyria). The only way to reach Ossyria, so it always counts as a map change.
 
 **Taxi**:
 An NPC who carries the player between towns for mesos.
