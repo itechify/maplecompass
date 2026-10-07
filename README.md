@@ -27,7 +27,11 @@ cargo run -p maplecompass --example probe       # no UI: capture the title and p
 
 Run the game windowed or borderless, with the minimap open.
 
-The panel starts on the right edge of the game window, and clicks pass through it to the game. It sits just above the game rather than on top of everything, so an app you bring in front of the game covers it too, and it disappears while the game is minimised. Once it knows your map it shows the map's Map Summary (mobs and EXP per hour, solo and 6+, as MeowDB gives them) and its mobs sorted by level, from NiaMeowDB (meowdb.com). These hotkeys work while the game has focus:
+The panel starts on the right edge of the game window, and clicks pass through it to the game. It sits just above the game rather than on top of everything, so an app you bring in front of the game covers it too, and it disappears while the game is minimised. Once it knows your map it shows the map's Map Summary (mobs and EXP per hour, solo and 6+, as MeowDB gives them), its mobs sorted by level, and its Hidden Portals, from NiaMeowDB (meowdb.com).
+
+Hidden Portals are exits to other maps that MeowDB marks invisible (type 1), hidden (10) or script (11, shown as a Quest Portal). Each shows where it leads (tagged when that is a Hidden Street) and roughly where it is on the map. Invisible exits on a town are its building doors, which you can see, so they aren't listed. Walk-into portals (type 3) count as visible until checked in-game. When play shows a portal the rule gets wrong, add it to the override list in `crates/compass-core/src/portal_overrides.rs`, by map ID and MeowDB portal name.
+
+These hotkeys work while the game has focus:
 
 - **Ctrl+Shift+M** collapses the panel to an icon, or expands it again.
 - **Ctrl+Shift+E** enters edit mode: drag the panel where you want it, then press Ctrl+Shift+E again to make it click-through.
