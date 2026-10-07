@@ -8,9 +8,32 @@
     <script type="module" src="/src/main.ts" defer></script>
   </head>
   <body class="hidden">
-    <main class="panel">
-      <p class="street" id="street"></p>
-      <p class="map" id="map">Starting…</p>
+    <main class="panel" id="panel">
+      <header>
+        <p class="street" id="street"></p>
+        <p class="map" id="map">Starting…</p>
+      </header>
+      <section id="data" hidden>
+        <p class="note" id="note"></p>
+        <table class="summary" id="summary">
+          <thead>
+            <tr><th></th><th>Solo</th><th>6+</th></tr>
+          </thead>
+          <tbody>
+            <tr><th>Mobs/h</th><td id="mobs-solo"></td><td id="mobs-party"></td></tr>
+            <tr><th>EXP/h</th><td id="exp-solo"></td><td id="exp-party"></td></tr>
+          </tbody>
+        </table>
+        <table class="mobs" id="mobs">
+          <thead>
+            <tr><th>Mob</th><th>Lv</th><th>HP</th><th>EXP</th><th>Count</th><th>Share</th></tr>
+          </thead>
+          <tbody id="mob-rows"></tbody>
+        </table>
+      </section>
+      <footer id="footer" hidden>
+        <span id="credit"></span><span class="hint" id="open-hint"></span>
+      </footer>
     </main>
     <img class="icon" src="/assets/icon.svg" alt="MapleCompass" draggable="false" />
   </body>
