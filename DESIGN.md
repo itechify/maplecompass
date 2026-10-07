@@ -145,6 +145,12 @@ components:
     typography: "{typography.marking-hint}"
     rounded: "{rounded.inset}"
     padding: "10px 16px"
+  text-field:
+    backgroundColor: "{colors.inset}"
+    textColor: "{colors.text}"
+    typography: "{typography.body}"
+    rounded: "{rounded.button}"
+    padding: "7px 10px"
 ---
 
 # Design System: MapleCompass
@@ -280,11 +286,15 @@ An inset, bordered result container. Reading text uses Blue Grey. A recognised r
 
 A crosshair cursor over the marking scrim, a centered inset instruction, and a Compass Gold selection outline with a light interior wash. The hint and rectangle ignore pointer events, leaving the marking window to receive the drag. Arrow keys move the selection, Alt+Arrow resizes it, and Shift uses ten-pixel steps. Enter tests the box; Escape returns to setup. Selection bounds and adjustments belong to the core and act only on MapleCompass’s own window.
 
+### Text field
+
+The mob search window's query box, the app's one text field. It fills its row on the `inset` fill, with a Slate border (1px), the `button` corner token and Clear Frost text; a small Blue Grey label sits above it, and its placeholder is Blue Grey. Keyboard focus uses the buttons' two-pixel Compass Gold outline with a three-pixel offset. Its suggestions drop below in an inset, bordered list with the `inset` corner token: rows are Blue Grey with the level right-aligned, and the highlighted row, the one Enter picks, is Clear Frost and semibold on the `selection-fill` wash. It is a keyboard-controlled combobox: the arrow keys move the highlight while the text box keeps the focus.
+
 ### App icon
 
 Use the existing SVG and packaged icons. The setup header displays the icon at a small size (28 × 28px); collapsed mode fills its window and applies reduced opacity (0.85). The turquoise identity asset remains distinct from Compass Gold controls.
 
-The app has no existing text-field system, web navigation component, tooltip system, or custom animation vocabulary to extract.
+The app has no existing web navigation component, tooltip system, or custom animation vocabulary to extract.
 
 ## Do's and Don'ts
 

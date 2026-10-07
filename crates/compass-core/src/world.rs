@@ -34,7 +34,7 @@ pub enum Distance {
 pub enum Step {
     /// Through a portal, Hidden Portal or Door (never a Quest Portal).
     Portal,
-    /// A ship ride between continents.
+    /// A ship ride between regions.
     Ship,
     /// A taxi ride between towns.
     Taxi,
