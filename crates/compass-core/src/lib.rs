@@ -18,7 +18,7 @@ mod shown_map;
 mod tracker;
 
 pub use map_data::{HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty};
-pub use map_index::{MapDataSource, MapEntry, SourceError};
+pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 pub use panel::{
     Action, GameWindow, InsideOffset, Layer, PanelSizes, PlacementMode, ScreenPoint, ScreenRect,
@@ -34,6 +34,7 @@ use setup::Setup;
 use recogniser::Recogniser;
 use tracker::Tracker;
 use serde::Serialize;
+use std::task::Poll;
 
 /// A captured Title Region image: tightly packed RGBA, top-down rows.
 #[derive(Debug, Clone)]
@@ -104,12 +105,18 @@ pub const MEOWDB_CREDIT: &str = "NiaMeowDB (meowdb.com)";
 
 /// Whether minimap titles can be recognised as real maps.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(tag = "status", rename_all = "camelCase")]
 pub enum Recognition {
-    /// No frame seen yet, so the map index hasn't been asked for.
+    /// The map index hasn't arrived yet (it is asked for at startup).
     #[default]
     Starting,
     Ready,
+    /// MeowDB couldn't be reached, so titles are snapped to a copy of the map index
+    /// saved at `saved_at_unix_ms` (ms since the Unix epoch).
+    SavedCopy {
+        #[serde(rename = "savedAtUnixMs")]
+        saved_at_unix_ms: u64,
+    },
     /// The map index couldn't be had, so readings can't be snapped to real maps.
     Unavailable,
 }
@@ -292,18 +299,37 @@ impl Compass {
         }
     }
 
-    /// Ask the source for the map index on the first frame, and after a failure, again
-    /// no sooner than [`INDEX_RETRY_MS`] later.
+    /// Time passed: check on fetches in flight. The shell calls this many times a
+    /// second (`at_ms` on the same clock as frames), so nothing waits for the network.
+    pub fn tick(&mut self, at_ms: u64) -> &PanelState {
+        self.load_map_index(at_ms);
+        if self.matcher.is_some() {
+            self.shown_map.poll(&mut *self.source);
+            self.sync_shown_map();
+        }
+        self.sync_panel()
+    }
+
+    /// Ask the source for the map index at startup (the first tick or frame) until it
+    /// answers, and after a failure, again no sooner than [`INDEX_RETRY_MS`] later.
     fn load_map_index(&mut self, at_ms: u64) {
         if self.matcher.is_some()
             || self.index_failed_at.is_some_and(|t| at_ms.saturating_sub(t) < INDEX_RETRY_MS)
         {
             return;
         }
-        match self.source.map_index() {
-            Ok(index) => {
+        let index = match self.source.map_index() {
+            Poll::Pending => return,
+            Poll::Ready(index) => index,
+        };
+        match index {
+            Ok(Fetched::Fresh(index)) => {
                 self.matcher = Some(Matcher::new(index));
                 self.state.recognition = Recognition::Ready;
+            }
+            Ok(Fetched::SavedCopy { data, saved_at_unix_ms }) => {
+                self.matcher = Some(Matcher::new(data));
+                self.state.recognition = Recognition::SavedCopy { saved_at_unix_ms };
             }
             Err(_) => {
                 self.index_failed_at = Some(at_ms);

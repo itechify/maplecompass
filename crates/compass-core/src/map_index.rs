@@ -35,16 +35,30 @@ impl std::fmt::Display for SourceError {
 
 impl std::error::Error for SourceError {}
 
+/// What a source got from MeowDB: fresh data, or a copy saved earlier because MeowDB
+/// couldn't be reached.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Fetched<T> {
+    /// Just fetched, or a cached copy young enough to use as it is.
+    Fresh(T),
+    /// MeowDB couldn't be reached: a copy saved at `saved_at_unix_ms` (ms since the
+    /// Unix epoch). The panel shows it, saying so and since when.
+    SavedCopy { data: T, saved_at_unix_ms: u64 },
+}
+
 /// Where the core gets MeowDB's data. The shell supplies one that fetches over HTTP
 /// with a disk cache; tests supply fakes.
+///
+/// Both operations may take a while over the network, and the core never waits for
+/// them: on the first call start the fetch and answer [`Poll::Pending`]; the core asks
+/// again (each tick and frame) until the answer is ready. A source should answer at
+/// once when it can (from a cache, say).
 pub trait MapDataSource {
-    /// Every map's ID, street name, map name and region. The core asks once at
-    /// startup, and again only if asking failed.
-    fn map_index(&mut self) -> Result<Vec<MapEntry>, SourceError>;
+    /// Every map's ID, street name, map name and region. The core asks at startup,
+    /// and again only if asking failed.
+    fn map_index(&mut self) -> Poll<Result<Fetched<Vec<MapEntry>>, SourceError>>;
 
-    /// One map's data, by its 9-digit ID. The core asks when the panel switches to the
-    /// map, then again on each frame while the answer is [`Poll::Pending`], so a slow
-    /// fetch never holds up the panel: start it on the first call and report it on a
-    /// later one. A source should answer at once when it can (from a cache, say).
-    fn map_data(&mut self, id: &str) -> Poll<Result<MapData, SourceError>>;
+    /// One map's data, by its 9-digit ID. The core asks once the panel is sure of the
+    /// map (or of the title it shares with other maps), never ahead of time.
+    fn map_data(&mut self, id: &str) -> Poll<Result<Fetched<MapData>, SourceError>>;
 }

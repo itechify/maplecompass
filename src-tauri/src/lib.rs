@@ -5,6 +5,7 @@
 
 pub mod capture;
 pub mod gamewin;
+mod files;
 mod hotkeys;
 pub mod meowdb;
 mod settings;
@@ -193,6 +194,8 @@ fn compass_loop(
             next_window_check = Instant::now() + WINDOW_TICK;
             game = find_game(&mut compass, &window.overlay, expanded);
         }
+        // Fetches in flight (map index, map pages) are checked on, never waited for.
+        compass.tick(start.elapsed().as_millis() as u64);
         if Instant::now() >= next_capture {
             next_capture = Instant::now() + TICK;
             // The region the player marked; none until setup is done, nor after the

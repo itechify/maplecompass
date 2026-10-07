@@ -13,7 +13,7 @@ type SetupReason = "firstRun" | "resolutionChanged" | "requested";
 /** Mirror of the shell's `SetupView`. */
 type SetupView = {
   setup: { needed: SetupReason | null; testRead: TestRead | null };
-  recognition: "starting" | "ready" | "unavailable";
+  recognition: { status: "starting" | "ready" | "savedCopy" | "unavailable" };
   game: { width: number; height: number } | null;
   gameTitle: string;
   setupHotkey: string;
@@ -89,7 +89,9 @@ function render() {
     map.className = "map";
     map.textContent = `${read.map.mapName} ✓`;
     box.append(street, map);
-  } else if (recognition === "unavailable") {
+  } else if (recognition.status === "starting") {
+    box.textContent = "Loading MeowDB's map list…";
+  } else if (recognition.status === "unavailable") {
     box.textContent =
       "Couldn't load MeowDB's map list, so no map can be recognised yet. Check your connection; MapleCompass tries again every minute.";
   } else {
