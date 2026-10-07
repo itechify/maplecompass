@@ -59,6 +59,14 @@ pub enum Action {
     /// The player marked the Title Region (relative to the game client area) and wants
     /// a test read of it.
     MarkTitleRegion(crate::Rect),
+    /// Open the Title Region window with a keyboard-adjustable selection.
+    BeginTitleSelection,
+    /// Arrow keys move the selection; Alt resizes it, Shift uses ten-pixel steps.
+    AdjustTitleSelection { direction: crate::SelectionDirection, resize: bool, coarse: bool },
+    /// Test-read the keyboard selection.
+    ConfirmTitleSelection,
+    /// Close marking without changing the previous test read or saved region.
+    CancelTitleSelection,
     /// Keep the marked Title Region, if its test read recognised a map.
     FinishSetup,
     /// The player wants to redo setup (the re-setup hotkey).

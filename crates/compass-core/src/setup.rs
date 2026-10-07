@@ -2,7 +2,7 @@
 //! for setup again.
 
 use crate::panel::{ScreenRect, Size};
-use crate::{CurrentMap, MEOWDB_CREDIT, Rect};
+use crate::{CurrentMap, MEOWDB_CREDIT, Rect, default_title_region};
 use serde::{Deserialize, Serialize};
 
 /// Why the player needs to (re)do setup.
@@ -45,6 +45,18 @@ pub struct SetupState {
     /// The setup window shows: when setup becomes needed, and when the player asks
     /// for it, until it is finished or closed.
     pub window_open: bool,
+    /// The keyboard-adjustable Title Region, before it is committed for a test read.
+    pub selection: Option<Rect>,
+}
+
+/// An arrow key in MapleCompass's own Title Region window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SelectionDirection {
+    Left,
+    Right,
+    Up,
+    Down,
 }
 
 /// A marked Title Region and the size of the game client area it was marked on.
@@ -73,6 +85,7 @@ pub(crate) struct Setup {
     pub saved: Option<TitleRegion>,
     /// The region being test-read, and how that is going.
     marking: Option<(TitleRegion, TestRead)>,
+    selection: Option<TitleRegion>,
     /// The player asked to redo setup and hasn't finished or cancelled it.
     requested: bool,
     /// The setup window is showing.
@@ -84,10 +97,51 @@ pub(crate) struct Setup {
 impl Setup {
     /// The player marked the Title Region: test-read it.
     pub fn mark(&mut self, marked: Rect) {
-        if let Some(game) = self.game {
+        if let Some((game, marked)) = self.game.and_then(|game| fit_mark(marked, game).map(|r| (game, r))) {
             let client = Size { width: game.width, height: game.height };
             self.marking = Some((TitleRegion { marked, client }, TestRead::Reading));
+            self.selection = None;
         }
+    }
+
+    pub fn begin_selection(&mut self) {
+        let Some(game) = self.game.filter(|_| self.window_open) else { return };
+        let marked = self.marking.as_ref().map(|(region, _)| region).or(self.saved.as_ref())
+            .filter(|region| self.fits(region)).map_or_else(
+                || default_title_region(game.width, game.height), |region| region.marked,
+            );
+        self.selection = fit_mark(marked, game).map(|marked| TitleRegion {
+            marked, client: Size { width: game.width, height: game.height },
+        });
+    }
+
+    pub fn adjust_selection(&mut self, direction: SelectionDirection, resize: bool, coarse: bool) {
+        let Some(game) = self.game else { return };
+        let Some(selection) = &mut self.selection else { return };
+        let r = &mut selection.marked;
+        let step = if coarse { 10 } else { 1 };
+        let (value, limit, increasing) = match (direction, resize) {
+            (SelectionDirection::Left, false) => (&mut r.x, game.width - r.width, false),
+            (SelectionDirection::Right, false) => (&mut r.x, game.width - r.width, true),
+            (SelectionDirection::Up, false) => (&mut r.y, game.height - r.height, false),
+            (SelectionDirection::Down, false) => (&mut r.y, game.height - r.height, true),
+            (SelectionDirection::Left, true) => (&mut r.width, game.width - r.x, false),
+            (SelectionDirection::Right, true) => (&mut r.width, game.width - r.x, true),
+            (SelectionDirection::Up, true) => (&mut r.height, game.height - r.y, false),
+            (SelectionDirection::Down, true) => (&mut r.height, game.height - r.y, true),
+        };
+        *value = if increasing { value.saturating_add(step).min(limit) }
+            else { value.saturating_sub(step).max(if resize { MIN_MARK_SIZE } else { 0 }) };
+    }
+
+    pub fn confirm_selection(&mut self) {
+        if let Some(region) = self.selection {
+            self.mark(region.marked);
+        }
+    }
+
+    pub fn cancel_selection(&mut self) {
+        self.selection = None;
     }
 
     /// Keep the marked region, if its test read recognised a map.
@@ -95,6 +149,7 @@ impl Setup {
         if let Some((region, TestRead::Recognised { .. })) = &self.marking {
             self.saved = Some(*region);
             self.marking = None;
+            self.selection = None;
             self.requested = false;
         }
     }
@@ -108,6 +163,7 @@ impl Setup {
     /// The player closed setup without finishing it.
     pub fn cancel(&mut self) {
         self.marking = None;
+        self.selection = None;
         self.requested = false;
         self.window_open = false;
     }
@@ -115,6 +171,9 @@ impl Setup {
     /// Open the setup window when setup becomes needed (or needed for a new reason),
     /// and close it once it isn't.
     pub fn follow_needed(&mut self) {
+        if self.selection.is_some_and(|region| self.game.is_none() || !self.fits(&region)) {
+            self.selection = None;
+        }
         let needed = self.needed();
         if needed.is_none() {
             self.window_open = false;
@@ -139,6 +198,7 @@ impl Setup {
             credit: matches!(test_read, Some(TestRead::Recognised { .. })).then_some(MEOWDB_CREDIT),
             test_read,
             window_open: self.window_open,
+            selection: self.selection.map(|region| region.marked),
         }
     }
 
@@ -177,6 +237,20 @@ impl Setup {
             height: r.height,
         })
     }
+}
+
+const MIN_MARK_SIZE: u32 = 8;
+
+/// Both pointer and keyboard marks stay inside the game client area.
+fn fit_mark(marked: Rect, game: ScreenRect) -> Option<Rect> {
+    if game.width < MIN_MARK_SIZE || game.height < MIN_MARK_SIZE {
+        return None;
+    }
+    let width = marked.width.clamp(MIN_MARK_SIZE, game.width);
+    let height = marked.height.clamp(MIN_MARK_SIZE, game.height);
+    Some(Rect {
+        x: marked.x.min(game.width - width), y: marked.y.min(game.height - height), width, height,
+    })
 }
 
 /// The region to capture for a mark: the marked top-left corner and height, widened to

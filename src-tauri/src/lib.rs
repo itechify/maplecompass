@@ -126,6 +126,8 @@ pub fn run() {
             setup::setup_view,
             setup::pick_game_window,
             setup::start_marking,
+            setup::adjust_title_selection,
+            setup::confirm_title_selection,
             setup::mark_title_region,
             setup::cancel_marking,
             setup::finish_setup,
