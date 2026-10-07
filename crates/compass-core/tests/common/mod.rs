@@ -101,7 +101,12 @@ impl FakeSource {
 
     /// MeowDB can't be reached.
     pub fn offline() -> Self {
-        Self::answering(vec![Err(unreachable())])
+        Self::failing(unreachable())
+    }
+
+    /// Every index request fails this way.
+    pub fn failing(error: SourceError) -> Self {
+        Self::answering(vec![Err(error)])
     }
 
     /// MeowDB can't be reached at first, then serves this index.
