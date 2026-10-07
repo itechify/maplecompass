@@ -13,7 +13,7 @@ mod settings;
 mod setup;
 
 use compass_core::{
-    Action, Compass, Frame, GameWindow, Layer, PanelSizes, PanelState, ScreenRect, Size, TitleReader,
+    Action, Compass, Frame, GameWindow, Layer, PanelSizes, PanelState, Request, ScreenRect, Size, TitleReader,
     TitleReading,
     default_title_region,
 };
@@ -238,8 +238,11 @@ fn compass_loop(
                 compass.act(action);
             }
             Ok(Command::Hotkey(pressed)) => {
-                if let Some(page) = compass.on_hotkey(&pressed) {
-                    open_in_browser(&app, &page.url);
+                match compass.on_hotkey(&pressed) {
+                    Some(Request::OpenInBrowser { url }) => open_in_browser(&app, &url),
+                    // Right after our hotkey, so Windows lets us take the foreground.
+                    Some(Request::RaiseSearchWindow) => search_window.raise(),
+                    None => {}
                 }
             }
             Ok(Command::SearchQuery(query)) => {

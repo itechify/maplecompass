@@ -80,6 +80,14 @@ impl SearchWindow {
         *self.app.state::<LastSearchView>().0.lock().unwrap() = Some(view.clone());
         self.emitted = Some(view);
     }
+
+    /// Bring the open search window back in front, if the game came in front of it.
+    pub fn raise(&self) {
+        if self.shown {
+            let _ = self.window.unminimize();
+            bring_to_front(&self.window);
+        }
+    }
 }
 
 /// Make our search window the foreground window, so the player's typing goes to it.
