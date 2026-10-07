@@ -206,6 +206,58 @@ td:first-child {
   text-transform: uppercase;
 }
 
+/* The picked mob's top maps, below the current map's info. */
+.mob-search {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mob-search h2 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+  color: #9fb6cc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.results {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.results th:nth-child(1) { width: 52%; }
+.results th:nth-child(2) { width: 16%; }
+.results th:nth-child(3) { width: 14%; }
+.results th:nth-child(4) { width: 18%; }
+.results th, .results td { box-sizing: border-box; padding-left: 6px; vertical-align: top; }
+.results th:first-child, .results td:first-child { padding-left: 0; }
+
+.result-map,
+.result-street {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-street {
+  color: #9fb6cc;
+}
+
+/* Tiers by text emphasis alone: the accent is kept for actions. */
+.tier.high { font-weight: 600; }
+.tier.medium { color: #c3ccd6; }
+.tier.low { color: #9fb6cc; }
+
+.mob-search .more,
+.mob-search .search-credit {
+  font-size: 12px;
+  color: #c3ccd6;
+}
+
 footer {
   font-size: 12px;
   color: #c3ccd6;

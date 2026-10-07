@@ -27,6 +27,7 @@ fn the_hotkeys_are_win_alt_letters_with_no_ctrl_or_shift() {
             open_meowdb_page: win_alt("o"),
             setup: win_alt("s"),
             choose_candidate: win_alt("n"),
+            search: win_alt("f"),
         }
     );
 }
@@ -124,4 +125,41 @@ fn a_hotkey_another_app_has_taken_is_shown_as_unavailable() {
     let state = compass.hotkeys_unavailable(vec!["super+alt+e".into()]);
 
     assert_eq!(state.unavailable_hotkeys, ["super+alt+e"]);
+}
+
+#[test]
+fn win_alt_f_is_the_search_hotkey_even_with_a_settings_file_from_before_search() {
+    let before_search = r#"{"version":2,"hotkeys":{"togglePanel":"super+alt+x","chooseCandidate":"super+alt+n"}}"#;
+    let mut compass = Compass::new(FakeSource::meowdb());
+
+    let state = compass.restore(serde_json::from_str(before_search).unwrap()).clone();
+
+    assert_eq!(state.hotkeys.search, win_alt("f"));
+    assert_eq!(state.hotkeys.toggle_panel, win_alt("x"), "the player's own bindings are kept");
+    assert_eq!(compass.settings().hotkeys.search, win_alt("f"), "and saved with the rest");
+}
+
+#[test]
+fn every_hotkey_the_panel_lists_is_one_to_register_the_search_one_included() {
+    let compass = Compass::new(FakeSource::meowdb());
+
+    let to_register = compass.panel_state().hotkeys.all();
+
+    assert_eq!(
+        to_register,
+        ["super+alt+c", "super+alt+e", "super+alt+p", "super+alt+o", "super+alt+s", "super+alt+n", "super+alt+f"]
+    );
+}
+
+#[test]
+fn a_rebound_search_hotkey_another_app_has_taken_is_shown_as_unavailable() {
+    let mut compass = Compass::new(FakeSource::meowdb());
+    let hotkeys = Hotkeys { search: "super+alt+q".into(), ..Hotkeys::default() };
+    compass.restore(Settings { hotkeys, ..Settings::default() });
+
+    let state = compass.hotkeys_unavailable(vec!["super+alt+q".into()]);
+
+    assert_eq!(state.hotkeys.search, "super+alt+q");
+    assert_eq!(state.hotkeys.all().last(), Some(&"super+alt+q"));
+    assert_eq!(state.unavailable_hotkeys, ["super+alt+q"]);
 }

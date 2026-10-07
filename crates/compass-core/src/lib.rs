@@ -30,12 +30,13 @@ pub use panel::{
     Action, GameWindow, InsideOffset, Layer, PanelSizes, PlacementMode, ScreenPoint, ScreenRect,
     Size,
 };
-pub use search::SearchState;
+pub use search::{DensityTier, MobChoice, PANEL_RESULTS, SearchResult, SearchState};
 pub use settings::{Hotkeys, Settings};
 pub use setup::{SelectionDirection, SetupReason, SetupState, TestRead, TitleRegion};
 pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
 
 use crawl::Crawl;
+use search::MobSearch;
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
 use panel::Panel;
@@ -199,6 +200,8 @@ pub struct Compass {
     shown_map: ShownMap,
     /// The world crawl, from when the map index arrives.
     crawl: Option<Crawl>,
+    /// What the player typed, highlighted and picked in mob search.
+    search: MobSearch,
     panel: Panel,
     setup: Setup,
     /// The last settings restored; the panel's own fields live in `panel`.
@@ -218,6 +221,7 @@ impl Compass {
             tracker: Tracker::default(),
             shown_map: ShownMap::default(),
             crawl: None,
+            search: MobSearch::default(),
             panel: Panel::default(),
             setup: Setup::default(),
             settings: Settings::default(),
@@ -325,8 +329,41 @@ impl Compass {
                 self.state.quit |= self.setup.state().needed == Some(SetupReason::FirstRun);
                 self.setup.cancel();
             }
+            Action::OpenSearch => {
+                self.search.open();
+                self.sync_search();
+            }
+            Action::SearchPrevious => {
+                self.search.move_highlight(-1, self.crawl.as_ref());
+                self.sync_search();
+            }
+            Action::SearchNext => {
+                self.search.move_highlight(1, self.crawl.as_ref());
+                self.sync_search();
+            }
+            Action::SearchEnter => {
+                self.search.enter(self.crawl.as_ref());
+                self.sync_search();
+            }
+            Action::SearchEscape => {
+                self.search.escape();
+                self.sync_search();
+            }
         }
         self.sync_panel()
+    }
+
+    /// The player typed in the search window: `query` is everything in its text box.
+    pub fn search_query(&mut self, query: &str) -> &PanelState {
+        self.search.type_query(query);
+        self.sync_search();
+        self.sync_panel()
+    }
+
+    /// Bring the panel's mob search up to date with the player's inputs and the maps
+    /// the crawl knows.
+    fn sync_search(&mut self) {
+        self.state.search = self.search.state(self.crawl.as_ref());
     }
 
     /// The player pressed one of the global hotkeys (an accelerator string, as listed
@@ -344,6 +381,8 @@ impl Compass {
             Action::RequestSetup
         } else if is(&hotkeys.choose_candidate) {
             Action::ChooseCandidate
+        } else if is(&hotkeys.search) {
+            Action::OpenSearch
         } else if is(&hotkeys.open_meowdb_page) {
             return self.state.map.as_ref().map(|map| OpenInBrowser { url: map.url.clone() });
         } else {
@@ -406,7 +445,10 @@ impl Compass {
         // After the shown map, which never waits for the crawl.
         if let Some(crawl) = &mut self.crawl {
             crawl.poll(&mut *self.source, at_ms);
-            self.state.search.crawl = crawl.progress();
+            // Search covers the maps known so far: redone as the crawl learns more.
+            if crawl.progress() != self.state.search.crawl {
+                self.sync_search();
+            }
         }
         self.sync_panel()
     }
@@ -438,10 +480,9 @@ impl Compass {
                 return;
             }
         };
-        let crawl = Crawl::new(index.iter().map(|m| m.id.clone()));
-        self.state.search.crawl = crawl.progress();
-        self.crawl = Some(crawl);
+        self.crawl = Some(Crawl::new(index.clone()));
         self.matcher = Some(Matcher::new(index));
+        self.sync_search();
     }
 
     pub fn panel_state(&self) -> &PanelState {
