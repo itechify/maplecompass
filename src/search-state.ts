@@ -38,6 +38,12 @@ export type SearchState = {
   highlighted: number | null;
   picked: MobChoice | null;
   results: SearchResult[];
+  /** The first five results: the panel's list. */
+  topResults: SearchResult[];
+  /** How many results there are besides the panel's. */
+  moreResults: number;
+  /** The picked mob spawns only on Event maps, which search leaves out. */
+  onlyOnEventMaps: boolean;
   highlightedResult: number | null;
   nearest: SearchResult | null;
   credit: string | null;
@@ -48,9 +54,6 @@ export type SearchState = {
   teleportScrolls: boolean;
 };
 
-/** Mirror of `compass_core::PANEL_RESULTS`: the panel shows this many results. */
-export const PANEL_RESULTS = 5;
-
 export const TIER_NAMES: Record<DensityTier, string> = { high: "High", medium: "Medium", low: "Low" };
 
 /** A Density in hundredths as the player reads it: 1500 is "15", 1250 is "12.5". */
@@ -60,15 +63,13 @@ export const density = (hundredths: number) =>
 /** "Orange Mushroom · Lv 8" */
 export const mobTitle = (mob: MobChoice) => `${mob.name} · Lv ${mob.level}`;
 
-/** Why a picked mob has no results, or that the list may be incomplete mid-crawl. */
-export function resultsNote(search: SearchState): string {
-  if (!search.picked) return "";
-  const { crawl } = search;
-  if (search.results.length === 0) {
-    return crawl.done ? "It only spawns on Event maps." : "None of the maps known so far.";
-  }
-  return crawl.done ? "" : `From the ${crawl.known} of ${crawl.total} maps known so far.`;
-}
+/** Why a picked mob has no results, as the core says. (The crawl line says how much of the world is known.) */
+export const resultsNote = (search: SearchState) =>
+  search.onlyOnEventMaps ? "Found only on Event maps, which search leaves out." : "";
+
+/** "312 of 422 maps known" while the world crawl runs; "" before the Map list arrives and once it's done. */
+export const crawlLine = ({ crawl }: SearchState) =>
+  crawl.total > 0 && !crawl.done ? `${crawl.known} of ${crawl.total} maps known` : "";
 
 const DISTANCE_TEXT = {
   noRoute: { text: "no route", title: "No known route leads there" },

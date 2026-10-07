@@ -237,6 +237,48 @@ const SUNSET: &str = "victoria-road__sunset-sky--window";
 const HENESYS_HUNTING_GROUND_I: &str = "010001010";
 
 #[test]
+fn a_mob_found_only_on_event_maps_has_no_results_and_search_says_why() {
+    let mut compass = crawled(vec![
+        map("100000001", "Snail Field", 100, vec![mob("3", "Blue Snail", 4, 5)]),
+        map("100000002", "Mushroom Festival", 200, vec![orange(30)]).in_region("Event"),
+    ]);
+
+    let state = search_for(&mut compass, "orange");
+
+    assert!(state.search.results.is_empty());
+    assert!(state.search.only_on_event_maps);
+    let state = search_for(&mut compass, "snail");
+    assert!(!state.search.only_on_event_maps, "the Blue Snail has results");
+}
+
+/// The panel's results, as "Map Name".
+fn top(state: &PanelState) -> Vec<&str> {
+    state.search.top_results.iter().map(|r| r.map_name.as_str()).collect()
+}
+
+#[test]
+fn the_panel_gets_the_top_five_results_and_how_many_more_there_are() {
+    let maps = (1..=7).map(|n| map(&format!("10000000{n}"), &format!("Field {n}"), 100, vec![orange(10 - n)])).collect();
+    let mut compass = crawled(maps);
+
+    let state = search_for(&mut compass, "orange");
+
+    assert_eq!(state.search.results.len(), 7);
+    assert_eq!(top(&state), ["Field 1", "Field 2", "Field 3", "Field 4", "Field 5"]);
+    assert_eq!(state.search.more_results, 2);
+}
+
+#[test]
+fn with_five_results_or_fewer_the_panel_gets_them_all() {
+    let mut compass = crawled(mushroom_world());
+
+    let state = search_for(&mut compass, "orange");
+
+    assert_eq!(top(&state), ["Mushroom Field", "Mushroom Hill"]);
+    assert_eq!(state.search.more_results, 0);
+}
+
+#[test]
 fn the_picked_mob_and_its_results_stay_as_the_player_changes_map_until_the_search_is_cleared() {
     // MeowDB's saved pages: Orange Mushrooms live in Henesys Hunting Ground I.
     let mut compass = Compass::new(FakeSource::meowdb());
