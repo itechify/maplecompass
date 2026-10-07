@@ -158,6 +158,10 @@ pub struct PanelState {
     /// position alone except when its size or layer changes. Otherwise clicks pass
     /// through to the game and the shell keeps the overlay at `placement`.
     pub draggable: bool,
+    /// The overlay takes the mouse: while it is draggable, in search mode, and while the
+    /// pointer is over one of its controls (so the × is clickable at any time). Otherwise
+    /// clicks pass through it to the game.
+    pub takes_mouse: bool,
     /// First-run setup and re-setup.
     pub setup: SetupState,
     /// Where on screen to capture the Title Region (physical px); `None` while there
@@ -185,9 +189,9 @@ pub struct PanelState {
 pub enum Request {
     /// Open this page in the player's browser (the open-page hotkey).
     OpenInBrowser { url: String },
-    /// Bring the search window, already open, back in front (the search hotkey): the
+    /// Bring the overlay, already in search mode, back in front (the search hotkey): the
     /// game may have come in front of it. Our own window only (ADR 0001).
-    RaiseSearchWindow,
+    RaiseOverlay,
 }
 
 /// The game window's title, unless the player picked another by hand.
@@ -324,10 +328,31 @@ impl Compass {
         self.sync_panel()
     }
 
+    /// The mouse pointer is at this spot on screen, physical px (`None`: the shell
+    /// couldn't tell). The overlay takes the mouse while it is over one of its controls.
+    pub fn on_pointer(&mut self, pointer: Option<ScreenPoint>) -> &PanelState {
+        self.panel.pointer = pointer;
+        self.sync_panel()
+    }
+
+    /// The overlay's clickable controls (the mob search section's ×) are at these spots
+    /// on screen, physical px: none while it shows none.
+    pub fn set_overlay_controls(&mut self, controls: Vec<ScreenRect>) -> &PanelState {
+        self.panel.controls = controls;
+        self.sync_panel()
+    }
+
     /// Apply something the player did.
     pub fn act(&mut self, action: Action) -> &PanelState {
         match action {
-            Action::ToggleExpanded => self.panel.expanded = !self.panel.expanded,
+            Action::ToggleExpanded => {
+                self.panel.expanded = !self.panel.expanded;
+                // The query box goes with the panel: like Esc.
+                if !self.panel.expanded {
+                    self.search.escape();
+                    self.sync_search();
+                }
+            }
             Action::ToggleEditMode => self.panel.edit_mode = !self.panel.edit_mode,
             Action::PanelMoved { x, y } => self.panel.moved_to(x, y),
             Action::CyclePlacement => self.panel.cycle_placement(),
@@ -349,6 +374,8 @@ impl Compass {
                 self.setup.cancel();
             }
             Action::OpenSearch => {
+                // The query box is on the expanded panel.
+                self.panel.expanded = true;
                 self.search.open();
                 self.sync_search();
             }
@@ -365,6 +392,10 @@ impl Compass {
                 self.search.escape();
                 self.sync_search();
             }
+            Action::ClearSearch => {
+                self.search.clear();
+                self.sync_search();
+            }
             // Settings, so they count whether or not the window is open.
             Action::ToggleTaxis => {
                 self.settings.travel.taxis = !self.settings.travel.taxis;
@@ -378,7 +409,7 @@ impl Compass {
         self.sync_panel()
     }
 
-    /// The player typed in the search window: `query` is everything in its text box.
+    /// The player typed in search mode: `query` is everything in the query box.
     pub fn search_query(&mut self, query: &str) -> &PanelState {
         self.search.type_query(query);
         self.sync_search();
@@ -394,7 +425,7 @@ impl Compass {
 
     /// The player pressed one of the global hotkeys (an accelerator string, as listed
     /// in the panel state's `hotkeys`). Returns what the shell must do at once, if
-    /// anything: open a page, or bring the search window back in front.
+    /// anything: open a page, or bring the overlay in search mode back in front.
     pub fn on_hotkey(&mut self, pressed: &str) -> Option<Request> {
         let hotkeys = &self.settings.hotkeys;
         let is = |hotkey: &str| same_hotkey(hotkey, pressed);
@@ -409,9 +440,9 @@ impl Compass {
         } else if is(&hotkeys.choose_candidate) {
             Action::ChooseCandidate
         } else if is(&hotkeys.search) {
-            // An open window stays as it is; the shell shows a newly opened one in front.
-            if self.state.search.window_open {
-                return Some(Request::RaiseSearchWindow);
+            // Search mode stays as it is; the shell brings the overlay in front on entering it.
+            if self.state.search.search_mode {
+                return Some(Request::RaiseOverlay);
             }
             Action::OpenSearch
         } else if is(&hotkeys.open_meowdb_page) {
@@ -541,6 +572,7 @@ impl Compass {
         self.state.placement = self.panel.placement();
         self.state.layer = self.panel.layer();
         self.state.draggable = self.panel.draggable();
+        self.state.takes_mouse = self.panel.takes_mouse(self.state.search.search_mode);
         self.state.hotkeys = self.settings.hotkeys.clone();
         self.state.game_window_title =
             self.settings.game_window_title.clone().unwrap_or_else(|| GAME_WINDOW_TITLE.into());

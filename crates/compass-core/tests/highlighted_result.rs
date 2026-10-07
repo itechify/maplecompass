@@ -1,7 +1,7 @@
-//! The highlighted result: the search window shows the full route to one of the picked
-//! mob's maps at a time. The arrow keys move the highlight through the results whenever
-//! no mob suggestions are listed (as when the window opens on a search, with nothing
-//! typed yet).
+//! The highlighted result: search mode shows the full route to one of the picked mob's
+//! maps at a time. The arrow keys move the highlight through the results whenever no mob
+//! suggestions are listed (as when search mode starts on a search, with nothing typed
+//! yet).
 
 mod common;
 
@@ -73,7 +73,7 @@ fn with_nothing_typed_the_arrows_move_the_highlight_through_the_results() {
 }
 
 #[test]
-fn with_the_search_window_closed_the_arrows_do_nothing() {
+fn outside_search_mode_the_arrows_do_nothing() {
     let mut compass = on_sunset_sky(fields());
     search_for(&mut compass, "orange");
     compass.on_hotkey(SEARCH);

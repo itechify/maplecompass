@@ -206,29 +206,255 @@ td:first-child {
   text-transform: uppercase;
 }
 
-/* The picked mob's top maps, below the current map's info. */
+/* Mob search: its own section, divided from the current map's info by a Slate rule, with
+   its own heading and the × that clears it. */
 .mob-search {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid #3a4a5c;
+}
+
+.search-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .mob-search h2 {
+  flex: 1;
+  min-width: 0;
   margin: 0;
-  font-size: 12px;
-  font-weight: 400;
-  color: #9fb6cc;
+  font-size: 13px;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* The results table itself is in results.css, shared with the search window. */
+.mob-search h2 .level {
+  margin-left: 6px;
+  font-weight: 400;
+  color: #9fb6cc;
+}
+
+/* A small secondary button: clickable at any time, though clicks pass through the rest
+   of the panel. */
+.mob-search .clear {
+  flex: none;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #3a4a5c;
+  border-radius: 6px;
+  background: transparent;
+  color: #f2f5f8;
+  font: 16px/1 "Segoe UI", system-ui, sans-serif;
+  cursor: default;
+}
+
+.mob-search .clear:hover {
+  background: rgba(242, 245, 248, 0.08);
+}
+
+.mob-search :focus-visible {
+  outline: 2px solid #f5c542;
+  outline-offset: 3px;
+}
+
+.search-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* The query box: the app's one text field. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field .label {
+  font-size: 12px;
+  color: #9fb6cc;
+}
+
+.field input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #3a4a5c;
+  border-radius: 6px;
+  background: rgba(16, 24, 36, 0.9);
+  color: #f2f5f8;
+  font: 14px "Segoe UI", system-ui, sans-serif;
+  user-select: text;
+}
+
+.field input::placeholder {
+  color: #9fb6cc;
+}
+
+/* The suggestions, in the panel's flow: they push the results down and the overlay
+   grows to fit them, never squeezed or covered. Past ten rows they scroll. */
+.suggestions {
+  flex: none;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #2a3846;
+  border-radius: 8px;
+  background: rgba(16, 24, 36, 0.9);
+  font-size: 13px;
+  scrollbar-color: #9fb6cc transparent;
+}
+
+.suggestions li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 1px 8px;
+  border-radius: 3px;
+  color: #9fb6cc;
+}
+
+/* The one Enter picks. */
+.suggestions li.current {
+  background: rgba(245, 197, 66, 0.12);
+  color: #f2f5f8;
+  font-weight: 600;
+}
+
+.suggestions .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggestions .level {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+
+.panel .keys {
+  white-space: normal;
+  font-size: 12px;
+  color: #9fb6cc;
+}
+
+/* The travel toggles: what else Distance counts besides portals and ships. */
+.travel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 12px;
+}
+
+.travel legend {
+  float: left;
+  padding: 0;
+  color: #9fb6cc;
+}
+
+.travel label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.travel input {
+  margin: 0;
+  accent-color: #f5c542;
+}
+
+/* The results table itself is in results.css. In search mode every result is listed,
+   scrolling past about a dozen maps so the panel stays within its height. */
+.results-box.all {
+  max-height: 360px;
+  overflow-y: auto;
+  scrollbar-color: #9fb6cc transparent;
+}
+
+/* The result whose route is shown below the table. */
+.results tr.current td {
+  background: rgba(245, 197, 66, 0.12);
+}
+
+.results tr.current .result-map {
+  font-weight: 600;
+}
 
 /* The nearest map with the mob, whatever its tier. */
 .mob-search .nearest {
   margin: 0;
   font-size: 12px;
+}
+
+/* The highlighted result's route: each map in turn, with how it's reached. */
+.route {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid #2a3846;
+  border-radius: 8px;
+  background: rgba(16, 24, 36, 0.9);
+}
+
+.route h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.route-stops {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.route-stops li {
+  display: grid;
+  grid-template-columns: 6.5em 1fr;
+  column-gap: 8px;
+  padding: 1px 0;
+}
+
+.route-stops .step {
+  color: #9fb6cc;
+  text-align: right;
+}
+
+/* Anything but a portal is worth noticing on the way: by text emphasis alone, like the
+   tiers, since the accent is kept for actions. */
+.route-stops .step.ship,
+.route-stops .step.taxi,
+.route-stops .step.teleportScroll {
+  color: #f2f5f8;
+  font-weight: 600;
+}
+
+.route-stops .route-map,
+.route-stops .route-street {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-stops .route-street {
+  grid-column: 2;
+  color: #9fb6cc;
 }
 
 .mob-search .more,
