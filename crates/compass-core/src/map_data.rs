@@ -1,6 +1,6 @@
 //! One map's hunting information from MeowDB, and the panel's progress getting it.
 
-use crate::map_index::{MapDataSource, SourceError};
+use crate::map_index::{Fetched, MapDataSource, SourceError};
 use serde::Serialize;
 use std::task::Poll;
 
@@ -82,11 +82,30 @@ pub enum MapDataStatus {
     /// The map's page is being fetched.
     Loading,
     Ready(MapData),
-    /// MeowDB couldn't be reached.
+    /// MeowDB couldn't be reached, but a copy of the map's page saved at
+    /// `saved_at_unix_ms` (ms since the Unix epoch) could: its figures, to be shown as
+    /// such.
+    SavedCopy {
+        #[serde(rename = "savedAtUnixMs")]
+        saved_at_unix_ms: u64,
+        #[serde(flatten)]
+        data: MapData,
+    },
+    /// MeowDB couldn't be reached, and there is no saved copy.
     Unavailable,
     /// MeowDB's page no longer looks the way the reader expects. Nothing from it is
     /// shown, rather than partial or wrong numbers.
     FormatChanged,
+}
+
+impl MapDataStatus {
+    /// The map's data, fresh or from a saved copy.
+    pub fn data(&self) -> Option<&MapData> {
+        match self {
+            Self::Ready(data) | Self::SavedCopy { data, .. } => Some(data),
+            _ => None,
+        }
+    }
 }
 
 impl MapData {
@@ -120,11 +139,15 @@ impl MapDataLoader {
         };
         let status = &mut self.statuses[at].1;
         if *status == MapDataStatus::Loading {
+            let sorted = |mut data: MapData| {
+                data.mobs.sort_by(|a, b| a.level.cmp(&b.level).then_with(|| a.name.cmp(&b.name)));
+                data
+            };
             *status = match source.map_data(id) {
                 Poll::Pending => MapDataStatus::Loading,
-                Poll::Ready(Ok(mut data)) => {
-                    data.mobs.sort_by(|a, b| a.level.cmp(&b.level).then_with(|| a.name.cmp(&b.name)));
-                    MapDataStatus::Ready(data)
+                Poll::Ready(Ok(Fetched::Fresh(data))) => MapDataStatus::Ready(sorted(data)),
+                Poll::Ready(Ok(Fetched::SavedCopy { data, saved_at_unix_ms })) => {
+                    MapDataStatus::SavedCopy { saved_at_unix_ms, data: sorted(data) }
                 }
                 Poll::Ready(Err(SourceError::Unreachable(_))) => MapDataStatus::Unavailable,
                 Poll::Ready(Err(SourceError::FormatChanged(_))) => MapDataStatus::FormatChanged,

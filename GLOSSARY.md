@@ -25,6 +25,12 @@ _Avoid_: title, map title
 **Minimap Title**:
 The street name and map name as rendered at the top of the in-game minimap; the only signal MapleCompass reads from the game.
 
+**Candidate**:
+One of several maps that share a Minimap Title, offered to the player when the map they came from doesn't settle which one they are on.
+
+**Saved Copy**:
+MeowDB data cached earlier and shown, with its date, because MeowDB can't be reached right now.
+
 **Title Region**:
 The rectangle the player marks around the minimap title, saved relative to the game window.
 _Avoid_: minimap region, capture area

@@ -5,7 +5,7 @@
 
 mod common;
 
-use common::{FakeSource, sample_frame, saved_index, saved_page};
+use common::{FakeSource, arrive, saved_index, saved_page};
 use compass_core::{Compass, HiddenPortal, MapDataStatus, MapEntry, PanelState, PortalOverride, meowdb};
 use std::task::Poll;
 
@@ -21,12 +21,6 @@ const FIELD_EAST_OF_AMHERST: &str = "000001020";
 const THREE_WAY_ROAD_SPLIT: &str = "010000020";
 const ORBIS_TOWER_8F: &str = "020000098";
 const ORBIS_TOWER_HIDDEN_ROOM: &str = "020000099";
-
-/// Two confident reads of a sample: the panel switches to its map.
-fn arrive(compass: &mut Compass, sample: &str, at_ms: u64) -> PanelState {
-    compass.on_frame(sample_frame(sample, at_ms));
-    compass.on_frame(sample_frame(sample, at_ms + 333)).clone()
-}
 
 /// Arrive on map `id`, which has no minimap sample: the index here files the Sunset Sky
 /// title under that ID.
@@ -137,10 +131,10 @@ fn construction_site_with(from: &str, to: &str) -> String {
     page.replace(HIDDEN_EXIT, &HIDDEN_EXIT.replace(from, to))
 }
 
-/// No saved page has a script portal (type 11), so this one is made up: the
-/// Construction Site's invisible exit, turned into a script portal.
+/// No saved page has a Quest Portal (MeowDB portal type 11), so this one is made up: the
+/// Construction Site's invisible exit, turned into type 11.
 #[test]
-fn a_script_portal_is_a_quest_portal() {
+fn a_type_11_portal_is_a_quest_portal() {
     let page = construction_site_with(r#"\"type\":1,"#, r#"\"type\":11,"#);
     let mut compass = Compass::new(FakeSource::meowdb().with_page(CONSTRUCTION_SITE_ID, page));
 
@@ -150,10 +144,10 @@ fn a_script_portal_is_a_quest_portal() {
     assert_eq!(quest, [("Northern Top of Construction Site", true)]);
 }
 
-/// Made up, like the script portal: two of Kerning City's Doors turned into a hidden
-/// portal (type 10) and a script portal (type 11). Only invisible exits are Doors.
+/// Made up, like the Quest Portal: two of Kerning City's Doors turned into a hidden
+/// portal (type 10) and a Quest Portal (type 11). Only invisible exits are Doors.
 #[test]
-fn a_towns_hidden_and_script_portals_are_still_hidden_portals() {
+fn a_towns_hidden_and_quest_portals_are_still_hidden_portals() {
     let page = saved_page(KERNING_CITY_ID)
         .unwrap()
         .replace(r#"\"name\":\"in05\",\"type\":1,"#, r#"\"name\":\"in05\",\"type\":10,"#)

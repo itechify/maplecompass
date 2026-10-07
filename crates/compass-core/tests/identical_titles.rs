@@ -9,14 +9,17 @@
 mod common;
 
 use common::{
-    FakeSource, black_frame, index_with_title, requests_for, sample_frame, saved_index, saved_page,
+    FakeSource, arrive, black_frame, index_with_title, requests_for, sample_frame, saved_index,
+    saved_page,
 };
 use compass_core::{
-    Action, Candidates, Compass, MapDataStatus, PanelState, Settings, SourceError, meowdb,
+    Action, Compass, LevelRange, MapDataStatus, MapEntry, Outline, PanelState, SourceError, meowdb,
 };
 use std::task::Poll;
 
-/// The titles MeowDB gives to more than one map (index saved 2026-10-07).
+/// The titles MeowDB gives to more than one map (index saved 2026-10-07): Maple Road /
+/// Mushroom Town and Hidden Street / Coconut Harvest, and no others (checked by hand
+/// against the saved index; a fact about MeowDB's data, not something the core does).
 const MUSHROOM_TOWNS: [&str; 2] = ["000000010", "000000020"];
 const COCONUT_HARVESTS: [&str; 3] = ["090040200", "090040201", "090040202"];
 
@@ -32,26 +35,36 @@ fn titled_like_kerning_city(ids: &[&str]) -> FakeSource {
     FakeSource::with_index(index_with_title("Victoria Road", "Kerning City", ids))
 }
 
-#[test]
-fn the_only_titles_meowdb_gives_to_more_than_one_map_are_mushroom_town_and_coconut_harvest() {
-    let index = saved_index();
-    let mut shared: Vec<(String, Vec<&str>)> = Vec::new();
-    for entry in &index {
-        let title = format!("{} / {}", entry.street_name, entry.map_name);
-        let ids: Vec<&str> =
-            index.iter().filter(|e| e.street_name == entry.street_name && e.map_name == entry.map_name).map(|e| e.id.as_str()).collect();
-        if ids.len() > 1 && !shared.iter().any(|(t, _)| *t == title) {
-            shared.push((title, ids));
-        }
-    }
+/// MeowDB's saved index, with whatever maps it titles `street` / `map` shown under the
+/// Kerning City sample's title instead (and the real Kerning City left out).
+fn saved_index_reading_as_kerning_city(street: &str, map: &str) -> FakeSource {
+    let index = saved_index()
+        .into_iter()
+        .filter(|e| e.map_name != "Kerning City")
+        .map(|e| {
+            if e.street_name == street && e.map_name == map {
+                MapEntry { street_name: "Victoria Road".into(), map_name: "Kerning City".into(), ..e }
+            } else {
+                e
+            }
+        })
+        .collect();
+    // Unreachable pages can't show the same, so every map with the title is offered.
+    FakeSource::with_index(index).with_pages_offline()
+}
 
-    assert_eq!(
-        shared,
-        [
-            ("Maple Road / Mushroom Town".to_string(), MUSHROOM_TOWNS.to_vec()),
-            ("Hidden Street / Coconut Harvest".to_string(), COCONUT_HARVESTS.to_vec()),
-        ]
-    );
+#[test]
+fn meowdbs_index_gives_the_mushroom_town_title_to_two_maps_and_coconut_harvest_to_three() {
+    for (street, map, ids) in [
+        ("Maple Road", "Mushroom Town", MUSHROOM_TOWNS.to_vec()),
+        ("Hidden Street", "Coconut Harvest", COCONUT_HARVESTS.to_vec()),
+    ] {
+        let mut compass = Compass::new(saved_index_reading_as_kerning_city(street, map));
+
+        let state = arrive(&mut compass, KERNING, 0);
+
+        assert_eq!(candidates(&state), Some((ids, 0, false)), "{street} / {map}");
+    }
 }
 
 #[test]
@@ -81,10 +94,17 @@ fn maps_alike_but_for_their_hidden_portals_are_offered_as_candidates() {
 
     let state = compass.on_frame(sample_frame(KERNING, 333));
 
-    assert_eq!(
-        state.candidates,
-        Some(Candidates { ids: vec![MUSHROOM_TOWNS[0].into(), HIDDEN_ROOM.into()], shown: 0, chosen: false })
-    );
+    assert_eq!(candidates(state), Some((vec![MUSHROOM_TOWNS[0], HIDDEN_ROOM], 0, false)));
+    // What sets them apart: no mobs either way, but one Hidden Portal against none.
+    let outlines: Vec<_> = state.candidates.as_ref().unwrap().maps.iter().map(|m| m.outline.clone()).collect();
+    let none_mobs_and = |hidden_portals| Some(Outline { mob_levels: None, first_mobs: vec![], hidden_portals });
+    assert_eq!(outlines, [none_mobs_and(0), none_mobs_and(1)]);
+}
+
+/// The candidates' IDs, which of them the panel shows, and whether the player chose it.
+fn candidates(state: &PanelState) -> Option<(Vec<&str>, usize, bool)> {
+    let c = state.candidates.as_ref()?;
+    Some((c.maps.iter().map(|m| m.id.as_str()).collect(), c.shown, c.chosen))
 }
 
 #[test]
@@ -136,8 +156,34 @@ fn mob_count(state: &PanelState) -> Option<usize> {
     }
 }
 
-fn coconut_candidates(shown: usize, chosen: bool) -> Option<Candidates> {
-    Some(Candidates { ids: COCONUT_HARVESTS.map(String::from).to_vec(), shown, chosen })
+fn coconut_candidates(shown: usize, chosen: bool) -> Option<(Vec<&'static str>, usize, bool)> {
+    Some((COCONUT_HARVESTS.to_vec(), shown, chosen))
+}
+
+/// Each candidate's mob levels and first (lowest-level) mobs.
+fn mobs_at_a_glance(state: &PanelState) -> Vec<Option<(LevelRange, Vec<String>)>> {
+    let maps = &state.candidates.as_ref().expect("candidates").maps;
+    maps.iter()
+        .map(|m| m.outline.as_ref().and_then(|o| Some((o.mob_levels?, o.first_mobs.clone()))))
+        .collect()
+}
+
+#[test]
+fn each_candidate_is_listed_with_its_mob_levels_and_first_mobs_to_tell_them_apart() {
+    let mut compass = Compass::new(coconut_harvests_that_differ());
+    compass.on_frame(sample_frame(KERNING, 0));
+
+    let state = compass.on_frame(sample_frame(KERNING, 333));
+
+    let names = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+    assert_eq!(
+        mobs_at_a_glance(state),
+        [
+            Some((LevelRange { lowest: 2, highest: 14 }, names(&["Blue Snail", "Stump", "Orange Mushroom"]))),
+            Some((LevelRange { lowest: 4, highest: 19 }, names(&["Red Snail", "Orange Mushroom", "Dark Stump"]))),
+            Some((LevelRange { lowest: 41, highest: 58 }, names(&["Flyeye", "Minor Zombie"]))),
+        ]
+    );
 }
 
 #[test]
@@ -150,7 +196,7 @@ fn arriving_with_nothing_to_go_on_in_one_of_maps_that_differ_shows_the_first_and
     let state = compass.on_frame(sample_frame(KERNING, 333));
 
     assert_eq!(shown_id(state), Some("090040200"));
-    assert_eq!(state.candidates, coconut_candidates(0, false));
+    assert_eq!(candidates(state), coconut_candidates(0, false));
     assert_eq!(mob_count(state), Some(5));
     for id in COCONUT_HARVESTS {
         assert!(requests_for(&requests, id) <= 1, "{id} asked for more than once");
@@ -179,6 +225,26 @@ fn coming_from_a_map_connected_to_just_one_of_them_shows_that_one_and_fetches_on
     assert_eq!(requests_for(&requests, NORTHERN_TOP), 0);
 }
 
+/// MeowDB unreachable, with saved copies of every page: the map the player came from
+/// still settles which map it is.
+#[test]
+fn coming_from_a_connected_map_settles_it_serving_saved_copies_too() {
+    const KERNING_CITY: &str = "010003000";
+    const NORTHERN_TOP: &str = "010003081";
+    let mut compass = Compass::new(
+        titled_like_kerning_city(&[KERNING_CITY, NORTHERN_TOP]).serving_saved_copies(1_790_812_800_000),
+    );
+    compass.on_frame(sample_frame(SUNSET, 0));
+    compass.on_frame(sample_frame(SUNSET, 333));
+
+    compass.on_frame(sample_frame(KERNING, 666));
+    let state = compass.on_frame(sample_frame(KERNING, 1000));
+
+    assert_eq!(shown_id(state), Some(KERNING_CITY));
+    assert_eq!(state.candidates, None);
+    assert!(matches!(state.data, MapDataStatus::SavedCopy { .. }));
+}
+
 #[test]
 fn the_choose_candidate_hotkey_shows_each_candidate_in_turn_with_its_own_data() {
     let mut compass = Compass::new(coconut_harvests_that_differ());
@@ -187,7 +253,7 @@ fn the_choose_candidate_hotkey_shows_each_candidate_in_turn_with_its_own_data() 
 
     let state = compass.act(Action::ChooseCandidate);
     assert_eq!(shown_id(state), Some("090040201"));
-    assert_eq!(state.candidates, coconut_candidates(1, true));
+    assert_eq!(candidates(state), coconut_candidates(1, true));
     assert_eq!(mob_count(state), Some(6));
 
     let state = compass.act(Action::ChooseCandidate);
@@ -196,7 +262,7 @@ fn the_choose_candidate_hotkey_shows_each_candidate_in_turn_with_its_own_data() 
 
     let state = compass.act(Action::ChooseCandidate);
     assert_eq!(shown_id(state), Some("090040200"));
-    assert_eq!(state.candidates, coconut_candidates(0, true));
+    assert_eq!(candidates(state), coconut_candidates(0, true));
 }
 
 #[test]
@@ -209,7 +275,7 @@ fn a_chosen_candidate_holds_through_unreadable_frames_until_the_map_changes() {
     compass.on_frame(black_frame(666));
     let state = compass.on_frame(sample_frame(KERNING, 1000));
     assert_eq!(shown_id(state), Some("090040201"));
-    assert_eq!(state.candidates, coconut_candidates(1, true));
+    assert_eq!(candidates(state), coconut_candidates(1, true));
 
     // Off to Sunset Sky and back: the choice is gone, and the first is shown again.
     compass.on_frame(sample_frame(SUNSET, 1333));
@@ -219,18 +285,20 @@ fn a_chosen_candidate_holds_through_unreadable_frames_until_the_map_changes() {
     compass.on_frame(sample_frame(KERNING, 2000));
     let state = compass.on_frame(sample_frame(KERNING, 2333));
     assert_eq!(shown_id(state), Some("090040200"));
-    assert_eq!(state.candidates, coconut_candidates(0, false));
+    assert_eq!(candidates(state), coconut_candidates(0, false));
 }
 
+/// Settings from before this hotkey existed (or used Ctrl+Shift) get Win+Alt+N.
 #[test]
-fn the_choose_candidate_hotkey_defaults_to_ctrl_shift_c_and_older_settings_get_it() {
-    let older: Settings = serde_json::from_str(
-        r#"{"version":1,"expanded":true,"hotkeys":{"togglePanel":"ctrl+shift+m","openMeowdbPage":"ctrl+shift+o"}}"#,
-    )
-    .unwrap();
+fn win_alt_n_shows_the_next_candidate_even_with_settings_from_before_it_existed() {
+    let older = r#"{"version":1,"expanded":true,"hotkeys":{"togglePanel":"ctrl+shift+m","openMeowdbPage":"ctrl+shift+o"}}"#;
+    let mut compass = Compass::new(coconut_harvests_that_differ());
+    compass.restore(serde_json::from_str(older).unwrap());
+    arrive(&mut compass, KERNING, 0);
 
-    assert_eq!(older.hotkeys.choose_candidate, "ctrl+shift+c");
-    assert_eq!(Settings::default().hotkeys.choose_candidate, "ctrl+shift+c");
+    compass.on_hotkey("super+alt+n");
+
+    assert_eq!(candidates(compass.panel_state()), coconut_candidates(1, true));
 }
 
 #[test]

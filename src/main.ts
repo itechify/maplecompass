@@ -28,22 +28,41 @@ type HiddenPortal = {
   position: string;
 };
 
+/** Mirror of `compass_core::MapData`. */
+type MapData = {
+  summary: { mobsPerHour: PerParty; expPerHour: PerParty } | null;
+  mobs: Mob[];
+  hiddenPortals: HiddenPortal[];
+};
+
 /** Mirror of `compass_core::MapDataStatus`. */
 type MapDataStatus =
   | { status: "noMap" | "loading" | "unavailable" | "formatChanged" }
-  | {
-      status: "ready";
-      summary: { mobsPerHour: PerParty; expPerHour: PerParty } | null;
-      mobs: Mob[];
-      hiddenPortals: HiddenPortal[];
-    };
+  | ({ status: "ready" } & MapData)
+  | ({ status: "savedCopy"; savedAtUnixMs: number } & MapData);
+
+/** Mirror of `compass_core::Recognition`. */
+type Recognition =
+  | { status: "starting" | "ready" | "unavailable" }
+  | { status: "savedCopy"; savedAtUnixMs: number };
+
+/** Mirror of `compass_core::Outline`. */
+type Outline = {
+  mobLevels: { lowest: number; highest: number } | null;
+  firstMobs: string[];
+  hiddenPortals: number;
+};
 
 /** Mirror of `compass_core::Candidates`. */
-type Candidates = { ids: string[]; shown: number; chosen: boolean };
+type Candidates = {
+  maps: { id: string; outline: Outline | null }[];
+  shown: number;
+  chosen: boolean;
+};
 
 /** Mirror of `compass_core::PanelState`. */
 type PanelState = {
-  recognition: "starting" | "ready" | "unavailable";
+  recognition: Recognition;
   map: { id: string; streetName: string; mapName: string; url: string } | null;
   confidence: number;
   notSure: boolean;
@@ -57,11 +76,6 @@ type PanelState = {
   layer: "aboveGame" | "free" | "hidden";
   draggable: boolean;
   setup: { needed: "firstRun" | "resolutionChanged" | "requested" | null };
-};
-
-/** Mirror of the shell's `OverlayState`. */
-type OverlayState = {
-  panel: PanelState;
   hotkeys: {
     togglePanel: string;
     editMode: string;
@@ -70,6 +84,8 @@ type OverlayState = {
     setup: string;
     chooseCandidate: string;
   };
+  unavailableHotkeys: string[];
+  gameWindowTitle: string;
 };
 
 const byId = (id: string) => document.getElementById(id)!;
@@ -79,6 +95,8 @@ const map = byId("map");
 const dataEl = byId("data");
 const note = byId("note");
 const candidatesEl = byId("candidates");
+const candidatesNote = byId("candidates-note");
+const candidateRows = byId("candidate-rows");
 const summary = byId("summary");
 const mobsTable = byId("mobs");
 const mobRows = byId("mob-rows");
@@ -88,6 +106,7 @@ const portalRows = byId("portal-rows");
 const footer = byId("footer");
 const credit = byId("credit");
 const openHint = byId("open-hint");
+const hotkeyProblem = byId("hotkey-problem");
 let draggable = false;
 
 const PLACEMENT_NAMES: Record<PlacementMode, string> = {
@@ -97,12 +116,19 @@ const PLACEMENT_NAMES: Record<PlacementMode, string> = {
   detached: "Detached",
 };
 
-/** "ctrl+shift+e" -> "Ctrl+Shift+E" */
+/** "super+alt+e" -> "Win+Alt+E" */
 function keyLabel(accelerator: string): string {
   return accelerator
     .split("+")
-    .map((k) => k.charAt(0).toUpperCase() + k.slice(1))
+    .map((k) => (k.toLowerCase() === "super" ? "Win" : k.charAt(0).toUpperCase() + k.slice(1)))
     .join("+");
+}
+
+/** "Win+Alt+E is taken by another app, so it does nothing here" */
+function takenHotkeys(hotkeys: string[]): string {
+  if (hotkeys.length === 0) return "";
+  const one = hotkeys.length === 1;
+  return `${hotkeys.map(keyLabel).join(", ")} ${one ? "is" : "are"} taken by another app (or invalid), so ${one ? "it does" : "they do"} nothing here`;
 }
 
 const number = (n: number) => n.toLocaleString("en-US");
@@ -131,8 +157,33 @@ function portalRow(portal: HiddenPortal): HTMLLIElement {
   return row;
 }
 
+/** "090040200 · Lv 2–14 · Blue Snail, Stump, Orange Mushroom · 1 hidden portal" */
+function candidateLine(id: string, outline: Outline | null): string {
+  // Its page is still on its way, or MeowDB can't give it.
+  if (!outline) return `${id} · no MeowDB data yet`;
+  const parts = [id];
+  const { mobLevels, firstMobs, hiddenPortals } = outline;
+  if (mobLevels) {
+    parts.push(
+      mobLevels.lowest === mobLevels.highest
+        ? `Lv ${mobLevels.lowest}`
+        : `Lv ${mobLevels.lowest}–${mobLevels.highest}`,
+      firstMobs.join(", "),
+    );
+  } else {
+    parts.push("no mobs");
+  }
+  parts.push(`${hiddenPortals} hidden portal${hiddenPortals === 1 ? "" : "s"}`);
+  return parts.join(" · ");
+}
+
+/** "7 Oct 2026", in the player's time zone. */
+const savedOn = (unixMs: number) =>
+  new Date(unixMs).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+
 /** The note shown in place of (or above) the map's data. */
-function dataNote(data: MapDataStatus): string {
+function dataNote(data: MapDataStatus, recognition: Recognition): string {
+  const noMobs = (data: MapData) => (data.mobs.length === 0 ? " · No mobs here" : "");
   switch (data.status) {
     case "loading":
       return "Loading MeowDB data…";
@@ -140,36 +191,49 @@ function dataNote(data: MapDataStatus): string {
       return "MeowDB data unavailable";
     case "formatChanged":
       return "MeowDB's page format has changed, so its data isn't shown";
+    case "savedCopy":
+      return `MeowDB unreachable — showing a saved copy from ${savedOn(data.savedAtUnixMs)}${noMobs(data)}`;
     case "ready":
+      if (recognition.status === "savedCopy") {
+        return `MeowDB unreachable — map list from a saved copy from ${savedOn(recognition.savedAtUnixMs)}${noMobs(data)}`;
+      }
       return data.mobs.length === 0 ? "No mobs here" : "";
     case "noMap":
       return "";
   }
 }
 
-function renderData(state: OverlayState) {
-  const { data } = state.panel;
-  const shown = state.panel.gameFound && !!state.panel.map;
+function renderData(panel: PanelState) {
+  const { data } = panel;
+  const shown = panel.gameFound && !!panel.map;
   dataEl.hidden = !shown;
   footer.hidden = !shown;
   if (!shown) return;
 
-  const { candidates } = state.panel;
+  const { candidates } = panel;
   candidatesEl.hidden = !candidates;
   if (candidates) {
-    const which = `${candidates.shown + 1} of ${candidates.ids.length}`;
-    const next = `${keyLabel(state.hotkeys.chooseCandidate)} for the next`;
-    candidatesEl.textContent = candidates.chosen
-      ? `Your pick: map ${which} with this title · ${next}`
-      : `Showing map ${which} with this title; not sure which you're on · ${next}`;
-    candidatesEl.classList.toggle("problem", !candidates.chosen);
+    const next = `${keyLabel(panel.hotkeys.chooseCandidate)} for the next`;
+    candidatesNote.textContent = candidates.chosen
+      ? `Your pick of ${candidates.maps.length} maps with this title · ${next}`
+      : `${candidates.maps.length} maps share this title; not sure which you're on · ${next}`;
+    candidatesNote.classList.toggle("problem", !candidates.chosen);
+    candidateRows.replaceChildren(
+      ...candidates.maps.map((candidate, i) => {
+        const row = document.createElement("li");
+        row.textContent = candidateLine(candidate.id, candidate.outline);
+        row.classList.toggle("current", i === candidates.shown);
+        return row;
+      }),
+    );
   }
 
-  note.textContent = dataNote(data);
+  note.textContent = dataNote(data, panel.recognition);
   note.hidden = note.textContent === "";
-  note.classList.toggle("problem", data.status === "unavailable" || data.status === "formatChanged");
+  const problem = ["unavailable", "formatChanged", "savedCopy"].includes(data.status);
+  note.classList.toggle("problem", problem || panel.recognition.status === "savedCopy");
 
-  const ready = data.status === "ready" ? data : null;
+  const ready = data.status === "ready" || data.status === "savedCopy" ? data : null;
   summary.hidden = !ready?.summary;
   if (ready?.summary) {
     const { mobsPerHour, expPerHour } = ready.summary;
@@ -198,12 +262,12 @@ function renderData(state: OverlayState) {
   noPortals.hidden = !ready || ready.hiddenPortals.length > 0;
   portalRows.replaceChildren(...(ready?.hiddenPortals ?? []).map(portalRow));
 
-  credit.textContent = state.panel.credit ?? "";
-  openHint.textContent = `${keyLabel(state.hotkeys.openMeowdbPage)} opens the page`;
+  credit.textContent = panel.credit ?? "";
+  openHint.textContent = `${keyLabel(panel.hotkeys.openMeowdbPage)} opens the page`;
 }
 
-function render(state: OverlayState) {
-  const { panel, hotkeys } = state;
+function render(panel: PanelState) {
+  const { hotkeys } = panel;
   const { recognition, map: current, notSure } = panel;
   draggable = panel.draggable;
   // Hidden while the game is minimised or gone: the window stays, but draws nothing.
@@ -215,13 +279,13 @@ function render(state: OverlayState) {
   document.body.classList.toggle("not-sure", !!current && notSure);
   if (!panel.gameFound) {
     street.textContent = "";
-    map.textContent = "Looking for MapleStory…";
+    map.textContent = `Looking for ${panel.gameWindowTitle}…`;
   } else if (panel.setup.needed === "firstRun" || panel.setup.needed === "resolutionChanged") {
     // Nothing is read until the Title Region is marked (again).
     street.textContent =
       panel.setup.needed === "firstRun" ? "Finish setup to start" : "The game window changed size";
-    map.textContent = `Set up: ${keyLabel(state.hotkeys.setup)}`;
-  } else if (recognition === "unavailable") {
+    map.textContent = `Set up: ${keyLabel(panel.hotkeys.setup)}`;
+  } else if (recognition.status === "unavailable") {
     street.textContent = "Couldn't load the map list from MeowDB";
     map.textContent = "Map recognition unavailable";
   } else if (current) {
@@ -238,7 +302,9 @@ function render(state: OverlayState) {
         ? `Drag to move · ${keyLabel(hotkeys.editMode)} when done`
         : place;
   }
-  renderData(state);
+  hotkeyProblem.textContent = takenHotkeys(panel.unavailableHotkeys);
+  hotkeyProblem.hidden = hotkeyProblem.textContent === "";
+  renderData(panel);
   reportHeight(panel.expanded);
 }
 
@@ -261,4 +327,4 @@ document.addEventListener("mousedown", (e) => {
   }
 });
 
-listen<OverlayState>("overlay-state", (e) => render(e.payload));
+listen<PanelState>("overlay-state", (e) => render(e.payload));
