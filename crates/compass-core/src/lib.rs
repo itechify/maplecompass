@@ -19,6 +19,7 @@ mod settings;
 mod setup;
 mod shown_map;
 mod tracker;
+mod world;
 
 pub use crawl::CrawlProgress;
 pub use map_data::{
@@ -34,6 +35,7 @@ pub use search::{DensityTier, MobChoice, PANEL_RESULTS, SearchResult, SearchStat
 pub use settings::{Hotkeys, Settings};
 pub use setup::{SelectionDirection, SetupReason, SetupState, TestRead, TitleRegion};
 pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
+pub use world::Distance;
 
 use crawl::Crawl;
 use search::MobSearch;
@@ -285,7 +287,13 @@ impl Compass {
     }
 
     fn sync_shown_map(&mut self) {
-        self.state.map = self.shown_map.map().cloned();
+        let map = self.shown_map.map().cloned();
+        // Distances are measured from the map shown (with Candidates, the one shown).
+        let moved = map.as_ref().map(|m| &m.id) != self.state.map.as_ref().map(|m| &m.id);
+        self.state.map = map;
+        if moved {
+            self.sync_search();
+        }
         self.state.data = self.shown_map.data();
         self.state.candidates = self.shown_map.candidates();
         self.state.credit = self.state.map.as_ref().map(|_| MEOWDB_CREDIT);
@@ -360,10 +368,11 @@ impl Compass {
         self.sync_panel()
     }
 
-    /// Bring the panel's mob search up to date with the player's inputs and the maps
-    /// the crawl knows.
+    /// Bring the panel's mob search up to date with the player's inputs, the maps the
+    /// crawl knows and the map shown.
     fn sync_search(&mut self) {
-        self.state.search = self.search.state(self.crawl.as_ref());
+        let from = self.state.map.as_ref().map(|m| m.id.as_str());
+        self.state.search = self.search.state(self.crawl.as_ref(), from);
     }
 
     /// The player pressed one of the global hotkeys (an accelerator string, as listed
