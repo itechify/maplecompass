@@ -73,6 +73,8 @@ pub struct Hotkeys {
     /// Show the next of the maps sharing the shown map's title, when the core couldn't
     /// tell which one the player is on.
     pub choose_candidate: String,
+    /// Clear the Session back to waiting for the next EXP change.
+    pub reset_session: String,
 }
 
 impl Default for Hotkeys {
@@ -84,6 +86,7 @@ impl Default for Hotkeys {
             open_meowdb_page: "super+alt+o".into(),
             setup: "super+alt+s".into(),
             choose_candidate: "super+alt+n".into(),
+            reset_session: "super+alt+x".into(),
         }
     }
 }
