@@ -7,10 +7,12 @@ mod map_index;
 mod matcher;
 mod prep;
 mod recogniser;
+mod tracker;
 
 pub use map_index::{MapDataSource, MapEntry, SourceError};
 use matcher::Matcher;
 use recogniser::Recogniser;
+use tracker::Tracker;
 use serde::Serialize;
 
 /// A captured Title Region image: tightly packed RGBA, top-down rows.
@@ -90,6 +92,7 @@ pub struct Compass {
     recogniser: Recogniser,
     source: Box<dyn MapDataSource + Send>,
     matcher: Option<Matcher>,
+    tracker: Tracker,
     state: PanelState,
 }
 
@@ -101,6 +104,7 @@ impl Compass {
             recogniser: Recogniser::bundled(),
             source: Box::new(source),
             matcher: None,
+            tracker: Tracker::default(),
             state: PanelState::default(),
         }
     }
@@ -119,14 +123,17 @@ impl Compass {
         let Some(matcher) = &self.matcher else { return &self.state };
         let read = frame_to_rgb(&frame).and_then(|img| self.recogniser.read(&img));
         let snap = read.and_then(|raw| matcher.snap(&raw.street, &raw.map));
-        if let Some(snap) = snap {
-            let entry = matcher.map(snap.index);
-            self.state.map = Some(CurrentMap {
+        let tracked = self.tracker.update(snap);
+        self.state.map = tracked.current.map(|i| {
+            let entry = matcher.map(i);
+            CurrentMap {
                 id: entry.id.clone(),
                 street_name: entry.street_name.clone(),
                 map_name: entry.map_name.clone(),
-            });
-        }
+            }
+        });
+        self.state.confidence = (tracked.confidence * 100.0).round() as u8;
+        self.state.not_sure = tracked.not_sure;
         &self.state
     }
 
