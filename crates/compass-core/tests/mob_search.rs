@@ -1,7 +1,7 @@
 //! Mob search: the player presses the search hotkey, types part of a mob's name, picks
 //! the mob, and sees every map it spawns on, ranked by Density Tier and then Density.
-//! The search window is ours and takes the keyboard while it's open (ADR 0001); the top
-//! results stay on the panel as the player travels.
+//! In search mode the overlay takes the keyboard (ADR 0001); the top results stay on the
+//! panel as the player travels, until the search is cleared.
 
 mod common;
 
@@ -19,16 +19,16 @@ fn mushroom_world() -> Vec<WorldMap> {
 }
 
 #[test]
-fn the_search_hotkey_brings_an_open_search_window_back_in_front_as_it_is() {
+fn the_search_hotkey_in_search_mode_brings_the_overlay_back_in_front_as_it_is() {
     let mut compass = crawled(mushroom_world());
-    assert_eq!(compass.on_hotkey(SEARCH), None, "opening it shows it in front");
+    assert_eq!(compass.on_hotkey(SEARCH), None, "entering search mode brings it in front");
     compass.search_query("mush");
     let before = compass.panel_state().clone();
 
     // The game may have come in front of it since.
     let asked = compass.on_hotkey(SEARCH);
 
-    assert_eq!(asked, Some(Request::RaiseSearchWindow));
+    assert_eq!(asked, Some(Request::RaiseOverlay));
     assert_eq!(*compass.panel_state(), before);
 }
 
@@ -66,7 +66,7 @@ fn picked(state: &PanelState) -> Option<&str> {
 }
 
 #[test]
-fn the_highlight_moves_through_the_suggestions_and_enter_picks_it_and_closes_the_window() {
+fn the_highlight_moves_through_the_suggestions_and_enter_picks_it_and_leaves_search_mode() {
     let mut compass = crawled(mushroom_world());
     compass.on_hotkey(SEARCH);
     compass.search_query("mush");
@@ -79,7 +79,7 @@ fn the_highlight_moves_through_the_suggestions_and_enter_picks_it_and_closes_the
 
     assert_eq!(picked(state), Some("Horny Mushroom"));
     assert_eq!(state.search.picked.as_ref().map(|m| m.level), Some(22));
-    assert!(!state.search.window_open, "focus goes back to the game");
+    assert!(!state.search.search_mode, "focus goes back to the game");
 }
 
 #[test]
@@ -94,29 +94,29 @@ fn the_highlight_stays_at_the_top_going_up_and_a_new_query_starts_it_at_the_top_
 }
 
 #[test]
-fn esc_closes_the_search_window_and_keeps_the_current_search() {
+fn esc_leaves_search_mode_and_keeps_the_current_search() {
     let mut compass = crawled(mushroom_world());
     search_for(&mut compass, "orange");
 
     assert_eq!(compass.on_hotkey(SEARCH), None);
     let state = compass.panel_state();
-    assert!(state.search.window_open);
+    assert!(state.search.search_mode);
     assert_eq!(state.search.query, "", "it opens with nothing typed");
     compass.search_query("horny");
     let state = compass.act(Action::SearchEscape);
 
-    assert!(!state.search.window_open);
+    assert!(!state.search.search_mode);
     assert_eq!(picked(state), Some("Orange Mushroom"));
 }
 
 #[test]
-fn enter_with_nothing_typed_clears_the_search_and_closes_the_window() {
+fn enter_with_nothing_typed_clears_the_search_and_leaves_search_mode() {
     let mut compass = crawled(mushroom_world());
     search_for(&mut compass, "orange");
 
     let state = search_for(&mut compass, "  ");
 
-    assert!(!state.search.window_open);
+    assert!(!state.search.search_mode);
     assert_eq!(picked(&state), None);
 }
 
@@ -127,12 +127,12 @@ fn enter_on_a_query_that_matches_no_mob_does_nothing() {
 
     let state = search_for(&mut compass, "dragon");
 
-    assert!(state.search.window_open, "the player can fix the typing");
+    assert!(state.search.search_mode, "the player can fix the typing");
     assert_eq!(picked(&state), Some("Orange Mushroom"));
 }
 
 #[test]
-fn search_keys_do_nothing_while_the_search_window_is_closed() {
+fn search_keys_do_nothing_outside_search_mode() {
     let mut compass = crawled(mushroom_world());
     search_for(&mut compass, "orange");
     let before = compass.panel_state().clone();
@@ -361,14 +361,66 @@ fn without_a_search_there_are_no_results_and_no_credit() {
 }
 
 #[test]
-fn the_search_hotkey_opens_the_search_window_with_nothing_typed() {
+fn the_search_hotkey_enters_search_mode_with_nothing_typed() {
     let mut compass = crawled(mushroom_world());
-    assert!(!compass.panel_state().search.window_open);
+    assert!(!compass.panel_state().search.search_mode);
 
     compass.on_hotkey(SEARCH);
 
     let search = &compass.panel_state().search;
-    assert!(search.window_open);
+    assert!(search.search_mode);
     assert_eq!(search.query, "");
     assert!(search.suggestions.is_empty());
+}
+
+#[test]
+fn the_search_hotkey_expands_a_collapsed_panel_to_show_the_query_box() {
+    let mut compass = crawled(mushroom_world());
+    assert!(!compass.act(Action::ToggleExpanded).expanded);
+
+    compass.on_hotkey(SEARCH);
+
+    let state = compass.panel_state();
+    assert!(state.search.search_mode);
+    assert!(state.expanded);
+}
+
+#[test]
+fn collapsing_the_panel_leaves_search_mode_and_keeps_the_search() {
+    let mut compass = crawled(mushroom_world());
+    search_for(&mut compass, "orange");
+    compass.on_hotkey(SEARCH);
+
+    let state = compass.act(Action::ToggleExpanded);
+
+    assert!(!state.expanded);
+    assert!(!state.search.search_mode, "the query box is hidden with the panel");
+    assert_eq!(picked(state), Some("Orange Mushroom"));
+}
+
+#[test]
+fn clearing_the_search_removes_the_picked_mob_and_its_results() {
+    let mut compass = crawled(mushroom_world());
+    assert!(!search_for(&mut compass, "orange").search.results.is_empty());
+
+    let state = compass.act(Action::ClearSearch);
+
+    assert_eq!(picked(state), None);
+    assert!(state.search.results.is_empty());
+    assert!(state.search.top_results.is_empty());
+    assert!(!state.search.search_mode);
+}
+
+#[test]
+fn clearing_the_search_in_search_mode_also_leaves_search_mode() {
+    let mut compass = crawled(mushroom_world());
+    search_for(&mut compass, "orange");
+    compass.on_hotkey(SEARCH);
+    compass.search_query("horny");
+
+    let state = compass.act(Action::ClearSearch);
+
+    assert!(!state.search.search_mode, "focus goes back to the game");
+    assert_eq!(picked(state), None);
+    assert!(state.search.results.is_empty());
 }

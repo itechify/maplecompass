@@ -1,4 +1,4 @@
-/* The mob search results table, the same in the panel and in the search window. */
+/* The mob search results table: the panel's top five, and every result in search mode. */
 .results {
   width: 100%;
   table-layout: fixed;

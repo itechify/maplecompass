@@ -33,7 +33,7 @@ pub struct Settings {
     /// The title of the game window the player picked by hand; `None` to look for the
     /// "MapleStory" window.
     pub game_window_title: Option<String>,
-    /// What Distance counts besides portals and ships (the search window's
+    /// What Distance counts besides portals and ships (search mode's
     /// checkboxes). Saved as top-level `taxis` and `teleportScrolls`.
     #[serde(flatten)]
     pub travel: Travel,
@@ -77,7 +77,7 @@ pub struct Hotkeys {
     /// Show the next of the maps sharing the shown map's title, when the core couldn't
     /// tell which one the player is on.
     pub choose_candidate: String,
-    /// Open the mob search window.
+    /// Put the overlay in mob search mode.
     pub search: String,
 }
 
