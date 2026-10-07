@@ -110,7 +110,8 @@ pub struct PanelState {
     /// The latest frame didn't confirm the map shown (unreadable, low confidence, or
     /// a different map not yet confirmed).
     pub not_sure: bool,
-    /// The shown map's Map Summary and mobs from MeowDB, or why they aren't there.
+    /// The shown map's Map Summary, mobs and Hidden Portals from MeowDB, or why they
+    /// aren't there.
     pub data: MapDataStatus,
     /// [`MEOWDB_CREDIT`] whenever a map is shown: its names and data are MeowDB's.
     pub credit: Option<&'static str>,
