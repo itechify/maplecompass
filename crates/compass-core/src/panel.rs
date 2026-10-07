@@ -53,6 +53,9 @@ pub enum Action {
     PanelMoved { x: i32, y: i32 },
     /// Switch to the next placement: inside, docked right, docked left, detached.
     CyclePlacement,
+    /// Show the next of the maps sharing the shown map's title, when the core couldn't
+    /// tell which one the player is on (see [`crate::Candidates`]).
+    ChooseCandidate,
 }
 
 /// Where the player wants the panel.
@@ -171,6 +174,8 @@ impl Panel {
                     self.detached_at = was.map(|r| ScreenPoint { x: r.x, y: r.y });
                 }
             }
+            // Not about layout: the compass shows another map.
+            Action::ChooseCandidate => {}
         }
     }
 

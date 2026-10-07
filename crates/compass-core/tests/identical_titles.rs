@@ -8,8 +8,10 @@
 
 mod common;
 
-use common::{FakeSource, index_with_title, requests_for, sample_frame, saved_index, saved_page};
-use compass_core::{Candidates, Compass, MapDataStatus, PanelState, SourceError, meowdb};
+use common::{
+    FakeSource, black_frame, index_with_title, requests_for, sample_frame, saved_index, saved_page,
+};
+use compass_core::{Action, Candidates, Compass, MapDataStatus, PanelState, SourceError, meowdb};
 use std::task::Poll;
 
 /// The titles MeowDB gives to more than one map (index saved 2026-10-07).
@@ -17,6 +19,7 @@ const MUSHROOM_TOWNS: [&str; 2] = ["000000010", "000000020"];
 const COCONUT_HARVESTS: [&str; 3] = ["090040200", "090040201", "090040202"];
 
 const KERNING: &str = "victoria-road__kerning-city--window";
+const SUNSET: &str = "victoria-road__sunset-sky--window";
 
 fn shown_id(state: &PanelState) -> Option<&str> {
     state.map.as_ref().map(|m| m.id.as_str())
@@ -113,4 +116,58 @@ fn arriving_with_nothing_to_go_on_in_one_of_maps_that_differ_shows_the_first_and
     for id in COCONUT_HARVESTS {
         assert!(requests_for(&requests, id) <= 1, "{id} asked for more than once");
     }
+}
+
+#[test]
+fn the_choose_candidate_hotkey_shows_each_candidate_in_turn_with_its_own_data() {
+    let mut compass = Compass::new(coconut_harvests_that_differ());
+    compass.on_frame(sample_frame(KERNING, 0));
+    compass.on_frame(sample_frame(KERNING, 333));
+
+    let state = compass.act(Action::ChooseCandidate);
+    assert_eq!(shown_id(state), Some("090040201"));
+    assert_eq!(state.candidates, coconut_candidates(1, true));
+    assert_eq!(mob_count(state), Some(6));
+
+    let state = compass.act(Action::ChooseCandidate);
+    assert_eq!(shown_id(state), Some("090040202"));
+    assert_eq!(mob_count(state), Some(2));
+
+    let state = compass.act(Action::ChooseCandidate);
+    assert_eq!(shown_id(state), Some("090040200"));
+    assert_eq!(state.candidates, coconut_candidates(0, true));
+}
+
+#[test]
+fn a_chosen_candidate_holds_through_unreadable_frames_until_the_map_changes() {
+    let mut compass = Compass::new(coconut_harvests_that_differ());
+    compass.on_frame(sample_frame(KERNING, 0));
+    compass.on_frame(sample_frame(KERNING, 333));
+    compass.act(Action::ChooseCandidate);
+
+    compass.on_frame(black_frame(666));
+    let state = compass.on_frame(sample_frame(KERNING, 1000));
+    assert_eq!(shown_id(state), Some("090040201"));
+    assert_eq!(state.candidates, coconut_candidates(1, true));
+
+    // Off to Sunset Sky and back: the choice is gone, and the first is shown again.
+    compass.on_frame(sample_frame(SUNSET, 1333));
+    let state = compass.on_frame(sample_frame(SUNSET, 1666));
+    assert_eq!(shown_id(state), Some(SUNSET_SKY));
+    assert_eq!(state.candidates, None);
+    compass.on_frame(sample_frame(KERNING, 2000));
+    let state = compass.on_frame(sample_frame(KERNING, 2333));
+    assert_eq!(shown_id(state), Some("090040200"));
+    assert_eq!(state.candidates, coconut_candidates(0, false));
+}
+
+#[test]
+fn the_choose_candidate_hotkey_does_nothing_when_there_is_nothing_to_choose() {
+    let mut compass = Compass::new(titled_like_kerning_city(&MUSHROOM_TOWNS));
+    compass.on_frame(sample_frame(KERNING, 0));
+    let before = compass.on_frame(sample_frame(KERNING, 333)).clone();
+
+    let state = compass.act(Action::ChooseCandidate);
+
+    assert_eq!(*state, before);
 }

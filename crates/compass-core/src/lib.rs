@@ -232,6 +232,10 @@ impl Compass {
 
     /// Apply something the player did.
     pub fn act(&mut self, action: Action) -> &PanelState {
+        if action == Action::ChooseCandidate {
+            self.shown_map.choose_next(&mut *self.source);
+            self.sync_shown_map();
+        }
         self.panel.act(action);
         self.sync_panel()
     }
