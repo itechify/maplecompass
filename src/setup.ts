@@ -101,8 +101,8 @@ function render() {
     `To mark the title again later, press ${keyLabel(view.setupHotkey)} while you play.`;
 }
 
-listen<SetupView>("setup-state", (e) => {
-  view = e.payload;
+function update(next: SetupView) {
+  view = next;
   const needed = view.setup.needed;
   if (needed && needed !== openedFor) {
     openedFor = needed;
@@ -111,6 +111,12 @@ listen<SetupView>("setup-state", (e) => {
     if (!needed) openedFor = null;
     render();
   }
+}
+
+listen<SetupView>("setup-state", (e) => update(e.payload));
+// The shell may have sent the state before this page was listening.
+invoke<SetupView | null>("setup_view").then((v) => {
+  if (v && !view) update(v);
 });
 
 listen("title-marked", () => show("test"));

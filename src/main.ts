@@ -1,6 +1,8 @@
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
+type PlacementMode = "inside" | "dockedRight" | "dockedLeft" | "detached";
+
 /** Mirror of `compass_core::PanelState`. */
 type PanelState = {
   recognition: "starting" | "ready" | "unavailable";
@@ -9,19 +11,29 @@ type PanelState = {
   notSure: boolean;
   expanded: boolean;
   editMode: boolean;
+  gameFound: boolean;
+  placementMode: PlacementMode;
+  layer: "aboveGame" | "free" | "hidden";
+  draggable: boolean;
   setup: { needed: "firstRun" | "resolutionChanged" | "requested" | null };
 };
 
 /** Mirror of the shell's `OverlayState`. */
 type OverlayState = {
-  gameFound: boolean;
   panel: PanelState;
-  hotkeys: { togglePanel: string; editMode: string; setup: string };
+  hotkeys: { togglePanel: string; editMode: string; cyclePlacement: string; setup: string };
 };
 
 const street = document.getElementById("street")!;
 const map = document.getElementById("map")!;
-let editMode = false;
+let draggable = false;
+
+const PLACEMENT_NAMES: Record<PlacementMode, string> = {
+  inside: "Inside",
+  dockedRight: "Docked right",
+  dockedLeft: "Docked left",
+  detached: "Detached",
+};
 
 /** "ctrl+shift+e" -> "Ctrl+Shift+E" */
 function keyLabel(accelerator: string): string {
@@ -32,14 +44,17 @@ function keyLabel(accelerator: string): string {
 }
 
 function render(state: OverlayState) {
-  const { panel } = state;
+  const { panel, hotkeys } = state;
   const { recognition, map: current, notSure } = panel;
-  editMode = panel.editMode;
+  draggable = panel.draggable;
+  // Hidden while the game is minimised or gone: the window stays, but draws nothing.
+  document.body.classList.toggle("hidden", panel.layer === "hidden");
   document.body.classList.toggle("collapsed", !panel.expanded);
   document.body.classList.toggle("editing", panel.editMode);
+  document.body.classList.toggle("draggable", panel.draggable);
   document.body.classList.toggle("unreadable", !current);
   document.body.classList.toggle("not-sure", !!current && notSure);
-  if (!state.gameFound) {
+  if (!panel.gameFound) {
     street.textContent = "";
     map.textContent = "Looking for MapleStory…";
   } else if (panel.setup.needed === "firstRun" || panel.setup.needed === "resolutionChanged") {
@@ -58,14 +73,18 @@ function render(state: OverlayState) {
     map.textContent = "Reading the minimap title…";
   }
   if (panel.editMode) {
-    street.textContent = `Drag to move · ${keyLabel(state.hotkeys.editMode)} when done`;
+    const place = `${PLACEMENT_NAMES[panel.placementMode]} · ${keyLabel(hotkeys.cyclePlacement)} to change`;
+    street.textContent =
+      panel.placementMode === "inside"
+        ? `Drag to move · ${keyLabel(hotkeys.editMode)} when done`
+        : place;
   }
 }
 
-// In edit mode the overlay takes the mouse (the shell turns click-through off), so the
-// player can drag it anywhere on it. Outside edit mode it never sees a click.
+// A draggable overlay takes the mouse (the shell turns click-through off): in edit mode
+// inside the game, and always when detached. Otherwise it never sees a click.
 document.addEventListener("mousedown", (e) => {
-  if (editMode && e.button === 0) {
+  if (draggable && e.button === 0) {
     getCurrentWindow().startDragging();
   }
 });

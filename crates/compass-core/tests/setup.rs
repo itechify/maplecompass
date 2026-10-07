@@ -11,21 +11,27 @@ mod common;
 
 use common::FakeSource;
 use compass_core::{
-    Action, Compass, CurrentMap, Rect, ScreenRect, Settings, SetupReason, TestRead,
+    Action, Compass, CurrentMap, GameWindow, Rect, ScreenRect, Settings, SetupReason, TestRead,
 };
 
 const KERNING: &str = "victoria-road__kerning-city--window";
 
-/// The game window as the shell reports it: the sample's client area at (812,110).
+/// The client area of a window sample shown at (812,110).
 fn game(sample: &str) -> ScreenRect {
     let client = common::client_of(&common::load(sample));
     ScreenRect { x: 812, y: 110, width: client.width(), height: client.height() }
 }
 
+/// The game window as the shell reports it, with this client area on a 3440x1440 screen.
+fn window(client: ScreenRect) -> Option<GameWindow> {
+    let frame = ScreenRect { x: client.x - 1, y: client.y - 31, width: client.width + 2, height: client.height + 32 };
+    Some(GameWindow { client, frame, screens: vec![ScreenRect { x: 0, y: 0, width: 3440, height: 1440 }] })
+}
+
 #[test]
 fn a_fresh_install_asks_for_setup_and_reads_nothing_until_the_title_is_marked() {
     let mut compass = Compass::new(FakeSource::meowdb());
-    let state = compass.on_game_window(Some(game(KERNING)));
+    let state = compass.on_game_window(window(game(KERNING)));
 
     assert_eq!(state.setup.needed, Some(SetupReason::FirstRun));
     assert_eq!(state.title_region, None);
@@ -37,7 +43,7 @@ const MARK: Rect = Rect { x: 70, y: 40, width: 130, height: 48 };
 #[test]
 fn marking_the_title_starts_a_test_read_there_keeping_the_marked_corner_and_height() {
     let mut compass = Compass::new(FakeSource::meowdb());
-    compass.on_game_window(Some(game(KERNING)));
+    compass.on_game_window(window(game(KERNING)));
 
     let state = compass.act(Action::MarkTitleRegion(MARK));
 
@@ -52,7 +58,7 @@ fn marking_the_title_starts_a_test_read_there_keeping_the_marked_corner_and_heig
 /// region the core asks for.
 fn mark_and_test_read(compass: &mut Compass, sample: &str) -> Option<TestRead> {
     let game = game(sample);
-    compass.on_game_window(Some(game));
+    compass.on_game_window(window(game));
     let region = compass.act(Action::MarkTitleRegion(MARK)).title_region.expect("a region to capture");
     let client = common::client_of(&common::load(sample));
     compass.on_frame(common::capture(&client, game, region, 0)).setup.test_read.clone()
@@ -98,7 +104,7 @@ fn the_extended_region_still_reads_a_short_title_on_a_narrow_minimap() {
 #[test]
 fn a_mark_that_misses_the_title_fails_its_test_read_and_can_be_marked_again() {
     let mut compass = Compass::new(FakeSource::meowdb());
-    compass.on_game_window(Some(game(KERNING)));
+    compass.on_game_window(window(game(KERNING)));
     compass.act(Action::MarkTitleRegion(MARK));
 
     let state = compass.on_frame(common::black_frame(0));
@@ -140,7 +146,7 @@ fn finishing_setup_after_a_good_test_read_keeps_reading_the_marked_region() {
 #[test]
 fn setup_cannot_be_finished_until_the_test_read_recognises_a_map() {
     let mut compass = Compass::new(FakeSource::meowdb());
-    compass.on_game_window(Some(game(KERNING)));
+    compass.on_game_window(window(game(KERNING)));
     compass.act(Action::MarkTitleRegion(MARK));
     compass.on_frame(common::black_frame(0));
 
@@ -155,7 +161,7 @@ fn the_title_region_survives_a_restart() {
     let compass = set_up();
 
     let mut restarted = restart(&compass);
-    let state = restarted.on_game_window(Some(game(KERNING)));
+    let state = restarted.on_game_window(window(game(KERNING)));
 
     assert_eq!(state.setup.needed, None);
     assert_eq!(state.title_region, compass.panel_state().title_region);
@@ -167,7 +173,7 @@ fn the_title_region_moves_with_the_game_window() {
     let before = compass.panel_state().title_region.unwrap();
 
     let moved = ScreenRect { x: 100, y: 50, ..game(KERNING) };
-    let state = compass.on_game_window(Some(moved));
+    let state = compass.on_game_window(window(moved));
 
     assert_eq!(state.setup.needed, None);
     // Still (70,40) from the client's top-left corner.
@@ -179,7 +185,7 @@ fn a_new_game_resolution_asks_for_setup_again_and_stops_reading_the_old_spot() {
     let mut compass = set_up();
 
     let resized = ScreenRect { width: 1280, height: 720, ..game(KERNING) };
-    let state = compass.on_game_window(Some(resized));
+    let state = compass.on_game_window(window(resized));
 
     assert_eq!(state.setup.needed, Some(SetupReason::ResolutionChanged));
     assert_eq!(state.title_region, None);
@@ -189,9 +195,9 @@ fn a_new_game_resolution_asks_for_setup_again_and_stops_reading_the_old_spot() {
 fn going_back_to_the_resolution_of_setup_reads_the_title_region_again() {
     let mut compass = set_up();
     let region = compass.panel_state().title_region;
-    compass.on_game_window(Some(ScreenRect { width: 1280, height: 720, ..game(KERNING) }));
+    compass.on_game_window(window(ScreenRect { width: 1280, height: 720, ..game(KERNING) }));
 
-    let state = compass.on_game_window(Some(game(KERNING)));
+    let state = compass.on_game_window(window(game(KERNING)));
 
     assert_eq!(state.setup.needed, None);
     assert_eq!(state.title_region, region);
@@ -202,7 +208,7 @@ fn setup_redone_at_the_new_resolution_is_kept_for_it() {
     let mut compass = set_up();
     // The Kerning City client, 200 px narrower: the title stays put at the top-left.
     let narrower = ScreenRect { width: game(KERNING).width - 200, ..game(KERNING) };
-    compass.on_game_window(Some(narrower));
+    compass.on_game_window(window(narrower));
     let state = compass.act(Action::MarkTitleRegion(MARK));
     let region = state.title_region.unwrap();
     let client = common::client_of(&common::load(KERNING));
@@ -252,7 +258,7 @@ fn cancelling_a_requested_setup_goes_back_to_the_saved_region() {
 #[test]
 fn cancelling_first_run_setup_leaves_it_still_needed() {
     let mut compass = Compass::new(FakeSource::meowdb());
-    compass.on_game_window(Some(game(KERNING)));
+    compass.on_game_window(window(game(KERNING)));
     compass.act(Action::MarkTitleRegion(MARK));
 
     let state = compass.act(Action::CancelSetup);
@@ -279,7 +285,7 @@ fn an_empty_settings_file_has_a_re_setup_hotkey_and_needs_setup() {
 
     let mut compass = Compass::new(FakeSource::meowdb());
     compass.restore(settings);
-    let state = compass.on_game_window(Some(game(KERNING)));
+    let state = compass.on_game_window(window(game(KERNING)));
     assert_eq!(state.setup.needed, Some(SetupReason::FirstRun));
 }
 
@@ -304,7 +310,7 @@ fn the_region_extends_only_as_far_as_the_longest_name_in_the_index_needs() {
 fn the_region_never_extends_past_the_game_window() {
     let mut compass = Compass::new(FakeSource::meowdb());
     // A small 400x300 window: the region can reach at most 330 px right of x 70.
-    compass.on_game_window(Some(ScreenRect { x: 812, y: 110, width: 400, height: 300 }));
+    compass.on_game_window(window(ScreenRect { x: 812, y: 110, width: 400, height: 300 }));
 
     let state = compass.act(Action::MarkTitleRegion(MARK));
 

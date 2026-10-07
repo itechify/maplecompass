@@ -23,6 +23,8 @@ pub struct Bridge {
     pub game: Mutex<Option<ClientArea>>,
     /// Why setup is needed, as last reported by the core.
     pub needed: Mutex<Option<SetupReason>>,
+    /// The last view sent to the setup window, for when it loads after it was sent.
+    pub view: Mutex<Option<serde_json::Value>>,
 }
 
 /// What the setup window renders.
@@ -49,6 +51,8 @@ pub struct SetupWindows {
     app: AppHandle,
     setup: WebviewWindow,
     shown_for: Option<SetupReason>,
+    /// The last view sent to the setup window.
+    emitted: Option<serde_json::Value>,
 }
 
 impl SetupWindows {
@@ -70,7 +74,7 @@ impl SetupWindows {
                 let _ = bridge.actions.send(Action::CancelSetup);
             }
         });
-        Ok(Self { app: app.clone(), setup, shown_for: None })
+        Ok(Self { app: app.clone(), setup, shown_for: None, emitted: None })
     }
 
     /// Bring setup up (the re-setup hotkey), even if it was needed before and closed.
@@ -100,9 +104,16 @@ impl SetupWindows {
             game_title,
             setup_hotkey,
         };
+        // Only send changes: the loop wakes up 20 times a second.
+        let Ok(view) = serde_json::to_value(&view) else { return };
+        if self.emitted.as_ref() == Some(&view) {
+            return;
+        }
         if let Err(e) = self.app.emit_to(SETUP, "setup-state", &view) {
             eprintln!("emit failed: {e}");
         }
+        *self.app.state::<Bridge>().view.lock().unwrap() = Some(view.clone());
+        self.emitted = Some(view);
     }
 }
 
@@ -116,6 +127,12 @@ fn focus_setup(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(SETUP) {
         let _ = window.set_focus();
     }
+}
+
+/// What the setup window renders, as last sent (`None` before the first).
+#[tauri::command]
+pub async fn setup_view(bridge: State<'_, Bridge>) -> Result<Option<serde_json::Value>, String> {
+    Ok(bridge.view.lock().unwrap().clone())
 }
 
 /// Take the window under the mouse pointer as the game window.

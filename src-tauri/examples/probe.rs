@@ -14,7 +14,7 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let reads: u32 = args.next().and_then(|s| s.parse().ok()).unwrap_or(5);
     let save = args.next();
-    let Some(client) = gamewin::find_game_client(gamewin::GAME_TITLE) else {
+    let Some(client) = gamewin::find_game_client() else {
         println!("No visible \"{}\" window found.", gamewin::GAME_TITLE);
         return;
     };
