@@ -18,6 +18,9 @@ pub struct Settings {
     pub hotkeys: Hotkeys,
     /// The Title Region marked at setup; `None` until setup is first finished.
     pub title_region: Option<TitleRegion>,
+    /// The title of the game window the player picked by hand; `None` to look for the
+    /// "MapleStory" window.
+    pub game_window_title: Option<String>,
 }
 
 impl Default for Settings {
@@ -28,6 +31,7 @@ impl Default for Settings {
             inside_offset: None,
             hotkeys: Hotkeys::default(),
             title_region: None,
+            game_window_title: None,
         }
     }
 }
@@ -44,10 +48,16 @@ pub struct Hotkeys {
     pub toggle_panel: String,
     /// Make the overlay draggable, or return it to click-through.
     pub edit_mode: String,
+    /// Open setup again, to mark the Title Region anew.
+    pub setup: String,
 }
 
 impl Default for Hotkeys {
     fn default() -> Self {
-        Self { toggle_panel: "ctrl+shift+m".into(), edit_mode: "ctrl+shift+e".into() }
+        Self {
+            toggle_panel: "ctrl+shift+m".into(),
+            edit_mode: "ctrl+shift+e".into(),
+            setup: "ctrl+shift+s".into(),
+        }
     }
 }

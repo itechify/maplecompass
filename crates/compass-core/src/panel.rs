@@ -42,6 +42,10 @@ pub enum Action {
     MarkTitleRegion(crate::Rect),
     /// Keep the marked Title Region, if its test read recognised a map.
     FinishSetup,
+    /// The player wants to redo setup (the re-setup hotkey).
+    RequestSetup,
+    /// The player closed setup without finishing it.
+    CancelSetup,
 }
 
 /// Where the inside panel sits: its top-right corner, relative to the game client's

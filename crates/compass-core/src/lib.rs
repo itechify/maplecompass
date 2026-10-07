@@ -204,6 +204,12 @@ impl Compass {
         self.sync_panel()
     }
 
+    /// The player picked the game window by hand: look for windows with this title
+    /// from now on (the shell's window locator reads it from [`Compass::settings`]).
+    pub fn pick_game_window(&mut self, title: String) {
+        self.settings.game_window_title = Some(title);
+    }
+
     /// The settings to save: whatever the player has changed since [`Compass::restore`].
     pub fn settings(&self) -> Settings {
         Settings {
