@@ -8,12 +8,13 @@ mod map_index;
 mod matcher;
 pub mod meowdb;
 mod panel;
+mod portals;
 mod prep;
 mod recogniser;
 mod settings;
 mod tracker;
 
-pub use map_data::{MapData, MapDataStatus, MapSummary, Mob, PerParty};
+pub use map_data::{HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty};
 pub use map_index::{MapDataSource, MapEntry, SourceError};
 pub use panel::{
     Action, GameWindow, InsideOffset, Layer, PanelSizes, PlacementMode, ScreenPoint, ScreenRect,
