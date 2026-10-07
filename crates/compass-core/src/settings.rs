@@ -2,6 +2,7 @@
 //! JSON in the app's config directory and hands it back to the core at startup.
 
 use crate::panel::{InsideOffset, PlacementMode, ScreenPoint};
+use crate::setup::TitleRegion;
 use serde::{Deserialize, Serialize};
 
 /// The player's settings. Missing fields (an older or empty file) take their defaults.
@@ -20,6 +21,11 @@ pub struct Settings {
     /// px); `None` if it was never detached.
     pub detached_at: Option<ScreenPoint>,
     pub hotkeys: Hotkeys,
+    /// The Title Region marked at setup; `None` until setup is first finished.
+    pub title_region: Option<TitleRegion>,
+    /// The title of the game window the player picked by hand; `None` to look for the
+    /// "MapleStory" window.
+    pub game_window_title: Option<String>,
 }
 
 impl Default for Settings {
@@ -31,6 +37,8 @@ impl Default for Settings {
             placement: PlacementMode::Inside,
             detached_at: None,
             hotkeys: Hotkeys::default(),
+            title_region: None,
+            game_window_title: None,
         }
     }
 }
@@ -51,6 +59,8 @@ pub struct Hotkeys {
     pub cycle_placement: String,
     /// Open the shown map's MeowDB page in the browser.
     pub open_meowdb_page: String,
+    /// Open setup again, to mark the Title Region anew.
+    pub setup: String,
     /// Show the next of the maps sharing the shown map's title, when the core couldn't
     /// tell which one the player is on.
     pub choose_candidate: String,
@@ -63,6 +73,7 @@ impl Default for Hotkeys {
             edit_mode: "ctrl+shift+e".into(),
             cycle_placement: "ctrl+shift+d".into(),
             open_meowdb_page: "ctrl+shift+o".into(),
+            setup: "ctrl+shift+s".into(),
             choose_candidate: "ctrl+shift+c".into(),
         }
     }
