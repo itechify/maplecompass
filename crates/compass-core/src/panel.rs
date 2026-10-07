@@ -76,6 +76,8 @@ pub enum Action {
     /// The player closed setup without finishing it. On the first run that quits
     /// (`PanelState::quit`): there is nothing to read without a Title Region.
     CancelSetup,
+    /// Start measuring afresh: the Session goes back to waiting for an EXP change.
+    ResetSession,
 }
 
 /// Where the player wants the panel.
