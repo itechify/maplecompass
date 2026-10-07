@@ -64,6 +64,35 @@ fn win_alt_hotkeys_from_version_2_are_replaced_by_the_ctrl_shift_ones_and_the_re
     assert_eq!(compass.settings().hotkeys, Hotkeys::default(), "and saved as Ctrl+Shift");
 }
 
+/// Settings saved as version 3 by a build of the EXP tracking branch, which kept the
+/// Win+Alt hotkeys (and has fields this build doesn't know).
+const VERSION_3_WIN_ALT_SETTINGS: &str = r#"{
+  "version": 3,
+  "expanded": true,
+  "placementMode": "inside",
+  "hotkeys": {
+    "togglePanel": "super+alt+c",
+    "editMode": "super+alt+e",
+    "cyclePlacement": "super+alt+p",
+    "openMeowdbPage": "super+alt+o",
+    "setup": "super+alt+s",
+    "chooseCandidate": "super+alt+n",
+    "resetSession": "super+alt+x"
+  },
+  "expBarRegion": { "marked": { "x": 1016, "y": 1145, "width": 207, "height": 54 }, "client": { "width": 1920, "height": 1200 } }
+}"#;
+
+#[test]
+fn win_alt_hotkeys_saved_as_version_3_are_replaced_by_the_ctrl_shift_ones_too() {
+    let mut compass = Compass::new(FakeSource::meowdb());
+
+    let state = compass.restore(serde_json::from_str(VERSION_3_WIN_ALT_SETTINGS).unwrap());
+
+    assert_eq!(state.hotkeys, Hotkeys::default());
+    assert!(state.hotkeys.all().iter().all(|hotkey| hotkey.starts_with("ctrl+shift+")));
+    assert_eq!(compass.settings().hotkeys, Hotkeys::default(), "and saved as Ctrl+Shift");
+}
+
 /// Settings saved by version 1, with its own Ctrl+Shift letters.
 const VERSION_1_SETTINGS: &str = r#"{
   "version": 1,
@@ -161,7 +190,7 @@ fn a_hotkey_another_app_has_taken_is_shown_as_unavailable() {
 
 #[test]
 fn ctrl_shift_f_is_the_search_hotkey_even_with_a_settings_file_from_before_search() {
-    let before_search = r#"{"version":3,"hotkeys":{"togglePanel":"ctrl+shift+x","chooseCandidate":"ctrl+shift+n"}}"#;
+    let before_search = r#"{"version":4,"hotkeys":{"togglePanel":"ctrl+shift+x","chooseCandidate":"ctrl+shift+n"}}"#;
     let mut compass = Compass::new(FakeSource::meowdb());
 
     let state = compass.restore(serde_json::from_str(before_search).unwrap()).clone();

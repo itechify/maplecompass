@@ -436,8 +436,8 @@ impl Compass {
         self.sync_panel()
     }
 
-    /// Pick up settings saved by an earlier session. Hotkeys from before version 3
-    /// (version 1's Ctrl+Shift letters, version 2's Win+Alt) are replaced by the
+    /// Pick up settings saved by an earlier session. Hotkeys from before version 4
+    /// (version 1's Ctrl+Shift letters, versions 2 and 3's Win+Alt) are replaced by the
     /// defaults.
     pub fn restore(&mut self, mut settings: Settings) -> &PanelState {
         if settings.version < settings::VERSION {

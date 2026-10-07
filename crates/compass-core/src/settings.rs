@@ -6,10 +6,10 @@ use crate::setup::TitleRegion;
 use crate::world::Travel;
 use serde::{Deserialize, Serialize};
 
-/// The settings version this core writes. Version 1 had other Ctrl+Shift letters and
-/// version 2 had Win+Alt hotkeys; [`crate::Compass::restore`] replaces both with the
-/// defaults.
-pub(crate) const VERSION: u32 = 3;
+/// The settings version this core writes. Version 1 had other Ctrl+Shift letters, and
+/// versions 2 and 3 had Win+Alt hotkeys (3 was written by the EXP tracking branch);
+/// [`crate::Compass::restore`] replaces all of them with the defaults.
+pub(crate) const VERSION: u32 = 4;
 
 /// The player's settings. Missing fields (an older or empty file) take their defaults.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
