@@ -4,7 +4,8 @@
 //! Politeness: the core asks for the map index once at startup (again only after a
 //! failure, at most once a minute). A cached page younger than [`FRESH_FOR`] is used
 //! without any request; an older one is refetched, and still used if MeowDB can't be
-//! reached. Only pages the core could read are cached.
+//! reached. Every page MeowDB serves is cached, even one the core can't read, so a
+//! format change costs one request a day rather than one a minute.
 
 use compass_core::{MapDataSource, MapEntry, SourceError, meowdb};
 use std::path::{Path, PathBuf};
@@ -62,18 +63,17 @@ impl MeowDbSource {
         let cached = std::fs::read_to_string(&path).ok();
         if let Some(page) = &cached {
             if is_fresh(&path) {
-                if let Ok(data) = read(page) {
-                    return Ok(data);
-                }
+                // Even when it can't be read: refetching won't fix a format change
+                // until MeowDB changes again, so it waits out the day like any page.
+                return read(page);
             }
         }
         match self.fetch(url) {
             Ok(page) => {
-                let data = read(&page)?;
                 if let Err(e) = write_atomically(&path, &page) {
                     eprintln!("MeowDB cache: couldn't write {}: {e}", path.display());
                 }
-                Ok(data)
+                read(&page)
             }
             Err(e) => {
                 eprintln!("MeowDB: {url}: {e}");
