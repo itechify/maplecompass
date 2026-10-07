@@ -36,17 +36,17 @@ pub use search::{DensityTier, MobChoice, PANEL_RESULTS, RouteStop, SearchResult,
 pub use settings::{Hotkeys, Settings};
 pub use setup::{SelectionDirection, SetupReason, SetupState, TestRead, TitleRegion};
 pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
-pub use world::{Distance, Step};
+pub use world::{Distance, Step, Travel};
 
 use crawl::Crawl;
-use search::MobSearch;
+use search::{MobSearch, Searched};
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
 use panel::Panel;
 use setup::Setup;
 pub use recogniser::{TitleLines, TitleReader, TitleReading};
 use tracker::Tracker;
-use world::Travel;
+use world::Here;
 use serde::Serialize;
 use std::task::Poll;
 
@@ -177,11 +177,14 @@ pub struct PanelState {
     pub search: SearchState,
 }
 
-/// A page to open in the player's browser (the open-page hotkey asked for it): the one
-/// thing the shell does on the core's say beyond rendering the panel state.
+/// What a hotkey asks the shell to do at once, beyond rendering the panel state.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OpenInBrowser {
-    pub url: String,
+pub enum Request {
+    /// Open this page in the player's browser (the open-page hotkey).
+    OpenInBrowser { url: String },
+    /// Bring the search window, already open, back in front (the search hotkey): the
+    /// game may have come in front of it. Our own window only (ADR 0001).
+    RaiseSearchWindow,
 }
 
 /// The game window's title, unless the player picked another by hand.
@@ -290,13 +293,16 @@ impl Compass {
 
     fn sync_shown_map(&mut self) {
         let map = self.shown_map.map().cloned();
-        // Distances are measured from the map shown (with Candidates, the one shown).
+        let data = self.shown_map.data();
+        // Distances are measured from the map shown (with Candidates, the one shown),
+        // and its page's exits count before the crawl gets to it.
         let moved = map.as_ref().map(|m| &m.id) != self.state.map.as_ref().map(|m| &m.id);
+        let paged = data.data() != self.state.data.data();
         self.state.map = map;
-        if moved {
+        self.state.data = data;
+        if moved || paged {
             self.sync_search();
         }
-        self.state.data = self.shown_map.data();
         self.state.candidates = self.shown_map.candidates();
         self.state.credit = self.state.map.as_ref().map(|_| MEOWDB_CREDIT);
     }
@@ -345,8 +351,7 @@ impl Compass {
             }
             Action::SearchPrevious | Action::SearchNext => {
                 let by = if action == Action::SearchNext { 1 } else { -1 };
-                let from = self.state.map.as_ref().map(|m| m.id.as_str());
-                self.search.move_highlight(by, self.crawl.as_ref(), from, self.travel());
+                self.search.move_highlight(by, &searched(&self.crawl, &self.state, &self.settings));
                 self.sync_search();
             }
             Action::SearchEnter => {
@@ -359,11 +364,11 @@ impl Compass {
             }
             // Settings, so they count whether or not the window is open.
             Action::ToggleTaxis => {
-                self.settings.taxis = !self.settings.taxis;
+                self.settings.travel.taxis = !self.settings.travel.taxis;
                 self.sync_search();
             }
             Action::ToggleTeleportScrolls => {
-                self.settings.teleport_scrolls = !self.settings.teleport_scrolls;
+                self.settings.travel.teleport_scrolls = !self.settings.travel.teleport_scrolls;
                 self.sync_search();
             }
         }
@@ -380,18 +385,14 @@ impl Compass {
     /// Bring the panel's mob search up to date with the player's inputs, the maps the
     /// crawl knows, the map shown and the travel toggles.
     fn sync_search(&mut self) {
-        let from = self.state.map.as_ref().map(|m| m.id.as_str());
-        self.state.search = self.search.state(self.crawl.as_ref(), from, self.travel());
-    }
-
-    /// The kinds of travel the player has turned on.
-    fn travel(&self) -> Travel {
-        Travel { taxis: self.settings.taxis, teleport_scrolls: self.settings.teleport_scrolls }
+        let search = self.search.state(&searched(&self.crawl, &self.state, &self.settings));
+        self.state.search = search;
     }
 
     /// The player pressed one of the global hotkeys (an accelerator string, as listed
-    /// in the panel state's `hotkeys`). Returns the page to open, if it asks for one.
-    pub fn on_hotkey(&mut self, pressed: &str) -> Option<OpenInBrowser> {
+    /// in the panel state's `hotkeys`). Returns what the shell must do at once, if
+    /// anything: open a page, or bring the search window back in front.
+    pub fn on_hotkey(&mut self, pressed: &str) -> Option<Request> {
         let hotkeys = &self.settings.hotkeys;
         let is = |hotkey: &str| same_hotkey(hotkey, pressed);
         let action = if is(&hotkeys.toggle_panel) {
@@ -405,9 +406,13 @@ impl Compass {
         } else if is(&hotkeys.choose_candidate) {
             Action::ChooseCandidate
         } else if is(&hotkeys.search) {
+            // An open window stays as it is; the shell shows a newly opened one in front.
+            if self.state.search.window_open {
+                return Some(Request::RaiseSearchWindow);
+            }
             Action::OpenSearch
         } else if is(&hotkeys.open_meowdb_page) {
-            return self.state.map.as_ref().map(|map| OpenInBrowser { url: map.url.clone() });
+            return self.state.map.as_ref().map(|map| Request::OpenInBrowser { url: map.url.clone() });
         } else {
             return None;
         };
@@ -535,6 +540,16 @@ impl Compass {
         self.setup.follow_needed();
         self.state.setup = self.setup.state();
         self.state.title_region = self.setup.title_region(self.matcher.as_ref().map(Matcher::longest_name));
+    }
+}
+
+/// What mob search works over: the maps the crawl knows, the map the panel shows with
+/// its page (once it has it), and the travel the player has turned on.
+fn searched<'a>(crawl: &'a Option<Crawl>, state: &'a PanelState, settings: &Settings) -> Searched<'a> {
+    Searched {
+        crawl: crawl.as_ref(),
+        here: state.map.as_ref().map(|map| Here { id: &map.id, page: state.data.data() }),
+        travel: settings.travel,
     }
 }
 

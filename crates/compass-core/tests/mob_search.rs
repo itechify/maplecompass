@@ -7,7 +7,7 @@ mod common;
 
 use common::world::{SEARCH, WorldMap, crawled, map, mob, orange, search_for, tick_through, world};
 use common::{FakeSource, arrive};
-use compass_core::{Action, Compass, DensityTier, MEOWDB_CREDIT, Mob, PanelState, SearchState};
+use compass_core::{Action, Compass, DensityTier, MEOWDB_CREDIT, Mob, PanelState, Request, SearchState};
 
 fn mushroom_world() -> Vec<WorldMap> {
     vec![
@@ -19,14 +19,16 @@ fn mushroom_world() -> Vec<WorldMap> {
 }
 
 #[test]
-fn the_search_hotkey_leaves_an_open_search_window_as_it_is() {
+fn the_search_hotkey_brings_an_open_search_window_back_in_front_as_it_is() {
     let mut compass = crawled(mushroom_world());
-    compass.on_hotkey(SEARCH);
+    assert_eq!(compass.on_hotkey(SEARCH), None, "opening it shows it in front");
     compass.search_query("mush");
     let before = compass.panel_state().clone();
 
-    compass.on_hotkey(SEARCH);
+    // The game may have come in front of it since.
+    let asked = compass.on_hotkey(SEARCH);
 
+    assert_eq!(asked, Some(Request::RaiseSearchWindow));
     assert_eq!(*compass.panel_state(), before);
 }
 
@@ -142,12 +144,6 @@ fn search_keys_do_nothing_while_the_search_window_is_closed() {
     assert_eq!(*state, before);
 }
 
-/// The same map in another region of MeowDB's index ("Event", "Hidden Street", …).
-fn in_region(region: &str, mut map: WorldMap) -> WorldMap {
-    map.entry.region = region.into();
-    map
-}
-
 /// A mob with this Spawn Share (whole percent).
 fn sharing(share: u32, mut mob: Mob) -> Mob {
     mob.spawn_share_percent = share;
@@ -229,8 +225,8 @@ fn results_are_ordered_by_tier_then_density_with_spawn_count_and_mob_rate_both_c
 fn event_maps_are_left_out_and_dont_set_the_densest_map() {
     let mut compass = crawled(vec![
         map("100000001", "Mushroom Field", 100, vec![orange(10)]),
-        in_region("Event", map("100000002", "Mushroom Festival", 200, vec![orange(30)])),
-        in_region("Hidden Street", map("100000003", "Hidden Mushrooms", 100, vec![orange(4)])),
+        map("100000002", "Mushroom Festival", 200, vec![orange(30)]).in_region("Event"),
+        map("100000003", "Hidden Mushrooms", 100, vec![orange(4)]).in_region("Hidden Street"),
     ]);
 
     let state = search_for(&mut compass, "orange");
@@ -241,6 +237,48 @@ fn event_maps_are_left_out_and_dont_set_the_densest_map() {
 const KERNING: &str = "victoria-road__kerning-city--window";
 const SUNSET: &str = "victoria-road__sunset-sky--window";
 const HENESYS_HUNTING_GROUND_I: &str = "010001010";
+
+#[test]
+fn a_mob_found_only_on_event_maps_has_no_results_and_search_says_why() {
+    let mut compass = crawled(vec![
+        map("100000001", "Snail Field", 100, vec![mob("3", "Blue Snail", 4, 5)]),
+        map("100000002", "Mushroom Festival", 200, vec![orange(30)]).in_region("Event"),
+    ]);
+
+    let state = search_for(&mut compass, "orange");
+
+    assert!(state.search.results.is_empty());
+    assert!(state.search.only_on_event_maps);
+    let state = search_for(&mut compass, "snail");
+    assert!(!state.search.only_on_event_maps, "the Blue Snail has results");
+}
+
+/// The panel's results, as "Map Name".
+fn top(state: &PanelState) -> Vec<&str> {
+    state.search.top_results.iter().map(|r| r.map_name.as_str()).collect()
+}
+
+#[test]
+fn the_panel_gets_the_top_five_results_and_how_many_more_there_are() {
+    let maps = (1..=7).map(|n| map(&format!("10000000{n}"), &format!("Field {n}"), 100, vec![orange(10 - n)])).collect();
+    let mut compass = crawled(maps);
+
+    let state = search_for(&mut compass, "orange");
+
+    assert_eq!(state.search.results.len(), 7);
+    assert_eq!(top(&state), ["Field 1", "Field 2", "Field 3", "Field 4", "Field 5"]);
+    assert_eq!(state.search.more_results, 2);
+}
+
+#[test]
+fn with_five_results_or_fewer_the_panel_gets_them_all() {
+    let mut compass = crawled(mushroom_world());
+
+    let state = search_for(&mut compass, "orange");
+
+    assert_eq!(top(&state), ["Mushroom Field", "Mushroom Hill"]);
+    assert_eq!(state.search.more_results, 0);
+}
 
 #[test]
 fn the_picked_mob_and_its_results_stay_as_the_player_changes_map_until_the_search_is_cleared() {

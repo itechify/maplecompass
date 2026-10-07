@@ -122,9 +122,14 @@ impl Crawl {
         })
     }
 
+    /// Every map in the index, whether or not its page has been read.
+    pub fn entries(&self) -> impl Iterator<Item = &MapEntry> {
+        self.maps.iter().map(|(entry, _)| entry)
+    }
+
     /// Map `id`'s index entry, whether or not its page has been read.
     pub fn entry(&self, id: &str) -> Option<&MapEntry> {
-        self.maps.iter().map(|(entry, _)| entry).find(|entry| entry.id == id)
+        self.entries().find(|entry| entry.id == id)
     }
 
     pub fn progress(&self) -> CrawlProgress {

@@ -1,0 +1,33 @@
+/* The mob search results table, the same in the panel and in the search window. */
+.results {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.results th:nth-child(1) { width: 38%; }
+.results th:nth-child(2) { width: 14%; }
+.results th:nth-child(3) { width: 12%; }
+.results th:nth-child(4) { width: 17%; }
+.results th:nth-child(5) { width: 19%; }
+.results th, .results td { box-sizing: border-box; padding-left: 6px; vertical-align: top; }
+.results th:first-child, .results td:first-child { padding-left: 0; }
+
+.result-map,
+.result-street {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-street {
+  color: #9fb6cc;
+}
+
+/* Tiers by text emphasis alone: the accent is kept for actions. */
+.tier.high { font-weight: 600; }
+.tier.medium { color: #c3ccd6; }
+.tier.low { color: #9fb6cc; }
+
+/* "no route", "quest only" and "?" read as a lack of a number, not as one. */
+.distance.none { color: #9fb6cc; }

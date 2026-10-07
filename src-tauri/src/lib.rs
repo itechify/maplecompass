@@ -11,9 +11,10 @@ pub mod meowdb;
 mod search;
 mod settings;
 mod setup;
+mod view;
 
 use compass_core::{
-    Action, Compass, Frame, GameWindow, Layer, PanelSizes, PanelState, ScreenRect, Size, TitleReader,
+    Action, Compass, Frame, GameWindow, Layer, PanelSizes, PanelState, Request, ScreenRect, Size, TitleReader,
     TitleReading,
     default_title_region,
 };
@@ -104,7 +105,7 @@ pub fn run() {
                 commands: commands.clone(),
                 picks,
                 game: Mutex::new(None),
-                view: Mutex::new(None),
+                view: Default::default(),
             });
             let setup_windows = SetupWindows::new(app.handle())?;
             let search_window = SearchWindow::new(app.handle(), commands.clone());
@@ -238,8 +239,11 @@ fn compass_loop(
                 compass.act(action);
             }
             Ok(Command::Hotkey(pressed)) => {
-                if let Some(page) = compass.on_hotkey(&pressed) {
-                    open_in_browser(&app, &page.url);
+                match compass.on_hotkey(&pressed) {
+                    Some(Request::OpenInBrowser { url }) => open_in_browser(&app, &url),
+                    // Right after our hotkey, so Windows lets us take the foreground.
+                    Some(Request::RaiseSearchWindow) => search_window.raise(),
+                    None => {}
                 }
             }
             Ok(Command::SearchQuery(query)) => {

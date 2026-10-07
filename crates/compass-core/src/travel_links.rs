@@ -1,5 +1,5 @@
 //! The hand-kept travel links: ways between maps that no portal shows, such as the
-//! ships between continents. Each is one map change. Like the Portal Overrides, the
+//! ships between regions. Each is one map change. Like the Portal Overrides, the
 //! list is small and kept by hand, so fix an entry when the game turns out to differ.
 //! Maps are given by their 9-digit MeowDB IDs.
 
@@ -41,9 +41,9 @@ pub(crate) const TRAVEL_LINKS: &[TravelLink] = &[
     TravelLink { from: "000000060", to: "010000000", by: Step::Ship },
 ];
 
-/// The towns the Victoria Island regular cab runs between, every one to every other,
+/// The towns the Victoria Island taxi runs between, every one to every other,
 /// when the player has turned taxis on: Lith Harbor, Henesys, Ellinia, Kerning City
-/// and Perion. Sleepywood (010005000) is left out: it isn't known to have a cab.
+/// and Perion. Sleepywood (010005000) is left out: it isn't known to have a taxi.
 pub(crate) const TAXI_TOWNS: &[&str] = &["010000000", "010001000", "010002000", "010003000", "010004000"];
 
 /// The towns a named Teleport Scroll takes the player to from any map, when the player
