@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The overlay listens for panel state pushed from Rust, and in edit mode starts a window drag.",
+  "description": "The overlay listens for panel state pushed from Rust, and starts a window drag while the panel is draggable (edit mode, or detached).",
   "windows": ["overlay"],
   "permissions": ["core:default", "core:window:allow-start-dragging"]
 }
