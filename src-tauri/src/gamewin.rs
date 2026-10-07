@@ -33,7 +33,12 @@ pub fn looking_for() -> String {
 }
 
 #[cfg(windows)]
-pub use win::{find_game, keep_above, monitor_work_areas, window_under_cursor};
+pub use win::{find_game, foreground_is_ours, keep_above, monitor_work_areas, window_under_cursor};
+
+#[cfg(not(windows))]
+pub fn foreground_is_ours() -> bool {
+    false
+}
 
 /// The game's client area, or `None` when it isn't running or is minimised.
 pub fn find_game_client() -> Option<ScreenRect> {
@@ -202,6 +207,13 @@ mod win {
         let mut pid = 0;
         unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
         pid == unsafe { GetCurrentProcessId() }
+    }
+
+    /// Whether the foreground window is one of ours (e.g. focus only moved inside our
+    /// window, into its webview), rather than the game or another app.
+    pub fn foreground_is_ours() -> bool {
+        let foreground = unsafe { GetForegroundWindow() };
+        !foreground.is_invalid() && is_ours(foreground)
     }
 
     /// Keep our `overlay` just above the game in the z-order: an app in front of the
