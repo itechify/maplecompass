@@ -102,7 +102,7 @@ impl Default for Hotkeys {
             toggle_panel: "ctrl+shift+c".into(),
             edit_mode: "ctrl+shift+e".into(),
             cycle_placement: "ctrl+shift+p".into(),
-            open_meowdb_page: "ctrl+shift+o".into(),
+            open_meowdb_page: "ctrl+shift+m".into(),
             setup: "ctrl+shift+s".into(),
             choose_candidate: "ctrl+shift+n".into(),
             search: "ctrl+shift+f".into(),
