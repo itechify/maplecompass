@@ -23,8 +23,9 @@ export default defineConfig(() => ({
         }
       : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      // 3. tell Vite to ignore watching `src-tauri`, the Cargo workspace's
+      //    `target/` (Windows locks .exe/.pdb files there) and agent worktrees
+      ignored: ["**/src-tauri/**", "**/target/**", "**/.claude/**", "**/crates/**"],
     },
   },
 }));
