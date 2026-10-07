@@ -33,11 +33,16 @@ pub fn looking_for() -> String {
 }
 
 #[cfg(windows)]
-pub use win::{find_game, foreground, foreground_is_ours, keep_above, monitor_work_areas, window_under_cursor};
+pub use win::{find_game, foreground, foreground_is_ours, keep_above, monitor_work_areas, pointer, window_under_cursor};
 
 #[cfg(not(windows))]
 pub fn foreground_is_ours() -> bool {
     false
+}
+
+#[cfg(not(windows))]
+pub fn pointer() -> Option<compass_core::ScreenPoint> {
+    None
 }
 
 /// Elsewhere the foreground can't be told apart yet, so the hotkeys stay live as before.
@@ -103,6 +108,15 @@ mod win {
             found.push(hwnd);
         }
         BOOL(1) // keep enumerating
+    }
+
+    /// Where the mouse pointer is on screen (physical px), so the overlay's controls can
+    /// take the mouse while it is over them. Reads the pointer position only: no hook,
+    /// and nothing about the window under it.
+    pub fn pointer() -> Option<compass_core::ScreenPoint> {
+        let mut at = POINT::default();
+        unsafe { GetCursorPos(&mut at) }.ok()?;
+        Some(compass_core::ScreenPoint { x: at.x, y: at.y })
     }
 
     /// The title of the top-level window under the mouse pointer, for picking the game

@@ -44,13 +44,51 @@
           <ul id="portal-rows"></ul>
         </section>
       </section>
-      <section class="mob-search" id="mob-search" aria-label="Mob search" hidden>
-        <h2 id="search-title"></h2>
+      <section class="mob-search" id="mob-search" aria-labelledby="search-title" hidden>
+        <div class="search-head">
+          <h2 id="search-title">Mob search</h2>
+          <button type="button" class="clear" id="search-clear" data-control aria-label="Clear the mob search" title="Clear the mob search">×</button>
+        </div>
+        <div class="search-mode" id="search-mode" hidden>
+          <label class="field">
+            <span class="label">Mob name</span>
+            <input
+              id="query"
+              type="text"
+              placeholder="Type part of a mob's name"
+              autocomplete="off"
+              spellcheck="false"
+              role="combobox"
+              aria-controls="suggestions"
+              aria-expanded="false"
+              aria-autocomplete="list"
+            />
+          </label>
+          <ul class="suggestions" id="suggestions" role="listbox" aria-label="Mobs" hidden></ul>
+          <p class="note" id="no-match" hidden></p>
+          <p class="keys">↑ ↓ choose a mob, or with nothing typed a map's route · Enter picks · Esc returns to the game · Enter with nothing typed, or ×, clears the search</p>
+          <fieldset class="travel">
+            <legend>Distance also counts</legend>
+            <label title="Taxi rides between Lith Harbor, Henesys, Ellinia, Kerning City and Perion, one map change each">
+              <input type="checkbox" id="taxis" /> Taxis
+            </label>
+            <label title="A scroll to the map's nearest town, or to Henesys, Ellinia, Perion, Kerning City, Lith Harbor, Sleepywood, Orbis or El Nath, one map change each">
+              <input type="checkbox" id="teleport-scrolls" /> Teleport Scrolls
+            </label>
+          </fieldset>
+        </div>
         <p class="nearest" id="search-nearest" hidden></p>
         <p class="note" id="search-note" role="status" hidden></p>
-        <table class="results" id="search-results">
-          <tbody id="search-rows"></tbody>
-        </table>
+        <div class="results-box" id="results-box">
+          <table class="results" id="search-results">
+            <tbody id="search-rows"></tbody>
+          </table>
+        </div>
+        <section class="route" id="route" aria-live="polite" hidden>
+          <h3 id="route-title"></h3>
+          <ol class="route-stops" id="route-stops"></ol>
+          <p class="note" id="route-none" hidden></p>
+        </section>
         <p class="more" id="search-more" hidden></p>
         <p class="search-credit" id="search-credit" hidden></p>
       </section>
