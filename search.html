@@ -29,7 +29,7 @@
     </label>
     <ul class="suggestions" id="suggestions" role="listbox" aria-label="Mobs" hidden></ul>
     <p class="none" id="no-match" hidden>No known mob has that in its name.</p>
-    <p class="keys">↑ ↓ choose · Enter picks · Esc closes · Enter with nothing typed clears the search</p>
+    <p class="keys">↑ ↓ choose a mob, or with nothing typed a map's route · Enter picks · Esc closes · Enter with nothing typed clears the search</p>
     <section class="picked" id="picked" hidden>
       <h2 id="picked-title"></h2>
       <p class="nearest" id="picked-nearest" hidden></p>
@@ -40,6 +40,11 @@
         </thead>
         <tbody id="result-rows"></tbody>
       </table>
+      <section class="route" id="route" aria-live="polite" hidden>
+        <h3 id="route-title"></h3>
+        <ol class="route-stops" id="route-stops"></ol>
+        <p class="note" id="route-none" hidden></p>
+      </section>
       <p class="credit" id="credit"></p>
     </section>
   </body>
