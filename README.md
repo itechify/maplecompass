@@ -53,7 +53,7 @@ A few maps share a title, such as the two Maple Road / Mushroom Town maps. If th
 
 Many map names differ only in a Roman numeral, such as Rocky Road I, II and III. The recogniser can't read the game font's "II" and "III", so MapleCompass counts their strokes. When a numeral still can't be made out, the panel picks the map the one you came from leads to, if it leads to just one of them; otherwise it says it isn't sure rather than guess.
 
-Inside, the panel keeps the spot you dragged it to relative to the game window. Docked, it follows the game window's outside edge, and goes inside when there is no room on screen. Detached, it is an ordinary window: drag it anywhere, such as onto another monitor, and it stays there.
+Inside, the panel keeps the spot you dragged it to relative to the game window. Docked, it follows the game window's outside edge, and goes inside when there is no room on screen. Detached, you can drag it anywhere, such as onto another monitor, and it stays there; it also gets a taskbar entry. Wherever it is placed, it stays just above the game window and never above an app in front of the game, and it disappears while the game is minimised.
 
 Settings, including the placement, the marked title, a hand-picked game window and the hotkeys, are saved in `%APPDATA%\com.itechify.maplecompass\settings.json`.
 
