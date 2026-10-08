@@ -37,9 +37,11 @@ const WINDOW_TICK: Duration = Duration::from_millis(50);
 const SAVE_DELAY: Duration = Duration::from_millis(500);
 /// The overlay's size in CSS px (logical); `src/styles.css` lays out to fit. The
 /// expanded panel's height follows its content, as the overlay reports it; the core
-/// keeps it within the space where the panel is placed.
+/// keeps it within the space where the panel is placed. It is never taller than
+/// [`MAX_EXPANDED_HEIGHT`]: past that the route or the map list scrolls.
 const EXPANDED: (f64, f64) = (380.0, 72.0);
 const MIN_EXPANDED_HEIGHT: f64 = 44.0;
+const MAX_EXPANDED_HEIGHT: f64 = 600.0;
 const COLLAPSED: (f64, f64) = (44.0, 44.0);
 /// A drag has ended once the overlay hasn't moved for this long since it started or last
 /// moved (Windows' move loop tells the page nothing when the mouse is let go): then the
@@ -285,7 +287,7 @@ fn compass_loop(
                 compass.search_pick(&id);
             }
             Ok(Command::PanelHeight(height)) => {
-                expanded.1 = height.max(MIN_EXPANDED_HEIGHT);
+                expanded.1 = height.clamp(MIN_EXPANDED_HEIGHT, MAX_EXPANDED_HEIGHT);
                 set_panel_sizes(&mut compass, &window.overlay, expanded);
             }
             Ok(Command::DragStarted) => window.drag_started(),

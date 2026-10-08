@@ -323,7 +323,14 @@ function renderHunting(panel: PanelState) {
   hunting.hidden = !target;
   if (!target) return;
   const { mob, map } = target;
-  huntingTitle.textContent = `${mob.name} · ${map.mapName}`;
+  // The mob on the first line, the map on the next.
+  const mobLine = document.createElement("span");
+  mobLine.className = "hunting-mob";
+  mobLine.textContent = mob.name;
+  const mapLine = document.createElement("span");
+  mapLine.className = "hunting-map";
+  mapLine.textContent = map.mapName;
+  huntingTitle.replaceChildren(mobLine, mapLine);
   huntingTitle.title = `${mob.name} (Lv ${mob.level}) on ${map.streetName}: ${map.mapName}`;
   const tier = byId("hunting-tier");
   tier.textContent = TIER_NAMES[map.tier];
