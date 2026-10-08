@@ -11,6 +11,8 @@ mod map_data;
 mod map_index;
 mod matcher;
 pub mod meowdb;
+mod mob_card;
+mod pace;
 mod panel;
 mod portal_overrides;
 mod portals;
@@ -32,6 +34,7 @@ pub use map_data::{
     Portal, PortalKind,
 };
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
+pub use mob_card::{DamageRange, Elements, HpPerExp, MobCard, MobDetails, MobPage};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 pub use panel::{
     Action, DEFAULT_PANEL_WIDTH, Foreground, GameWindow, InsideOffset, Layer, MIN_PANEL_WIDTH, PanelSizes,
@@ -52,6 +55,8 @@ use crawl::Crawl;
 use search::{MobSearch, Searched};
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
+use mob_card::MobCards;
+use pace::Pace;
 use panel::Panel;
 use session::Session;
 use setup::Setup;
@@ -113,6 +118,10 @@ pub struct CurrentMap {
 /// The credit for everything MapleCompass shows from MeowDB (ADR 0003).
 pub const MEOWDB_CREDIT: &str = "NiaMeowDB (meowdb.com)";
 
+/// The panel's credit when it lists mobs: their Mob Cards show images from maplestory.io
+/// (ADR 0006).
+pub const MEOWDB_AND_IMAGES_CREDIT: &str = "NiaMeowDB (meowdb.com) · images: maplestory.io";
+
 /// Whether minimap titles can be recognised as real maps.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
@@ -149,8 +158,11 @@ pub struct PanelState {
     /// The shown map's Map Summary, mobs and Hidden Portals from MeowDB, or why they
     /// aren't there.
     pub data: MapDataStatus,
-    /// [`MEOWDB_CREDIT`] whenever a map is shown: its names and data are MeowDB's.
+    /// [`MEOWDB_CREDIT`] whenever a map is shown: its names and data are MeowDB's; with
+    /// Mob Cards, [`MEOWDB_AND_IMAGES_CREDIT`].
     pub credit: Option<&'static str>,
+    /// The Mob Card of each mob the panel lists, in its order; empty while it lists none.
+    pub mob_cards: Vec<MobCard>,
     /// Expanded to the full panel, or collapsed to a small icon.
     pub expanded: bool,
     /// A visible game window was found (not minimised).
@@ -204,7 +216,8 @@ pub struct PanelState {
 /// What a hotkey asks the shell to do at once, beyond rendering the panel state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
-    /// Open this page in the player's browser (the open-page hotkey).
+    /// Open this page in the player's browser (the open-page hotkey, or a click on a
+    /// listed mob's name).
     OpenInBrowser { url: String },
     /// Bring the overlay, with the search view already open, back in front (the search
     /// hotkey): the game may have come in front of it. Our own window only (ADR 0001).
@@ -258,6 +271,10 @@ pub struct Compass {
     shown_map: ShownMap,
     /// The world crawl, from when the map index arrives.
     crawl: Option<Crawl>,
+    /// The listed mobs' pages and images, for their Mob Cards.
+    mob_cards: MobCards,
+    /// MeowDB's pace, kept by the crawl and the Mob Cards' pages together.
+    meowdb_pace: Pace,
     /// What the player typed, highlighted and picked in mob search.
     search: MobSearch,
     panel: Panel,
@@ -282,6 +299,8 @@ impl Compass {
             tracker: Tracker::default(),
             shown_map: ShownMap::default(),
             crawl: None,
+            mob_cards: MobCards::default(),
+            meowdb_pace: Pace::default(),
             search: MobSearch::default(),
             panel: Panel::default(),
             setup: Setup::default(),
@@ -385,7 +404,11 @@ impl Compass {
             self.sync_search();
         }
         self.state.candidates = self.shown_map.candidates();
-        self.state.credit = self.state.map.as_ref().map(|_| MEOWDB_CREDIT);
+        let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
+        self.mob_cards.list(listed);
+        self.state.mob_cards = self.mob_cards.cards();
+        let credit = if self.state.mob_cards.is_empty() { MEOWDB_CREDIT } else { MEOWDB_AND_IMAGES_CREDIT };
+        self.state.credit = self.state.map.as_ref().map(|_| credit);
     }
 
     /// The game window moved, resized, appeared or went away (`None`: not found, or
@@ -568,6 +591,13 @@ impl Compass {
         None
     }
 
+    /// The player clicked a listed mob's name in the panel: open its MeowDB page. `None`
+    /// for a mob the panel doesn't list.
+    pub fn open_mob_page(&self, id: &str) -> Option<Request> {
+        let card = self.state.mob_cards.iter().find(|card| card.id == id)?;
+        Some(Request::OpenInBrowser { url: card.url.clone() })
+    }
+
     /// Another window came to the front. The hotkeys are live while the game or one of
     /// our windows is in front, and nowhere else.
     pub fn on_foreground(&mut self, foreground: Foreground) -> &PanelState {
@@ -637,10 +667,13 @@ impl Compass {
         if self.matcher.is_some() {
             self.shown_map.poll(&mut *self.source);
             self.sync_shown_map();
+            // Once the shown map's page lists its mobs.
+            self.mob_cards.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
+            self.state.mob_cards = self.mob_cards.cards();
         }
-        // After the shown map, which never waits for the crawl.
-        if let Some(crawl) = &mut self.crawl {
-            crawl.poll(&mut *self.source, at_ms);
+        // After the shown map, which never waits for the crawl, and its listed mobs' pages.
+        if let Some(crawl) = self.crawl.as_mut().filter(|_| !self.mob_cards.wants_meowdb(at_ms)) {
+            crawl.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
             // Search covers the maps known so far: redone as the crawl learns more.
             if crawl.progress() != self.state.search.crawl {
                 self.sync_search();
