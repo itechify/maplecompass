@@ -2,6 +2,8 @@
 //! serving MeowDB's saved map index and map pages (personal-use test data, ADR 0003).
 #![allow(dead_code)]
 
+pub mod world;
+
 use compass_core::{
     Compass, Fetched, Frame, MapData, MapDataSource, MapEntry, PanelState, Rect, ScreenRect, Size,
     SourceError, TitleRegion, default_title_region, meowdb,
@@ -145,6 +147,14 @@ pub struct FakeSource {
     pages: Box<dyn FnMut(&str) -> PageAnswer + Send>,
     /// The map ID of every map data request, in order.
     pub map_requests: Arc<Mutex<Vec<String>>>,
+    /// The map ID of every crawl fetch started, in order: a crawl request for a map
+    /// whose fetch is still in flight checks on it and isn't logged again.
+    pub crawl_requests: Arc<Mutex<Vec<String>>>,
+    /// Crawl answers aren't in the cache: each arrives only on the poll after its fetch
+    /// started, as from the network.
+    crawl_uncached: bool,
+    /// The crawl fetch in flight, and its answer once it has arrived.
+    crawl_in_flight: Option<(String, Option<Result<MapData, SourceError>>)>,
     /// MeowDB is unreachable and the answers are copies saved at this time (ms since the
     /// Unix epoch); `None`: they are fresh.
     saved_at: Option<u64>,
@@ -157,6 +167,9 @@ impl FakeSource {
             index_requests: Arc::default(),
             pages: Box::new(|id| Poll::Ready(read_saved_page(id))),
             map_requests: Arc::default(),
+            crawl_requests: Arc::default(),
+            crawl_uncached: false,
+            crawl_in_flight: None,
             saved_at: None,
         }
     }
@@ -214,6 +227,13 @@ impl FakeSource {
         })
     }
 
+    /// Crawl answers come over the network, not from the cache: each arrives on the
+    /// poll after its fetch started. (By default the crawl is answered at once, as from
+    /// the cache.)
+    pub fn crawling_uncached(self) -> Self {
+        Self { crawl_uncached: true, ..self }
+    }
+
     pub fn with_index(index: Vec<MapEntry>) -> Self {
         Self::answering(vec![Poll::Ready(Ok(index))])
     }
@@ -243,6 +263,18 @@ fn unreachable() -> SourceError {
     SourceError::Unreachable("offline".into())
 }
 
+/// A small index of `n` made-up maps ("100000000", "100000001", …) on one street.
+pub fn made_up_index(n: usize) -> Vec<MapEntry> {
+    (0..n)
+        .map(|i| MapEntry {
+            id: format!("{:09}", 100_000_000 + i),
+            street_name: "Made-up Street".into(),
+            map_name: format!("Made-up Map {i}"),
+            region: "Victoria Island".into(),
+        })
+        .collect()
+}
+
 /// How many map data requests a [`FakeSource`] had for map `id`.
 pub fn requests_for(requests: &Mutex<Vec<String>>, id: &str) -> usize {
     requests.lock().unwrap().iter().filter(|r| *r == id).count()
@@ -265,6 +297,29 @@ impl MapDataSource for FakeSource {
     fn map_data(&mut self, id: &str) -> Poll<Result<Fetched<MapData>, SourceError>> {
         self.map_requests.lock().unwrap().push(id.to_string());
         let answer = (self.pages)(id);
+        self.fetched(answer)
+    }
+
+    /// Answered from the same pages as [`FakeSource::map_data`], but logged in
+    /// `crawl_requests`.
+    fn crawl_data(&mut self, id: &str) -> Poll<Result<Fetched<MapData>, SourceError>> {
+        let answer = match self.crawl_in_flight.take() {
+            Some((asked, Some(arrived))) if asked == id => Poll::Ready(arrived),
+            Some((asked, None)) if asked == id => (self.pages)(id),
+            _ => {
+                self.crawl_requests.lock().unwrap().push(id.to_string());
+                match (self.pages)(id) {
+                    Poll::Ready(arrived) if self.crawl_uncached => {
+                        self.crawl_in_flight = Some((id.to_string(), Some(arrived)));
+                        return Poll::Pending;
+                    }
+                    answer => answer,
+                }
+            }
+        };
+        if answer.is_pending() {
+            self.crawl_in_flight = Some((id.to_string(), None));
+        }
         self.fetched(answer)
     }
 }

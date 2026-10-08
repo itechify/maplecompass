@@ -69,5 +69,34 @@ How many of a given mob a map holds at once.
 **Spawn Share**:
 A mob's spawn count as a fraction of all mob spawns on the map.
 
+**Mob Rate**:
+A map's multiplier on how fast its mobs respawn (e.g. 0.5x, 1.6x).
+
+**Density**:
+How many of a given mob a player can kill on a map: its spawn count times the map's mob rate. A map with more of the mob, or that refills faster, is denser for that mob.
+_Avoid_: spawn rate, mob density (when meaning spawn share)
+
+**Density Tier**:
+High, Medium or Low: how a map's density for a mob compares with that mob's densest map (High from two-thirds of it, Medium from one-third).
+
+**Distance**:
+The fewest map changes it takes to get from the player's current map to another map. A map change is going through a portal (but not a Quest Portal) or a ship ride, and, if the player has turned them on, a taxi ride or a Teleport Scroll. MapleCompass knows only which map the player is on, never where on it they stand.
+_Avoid_: position, proximity
+
+**Hunting Target**:
+The mob and map the player picked from a mob search to go and hunt. MapleCompass shows the way there from the player's current map until they arrive or clear it.
+_Avoid_: destination, waypoint, goal
+
+**Ship**:
+An NPC-run crossing between regions (e.g. Ellinia, on Victoria Island, to Orbis, in Ossyria). The only way to reach Ossyria, so it always counts as a map change.
+
+**Taxi**:
+An NPC who carries the player between towns for mesos.
+_Avoid_: cab
+
+**Teleport Scroll**:
+An item that moves the player from any map to a town: either the map's own nearest town, or a named town.
+_Avoid_: return scroll, portal scroll
+
 **Map Summary**:
 The hunting figures for a map as a whole, such as the EXP-per-hour ceiling and mobs killed per hour by party size.

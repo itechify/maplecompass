@@ -1,5 +1,5 @@
-//! First-run setup windows. The overlay can't take input (it is click-through and
-//! never takes focus), so setup has its own normal window, plus a "region" window laid
+//! First-run setup windows. The overlay never takes focus on a click and has no room
+//! for setup, so setup has its own normal window, plus a "region" window laid
 //! over the game's client area where the player marks the Title Region. Both are
 //! declared hidden in `tauri.conf.json`: creating windows inside commands can deadlock
 //! on Windows. Every decision is the core's; this only shows windows and relays.
@@ -9,6 +9,7 @@
 //! ignores our own windows.
 
 use crate::gamewin;
+use crate::view::{LastView, ViewSender};
 use crate::Command;
 use compass_core::{Action, Hotkeys, PanelState, Recognition, Rect, ScreenRect, SelectionDirection, SetupState};
 use serde::Serialize;
@@ -27,7 +28,7 @@ pub struct Bridge {
     /// The game's client area as last found, where the region window goes.
     pub game: Mutex<Option<ScreenRect>>,
     /// The last view sent to the setup window, for when it loads after it was sent.
-    pub view: Mutex<Option<serde_json::Value>>,
+    pub view: LastView,
 }
 
 /// What the setup window renders.
@@ -59,8 +60,8 @@ pub struct SetupWindows {
     shown: bool,
     region_client: Option<ScreenRect>,
     settings_path: String,
-    /// The last view sent to the setup window.
-    emitted: Option<serde_json::Value>,
+    /// Sends the setup window its view.
+    view: ViewSender,
 }
 
 impl SetupWindows {
@@ -79,7 +80,8 @@ impl SetupWindows {
         });
         Ok(Self {
             app: app.clone(), setup, shown: false, region_client: None,
-            settings_path: crate::settings::path(app)?.display().to_string(), emitted: None,
+            settings_path: crate::settings::path(app)?.display().to_string(),
+            view: ViewSender::new(SETUP, "setup-state"),
         })
     }
 
@@ -135,17 +137,9 @@ impl SetupWindows {
             settings_path: &self.settings_path,
             unavailable_hotkeys: &state.unavailable_hotkeys,
         };
-        // Only send changes: the loop wakes up 20 times a second.
-        let Ok(view) = serde_json::to_value(&view) else { return };
-        if self.emitted.as_ref() == Some(&view) {
-            return;
+        if self.view.send(&self.app, &view, &self.app.state::<Bridge>().view) {
+            let _ = self.app.emit_to(REGION, "selection-state", &state.setup.selection);
         }
-        if let Err(e) = self.app.emit_to(SETUP, "setup-state", &view) {
-            eprintln!("emit failed: {e}");
-        }
-        let _ = self.app.emit_to(REGION, "selection-state", &state.setup.selection);
-        *self.app.state::<Bridge>().view.lock().unwrap() = Some(view.clone());
-        self.emitted = Some(view);
     }
 }
 
@@ -164,7 +158,7 @@ fn focus_setup(app: &AppHandle) {
 /// What the setup window renders, as last sent (`None` before the first).
 #[tauri::command]
 pub async fn setup_view(bridge: State<'_, Bridge>) -> Result<Option<serde_json::Value>, String> {
-    Ok(bridge.view.lock().unwrap().clone())
+    Ok(bridge.view.get())
 }
 
 /// Take the window under the mouse pointer as the game window.

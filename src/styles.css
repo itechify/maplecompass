@@ -8,9 +8,13 @@ body {
   cursor: default;
 }
 
-/* As tall as its content: the overlay reports this height and the window fits it. */
+/* As tall as its content: the overlay reports this height and the window fits it, up to
+   600 px (MAX_EXPANDED_HEIGHT in the shell) or the space where the panel is placed,
+   whichever is less. Then it is as tall as the window, and its long part scrolls. */
 .panel {
   box-sizing: border-box;
+  max-height: 100vh;
+  overflow: hidden;
   padding: 10px 14px;
   border-radius: 10px;
   background: rgba(16, 24, 36, 0.82);
@@ -48,6 +52,12 @@ body {
 
 .note.problem {
   color: #f0c674;
+}
+
+/* Background progress: present, but quieter than a status note. */
+.panel .note.crawl {
+  font-size: 12px;
+  color: #9fb6cc;
 }
 
 /* The maps sharing the title, each with what sets it apart; the shown one marked. */
@@ -200,6 +210,355 @@ td:first-child {
   text-transform: uppercase;
 }
 
+/* The panel's header: the current map, and a row of icons, one per hotkey action (🔍
+   search, ⇆ next candidate, ↗ MeowDB, ⧉ placement, ? help & setup, – collapse). The
+   player drags the panel by it (inside or detached), never by an icon. */
+.drag-handle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.drag-handle .where {
+  flex: 1;
+  min-width: 0;
+}
+
+.toolbar {
+  flex: none;
+  display: flex;
+  gap: 4px;
+}
+
+/* A small secondary button (🔍, ×, ←): transparent, with a Slate border. */
+.icon-button {
+  flex: none;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #3a4a5c;
+  border-radius: 6px;
+  background: transparent;
+  color: #f2f5f8;
+  font: 13px/1 "Segoe UI", "Segoe UI Emoji", system-ui, sans-serif;
+  cursor: default;
+}
+
+#hunting-clear,
+#search-back {
+  font-size: 16px;
+}
+
+.icon-button:hover {
+  background: rgba(242, 245, 248, 0.08);
+}
+
+.panel :focus-visible {
+  outline: 2px solid #f5c542;
+  outline-offset: 3px;
+}
+
+/* The long parts (the route, the suggestions, the map list) scroll once the panel is as
+   tall as the space where it is placed; the rest keeps its height. */
+.view > *,
+.step > *,
+.hunting > * {
+  flex-shrink: 0;
+}
+
+.scroll,
+.view > .step,
+.view > .hunting {
+  flex: 0 1 auto;
+  min-height: 0;
+}
+
+.scroll {
+  overflow-y: auto;
+  scrollbar-color: #9fb6cc transparent;
+}
+
+/* The Hunting section: its own section at the bottom of the normal view, divided from
+   the current map's info by a Slate rule, headed by the Hunting Target's mob and map. */
+.hunting {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid #3a4a5c;
+}
+
+.section-head,
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hunting h2,
+.search-view h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hunting h2 .hunting-mob,
+.hunting h2 .hunting-map {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hunting h2 .hunting-map {
+  font-weight: 400;
+  color: #9fb6cc;
+}
+
+.search-view h2 .level {
+  margin-left: 6px;
+  font-weight: 400;
+  color: #9fb6cc;
+}
+
+/* Tier, Density, Share and Distance side by side, labels above figures. */
+.figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.figures dt {
+  color: #9fb6cc;
+}
+
+.figures dd {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.figures dd:not(.tier) {
+  font-weight: 600;
+}
+
+.route-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The route there: each map in turn, with how it's reached, in an inset, bordered box. */
+.route-stops {
+  margin: 0;
+  padding: 4px 10px;
+  list-style: none;
+  font-size: 12px;
+  border: 1px solid #2a3846;
+  border-radius: 8px;
+  background: rgba(16, 24, 36, 0.9);
+}
+
+.route-stops li {
+  display: grid;
+  grid-template-columns: 6.5em 1fr;
+  column-gap: 8px;
+  padding: 1px 0;
+}
+
+.route-stops .step {
+  color: #9fb6cc;
+  text-align: right;
+}
+
+/* Anything but a portal is worth noticing on the way: by text emphasis alone, like the
+   tiers, since the accent is kept for actions. */
+.route-stops .step.ship,
+.route-stops .step.taxi,
+.route-stops .step.teleportScroll {
+  color: #f2f5f8;
+  font-weight: 600;
+}
+
+.route-stops .route-map,
+.route-stops .route-street {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-stops .route-street {
+  grid-column: 2;
+  color: #9fb6cc;
+}
+
+.search-credit {
+  font-size: 12px;
+  color: #c3ccd6;
+}
+
+/* The search view takes over the whole panel: the query box and its suggestions, then
+   the picked mob's map list. */
+.view {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.search-view .step {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* The query box: the app's one text field. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field .label {
+  font-size: 12px;
+  color: #9fb6cc;
+}
+
+.field input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #3a4a5c;
+  border-radius: 6px;
+  background: rgba(16, 24, 36, 0.9);
+  color: #f2f5f8;
+  font: 14px "Segoe UI", system-ui, sans-serif;
+  user-select: text;
+}
+
+.field input::placeholder {
+  color: #9fb6cc;
+}
+
+/* The suggestions, in the panel's flow below the query box. */
+.suggestions {
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid #2a3846;
+  border-radius: 8px;
+  background: rgba(16, 24, 36, 0.9);
+  font-size: 13px;
+}
+
+.suggestions li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 1px 8px;
+  border-radius: 3px;
+  color: #9fb6cc;
+}
+
+.suggestions li:hover,
+.results tbody tr:hover td {
+  background: rgba(242, 245, 248, 0.06);
+}
+
+/* The one Enter picks. */
+.suggestions li.current {
+  background: rgba(245, 197, 66, 0.12);
+  color: #f2f5f8;
+  font-weight: 600;
+}
+
+.suggestions .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggestions .level {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+
+.panel .keys {
+  white-space: normal;
+  font-size: 12px;
+  color: #9fb6cc;
+}
+
+/* The travel toggles: what else Distance counts besides portals and ships. */
+.travel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 12px;
+}
+
+.travel legend {
+  float: left;
+  padding: 0;
+  color: #9fb6cc;
+}
+
+.travel label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.travel input {
+  margin: 0;
+  accent-color: #f5c542;
+}
+
+/* The map list (the table itself is in results.css). It takes the keys, but its
+   highlight shows where they act, not a focus ring. */
+.results-box:focus {
+  outline: none;
+}
+
+.results thead th {
+  position: sticky;
+  top: 0;
+  background: rgb(19, 27, 39);
+}
+
+/* The map Enter makes the Hunting Target. */
+.results tr.current td {
+  background: rgba(245, 197, 66, 0.12);
+}
+
+.results tr.current .result-map {
+  font-weight: 600;
+}
+
+/* The nearest map with the mob, whatever its tier. */
+.search-view .nearest {
+  margin: 0;
+  font-size: 12px;
+}
+
 footer {
   font-size: 12px;
   color: #c3ccd6;
@@ -211,12 +570,10 @@ footer {
   overflow-wrap: anywhere;
 }
 
-#help-hint { flex-basis: 100%; }
 
 .map-line { display: flex; align-items: baseline; gap: 6px; }
 .map-line .map { min-width: 0; }
 #uncertainty { flex: none; color: #f0c674; font-size: 17px; }
-.panel #edit-hint { color: #f5c542; }
 
 .street {
   font-size: 12px;
@@ -258,10 +615,10 @@ footer {
   display: block;
 }
 
-/* Draggable (edit mode inside the game, or detached): the overlay takes the mouse and
-   can be dragged anywhere on it. */
-.draggable,
-.draggable * {
+/* Draggable (inside the game, or detached): the header, or the collapsed icon, moves the panel. */
+.draggable .icon,
+.draggable .drag-handle,
+.draggable .drag-handle :not(button) {
   cursor: move;
 }
 
@@ -269,16 +626,6 @@ footer {
 .hidden .panel,
 .hidden .icon {
   display: none;
-}
-
-.editing .panel,
-.editing .icon {
-  outline: 2px dashed #f5c542;
-  outline-offset: -2px;
-}
-
-.editing .street {
-  color: #f5c542;
 }
 
 /* Increased text scale can leave less inline space in the fixed-width window. */
