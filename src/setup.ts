@@ -63,7 +63,7 @@ function show(next: Step) {
 
 function move(by: number) {
   if (step === "guide") return;
-  // Back from EXP tracking after keeping the title goes to the title, not its test read.
+  // Back from the Grind Tracker after keeping the title goes to the title, not its test read.
   if (step === "exp" && by < 0 && !view?.setup.testRead) return show("mark");
   show(STEPS[Math.min(Math.max(STEPS.indexOf(step) + by, 0), STEPS.length - 1)]);
 }
@@ -79,7 +79,7 @@ const NOTICES: Record<SetupReason, string> = {
   resolutionChanged:
     "The game window changed size since setup, so the minimap title and the EXP bar have probably moved. Mark them again.",
   requested:
-    "Mark the minimap title again, or keep it and change EXP tracking. Until you finish, MapleCompass keeps reading the old spots.",
+    "Mark the minimap title again, or keep it and change the Grind Tracker. Until you finish, MapleCompass keeps reading the old spots.",
 };
 
 function render() {
@@ -140,10 +140,10 @@ function render() {
   ($("title-next") as HTMLButtonElement).disabled = read?.status !== "recognised";
   $("test-credit").textContent = setup.credit ? `Map names from ${setup.credit}` : "";
 
-  // EXP tracking: kept from before, it can be marked again, kept as it is or turned off.
+  // The Grind Tracker: kept from before, it can be marked again, kept as it is or turned off.
   const kept = setup.expBarKept;
   $("exp-status").textContent = kept
-    ? "EXP tracking is on. Mark the EXP bar again, keep it as it is, or turn tracking off."
+    ? "The Grind Tracker is on. Mark the EXP bar again, keep it as it is, or turn it off."
     : "You can skip this and turn it on later.";
   $("exp-off").hidden = !kept;
   $("exp-skip").textContent = kept ? "Keep and finish" : "Skip";

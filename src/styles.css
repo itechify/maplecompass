@@ -424,7 +424,7 @@ h2 {
   color: var(--ink-2);
 }
 
-/* EXP tracking: Time to Level over the rates, one line per figure, so the panel's
+/* The Grind Tracker: Time to Level over the rates, one line per figure, so the panel's
    height only changes when a line comes or goes. */
 .tracking {
   display: flex;
