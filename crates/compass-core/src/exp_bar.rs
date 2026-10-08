@@ -72,7 +72,10 @@ fn consistent(bar: ExpBar) -> bool {
 }
 
 /// The digits of a figure as ocrs read it, with the letters it mistakes for digits in
-/// this font put right. `None` if anything else is in it.
+/// this font put right. `None` if anything else is in it. Both figures are whole
+/// numbers of digits, so a point or comma in one is only a separator: the EXP's
+/// thousands comma ("8,435"), which ocrs reads as a point at this size, or the
+/// percentage's decimal point.
 fn digits(text: &str) -> Option<String> {
     let mut out = String::new();
     for c in text.chars() {
@@ -80,7 +83,7 @@ fn digits(text: &str) -> Option<String> {
             '0'..='9' => out.push(c),
             'O' | 'o' | 'D' => out.push('0'),
             'l' | 'I' | '|' | 'i' => out.push('1'),
-            ' ' | ',' => {}
+            ' ' | ',' | '.' => {}
             _ => return None,
         }
     }
@@ -90,8 +93,7 @@ fn digits(text: &str) -> Option<String> {
 /// Hundredths of a percent from "3.81%": the digits before the "%". The point may be
 /// lost (it is one pixel square); the two decimals never are.
 fn percent(text: &str) -> Option<u32> {
-    let figure = text.trim().trim_end_matches(['%', ')', ']']).replace('.', "");
-    let digits = digits(&figure)?;
+    let digits = digits(text.trim().trim_end_matches(['%', ')', ']']))?;
     (digits.len() >= 3).then(|| digits.parse().ok()).flatten()
 }
 
