@@ -67,7 +67,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 9px;
-  padding-bottom: 10px;
+  /* Clear of the 14px corner grips, so the last line never sits beside one. */
+  padding-bottom: 16px;
   text-shadow:
     0 0 1px rgba(238, 242, 255, 0.9),
     0 0 3px rgba(238, 242, 255, 0.75);
