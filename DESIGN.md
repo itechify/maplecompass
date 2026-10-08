@@ -21,7 +21,6 @@ colors:
   secondary-border: "#3a4a5c"
   inset-border: "#2a3846"
   accent-ink: "#1b1405"
-  icon: "#0891b2"
 typography:
   headline:
     fontFamily: '"Segoe UI", system-ui, sans-serif'
@@ -198,7 +197,7 @@ The palette combines Midnight Slate and cool light text with Compass Gold for co
 - **Slate borders** (`secondary-border`, `inset-border`): outlined secondary buttons and the test-read container.
 - **Marking scrim** (`scrim`): the dim layer across the game while marking the Title Region.
 
-The existing icon uses `icon` turquoise and white artwork from [assets/icon.svg](assets/icon.svg). Turquoise belongs to that identity asset; it is not the setup action color.
+The app icon is the pixel-art gold compass in [assets/icon.png](assets/icon.png). It is artwork, not a palette source: its colors are not interface tokens.
 
 **The Accent Has a Job Rule.** Use Compass Gold for the existing action and marking roles. Keep recognition, uncertainty, and Quest signals in their own established status tones.
 
@@ -302,7 +301,7 @@ The panel is never taller than the space where it is placed. When its content is
 
 ### App icon
 
-Use the existing SVG and packaged icons. The setup header displays the icon at a small size (28 × 28px); collapsed mode fills its window and applies reduced opacity (0.85). The turquoise identity asset remains distinct from Compass Gold controls.
+Use [assets/icon.png](assets/icon.png) and the packaged icons in `src-tauri/icons`, all generated from the same square, transparent compass artwork. The setup header displays the icon at a small size (28 × 28px); collapsed mode fills its window and applies reduced opacity (0.85).
 
 The app has no existing web navigation component, tooltip system, or custom animation vocabulary to extract.
 
@@ -319,7 +318,7 @@ The app has no existing web navigation component, tooltip system, or custom anim
 
 ### Don't:
 
-- **Don't** substitute the icon's turquoise for the Compass Gold action accent.
+- **Don't** sample interface colors from the app icon artwork.
 - **Don't** turn descriptive portal tags or Candidate rows into controls without an explicit interaction change.
 - **Don't** ellipsize status explanations using the name-row clipping treatment.
 - **Don't** describe shadows, blur, hover animation, or mobile breakpoints as established parts of this system.
