@@ -442,6 +442,15 @@ impl Compass {
             Action::CancelSelection => self.setup.cancel_selection(),
             Action::FinishSetup => self.setup.finish(),
             Action::RequestSetup => self.setup.request(),
+            Action::LaunchedAgain => {
+                if self.setup.state().window_open {
+                    // Setup shows already.
+                } else if self.panel.layer() != Layer::Hidden {
+                    self.panel.expanded = true;
+                } else {
+                    self.setup.request();
+                }
+            }
             Action::CancelSetup => {
                 self.state.quit |= self.setup.state().needed == Some(SetupReason::FirstRun);
                 self.setup.cancel();

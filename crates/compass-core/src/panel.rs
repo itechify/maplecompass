@@ -91,6 +91,10 @@ pub enum Action {
     FinishSetup,
     /// The player wants to redo setup (the re-setup hotkey).
     RequestSetup,
+    /// The player started MapleCompass again while it runs; only one runs at a time, so
+    /// this one shows itself: the panel, expanded, wherever it can show; setup
+    /// otherwise. An open setup window stays as it is (the shell brings it in front).
+    LaunchedAgain,
     /// The player closed setup without finishing it. On the first run that quits
     /// (`PanelState::quit`): there is nothing to read without a Title Region.
     CancelSetup,
