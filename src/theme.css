@@ -1,0 +1,39 @@
+/* The game's own window language (the minimap and the Quest Helper), shared by every
+   MapleCompass window: a light lavender body under a steel-blue title bar, navy text,
+   the map name in white lettering with a navy outline, and the minimap's blue portal
+   ring. Game orange only for doubt and problems. See DESIGN.md. */
+:root {
+  --font: Arial, "Segoe UI", system-ui, sans-serif;
+  --ink: #1b2648;
+  --ink-2: #44527a;
+  --ink-3: #505c7d;
+  --body: rgba(234, 232, 245, 0.95);
+  /* The same lavender, opaque, for windows that aren't laid over the game. */
+  --body-solid: #eae8f5;
+  --frame: #3e527c;
+  --bar: linear-gradient(180deg, #dfe8f7 0%, #b4c6e6 48%, #94abd6 100%);
+  --bar-hairline: #2e4170;
+  --street: #1d2b52;
+  --outline: #22325a;
+  /* White lettering outlined in navy, as the minimap draws its title. Map names only. */
+  --lettering:
+    -1px -1px 0 var(--outline), 0 -1px 0 var(--outline), 1px -1px 0 var(--outline),
+    -1px 0 0 var(--outline), 1px 0 0 var(--outline), -1px 1px 0 var(--outline),
+    0 1px 0 var(--outline), 1px 1px 0 var(--outline), 0 2px 2px rgba(20, 30, 60, 0.35);
+  --portal: #1f63d6;
+  --portal-fill: #eef5ff;
+  --portal-inner: #8db3ee;
+  --mob: #d8342a;
+  --mob-edge: #8e1c15;
+  --select: #d3def3;
+  --select-edge: #98afda;
+  --tag-bg: #dae3f3;
+  --tag-edge: #a3b6d8;
+  --tag-ink: #284a86;
+  --orange: #f08a1c;
+  --orange-deep: #b85e00;
+  --problem-bg: #fff1dc;
+  --problem-edge: #e5a04f;
+  --problem-ink: #6b3500;
+  --edit: #2f63c8;
+}
