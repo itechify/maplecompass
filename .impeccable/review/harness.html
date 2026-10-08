@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/results.css" />
     <title>Overlay review harness</title>
     <style>
       html {
@@ -37,7 +38,7 @@
     <div id="h"></div>
     <script type="module">
       const page = new DOMParser().parseFromString(await (await fetch("/index.html")).text(), "text/html");
-      document.body.prepend(page.getElementById("panel"), page.getElementById("icon"));
+      document.body.prepend(page.getElementById("panel"), page.getElementById("icon"), page.getElementById("badge"));
       await import("/src/main.ts");
       const mob = (name, level, hp, exp, share) => ({ name, level, hp, exp, spawnCount: 1, spawnSharePercent: share });
       const construction = {
@@ -57,7 +58,10 @@
         confidence: 96, notSure: false, candidates: null, data: construction,
         credit: "NiaMeowDB (meowdb.com)", expanded: true, editMode: false, gameFound: true,
         placementMode: "inside", layer: "aboveGame", draggable: false, setup: { needed: null },
-        hotkeys: { togglePanel: "super+alt+c", editMode: "super+alt+e", cyclePlacement: "super+alt+p", openMeowdbPage: "super+alt+o", setup: "super+alt+s", chooseCandidate: "super+alt+n" },
+        hotkeys: { togglePanel: "ctrl+shift+c", cyclePlacement: "ctrl+shift+p", openMeowdbPage: "ctrl+shift+m", setup: "ctrl+shift+s", chooseCandidate: "ctrl+shift+n", search: "ctrl+shift+f", resetSession: "ctrl+shift+r" },
+        hotkeysLive: true, expBarRegion: null, expBar: null,
+        expTracking: { state: "off", timeToLevelS: null, timeToLevelBadge: null, rolling: null, sessionAverage: null, ceilingShareHundredths: null, deaths: { count: 0, expLost: 0, percentLostHundredths: 0 } },
+        search: { view: null, query: "", suggestions: [], highlighted: null, picked: null, results: [], onlyOnEventMaps: false, highlightedResult: null, nearest: null, credit: null, crawl: { known: 0, total: 0, done: true }, travel: { taxis: false, teleportScrolls: false }, hunting: null },
         unavailableHotkeys: [], invalidHotkeys: [], gameWindowTitle: "MapleStory", ...over,
       });
       const mushroomTown = {
@@ -78,7 +82,7 @@
         normal: base(),
         ambiguous: base({ map: { id: "000000010", streetName: "Maple Road", mapName: "Mushroom Town", url: "" }, candidates: candidates(false, 0), data: mushroomTown }),
         notsure: base({ map: { id: "101010101", streetName: "Victoria Road", mapName: "The Tree That Grew II", url: "" }, notSure: true }),
-        offline: base({ data: { ...construction, status: "savedCopy", savedAtUnixMs: 1790812800000 }, unavailableHotkeys: ["super+alt+o", "super+alt+banana"], invalidHotkeys: ["super+alt+banana"] }),
+        offline: base({ data: { ...construction, status: "savedCopy", savedAtUnixMs: 1790812800000 }, unavailableHotkeys: ["ctrl+shift+m", "ctrl+shift+banana"], invalidHotkeys: ["ctrl+shift+banana"] }),
         reading: base({ map: null, data: { status: "noMap" } }),
         edit: base({
           editMode: true, draggable: true,
@@ -91,6 +95,21 @@
           data: { ...mushroomTown, hiddenPortals: [...mushroomTown.hiddenPortals, { name: "x", toMapId: "020000098", toMapName: "Orbis Tower <8th Floor>", toStreetName: "Orbis", toHiddenStreet: false, quest: false, position: "position unknown", spot: null }] },
         }),
         setup: base({ map: null, data: { status: "noMap" }, setup: { needed: "resolutionChanged" } }),
+        hunting: base({
+          expTracking: { state: "active", timeToLevelS: 2820, timeToLevelBadge: "47m", rolling: { expPerHour: 61200, percentPerHourHundredths: 1290 }, sessionAverage: { expPerHour: 58400, percentPerHourHundredths: 1230 }, ceilingShareHundredths: 2050, deaths: { count: 1, expLost: 120, percentLostHundredths: 210 } },
+          search: { view: null, query: "", suggestions: [], highlighted: null, picked: null, results: [], onlyOnEventMaps: false, highlightedResult: null, nearest: null, credit: "NiaMeowDB (meowdb.com)", crawl: { known: 312, total: 422, done: false }, travel: { taxis: true, teleportScrolls: false },
+            hunting: { mob: { id: "1210100", name: "Pig", level: 7 }, map: { mapId: "100030000", streetName: "Victoria Road", mapName: "Pig Beach", densityHundredths: 1450, spawnSharePercent: 62, tier: "high", distance: { mapChanges: 3 }, travel: ["taxi"],
+              route: [ { mapId: "a", streetName: "Victoria Road", mapName: "Construction Site North of Kerning City", by: null }, { mapId: "b", streetName: "Victoria Road", mapName: "Kerning City", by: "portal" }, { mapId: "c", streetName: "Victoria Road", mapName: "Lith Harbor", by: "taxi" }, { mapId: "d", streetName: "Victoria Road", mapName: "Pig Beach", by: "portal" } ] } } },
+        }),
+        search: base({
+          search: { view: "maps", query: "pig", suggestions: [], highlighted: null, picked: { id: "1210100", name: "Pig", level: 7 }, onlyOnEventMaps: false, highlightedResult: 1, nearest: 0, credit: "NiaMeowDB (meowdb.com)", crawl: { known: 422, total: 422, done: true }, travel: { taxis: true, teleportScrolls: false }, hunting: null,
+            results: [
+              { mapId: "1", streetName: "Victoria Road", mapName: "Henesys Hunting Ground I", densityHundredths: 900, spawnSharePercent: 40, tier: "medium", distance: { mapChanges: 2 }, travel: [], route: [] },
+              { mapId: "2", streetName: "Victoria Road", mapName: "Pig Beach", densityHundredths: 1450, spawnSharePercent: 62, tier: "high", distance: { mapChanges: 3 }, travel: ["taxi"], route: [] },
+              { mapId: "3", streetName: "Hidden Street", mapName: "Pig Park", densityHundredths: 500, spawnSharePercent: 20, tier: "low", distance: "questOnly", travel: [], route: [] },
+            ] } }),
+        searchmobs: base({
+          search: { view: "mobs", query: "sn", suggestions: [ { id: "100100", name: "Snail", level: 1 }, { id: "100101", name: "Blue Snail", level: 2 }, { id: "130101", name: "Red Snail", level: 4 } ], highlighted: 1, picked: null, onlyOnEventMaps: false, highlightedResult: null, nearest: null, credit: "NiaMeowDB (meowdb.com)", crawl: { known: 312, total: 422, done: false }, travel: { taxis: false, teleportScrolls: false }, hunting: null, results: [] } }),
         town: base({ map: { id: "010003000", streetName: "Victoria Road", mapName: "Kerning City", url: "" }, data: { status: "ready", summary: null, mobs: [], listedMobs: [], moreMobs: null, hiddenPortals: [] } }),
       };
       const s = new URLSearchParams(location.search).get("s") ?? "normal";

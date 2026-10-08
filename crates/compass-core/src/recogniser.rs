@@ -2,11 +2,12 @@
 //! boxes from our own mask and line split, so ocrs' detection model is not shipped.
 
 use crate::Frame;
-use crate::prep::{Numeral, Prepared, prepare};
-use image::RgbImage;
+use crate::prep::{Numeral, Prepared, Rect, prepare};
+use image::{GrayImage, RgbImage};
 use ocrs::{ImageSource, OcrEngine, OcrEngineParams, TextItem, TextLine};
 use rten::Model;
 use rten_imageproc::{RectF, RotatedRect};
+use std::sync::OnceLock;
 
 /// The bundled ocrs recognition model (CC-BY-SA-4.0, see `models/NOTICE.md`).
 static RECOGNITION_MODEL: &[u8] = include_bytes!("../models/text-recognition.onnx");
@@ -49,7 +50,7 @@ impl TitleReader {
     }
 }
 
-fn frame_to_rgb(frame: &Frame) -> Option<RgbImage> {
+pub(crate) fn frame_to_rgb(frame: &Frame) -> Option<RgbImage> {
     let (w, h) = (frame.width as usize, frame.height as usize);
     if frame.rgba.len() != w * h * 4 {
         return None;
@@ -58,19 +59,25 @@ fn frame_to_rgb(frame: &Frame) -> Option<RgbImage> {
     RgbImage::from_raw(frame.width, frame.height, rgb)
 }
 
-struct Recogniser {
-    engine: OcrEngine,
+/// The bundled engine, loaded on first use and shared by every reader.
+fn engine() -> &'static OcrEngine {
+    static ENGINE: OnceLock<OcrEngine> = OnceLock::new();
+    ENGINE.get_or_init(|| {
+        let model = Model::load(RECOGNITION_MODEL.to_vec()).expect("bundled recognition model loads");
+        OcrEngine::new(OcrEngineParams { recognition_model: Some(model), ..Default::default() })
+            .expect("ocrs engine builds")
+    })
+}
+
+/// The bundled recogniser: reads lines of black-on-white text at boxes we found.
+#[derive(Clone, Copy)]
+pub(crate) struct Recogniser {
+    engine: &'static OcrEngine,
 }
 
 impl Recogniser {
     pub fn bundled() -> Self {
-        let model = Model::load(RECOGNITION_MODEL.to_vec()).expect("bundled recognition model loads");
-        let engine = OcrEngine::new(OcrEngineParams {
-            recognition_model: Some(model),
-            ..Default::default()
-        })
-        .expect("ocrs engine builds");
-        Self { engine }
+        Self { engine: engine() }
     }
 
     /// Read the street line and the map line. `None` means unreadable.
@@ -79,12 +86,13 @@ impl Recogniser {
         self.read_prepared(&prepared)
     }
 
-    fn read_prepared(&self, p: &Prepared) -> Option<TitleLines> {
-        let (w, h) = p.canvas.dimensions();
-        let src = ImageSource::from_bytes(p.canvas.as_raw(), (w, h)).ok()?;
+    /// Read each line box (canvas coordinates) of a black-on-white canvas: one entry per
+    /// box, `None` where nothing was read. `None` overall if ocrs couldn't run.
+    pub fn read_lines(&self, canvas: &GrayImage, lines: &[Rect]) -> Option<Vec<Option<TextLine>>> {
+        let (w, h) = canvas.dimensions();
+        let src = ImageSource::from_bytes(canvas.as_raw(), (w, h)).ok()?;
         let input = self.engine.prepare_input(src).ok()?;
-        let boxes: Vec<Vec<RotatedRect>> = p
-            .lines
+        let boxes: Vec<Vec<RotatedRect>> = lines
             .iter()
             .map(|r| {
                 vec![RotatedRect::from_rect(RectF::from_tlhw(
@@ -95,7 +103,11 @@ impl Recogniser {
                 ))]
             })
             .collect();
-        let out = self.engine.recognize_text(&input, &boxes).ok()?;
+        self.engine.recognize_text(&input, &boxes).ok()
+    }
+
+    fn read_prepared(&self, p: &Prepared) -> Option<TitleLines> {
+        let out = self.read_lines(&p.canvas, &p.lines)?;
         let line = |i: usize| out.get(i).and_then(|l| l.as_ref());
         let street = line(0).map(|l| l.to_string().trim().to_string());
         let map = match (line(1), p.numeral) {

@@ -19,6 +19,19 @@ pub struct MapData {
     /// (the one the player came from is connected to the right one); not rendered.
     #[serde(skip_serializing)]
     pub connected_maps: Vec<String>,
+    /// Every portal to another map (not to the map itself or MeowDB's dead end), with
+    /// its kind, in MeowDB's order: the map's edges in the world's portal graph. Not
+    /// rendered.
+    #[serde(skip_serializing)]
+    pub portals: Vec<Portal>,
+    /// The map's Mob Rate in hundredths: 150 is a 1.5x respawn rate.
+    #[serde(skip_serializing)]
+    pub mob_rate_percent: u32,
+    /// The map's nearest town (MeowDB's `returnMap`), where a nearest-town Teleport
+    /// Scroll goes; a town's is itself. `None` when MeowDB gives the dead end. Not
+    /// rendered.
+    #[serde(skip_serializing)]
+    pub nearest_town: Option<String>,
     /// In the panel, the mobs it lists: the [`LISTED_MOBS`] with the largest spawn
     /// share, sorted as `mobs` is. From a source, empty.
     pub listed_mobs: Vec<Mob>,
@@ -35,6 +48,30 @@ pub const LISTED_MOBS: usize = 5;
 pub struct MoreMobs {
     pub count: usize,
     pub levels: LevelRange,
+}
+
+/// A portal from a map to another map.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Portal {
+    /// MeowDB's name for the portal on its map (e.g. `"in00"`).
+    pub name: String,
+    pub to_map_id: String,
+    pub kind: PortalKind,
+}
+
+/// What kind of portal it is, as the Hidden Portal rule and the portal overrides tell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PortalKind {
+    /// The player can see it: on the minimap, or a walk-into exit.
+    Visible,
+    /// A Hidden Portal that works for anyone.
+    Hidden,
+    /// A town's portal into a building, drawn into the scenery.
+    Door,
+    /// A Quest Portal: it only works while the player meets a quest condition.
+    Quest,
 }
 
 /// A portal to another map that is drawn neither on the minimap nor in the world.
@@ -93,6 +130,8 @@ pub struct PerParty {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Mob {
+    /// MeowDB's ID for the mob (e.g. `"3"`, Blue Snail): the same mob on every map.
+    pub id: String,
     pub name: String,
     pub level: u32,
     pub hp: u64,
@@ -136,6 +175,12 @@ impl MapDataStatus {
             Self::Ready(data) | Self::SavedCopy { data, .. } => Some(data),
             _ => None,
         }
+    }
+
+    /// The map's solo EXP-per-hour ceiling, from its Map Summary; `None` without data
+    /// or a Map Summary (a town).
+    pub fn solo_exp_ceiling(&self) -> Option<u64> {
+        self.data()?.summary.map(|s| s.exp_per_hour.solo)
     }
 }
 

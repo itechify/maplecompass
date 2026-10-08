@@ -288,15 +288,15 @@ fn a_chosen_candidate_holds_through_unreadable_frames_until_the_map_changes() {
     assert_eq!(candidates(state), coconut_candidates(0, false));
 }
 
-/// Settings from before this hotkey existed (or used Ctrl+Shift) get Win+Alt+N.
+/// Settings from before this hotkey existed (or from before Ctrl+Shift) get Ctrl+Shift+N.
 #[test]
-fn win_alt_n_shows_the_next_candidate_even_with_settings_from_before_it_existed() {
+fn ctrl_shift_n_shows_the_next_candidate_even_with_settings_from_before_it_existed() {
     let older = r#"{"version":1,"expanded":true,"hotkeys":{"togglePanel":"ctrl+shift+m","openMeowdbPage":"ctrl+shift+o"}}"#;
     let mut compass = Compass::new(coconut_harvests_that_differ());
     compass.restore(serde_json::from_str(older).unwrap());
     arrive(&mut compass, KERNING, 0);
 
-    compass.on_hotkey("super+alt+n");
+    compass.on_hotkey("ctrl+shift+n");
 
     assert_eq!(candidates(compass.panel_state()), coconut_candidates(1, true));
 }

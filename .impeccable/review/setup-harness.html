@@ -9,20 +9,21 @@
       const q = new URLSearchParams(location.search);
       const s = q.get("s") ?? "warning";
       const base = {
-        setup: { needed: "firstRun", testRead: null, credit: "NiaMeowDB (meowdb.com)" },
+        setup: { needed: "firstRun", testRead: null, credit: "NiaMeowDB (meowdb.com)", expBarTestRead: null, expBarKept: false },
         unavailableHotkeys: [],
         invalidHotkeys: [],
         recognition: { status: "ready" },
         game: { width: 1920, height: 1200 },
         gameTitle: "MapleStory",
-        setupHotkey: "super+alt+s",
+        hotkeys: { togglePanel: "ctrl+shift+c", cyclePlacement: "ctrl+shift+p", openMeowdbPage: "ctrl+shift+m", setup: "ctrl+shift+s", chooseCandidate: "ctrl+shift+n", search: "ctrl+shift+f", resetSession: "ctrl+shift+r" },
+        settingsPath: "%APPDATA%\com.itechify.maplecompass\settings.json",
       };
       const views = {
         missing: { game: null },
         recognised: { setup: { ...base.setup, testRead: { status: "recognised", map: { id: "010003000", streetName: "Victoria Road", mapName: "Kerning City" } } } },
         failed: { setup: { ...base.setup, testRead: { status: "failed" } } },
         unavailable: { setup: { ...base.setup, testRead: { status: "failed" } }, recognition: { status: "unavailable" } },
-        resized: { setup: { ...base.setup, needed: "resolutionChanged" }, unavailableHotkeys: ["super+alt+o", "super+alt+banana"], invalidHotkeys: ["super+alt+banana"] },
+        resized: { setup: { ...base.setup, needed: "resolutionChanged" }, unavailableHotkeys: ["ctrl+shift+m", "ctrl+shift+banana"], invalidHotkeys: ["ctrl+shift+banana"] },
         requested: { setup: { ...base.setup, needed: "requested" } },
       };
       window.__view = { ...base, ...(views[s] ?? {}) };

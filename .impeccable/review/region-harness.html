@@ -10,7 +10,7 @@
         metadata: { currentWindow: { label: "region" }, currentWebview: { windowLabel: "region", label: "region" } },
         transformCallback(cb) { const id = next++; cbs[id] = cb; return id; },
         unregisterCallback(id) { delete cbs[id]; },
-        async invoke() { return 1; },
+        async invoke(cmd) { return cmd === "setup_view" ? null : 1; },
       };
       window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
     </script>
