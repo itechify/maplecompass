@@ -140,15 +140,14 @@ pub enum PlacementMode {
     Detached,
 }
 
-/// Where the overlay window sits in the z-order, and whether it shows at all.
+/// Where the overlay window sits in the z-order, and whether it shows at all. Wherever
+/// the panel is placed (inside, docked or detached), it belongs to the game window.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Layer {
-    /// Directly above the game window, not topmost: an app in front of the game
+    /// Directly above the game window, never above an app in front of it: such an app
     /// covers the overlay too, and bringing the game back brings the overlay with it.
     AboveGame,
-    /// An ordinary window (the detached panel), stacked like any other app.
-    Free,
     /// Nothing to show: the game is minimised or gone. The overlay draws nothing and
     /// lets every click through.
     #[default]
@@ -268,21 +267,13 @@ impl Panel {
     }
 
     pub fn layer(&self) -> Layer {
-        match (self.mode, &self.game) {
-            (PlacementMode::Detached, _) => Layer::Free,
-            (_, Some(_)) => Layer::AboveGame,
-            (_, None) => Layer::Hidden,
-        }
+        if self.game.is_some() { Layer::AboveGame } else { Layer::Hidden }
     }
 
     /// The player can drag the panel by its header: inside or detached, at any time; a
     /// docked or hidden one never.
     pub fn draggable(&self) -> bool {
-        match self.layer() {
-            Layer::Free => true,
-            Layer::AboveGame => self.mode == PlacementMode::Inside,
-            Layer::Hidden => false,
-        }
+        self.layer() == Layer::AboveGame && matches!(self.mode, PlacementMode::Inside | PlacementMode::Detached)
     }
 
     fn size(&self) -> Size {

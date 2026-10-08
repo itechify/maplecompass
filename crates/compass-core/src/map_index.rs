@@ -1,6 +1,7 @@
 //! The map index and the injected map data source it comes from (MeowDB, ADR 0003).
 
 use crate::map_data::MapData;
+use crate::mob_card::MobDetails;
 use std::task::Poll;
 
 /// One map in MeowDB's map index.
@@ -57,8 +58,8 @@ pub enum Fetched<T> {
     SavedCopy { data: T, saved_at_unix_ms: u64 },
 }
 
-/// Where the core gets MeowDB's data. The shell supplies one that fetches over HTTP
-/// with a disk cache; tests supply fakes.
+/// Where the core gets MeowDB's data, and maplestory.io's mob images. The shell supplies
+/// one that fetches over HTTP with a disk cache; tests supply fakes.
 ///
 /// Both operations may take a while over the network, and the core never waits for
 /// them: on the first call start the fetch and answer [`Poll::Pending`]; the core asks
@@ -80,4 +81,15 @@ pub trait MapDataSource {
     /// pace. Kept apart from [`MapDataSource::map_data`]: a crawl request must never
     /// delay or replace the shown map's.
     fn crawl_data(&mut self, id: &str) -> Poll<Result<Fetched<MapData>, SourceError>>;
+
+    /// One mob's figures from its MeowDB page, by MeowDB's mob ID (ADR 0006): the core
+    /// asks for each mob the shown map lists, one at a time. A cached copy up to 7 days
+    /// old may be used as it is; answer at once when it is.
+    fn mob_page(&mut self, id: &str) -> Poll<Result<Fetched<MobDetails>, SourceError>>;
+
+    /// Where the overlay can load one mob's image from, by mob ID: the shell's copy of
+    /// maplestory.io's (ADR 0006), asked for like [`MapDataSource::mob_page`] but kept
+    /// apart from it, since it comes from another site. A cached image up to 30 days old
+    /// may be used as it is. [`SourceError::FormatChanged`] when maplestory.io has none.
+    fn mob_image(&mut self, id: &str) -> Poll<Result<String, SourceError>>;
 }
