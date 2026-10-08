@@ -4,12 +4,9 @@
 
 use crate::map_data::MapData;
 use crate::map_index::{Fetched, MapDataSource, MapEntry, SourceError};
+use crate::pace::Pace;
 use serde::Serialize;
 use std::task::Poll;
-
-/// The least time between two crawl requests that went to MeowDB: about one page every
-/// 2 seconds. An answer the source gives at once (from its cache) doesn't wait.
-const PACE_MS: u64 = 2_000;
 
 /// How long an unreachable page waits before it is asked for again.
 const RETRY_MS: u64 = 5 * 60_000;
@@ -48,8 +45,6 @@ pub(crate) struct Crawl {
     maps: Vec<(MapEntry, Page)>,
     /// The map whose answer is awaited.
     in_flight: Option<usize>,
-    /// When the last request that went to MeowDB (didn't answer at once) started.
-    last_sent_ms: Option<u64>,
 }
 
 impl Crawl {
@@ -58,17 +53,17 @@ impl Crawl {
         Self {
             maps: index.into_iter().map(|entry| (entry, Page::Unasked)).collect(),
             in_flight: None,
-            last_sent_ms: None,
         }
     }
 
     /// Time passed: check on the request in flight, and ask for the next page when
-    /// the pace allows.
-    pub fn poll(&mut self, source: &mut dyn MapDataSource, at_ms: u64) {
+    /// MeowDB's pace allows (about one page every 2 seconds; an answer the source gives
+    /// at once, from its cache, doesn't wait).
+    pub fn poll(&mut self, source: &mut dyn MapDataSource, meowdb: &mut Pace, at_ms: u64) {
         for _ in 0..AT_ONCE_PER_TICK {
             let (at, first_ask) = match self.in_flight {
                 Some(at) => (at, false),
-                None if self.last_sent_ms.is_some_and(|t| at_ms.saturating_sub(t) < PACE_MS) => return,
+                None if !meowdb.ready(at_ms) => return,
                 None => match self.next(at_ms) {
                     Some(at) => (at, true),
                     None => return,
@@ -77,7 +72,7 @@ impl Crawl {
             let answer = match source.crawl_data(&self.maps[at].0.id) {
                 Poll::Pending => {
                     if first_ask {
-                        self.last_sent_ms = Some(at_ms);
+                        meowdb.sent(at_ms);
                     }
                     self.in_flight = Some(at);
                     return;
