@@ -134,7 +134,9 @@ mod win {
 
     fn is_game_window(hwnd: HWND, title: &str) -> bool {
         unsafe {
-            if !IsWindowVisible(hwnd).as_bool() {
+            // Ours first: reading the caption of one of our own windows sends it a message
+            // and waits for our main thread, which the z-order keeper must never do.
+            if !IsWindowVisible(hwnd).as_bool() || is_ours(hwnd) {
                 return false;
             }
             if caption(hwnd).as_deref() != Some(title) {

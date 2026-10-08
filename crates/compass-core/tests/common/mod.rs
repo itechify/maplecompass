@@ -5,8 +5,8 @@
 pub mod world;
 
 use compass_core::{
-    Compass, Fetched, Frame, MapData, MapDataSource, MapEntry, PanelState, Rect, ScreenRect, Size,
-    SourceError, TitleRegion, default_title_region, meowdb,
+    Compass, Fetched, Frame, MapData, MapDataSource, MapEntry, MobDetails, PanelState, Rect, ScreenRect,
+    Size, SourceError, TitleRegion, default_title_region, meowdb,
 };
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -134,7 +134,31 @@ pub fn saved_page(id: &str) -> Option<String> {
     Some(std::fs::read_to_string(file.path()).expect("fixture"))
 }
 
+/// A MeowDB mob page saved on 2026-10-08:
+/// `tests/fixtures/meowdb-monsters/<7-digit id>__<slug>.html`.
+pub fn saved_mob_page(id: &str) -> Option<String> {
+    let dir = fixtures_dir().join("meowdb-monsters");
+    let file = std::fs::read_dir(dir)
+        .expect("fixture dir")
+        .filter_map(|e| e.ok())
+        .find(|e| e.file_name().to_string_lossy().starts_with(&format!("{id:0>7}__")))?;
+    Some(std::fs::read_to_string(file.path()).expect("fixture"))
+}
+
+/// The ID of every saved mob page, in file name order.
+pub fn saved_mob_ids() -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(fixtures_dir().join("meowdb-monsters"))
+        .expect("fixture dir")
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names.iter().map(|n| n[..n.find("__").expect("<id>__<slug>")].trim_start_matches('0').to_string()).collect()
+}
+
 type PageAnswer = Poll<Result<MapData, SourceError>>;
+type MobAnswer = Result<MobDetails, SourceError>;
+type ImageAnswer = Result<String, SourceError>;
 type IndexAnswer = Poll<Result<Vec<MapEntry>, SourceError>>;
 
 /// A map data source that answers from memory and counts index and map data requests.
@@ -158,6 +182,22 @@ pub struct FakeSource {
     /// MeowDB is unreachable and the answers are copies saved at this time (ms since the
     /// Unix epoch); `None`: they are fresh.
     saved_at: Option<u64>,
+    /// Answers a mob page request for a mob ID. Defaults to the saved mob pages, read
+    /// with the core's MeowDB reader; a mob without a saved page is unreachable.
+    mob_pages: Box<dyn FnMut(&str) -> MobAnswer + Send>,
+    /// Answers a mob image request for a mob ID. Defaults to `"image:<id>"`.
+    images: Box<dyn FnMut(&str) -> ImageAnswer + Send>,
+    /// The mob ID of every mob page fetch started, in order.
+    pub mob_requests: Arc<Mutex<Vec<String>>>,
+    /// The mob ID of every mob image fetch started, in order.
+    pub image_requests: Arc<Mutex<Vec<String>>>,
+    /// How many polls a mob page or image answer takes: 0 when it's in the cache (answered
+    /// at once), otherwise it arrives on the `n`th poll after its fetch started, as from
+    /// the network.
+    mob_polls: usize,
+    /// The mob page fetch in flight, its answer, and how many more polls it takes.
+    mob_in_flight: Option<(String, MobAnswer, usize)>,
+    image_in_flight: Option<(String, ImageAnswer, usize)>,
 }
 
 impl FakeSource {
@@ -171,6 +211,13 @@ impl FakeSource {
             crawl_uncached: false,
             crawl_in_flight: None,
             saved_at: None,
+            mob_pages: Box::new(read_saved_mob_page),
+            images: Box::new(|id| Ok(format!("image:{id}"))),
+            mob_requests: Arc::default(),
+            image_requests: Arc::default(),
+            mob_polls: 0,
+            mob_in_flight: None,
+            image_in_flight: None,
         }
     }
 
@@ -234,6 +281,38 @@ impl FakeSource {
         Self { crawl_uncached: true, ..self }
     }
 
+    /// Answer mob page requests with `pages` instead of the saved mob pages.
+    pub fn with_mob_pages(mut self, pages: impl FnMut(&str) -> MobAnswer + Send + 'static) -> Self {
+        self.mob_pages = Box::new(pages);
+        self
+    }
+
+    /// Serve `html` as the MeowDB page of mob `id`, and the saved pages for other mobs.
+    pub fn with_mob_page(self, id: &str, html: String) -> Self {
+        let id = id.to_string();
+        self.with_mob_pages(move |asked| {
+            if asked == id { meowdb::read_mob_page(&html) } else { read_saved_mob_page(asked) }
+        })
+    }
+
+    /// Answer mob image requests with `images`.
+    pub fn with_images(mut self, images: impl FnMut(&str) -> ImageAnswer + Send + 'static) -> Self {
+        self.images = Box::new(images);
+        self
+    }
+
+    /// Mob pages and images come over the network, not from the cache: each arrives on
+    /// the poll after its fetch started.
+    pub fn mobs_uncached(self) -> Self {
+        self.mobs_taking(1)
+    }
+
+    /// Mob pages and images come over a slow network: each arrives on the `polls`th poll
+    /// after its fetch started.
+    pub fn mobs_taking(self, polls: usize) -> Self {
+        Self { mob_polls: polls, ..self }
+    }
+
     pub fn with_index(index: Vec<MapEntry>) -> Self {
         Self::answering(vec![Poll::Ready(Ok(index))])
     }
@@ -280,6 +359,41 @@ pub fn requests_for(requests: &Mutex<Vec<String>>, id: &str) -> usize {
     requests.lock().unwrap().iter().filter(|r| *r == id).count()
 }
 
+fn read_saved_mob_page(id: &str) -> MobAnswer {
+    match saved_mob_page(id) {
+        Some(html) => meowdb::read_mob_page(&html),
+        None => Err(SourceError::Unreachable(format!("no saved page for mob {id}"))),
+    }
+}
+
+/// One fetch at a time: the answer for `id` if its fetch is the one in flight and it has
+/// arrived, otherwise a new fetch, logged in `requests`, answered at once or (with
+/// `polls` above 0) on the `polls`th poll after.
+fn one_at_a_time<T>(
+    id: &str,
+    in_flight: &mut Option<(String, Result<T, SourceError>, usize)>,
+    requests: &Mutex<Vec<String>>,
+    polls: usize,
+    answer: impl FnOnce(&str) -> Result<T, SourceError>,
+) -> Poll<Result<T, SourceError>> {
+    if let Some((asked, arrived, left)) = in_flight.take() {
+        if asked == id {
+            if left <= 1 {
+                return Poll::Ready(arrived);
+            }
+            *in_flight = Some((asked, arrived, left - 1));
+            return Poll::Pending;
+        }
+    }
+    requests.lock().unwrap().push(id.to_string());
+    let answer = answer(id);
+    if polls > 0 {
+        *in_flight = Some((id.to_string(), answer, polls));
+        return Poll::Pending;
+    }
+    Poll::Ready(answer)
+}
+
 fn read_saved_page(id: &str) -> Result<MapData, SourceError> {
     match saved_page(id) {
         Some(html) => meowdb::read_map_page(&html, id),
@@ -321,5 +435,15 @@ impl MapDataSource for FakeSource {
             self.crawl_in_flight = Some((id.to_string(), None));
         }
         self.fetched(answer)
+    }
+
+    fn mob_page(&mut self, id: &str) -> Poll<Result<Fetched<MobDetails>, SourceError>> {
+        let answer =
+            one_at_a_time(id, &mut self.mob_in_flight, &self.mob_requests, self.mob_polls, &mut self.mob_pages);
+        self.fetched(answer)
+    }
+
+    fn mob_image(&mut self, id: &str) -> Poll<Result<String, SourceError>> {
+        one_at_a_time(id, &mut self.image_in_flight, &self.image_requests, self.mob_polls, &mut self.images)
     }
 }

@@ -34,8 +34,8 @@ The companion follows the player's current Map by recognising the displayed Mini
 - The Minimap Title consists of Street Name and Map Name. Follow [GLOSSARY.md](GLOSSARY.md), especially its distinctions between a Hidden Portal, a Hidden Street, a Door, and a Quest Portal.
 - Recognition uses one bundled `ocrs` recogniser, with preprocessing and matching against a known map index. It must expose uncertainty rather than present an unresolved reading as certain.
 - Maps can share a Minimap Title. The previous Map's connections can resolve the ambiguity. Equivalent displayed data requires no choice; otherwise the player sees Candidates and can cycle through them, with their choice retained until the Map changes.
-- MeowDB supplies the map index and map data. The panel shows Map Summary figures for solo and 6+ party sizes, mobs sorted by level with their statistics and spawn information, and Hidden Portal destinations with approximate positions and Quest Portal labels where applicable.
-- Fetch map pages only for confirmed map changes or the documented shared-title exception. Cache pages for revisits; when the source is unreachable, show an available Saved Copy with its date. Without cached map data, retain the recognised Map and explain that its data is unavailable.
+- MeowDB supplies the map index and map data. The panel shows Map Summary figures for solo and 6+ party sizes, mobs sorted by level with their statistics and spawn information (hovering a mob's name shows its Mob Card, with its image from maplestory.io; clicking it opens the mob's MeowDB page), and Hidden Portal destinations with approximate positions and Quest Portal labels where applicable.
+- Fetch map pages only for confirmed map changes or the documented shared-title exception, plus the paced world crawl (ADR 0004) and the listed mobs' pages and images for their Mob Cards (ADR 0006). Cache pages for revisits; when the source is unreachable, show an available Saved Copy with its date. Without cached map data, retain the recognised Map and explain that its data is unavailable.
 - Preserve [ADR 0001](docs/adr/0001-observe-game-from-outside-only.md): ordinary screen capture and separate app windows only. No game memory or file access, injection, game input, hooks, cross-process window parenting, or `PrintWindow`. Hotkeys use operating-system registration.
 - Preserve [ADR 0003](docs/adr/0003-fetch-meowdb-live-until-permission.md): personal use only under the current fetching arrangement. Public release requires written MeowDB permission or revisiting that decision. Do not claim Nexon approval or guaranteed account safety.
 - All product logic belongs in `crates/compass-core`, taking plain data and returning `PanelState` without OS, UI, network, or file dependencies. `src-tauri` adapts the platform; the web UI renders state.
@@ -43,7 +43,7 @@ The companion follows the player's current Map by recognising the displayed Mini
 ## Brand Commitments
 
 - Product name: MapleCompass. The app icon is the pixel-art gold compass in [assets/icon.png](assets/icon.png), with packaged variants in `src-tauri/icons`.
-- Every screen displaying MeowDB data credits it as `NiaMeowDB (meowdb.com)`.
+- Every screen displaying MeowDB data credits it as `NiaMeowDB (meowdb.com)`; the panel adds `images: maplestory.io` while its Mob Cards show maplestory.io's mob images.
 - Preserve the explicit first-run account-risk disclosure. The product is a third-party companion, not made or approved by Nexon.
 - The windows lean into MapleStory: they borrow the game's own window language (the minimap and the Quest Helper), so they read as if they shipped with the game (chosen by the user in the October 2026 critique; see DESIGN.md).
 

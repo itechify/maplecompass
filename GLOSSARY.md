@@ -63,6 +63,10 @@ _Avoid_: script portal
 A hostile monster that spawns on a map.
 _Avoid_: monster, enemy, creature
 
+**Mob Card**:
+The card that appears when the player hovers a mob's name in the panel: its image and the figures from its MeowDB page that the row doesn't show. Clicking the name opens that page.
+_Avoid_: tooltip, popup, mob info
+
 **Spawn Count**:
 How many of a given mob a map holds at once.
 

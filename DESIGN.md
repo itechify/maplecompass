@@ -210,6 +210,12 @@ components:
     typography: "{typography.title}"
     rounded: "{rounded.window}"
     padding: "5px 10px 6px"
+  mob-card:
+    backgroundColor: "{colors.body-solid}"
+    textColor: "{colors.panel-ink}"
+    typography: "{typography.body-small}"
+    rounded: "{rounded.window}"
+    padding: "6px 10px 8px 6px"
   search-input:
     backgroundColor: "#ffffff"
     textColor: "{colors.panel-ink}"
@@ -467,23 +473,30 @@ When several maps share a title, each row leads with what sets the map apart ("1
 A quiet "waiting for EXP" note until a Session starts. Then a headline row: "Time to Level" (12px Panel Ink Steel), the figure (18px bold) and an optional tag; a rates table with bold values at least 72px wide under Rolling 5 min and Session; and a 12px Panel Ink Steel line for the ceiling share and deaths. While warming up or paused, the figures fall to Panel Ink Steel. "—" stands for any figure not there yet.
 
 ### Summary and Mob Table
-The summary is a five-column grid at 12px: label, value, unit, value, unit. Values are 13px bold Panel Ink, right-aligned with a 52px minimum width. The mob table runs full width with fixed column shares at 13px/17px, right-aligned numeric columns, 6px between columns and 12px Panel Ink Steel headers. Each mob name is bold, carries a 6px red mob dot, and truncates. "+N more" follows in 12px Panel Ink Steel.
+The summary is a five-column grid at 12px: label, value, unit, value, unit. Values are 13px bold Panel Ink, right-aligned with a 52px minimum width. The mob table runs full width with fixed column shares at 13px/17px, right-aligned numeric columns, 6px between columns and 12px Panel Ink Steel headers. Each mob name is bold, carries a 6px red mob dot, and truncates. Plain at rest, the name turns Portal Blue and underlined (1px, 2px offset) under the pointer, with a pointer cursor, and Frame Navy while pressed; keyboard focus takes the Edit Blue ring: it opens the mob's MeowDB page, and resting on it shows its Mob Card. "+N more" follows in 12px Panel Ink Steel.
+
+### Mob Card
+Shown 250ms after the pointer rests on a listed mob's name, gone as soon as it leaves; the pointer passes through it. It floats over the panel's own content, 8px in from each side and 4px below the mob's row, or above it when there is no room below; where it fits on neither side it takes the roomier one. It never covers the window bar, never leaves the panel and never resizes it. Opaque Body Solid under a 1px Window Edge frame with a 4px radius and the window's inner ring (0.65), so the content it covers doesn't show through; no drop shadow. Padding 6px 10px 8px 6px, 12px/15px Panel Ink.
+
+- **Head:** a 64px square holding the mob's image, standing on the square's floor at its own size (drawn pixelated), or scaled down smoothly to fit, never up; the square stays, empty, when there is no image. Beside it, 8px over, the name in 13px bold, then "Lv N · Slow · stays on its floor" in Panel Ink Steel (both truncate), then a Tag per element ("Weak to Fire", "Resists Ice", "Immune to Poison"), wrapping, or "No element" in Panel Ink Steel.
+- **Figures:** 7px below the head under a Panel Rule, two columns 18px apart, as in the game's stat window: each 12px Panel Ink Steel label at the left of its 13px bold value, right-aligned so the figures line up. Touch and MP, ACC and AVOID, P.DEF and M.DEF in pairs, then HP per EXP across the full width with its rank ("· #34 of 182") in regular Panel Ink Steel. "—" stands for a figure the mob doesn't have.
+- **Notes:** the panel's own notes at 12px/15px in place of the figures: "Loading from MeowDB…" plain, and a problem note (orange dot, Problem Peach) when MeowDB can't be reached or its page has changed. A saved copy keeps its figures and adds a problem note with its date.
 
 ### Hunting Target
-Its own section at the bottom of the normal view, 8px below a Panel Rule. A heading of two truncating lines (the mob in 13px bold, the map in regular Panel Ink Steel) with the two light icon buttons at its right; a four-column figures grid (Tier, Density, Share, Distance: 12px Panel Ink Steel labels over 13px values, bold except the tier); a 12px bold route title; and the route in an inset box (padding 4px 10px, 4px radius, 12px), each stop a right-aligned Panel Ink Steel step beside the map with its street beneath. A step that isn't a portal (ship, taxi, teleport scroll) is set in bold ink, by emphasis alone. A Distance of 0 reads "here".
+Its own section at the bottom of the normal view, 8px below a Panel Rule. A heading of two truncating lines (the mob in 13px bold, the map in regular Panel Ink Steel) with the two light icon buttons at its right; a four-column figures grid (Tier, Density, Share, Distance: 12px Panel Ink Steel labels over 13px values, bold except the tier); a 12px bold route title; and the route in an inset box on the near-opaque Body lavender (padding 5px 10px 5px 8px, 4px radius, 13px/17px), drawn as the minimap draws a way: a 2px Portal Inner rail joins a glyph per stop, the You Yellow dot where the player starts, a portal ring (2.5px Portal Blue on Portal Fill) for each portal, a Panel Ink Steel ring for a ship, taxi or teleport scroll, and the red mob dot at the target, whose map is bold. Each stop is its map, with a Tag naming the ride when it isn't a portal ("Taxi"), and its street in 12px Panel Ink Steel only where the street changes. Squeezed, the route keeps about three and a half stops. A Distance of 0 reads "here".
 
-**Arrival.** Once the player reaches the target's map from another, the route has done its job and its inset box resolves to its last stop: the same inset box (padding 5px 10px 6px), the You Yellow dot, "You're here" in 13px bold, and beneath it the trip as it stood when the target was picked ("3 map changes from Construction Site North of Kerning City, by taxi") in 12px Panel Ink Steel, wrapping. It is a status, static like everything else, and stays until the player leaves the map or presses ×; a target picked on the map the player is on shows no arrival until they leave and come back.
+**Arrival.** Once the player reaches the target's map from another, the route has done its job and its inset box resolves to its last stop: the same near-opaque inset box (padding 5px 10px 6px), the You Yellow dot, "You're here" in 13px bold, and beneath it the trip as it stood when the target was picked ("3 map changes from Construction Site North of Kerning City, by taxi") in 12px Panel Ink Steel, wrapping. It is a status, static like everything else, and stays until the player leaves the map or presses ×; a target picked on the map the player is on shows no arrival until they leave and come back.
 
 ### Search View
 - **Field:** a 12px Panel Ink Steel label over the app's one text input: white, 1px Frame Navy border, 4px radius, padding 6px 10px, 14px Panel Ink, Panel Ink Slate placeholder, the Field inset shadow, and the shared focus ring.
 - **Suggestions:** an inset box (padding 3px, 13px) of rows (padding 2px 8px, 3px radius) in Panel Ink Steel, name truncating and level at the right; the row Enter picks wears Selection Periwinkle with its inset ring and bold Panel Ink.
-- **Results:** a fixed-layout table of map (bold when current) over street, density, share, tier and distance. The header sticks to the top on the opaque Results Header tone. The current row is Selection Periwinkle. Tiers read by weight and ink (high bold, medium Panel Ink Steel, low Panel Ink Slate); a missing distance is Panel Ink Slate. The list takes the arrow keys, and its selection, not a focus ring, shows where they act.
+- **Results:** a fixed-layout table set into the body as an inset box (1px Inset Edge, 4px radius) on the near-opaque Body lavender rather than the light inset tint: the panel's densest reading, over the busiest scenes. Each map is its own row group, parted from the next by a Panel Rule: its name in bold across the row with its Distance (bold, a number, or "here") at the right, then its street in 12px Panel Ink Steel under Map with density, share and tier under their headers (columns 30/17/13/19/21%). The header sticks to the top on the opaque Results Header tone. The current map is Selection Periwinkle framed by Selection Edge hairlines. Tiers read by weight and ink (high bold, medium Panel Ink Steel, low Panel Ink Slate); a missing distance is Panel Ink Slate. The list takes the arrow keys, and its selection, not a focus ring, shows where they act.
 - **Row hover:** suggestion and result rows take Edit Blue at 8% under the pointer.
 - **Travel:** a Panel Ink Steel legend and checkboxes in Edit Blue (`accent-color`), 12px.
 - **Key hint:** one 12px Panel Ink Slate line naming the keys.
 
 ### Footer
-The credit, "NiaMeowDB (meowdb.com)", in 12px Panel Ink Slate, 6px below a Panel Rule.
+The credit, "NiaMeowDB (meowdb.com)", in 12px Panel Ink Slate, 6px below a Panel Rule. While the panel lists mobs, whose Mob Cards show maplestory.io's images, it reads "NiaMeowDB (meowdb.com) · images: maplestory.io".
 
 ### Collapsed Icon
 The app icon itself: the pixel-art gold compass filling the 44px square, with no frame. The Hidden Portal count sits on a chip at its bottom-right (an Ink pill with a 1px white border, at least 14px wide, 10px/13px bold white, hidden when there is no count), and a 9px orange alert dot with a white ring at its top-right when something needs a look. With EXP tracked, the Time to Level badge runs along its bottom edge (2px in from each side, 3px radius, Ink ground, white 9px/12px bold, "47m") and the count chip rises above it. Clicks and drags pass through the badge to the icon.
