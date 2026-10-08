@@ -254,8 +254,8 @@ body {
   box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
 }
 
-/* The expanded panel's bottom corners: drag one to resize the panel. A few dots, like a
-   window's grip, in the corner's triangle. */
+/* The expanded panel's bottom corners: drag one sideways to resize the panel (its height
+   follows its content). A few dots, like a window's grip, in the corner's triangle. */
 .grip {
   position: absolute;
   bottom: 0;
@@ -269,13 +269,13 @@ body {
 
 .grip.left {
   left: 0;
-  cursor: nesw-resize;
+  cursor: ew-resize;
   clip-path: polygon(0 0, 100% 100%, 0 100%);
 }
 
 .grip.right {
   right: 0;
-  cursor: nwse-resize;
+  cursor: ew-resize;
   clip-path: polygon(100% 0, 100% 100%, 0 100%);
 }
 

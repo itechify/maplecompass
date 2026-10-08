@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The overlay listens for panel state pushed from Rust, and starts a window drag from its header while the panel is draggable (inside or detached), and a resize from the expanded panel's bottom corners. The setup window listens for setup state and can close itself. The overlay also takes clicks on its buttons and the search view's typing.",
+  "description": "The overlay listens for panel state pushed from Rust, and starts a window drag from its header while the panel is draggable (inside or detached), and a sideways resize from the expanded panel's bottom corners. The setup window listens for setup state and can close itself. The overlay also takes clicks on its buttons and the search view's typing.",
   "windows": ["overlay", "setup", "region"],
   "permissions": [
     "core:default",
