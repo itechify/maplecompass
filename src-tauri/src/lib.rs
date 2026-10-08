@@ -41,11 +41,10 @@ const SAVE_DELAY: Duration = Duration::from_millis(500);
 const EXPANDED: (f64, f64) = (380.0, 72.0);
 const MIN_EXPANDED_HEIGHT: f64 = 44.0;
 const COLLAPSED: (f64, f64) = (44.0, 44.0);
-/// A drag has ended once the overlay hasn't moved for this long: then the shell puts it
-/// where the core says again (clear of the Title Region, inside the game window).
+/// A drag has ended once the overlay hasn't moved for this long since it started or last
+/// moved (Windows' move loop tells the page nothing when the mouse is let go): then the
+/// shell puts it where the core says again (clear of the Title Region, inside the game).
 const DRAG_SETTLE: Duration = Duration::from_millis(300);
-/// How long a move of the shell's own can take to come back as a window event.
-const OWN_MOVE_ECHO: Duration = Duration::from_secs(1);
 
 /// What the compass loop is asked to do.
 #[derive(Debug, Clone)]
@@ -60,8 +59,12 @@ pub(crate) enum Command {
     SearchPick(String),
     /// The expanded panel's content is this tall (CSS px).
     PanelHeight(f64),
-    /// The overlay window moved here (its outer top-left corner): the player dragged
-    /// it, or the shell moved or resized it.
+    /// The overlay is about to start a drag of its window: the player pressed the mouse
+    /// on its header or its collapsed icon.
+    DragStarted,
+    /// The overlay window moved here (its outer top-left corner). The player's move only
+    /// during a drag; otherwise the shell's own, or the system's (a DPI or monitor
+    /// change).
     Moved(PhysicalPosition<i32>),
     /// The title reader is done with a capture of `region`: what it read, or `None`
     /// if the capture failed.
@@ -72,6 +75,13 @@ pub(crate) enum Command {
 #[tauri::command]
 fn panel_height(height: f64, commands: tauri::State<'_, Sender<Command>>) {
     let _ = commands.send(Command::PanelHeight(height));
+}
+
+/// The overlay is about to start dragging its window, so the moves that follow are the
+/// player's.
+#[tauri::command]
+fn panel_drag_started(commands: tauri::State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::DragStarted);
 }
 
 /// Capture the default Title Region of the game's client area (the probe's guess; the
@@ -121,7 +131,7 @@ pub fn run() {
             });
             let setup_windows = SetupWindows::new(app.handle())?;
             overlay.on_window_event(move |event| match event {
-                // The compass loop tells the player's drags from its own moves.
+                // Only moves during a drag the overlay started are the player's.
                 WindowEvent::Moved(to) => {
                     let _ = commands.send(Command::Moved(*to));
                 }
@@ -147,6 +157,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             panel_height,
+            panel_drag_started,
             setup::setup_view,
             setup::pick_game_window,
             setup::start_marking,
@@ -277,8 +288,9 @@ fn compass_loop(
                 expanded.1 = height.max(MIN_EXPANDED_HEIGHT);
                 set_panel_sizes(&mut compass, &window.overlay, expanded);
             }
+            Ok(Command::DragStarted) => window.drag_started(),
             Ok(Command::Moved(to)) => {
-                if window.player_moved(to) {
+                if window.player_moved() {
                     compass.act(Action::PanelMoved { x: to.x, y: to.y });
                 }
             }
@@ -390,11 +402,7 @@ struct OverlayWindow {
     search_open: bool,
     /// Tells the z-order keeper to hold the overlay just above the game.
     above_game: Arc<AtomicBool>,
-    /// Where the overlay was last seen (moved to, by anyone).
-    seen_at: Option<PhysicalPosition<i32>>,
-    /// Where the shell moved the overlay lately, and when: their move events are ours.
-    placed: Vec<(PhysicalPosition<i32>, Instant)>,
-    /// When the player last dragged the overlay.
+    /// When the player's drag started or last moved the overlay; `None` before any drag.
     dragged_at: Option<Instant>,
 }
 
@@ -411,7 +419,6 @@ impl OverlayWindow {
         if let Err(e) = spawned {
             eprintln!("z-order keeper not started: {e}");
         }
-        let seen_at = overlay.outer_position().ok();
         Self {
             overlay,
             layer: None,
@@ -419,22 +426,30 @@ impl OverlayWindow {
             focusable: None,
             search_open: false,
             above_game,
-            seen_at,
-            placed: Vec::new(),
             dragged_at: None,
         }
     }
 
-    /// The overlay moved to `to`: whether the player dragged it there. Not when the shell
-    /// moved it there, nor when it didn't move (a resize).
-    fn player_moved(&mut self, to: PhysicalPosition<i32>) -> bool {
-        let now = Instant::now();
-        self.placed.retain(|(_, at)| now.duration_since(*at) < OWN_MOVE_ECHO);
-        let ours = self.seen_at.replace(to) == Some(to) || self.placed.iter().any(|(placed, _)| *placed == to);
-        if !ours {
-            self.dragged_at = Some(now);
+    /// The overlay page is about to drag the window: the player pressed the mouse on its
+    /// header or collapsed icon.
+    fn drag_started(&mut self) {
+        self.dragged_at = Some(Instant::now());
+    }
+
+    /// The player is dragging the overlay: a drag started, and it has moved within
+    /// `DRAG_SETTLE` of that or of its last move.
+    fn dragging(&self) -> bool {
+        self.dragged_at.is_some_and(|at| at.elapsed() < DRAG_SETTLE)
+    }
+
+    /// The overlay window moved: whether that was the player's drag. Any other move is
+    /// the shell's own or the system's, and the core never hears of it.
+    fn player_moved(&mut self) -> bool {
+        let dragging = self.dragging();
+        if dragging {
+            self.dragged_at = Some(Instant::now());
         }
-        !ours
+        dragging
     }
 
     fn show(&mut self, state: &PanelState) {
@@ -476,10 +491,7 @@ impl OverlayWindow {
         if let Some(placement) = state.placement {
             // While the player drags it the position is theirs; once the drag settles it
             // goes where the core says (clear of the Title Region, inside the game).
-            let dragging = self.dragged_at.is_some_and(|at| at.elapsed() < DRAG_SETTLE);
-            if let Some(to) = place(&self.overlay, placement, dragging && !layer_changed) {
-                self.placed.push((to, Instant::now()));
-            }
+            place(&self.overlay, placement, self.dragging() && !layer_changed);
         }
     }
 }
@@ -508,15 +520,14 @@ fn keep_above_game(overlay: WebviewWindow, above_game: Arc<AtomicBool>) {
 }
 
 /// Size the overlay to the core's placement, and move it there unless the player is
-/// dragging it. Returns where it was moved to, if it was.
-fn place(overlay: &WebviewWindow, placement: ScreenRect, player_drags_it: bool) -> Option<PhysicalPosition<i32>> {
+/// dragging it.
+fn place(overlay: &WebviewWindow, placement: ScreenRect, player_drags_it: bool) {
     let size = PhysicalSize::new(placement.width, placement.height);
     if overlay.inner_size().ok() != Some(size) {
         let _ = overlay.set_size(size);
     }
     let to = PhysicalPosition::new(placement.x, placement.y);
-    if player_drags_it || overlay.outer_position().ok() == Some(to) {
-        return None;
+    if !player_drags_it && overlay.outer_position().ok() != Some(to) {
+        let _ = overlay.set_position(to);
     }
-    overlay.set_position(to).ok().map(|()| to)
 }
