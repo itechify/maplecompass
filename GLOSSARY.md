@@ -84,7 +84,7 @@ The fewest map changes it takes to get from the player's current map to another 
 _Avoid_: position, proximity
 
 **Hunting Target**:
-The mob and map the player picked from a mob search to go and hunt. MapleCompass shows the way there from the player's current map until they arrive or clear it.
+The mob and map the player picked from a mob search to go and hunt. MapleCompass shows the way there from the player's current map, then that they have arrived, until they leave that map or clear it.
 _Avoid_: destination, waypoint, goal
 
 **Ship**:

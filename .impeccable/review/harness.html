@@ -99,7 +99,17 @@
           expTracking: { state: "active", timeToLevelS: 2820, timeToLevelBadge: "47m", rolling: { expPerHour: 61200, percentPerHourHundredths: 1290 }, sessionAverage: { expPerHour: 58400, percentPerHourHundredths: 1230 }, ceilingShareHundredths: 2050, deaths: { count: 1, expLost: 120, percentLostHundredths: 210 } },
           search: { view: null, query: "", suggestions: [], highlighted: null, picked: null, results: [], onlyOnEventMaps: false, highlightedResult: null, nearest: null, credit: "NiaMeowDB (meowdb.com)", crawl: { known: 312, total: 422, done: false }, travel: { taxis: true, teleportScrolls: false },
             hunting: { mob: { id: "1210100", name: "Pig", level: 7 }, map: { mapId: "100030000", streetName: "Victoria Road", mapName: "Pig Beach", densityHundredths: 1450, spawnSharePercent: 62, tier: "high", distance: { mapChanges: 3 }, travel: ["taxi"],
-              route: [ { mapId: "a", streetName: "Victoria Road", mapName: "Construction Site North of Kerning City", by: null }, { mapId: "b", streetName: "Victoria Road", mapName: "Kerning City", by: "portal" }, { mapId: "c", streetName: "Victoria Road", mapName: "Lith Harbor", by: "taxi" }, { mapId: "d", streetName: "Victoria Road", mapName: "Pig Beach", by: "portal" } ] } } },
+              route: [ { mapId: "a", streetName: "Victoria Road", mapName: "Construction Site North of Kerning City", by: null }, { mapId: "b", streetName: "Victoria Road", mapName: "Kerning City", by: "portal" }, { mapId: "c", streetName: "Victoria Road", mapName: "Lith Harbor", by: "taxi" }, { mapId: "d", streetName: "Victoria Road", mapName: "Pig Beach", by: "portal" } ] },
+              arrived: false, trip: { from: "Construction Site North of Kerning City", mapChanges: 3, travel: ["taxi"] } } },
+        }),
+        // On the Hunting Target's map, having come by the route above.
+        arrived: base({
+          map: { id: "100030000", streetName: "Victoria Road", mapName: "Pig Beach", url: "" },
+          data: { status: "ready", summary: { mobsPerHour: { solo: 1210, fullParty: 1980 }, expPerHour: { solo: 14520, fullParty: 23760 } }, mobs: [mob("Pig", 7, 80, 10, 62), mob("Ribbon Pig", 10, 125, 16, 38)], listedMobs: [mob("Pig", 7, 80, 10, 62), mob("Ribbon Pig", 10, 125, 16, 38)], moreMobs: null, hiddenPortals: [] },
+          search: { view: null, query: "", suggestions: [], highlighted: null, picked: null, results: [], onlyOnEventMaps: false, highlightedResult: null, nearest: null, credit: "NiaMeowDB (meowdb.com)", crawl: { known: 422, total: 422, done: true }, travel: { taxis: true, teleportScrolls: false },
+            hunting: { mob: { id: "1210100", name: "Pig", level: 7 }, map: { mapId: "100030000", streetName: "Victoria Road", mapName: "Pig Beach", densityHundredths: 1450, spawnSharePercent: 62, tier: "high", distance: { mapChanges: 0 }, travel: [],
+              route: [ { mapId: "100030000", streetName: "Victoria Road", mapName: "Pig Beach", by: null } ] },
+              arrived: true, trip: { from: "Construction Site North of Kerning City", mapChanges: 3, travel: ["taxi"] } } },
         }),
         search: base({
           search: { view: "maps", query: "pig", suggestions: [], highlighted: null, picked: { id: "1210100", name: "Pig", level: 7 }, onlyOnEventMaps: false, highlightedResult: 1, nearest: 0, credit: "NiaMeowDB (meowdb.com)", crawl: { known: 422, total: 422, done: true }, travel: { taxis: true, teleportScrolls: false }, hunting: null,

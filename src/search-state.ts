@@ -36,8 +36,21 @@ export type Travel = { taxis: boolean; teleportScrolls: boolean };
 /** Mirror of `compass_core::SearchView`: the search view's open step. */
 export type SearchView = "mobs" | "maps";
 
-/** Mirror of `compass_core::HuntingTarget`: the mob and map picked, with the map's figures and route. */
-export type HuntingTarget = { mob: MobChoice; map: SearchResult };
+/** Mirror of `compass_core::Trip`: the way to a Hunting Target as it stood when picked. */
+export type Trip = { from: string; mapChanges: number; travel: Step[] };
+
+/**
+ * Mirror of `compass_core::HuntingTarget`: the mob and map picked, with the map's figures
+ * and route, and once the player is there, that they've arrived.
+ */
+export type HuntingTarget = { mob: MobChoice; map: SearchResult; arrived: boolean; trip: Trip | null };
+
+/** An arrival's trip: "2 map changes from Sunset Sky, by teleport scroll". */
+export function tripLine({ from, mapChanges, travel }: Trip): string {
+  const by = travel.map((step) => STEP_TITLES[step].toLowerCase());
+  const ways = by.length > 1 ? `${by.slice(0, -1).join(", ")} and ${by[by.length - 1]}` : by[0];
+  return `${mapChanges} map change${mapChanges === 1 ? "" : "s"} from ${from}${ways ? `, by ${ways}` : ""}`;
+}
 
 /** Mirror of `compass_core::SearchState`. */
 export type SearchState = {
@@ -84,11 +97,12 @@ const DISTANCE_TEXT = {
   unknown: { text: "?", title: "Not known until your map is recognised" },
 } as const;
 
-/** A Distance as its table cell reads ("3", "no route", "quest only", "?"), with why. */
+/** A Distance as its table cell reads ("3", "here", "no route", "quest only", "?"), with why. */
 export function distanceText(distance: Distance): { text: string; title: string } {
   if (typeof distance === "string") return DISTANCE_TEXT[distance];
   const n = distance.mapChanges;
-  return { text: String(n), title: n === 0 ? "You're on this map" : `${n} map change${n === 1 ? "" : "s"} away` };
+  if (n === 0) return { text: "here", title: "You're on this map" };
+  return { text: String(n), title: `${n} map change${n === 1 ? "" : "s"} away` };
 }
 
 /** Each Step as a route and a travel marker name it ("5 · taxi, scroll"). */
