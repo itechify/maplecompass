@@ -14,7 +14,8 @@ mod setup;
 mod view;
 
 use compass_core::{
-    Action, Compass, Frame, GameWindow, Layer, PanelSizes, PanelState, Request, ScreenRect, Size, TitleReader,
+    Action, Compass, Frame, GameWindow, Layer, PanelControl, PanelSizes, PanelState, Request, ScreenRect, Size,
+    TitleReader,
     TitleReading,
     default_title_region,
 };
@@ -55,6 +56,8 @@ pub(crate) enum Command {
     Act(Action),
     /// The player pressed this hotkey (its accelerator string), for the core.
     Hotkey(String),
+    /// The player clicked one of the icons at the top of the panel, for the core.
+    Press(PanelControl),
     /// The overlay's query box now holds this, for the core.
     SearchQuery(String),
     /// The player clicked the search view's mob or map with this MeowDB ID.
@@ -168,7 +171,7 @@ pub fn run() {
             setup::mark_title_region,
             setup::cancel_marking,
             setup::finish_setup,
-            search::search_open,
+            search::panel_press,
             search::search_query,
             search::search_move,
             search::search_enter,
@@ -273,12 +276,12 @@ fn compass_loop(
                 compass.act(action);
             }
             Ok(Command::Hotkey(pressed)) => {
-                match compass.on_hotkey(&pressed) {
-                    Some(Request::OpenInBrowser { url }) => open_in_browser(&app, &url),
-                    // Right after our hotkey, so Windows lets us take the foreground.
-                    Some(Request::RaiseOverlay) => search::take_focus(&window.overlay),
-                    None => {}
-                }
+                let request = compass.on_hotkey(&pressed);
+                carry_out(&app, &window.overlay, request);
+            }
+            Ok(Command::Press(control)) => {
+                let request = compass.press(control);
+                carry_out(&app, &window.overlay, request);
             }
             Ok(Command::SearchQuery(query)) => {
                 compass.search_query(&query);
@@ -379,6 +382,16 @@ fn set_panel_sizes(compass: &mut Compass, overlay: &WebviewWindow, expanded: (f6
             expanded: physical(expanded, scale),
             collapsed: physical(COLLAPSED, scale),
         });
+    }
+}
+
+/// Do what a hotkey or a panel icon asked of the shell at once. Right after the player's
+/// own key press or click, so Windows lets us take the foreground.
+fn carry_out(app: &AppHandle, overlay: &WebviewWindow, request: Option<Request>) {
+    match request {
+        Some(Request::OpenInBrowser { url }) => open_in_browser(app, &url),
+        Some(Request::RaiseOverlay) => search::take_focus(overlay),
+        None => {}
     }
 }
 

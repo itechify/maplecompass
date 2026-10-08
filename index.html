@@ -16,7 +16,14 @@
             <p class="street" id="street"></p>
             <div class="map-line"><p class="map" id="map">Starting…</p><span id="uncertainty" aria-label="Current Map is uncertain" hidden>?</span></div>
           </div>
-          <button type="button" class="icon-button" id="open-search" aria-label="Search a mob">🔍</button>
+          <div class="toolbar" id="toolbar" role="toolbar" aria-label="MapleCompass">
+            <button type="button" class="icon-button" id="open-search" data-control="search" aria-label="Search a mob">🔍</button>
+            <button type="button" class="icon-button" id="next-candidate" data-control="chooseCandidate" aria-label="Next map with this title" hidden>⇆</button>
+            <button type="button" class="icon-button" id="open-meowdb" data-control="openMeowdbPage" aria-label="Open this map on MeowDB" hidden>↗</button>
+            <button type="button" class="icon-button" id="cycle-placement" data-control="cyclePlacement" aria-label="Move the panel: inside, docked right, docked left or detached">⧉</button>
+            <button type="button" class="icon-button" id="open-setup" data-control="setup" aria-label="Help &amp; setup">?</button>
+            <button type="button" class="icon-button" id="collapse" data-control="togglePanel" aria-label="Collapse to an icon">–</button>
+          </div>
         </header>
         <p class="note" id="recovery" role="status" hidden></p>
         <p class="note problem" id="hotkey-problem" role="status" hidden></p>
@@ -66,8 +73,7 @@
         </section>
         <p class="note crawl" id="crawl-progress" role="status" hidden></p>
         <footer id="footer" hidden>
-          <span id="credit"></span><span class="hint" id="open-hint"></span>
-          <span class="hint" id="help-hint"></span>
+          <span id="credit"></span>
         </footer>
       </div>
       <section class="view search-view" id="search-view" aria-labelledby="search-title" hidden>
