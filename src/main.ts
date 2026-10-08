@@ -755,17 +755,21 @@ function render(panel: PanelState) {
 
 // The shell sizes the window to the expanded panel's content, and the core keeps it
 // within the space where the panel is placed. The panel is then no taller than the
-// window, and its long part (the route, the suggestions, the map list) scrolls. What
-// is scrolled out of sight counts too, so the core always learns the content's full
-// height.
+// window, and its long part (the route, the suggestions, the map list) scrolls. So the
+// core always learns the content's full height, borders and bottom padding included,
+// the panel is measured without the window's limit: measured within it, the cut-off
+// padding would not count, and the window would shrink a little with every report.
+// Lifting the limit scrolls the long parts back to the top, so they are put back.
 let expanded = true;
 let reportedHeight = 0;
 function reportHeight() {
   if (!expanded) return;
-  const scrolledAway = [...panelEl.querySelectorAll<HTMLElement>(".scroll")]
-    .filter((el) => el.getClientRects().length > 0)
-    .reduce((sum, el) => sum + el.scrollHeight - el.clientHeight, 0);
-  const height = Math.ceil(panelEl.scrollHeight + scrolledAway);
+  const scrolls = [...panelEl.querySelectorAll<HTMLElement>(".scroll")];
+  const scrolledTo = scrolls.map((el) => el.scrollTop);
+  panelEl.classList.add("measuring");
+  const height = Math.ceil(panelEl.getBoundingClientRect().height);
+  panelEl.classList.remove("measuring");
+  scrolls.forEach((el, i) => (el.scrollTop = scrolledTo[i]));
   if (height > 0 && height !== reportedHeight) {
     reportedHeight = height;
     invoke("panel_height", { height });
