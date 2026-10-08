@@ -441,7 +441,8 @@ h2 {
 
 .tracking .tag,
 .portals .tag,
-.mob-card .tag {
+.mob-card .tag,
+.route-stops .tag {
   flex: none;
   padding: 0 5px;
   border: 1px solid var(--tag-edge);
@@ -889,14 +890,14 @@ td:first-child {
   scrollbar-color: var(--select-edge) transparent;
 }
 
-/* Squeezed by everything above it, the route still shows two and a half stops, the cut
-   third saying it scrolls; a route that short in full never shrinks. Should even that
+/* Squeezed by everything above it, the route still shows about three and a half stops,
+   the cut one saying it scrolls; a route that short in full never shrinks. Should even that
    not fit, the whole view scrolls rather than lose its end. */
-.route-stops:has(> li:nth-child(3)) {
-  min-height: 6.5em;
+.route-stops:has(> li:nth-child(4)) {
+  min-height: 5.75em;
 }
 
-.route-stops:not(:has(> li:nth-child(3))) {
+.route-stops:not(:has(> li:nth-child(4))) {
   flex-shrink: 0;
 }
 
@@ -1022,47 +1023,109 @@ td:first-child {
   white-space: nowrap;
 }
 
-/* The route there: each map in turn, with how it's reached, in an inset box. */
+/* The route there, drawn the way the minimap draws a way: a rail from your yellow dot,
+   through a portal ring for each portal and a plain ring for each ride, to the red mob
+   dot where the mob is. Each stop's map, with its street only where the street changes.
+   Set into the body as the map list is: the near-opaque lavender, read over any scene. */
 .route-stops {
   margin: 0;
-  padding: 4px 10px;
+  padding: 5px 10px 5px 8px;
   list-style: none;
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 17px;
   border: 1px solid var(--inset-edge);
   border-radius: 4px;
-  background: var(--inset-bg);
+  background: var(--body);
+  text-shadow: none;
 }
 
 .route-stops li {
+  position: relative;
   display: grid;
-  grid-template-columns: 6.5em 1fr;
+  grid-template-columns: 12px minmax(0, 1fr);
   column-gap: 8px;
-  padding: 1px 0;
+  padding: 2px 0;
 }
 
-.route-stops .step {
-  color: var(--ink-2);
-  text-align: right;
+/* The rail, from this stop's glyph to the next one's (each glyph sits at the same height
+   in its stop). */
+.route-stops li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 10.5px;
+  width: 2px;
+  height: 100%;
+  background: var(--portal-inner);
 }
 
-/* Anything but a portal is worth noticing on the way: by text emphasis alone. */
-.route-stops .step.ship,
-.route-stops .step.taxi,
-.route-stops .step.teleportScroll {
-  color: var(--ink);
-  font-weight: 700;
+.route-stops .glyph {
+  position: relative;
+  grid-row: 1;
+  align-self: start;
+  justify-self: center;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  margin-top: 3.5px;
+  border-radius: 50%;
+  border: 2.5px solid var(--portal);
+  background: var(--portal-fill);
+}
+
+.route-stops .start .glyph {
+  border: 0;
+  background: radial-gradient(circle at 35% 30%, var(--you-light) 0 18%, var(--you) 45%);
+  box-shadow: 0 0 0 1px var(--you-edge);
+}
+
+.route-stops .end .glyph {
+  width: 9px;
+  height: 9px;
+  margin-top: 4px;
+  border: 0;
+  background: var(--mob);
+  box-shadow: 0 0 0 1px var(--mob-edge);
+}
+
+.route-stops .ship .glyph,
+.route-stops .taxi .glyph,
+.route-stops .teleportScroll .glyph {
+  border-color: var(--ink-2);
+  background: var(--body-solid);
 }
 
 .route-stops .route-map,
 .route-stops .route-street {
+  grid-column: 2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.route-stops .route-map .tag {
+  margin-left: 6px;
+  vertical-align: 1px;
+}
+
+.route-stops .end .route-map {
+  font-weight: 700;
+}
+
 .route-stops .route-street {
-  grid-column: 2;
+  font-size: 12px;
+  line-height: 15px;
   color: var(--ink-2);
+}
+
+/* Read aloud, not shown: what a glyph says. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* Arrived on the Hunting Target's map: the route's inset box resolves to its last stop.
@@ -1076,7 +1139,9 @@ td:first-child {
   padding: 5px 10px 6px;
   border: 1px solid var(--inset-edge);
   border-radius: 4px;
-  background: var(--inset-bg);
+  /* The route's own box, on the near-opaque lavender. */
+  background: var(--body);
+  text-shadow: none;
 }
 
 .arrival::before {
