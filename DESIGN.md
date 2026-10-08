@@ -22,6 +22,9 @@ colors:
   portal-inner: "#8db3ee"
   mob: "#d8342a"
   mob-edge: "#8e1c15"
+  you: "#ffd21f"
+  you-light: "#fff6c2"
+  you-edge: "#7a5a00"
   select: "#d3def3"
   select-edge: "#98afda"
   orange: "#f08a1c"
@@ -265,6 +268,7 @@ Cool lavender and periwinkle neutrals with navy ink, two minimap accents (portal
 
 ### Tertiary
 - **Mob Dot Red** (mob, edged by mob-edge): the minimap's mob dot. Section mark for Mobs and the bullet on each mob row.
+- **You Yellow** (you, lit by you-light, edged by you-edge): the minimap's dot for the player's own character. It marks only the Hunting Target's arrival, "You're here", as a 10px dot with a you-light highlight up and to the left. Kept clear of Game Orange: a pale yellow with a dark gold edge, never a chip or a note.
 
 ### Neutral
 - **Window Lavender** (body): the translucent body of every window laid over the game (the overlay panel and the title-marking hint), at 95% opacity so it reads like the game's own and stays legible over busy scenes.
@@ -289,7 +293,7 @@ Cool lavender and periwinkle neutrals with navy ink, two minimap accents (portal
 ### Named Rules
 **The Orange Means Doubt Rule.** Game orange marks only uncertainty and problems: the "Not sure" chip, problem notes, the collapsed alert dot. A confirmed state never uses it, so orange can't become decoration. Search tiers are told apart by weight and ink, never by orange.
 
-**The Minimap Legend Rule.** Portal blue and mob red come from the minimap's legend and keep that meaning. Blue is for portals and red is for mobs, with no other uses.
+**The Minimap Legend Rule.** Portal blue, mob red and you yellow come from the minimap's legend and keep that meaning. Blue is for portals, red is for mobs and yellow is for where the player is, with no other uses.
 
 **The Over the Game, Translucent Rule.** A window laid over the game uses the translucent Window Lavender (body); a window on the desktop uses the opaque one (body-solid). Same colour, different footing.
 
@@ -407,7 +411,9 @@ A quiet "waiting for EXP" note until a Session starts. Then a headline row: "Tim
 The summary is a five-column grid: label, value, unit, value, unit. Values are 13px bold ink, right-aligned with a 52px minimum width. The mob table runs full width with fixed column shares at 13px/17px, right-aligned numeric columns, 6px between columns and 12px Ink Steel headers. Each mob name is bold, carries a 6px red mob dot, and truncates. "+N more" follows in 12px Ink Steel.
 
 ### Hunting Target
-Its own section at the bottom of the normal view, 8px below a Window Rule. A heading of two truncating lines (the mob in 13px bold, the map in regular Ink Steel) with the two light icon buttons at its right; a four-column figures grid (Tier, Density, Share, Distance: 12px Ink Steel labels over 13px values, bold except the tier); a 12px bold route title; and the route in an inset box (padding 4px 10px, 4px radius, 12px), each stop a right-aligned Ink Steel step beside the map with its street beneath. A step that isn't a portal (ship, taxi, teleport scroll) is set in bold ink, by emphasis alone.
+Its own section at the bottom of the normal view, 8px below a Window Rule. A heading of two truncating lines (the mob in 13px bold, the map in regular Ink Steel) with the two light icon buttons at its right; a four-column figures grid (Tier, Density, Share, Distance: 12px Ink Steel labels over 13px values, bold except the tier); a 12px bold route title; and the route in an inset box (padding 4px 10px, 4px radius, 12px), each stop a right-aligned Ink Steel step beside the map with its street beneath. A step that isn't a portal (ship, taxi, teleport scroll) is set in bold ink, by emphasis alone. A Distance of 0 reads "here".
+
+**Arrival.** Once the player reaches the target's map from another, the route has done its job and its inset box resolves to its last stop: the same inset box (padding 5px 10px 6px), the You Yellow dot, "You're here" in 13px bold ink, and beneath it the trip as it stood when the target was picked ("3 map changes from Construction Site North of Kerning City, by taxi") in 12px Ink Steel, wrapping. It is a status, static like everything else, and stays until the player leaves the map or presses ×; a target picked on the map the player is on shows no arrival until they leave and come back.
 
 ### Search View
 - **Field:** a 12px Ink Steel label over the app's one text input: white, 1px Frame Navy border, 4px radius, padding 6px 10px, 14px ink, Ink Slate placeholder, the Field inset shadow, and the shared focus ring.

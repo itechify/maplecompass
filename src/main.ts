@@ -13,6 +13,7 @@ import {
   resultsHead,
   resultsNote,
   routeStops,
+  tripLine,
   type HuntingTarget,
   type SearchState,
 } from "./search-state";
@@ -183,6 +184,8 @@ const huntingRouteTitle = byId("hunting-route-title");
 const huntingRoute = byId("hunting-route");
 const huntingRouteNone = byId("hunting-route-none");
 const huntingCredit = byId("hunting-credit");
+const huntingArrival = byId("hunting-arrival");
+const huntingTrip = byId("hunting-trip");
 const searchView = byId("search-view");
 const searchBack = byId("search-back");
 const searchTitle = byId("search-title");
@@ -490,14 +493,20 @@ function renderHunting(panel: PanelState) {
   distanceEl.title = distance.title;
   distanceEl.className = typeof map.distance === "string" ? "distance none" : "distance";
 
-  // The route from the map you're on (its first stop); without one, why not.
-  const routed = map.route.length > 0;
+  // The route from the map you're on (its first stop); without one, why not. Once you've
+  // arrived the route has done its job: in its place, that you're here and the way you
+  // came, until you leave the map.
+  const { arrived, trip } = target;
+  const routed = !arrived && map.route.length > 0;
   huntingRouteTitle.textContent = routed ? `Route from ${map.route[0].mapName}` : "";
   huntingRouteTitle.hidden = !routed;
-  huntingRoute.replaceChildren(...routeStops(map));
+  huntingRoute.replaceChildren(...(routed ? routeStops(map) : []));
   huntingRoute.hidden = !routed;
-  huntingRouteNone.textContent = routed ? "" : distanceText(map.distance).title;
-  huntingRouteNone.hidden = routed;
+  huntingRouteNone.textContent = routed || arrived ? "" : distanceText(map.distance).title;
+  huntingRouteNone.hidden = routed || arrived;
+  huntingArrival.hidden = !arrived;
+  huntingTrip.textContent = trip ? tripLine(trip) : "";
+  huntingTrip.hidden = !trip;
   // The footer credits MeowDB whenever a map is shown; otherwise the section does.
   huntingCredit.textContent = panel.search.credit ?? "";
   huntingCredit.hidden = !panel.search.credit || !!panel.credit;

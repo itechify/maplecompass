@@ -28,6 +28,24 @@ pub struct HuntingTarget {
     /// The map, as the mob's map list ranks it now: Density Tier, Density, Spawn Share,
     /// and Distance and route from the map the panel shows.
     pub map: SearchResult,
+    /// The player has come to the map from another: they are there, and the target
+    /// stays to say so until they leave it.
+    pub arrived: bool,
+    /// The way there as it stood when the player picked it; `None` when they picked the
+    /// map they were on, or no route led there.
+    pub trip: Option<Trip>,
+}
+
+/// The way to a Hunting Target as it stood when the player picked it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Trip {
+    /// The name of the map the player picked it on.
+    pub from: String,
+    /// How many map changes the route from there took.
+    pub map_changes: u32,
+    /// The kinds of travel besides portals it took, each once, in route order.
+    pub travel: Vec<Step>,
 }
 
 /// A mob the player can pick: one per MeowDB mob ID.
@@ -123,8 +141,8 @@ pub struct SearchState {
     pub crawl: CrawlProgress,
     /// What Distances count besides portals and ships (the checkboxes).
     pub travel: Travel,
-    /// The Hunting Target the panel's Hunting section shows, until the player arrives
-    /// there or clears it. Kept for this session only.
+    /// The Hunting Target the panel's Hunting section shows, until the player leaves its
+    /// map having arrived, or clears it. Kept for this session only.
     pub hunting: Option<HuntingTarget>,
 }
 
@@ -152,8 +170,17 @@ pub(crate) struct MobSearch {
     /// The ID of the map the player moved the map list's highlight to; `None` for the
     /// first map. Kept by ID, so the highlight stays on it as the list reorders.
     highlighted_result: Option<String>,
-    /// The Hunting Target: its mob and the ID of its map.
-    target: Option<(MobChoice, String)>,
+    target: Option<Target>,
+}
+
+/// The Hunting Target: its mob, the ID of its map, the trip there as it stood when the
+/// player picked it, and whether they have arrived.
+#[derive(Clone)]
+struct Target {
+    mob: MobChoice,
+    map_id: String,
+    trip: Option<Trip>,
+    arrived: bool,
 }
 
 impl MobSearch {
@@ -169,7 +196,7 @@ impl MobSearch {
     /// Open the search view on the Hunting Target mob's map list, highlighting its map.
     /// Without a target, nothing happens.
     pub fn reopen(&mut self) {
-        if let Some((mob, map_id)) = self.target.clone() {
+        if let Some(Target { mob, map_id, .. }) = self.target.clone() {
             self.type_query("");
             self.view = Some(SearchView::Maps);
             self.picked = Some(mob);
@@ -234,9 +261,15 @@ impl MobSearch {
                 }
             }
             Some(SearchView::Maps) => {
-                let listed = self.results(searched).iter().any(|result| result.map_id == id);
-                if let (Some(mob), true) = (&self.picked, listed) {
-                    self.target = Some((mob.clone(), id.to_string()));
+                let listed = self.results(searched).into_iter().find(|result| result.map_id == id);
+                if let (Some(mob), Some(result)) = (&self.picked, listed) {
+                    let trip = match (result.distance, result.route.first()) {
+                        (Distance::MapChanges(n @ 1..), Some(from)) => {
+                            Some(Trip { from: from.map_name.clone(), map_changes: n, travel: result.travel })
+                        }
+                        _ => None,
+                    };
+                    self.target = Some(Target { mob: mob.clone(), map_id: id.to_string(), trip, arrived: false });
                     self.close();
                 }
             }
@@ -262,9 +295,13 @@ impl MobSearch {
     }
 
     /// The panel now shows map `map_id`: if that is the Hunting Target's map, the player
-    /// is there, and the target is done with.
+    /// has arrived there; if they had arrived, they have left it, and the target is done
+    /// with.
     pub fn arrived(&mut self, map_id: &str) {
-        if self.target.as_ref().is_some_and(|(_, target)| target == map_id) {
+        let Some(target) = &mut self.target else { return };
+        if target.map_id == map_id {
+            target.arrived = true;
+        } else if target.arrived {
             self.clear();
         }
     }
@@ -301,9 +338,11 @@ impl MobSearch {
     /// The Hunting Target with its map's figures, ranked among the mob's maps as they
     /// are known now, and its route from the map the panel shows.
     fn hunting(&self, searched: &Searched) -> Option<HuntingTarget> {
-        let ((mob, map_id), crawl) = (self.target.as_ref()?, searched.crawl?);
-        let map = results(&mob.id, crawl, searched.here, searched.travel).into_iter().find(|r| &r.map_id == map_id)?;
-        Some(HuntingTarget { mob: mob.clone(), map })
+        let (target, crawl) = (self.target.as_ref()?, searched.crawl?);
+        let map = results(&target.mob.id, crawl, searched.here, searched.travel)
+            .into_iter()
+            .find(|r| r.map_id == target.map_id)?;
+        Some(HuntingTarget { mob: target.mob.clone(), map, arrived: target.arrived, trip: target.trip.clone() })
     }
 
     /// The picked mob's map list; none outside that step.
