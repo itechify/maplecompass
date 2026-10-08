@@ -28,6 +28,9 @@ pub struct Settings {
     /// Where the player put the detached panel (its top-left corner, physical screen
     /// px); `None` if it was never detached.
     pub detached_at: Option<ScreenPoint>,
+    /// The expanded panel's width (CSS px, logical) as the player set it; `None` for the
+    /// default width.
+    pub panel_width: Option<u32>,
     pub hotkeys: Hotkeys,
     /// The Title Region marked at setup; `None` until setup is first finished.
     pub title_region: Option<TitleRegion>,
@@ -50,6 +53,7 @@ impl Default for Settings {
             inside_offset: None,
             placement_mode: PlacementMode::Inside,
             detached_at: None,
+            panel_width: None,
             hotkeys: Hotkeys::default(),
             title_region: None,
             exp_bar_region: None,
