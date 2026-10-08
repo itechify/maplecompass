@@ -5,7 +5,9 @@
 mod common;
 
 use common::{FakeSource, black_frame, requests_for, sample_frame};
-use compass_core::{Compass, MEOWDB_CREDIT, MapData, MapDataStatus, Mob, PanelState, Request};
+use compass_core::{
+    Compass, LevelRange, MEOWDB_CREDIT, MapData, MapDataStatus, Mob, MoreMobs, PanelState, Request,
+};
 use std::task::Poll;
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
@@ -176,4 +178,74 @@ fn the_overlay_receives_a_saved_copy_with_its_date_beside_the_data() {
     assert!(json["data"]["summary"].is_object() && json["data"]["hiddenPortals"].is_array());
     assert!(json["data"].get("connectedMaps").is_none());
     assert_eq!(json["recognition"], serde_json::json!({ "status": "savedCopy", "savedAtUnixMs": SAVED_AT }));
+}
+
+/// A mob with this spawn share; the rest of its figures don't matter here.
+fn mob_with_share(name: &str, level: u32, spawn_share_percent: u32) -> Mob {
+    Mob { id: name.into(), name: name.into(), level, hp: 100, exp: 10, spawn_count: 1, spawn_share_percent }
+}
+
+/// The panel when the shown map's page gives these mobs.
+fn panel_with_mobs(mobs: Vec<Mob>) -> MapData {
+    let page = MapData { mobs, ..MapData::default() };
+    let source = FakeSource::meowdb().with_pages(move |_| Poll::Ready(Ok(page.clone())));
+    let mut compass = Compass::new(source);
+    compass.on_frame(sample_frame(SUNSET, 0));
+    let state = compass.on_frame(sample_frame(SUNSET, 333));
+    let MapDataStatus::Ready(data) = &state.data else { panic!("{:?}", state.data) };
+    data.clone()
+}
+
+#[test]
+fn the_panel_lists_the_five_most_common_mobs_by_level_and_sums_up_the_rest() {
+    let data = panel_with_mobs(vec![
+        mob_with_share("Wild Boar", 25, 20),
+        mob_with_share("Snail", 1, 2),
+        mob_with_share("Stump", 5, 18),
+        mob_with_share("Fire Boar", 32, 3),
+        mob_with_share("Horny Mushroom", 22, 15),
+        mob_with_share("Axe Stump", 17, 12),
+        mob_with_share("Ghost Stump", 19, 25),
+        mob_with_share("Ligator", 33, 5),
+    ]);
+
+    let listed: Vec<_> = data.listed_mobs.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(listed, ["Stump", "Axe Stump", "Ghost Stump", "Horny Mushroom", "Wild Boar"]);
+    assert_eq!(
+        data.more_mobs,
+        Some(MoreMobs { count: 3, levels: LevelRange { lowest: 1, highest: 33 } })
+    );
+    // Every mob is still there for comparing maps, in level order.
+    assert_eq!(data.mobs.len(), 8);
+}
+
+#[test]
+fn with_five_mobs_or_fewer_the_panel_lists_them_all() {
+    let data = panel_with_mobs(vec![
+        mob_with_share("Stump", 5, 50),
+        mob_with_share("Snail", 1, 50),
+    ]);
+
+    let listed: Vec<_> = data.listed_mobs.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(listed, ["Snail", "Stump"]);
+    assert_eq!(data.more_mobs, None);
+}
+
+#[test]
+fn when_mobs_tie_for_the_last_listed_place_the_lower_level_one_is_listed() {
+    let data = panel_with_mobs(vec![
+        mob_with_share("A", 10, 30),
+        mob_with_share("B", 11, 30),
+        mob_with_share("C", 12, 20),
+        mob_with_share("D", 13, 10),
+        mob_with_share("Late", 40, 5),
+        mob_with_share("Early", 2, 5),
+    ]);
+
+    let listed: Vec<_> = data.listed_mobs.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(listed, ["Early", "A", "B", "C", "D"]);
+    assert_eq!(
+        data.more_mobs,
+        Some(MoreMobs { count: 1, levels: LevelRange { lowest: 40, highest: 40 } })
+    );
 }

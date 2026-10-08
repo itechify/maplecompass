@@ -1,3 +1,10 @@
+@import "./theme.css";
+
+/* The overlay panel: one of the game's own windows laid over the screen, built like
+   the Mini Map and the Quest Helper. A light grey window bar with the name and the
+   game's blue buttons, the map's title on the Mini Map's sky blue, and the rest on the
+   Quest Helper's see-through periwinkle. */
+
 html,
 body {
   /* Transparent page, or WebView2 paints white behind the panel. */
@@ -8,21 +15,39 @@ body {
   cursor: default;
 }
 
+/* The game sets its windows in a plain bold sans, so the panel does too. */
+body {
+  font-family: var(--font);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+[hidden] {
+  display: none !important;
+}
+
 /* As tall as its content: the overlay reports this height and the window fits it, up to
    600 px (MAX_EXPANDED_HEIGHT in the shell) or the space where the panel is placed,
-   whichever is less. Then it is as tall as the window, and its long part scrolls. */
+   whichever is less. Then it is as tall as the window, and its long part scrolls. As
+   wide as the player made it, by a bottom corner. */
 .panel {
+  /* On the see-through body the game's near-black text, as in the Quest Helper. */
+  --ink: #16191f;
+  --ink-2: #2c3446;
+  --ink-3: #343d51;
+  --rule: rgba(30, 45, 90, 0.25);
+  --inset-bg: rgba(255, 255, 255, 0.5);
+  --inset-edge: rgba(30, 45, 90, 0.3);
+  position: relative;
   box-sizing: border-box;
   max-height: 100vh;
   overflow: hidden;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: rgba(16, 24, 36, 0.82);
-  color: #f2f5f8;
-  font-family: "Segoe UI", system-ui, sans-serif;
+  border: 1px solid var(--window-edge);
+  border-radius: 4px;
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
   display: flex;
   flex-direction: column;
-  gap: 8px;
   container-type: inline-size;
 }
 
@@ -33,25 +58,340 @@ body {
   text-overflow: ellipsis;
 }
 
-[hidden] {
-  display: none !important;
-}
-
-#data {
+/* A view: the window bar and the map's title full width, the rest inset from the frame.
+   Text on the see-through body keeps a faint light edge, so a busy scene behind it
+   doesn't swallow it. */
+.view {
+  flex: 0 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  gap: 9px;
+  padding-bottom: 10px;
+  text-shadow:
+    0 0 1px rgba(238, 242, 255, 0.9),
+    0 0 3px rgba(238, 242, 255, 0.75);
+}
+
+.view > :not(.window-bar):not(.titlebar) {
+  margin-inline: 11px;
+}
+
+.view > .window-bar + :not(.titlebar) {
+  margin-top: 2px;
+}
+
+/* The window bar: the Mini Map's and the Quest Helper's light grey strip, with the
+   window's name at the left and its buttons at the right. The player drags the panel by
+   it (inside or detached), never by a button. */
+.window-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 22px;
+  padding: 2px 3px 2px 5px;
+  background: var(--window-bar);
+  border-bottom: 1px solid var(--window-edge);
+  text-shadow: none;
+}
+
+.window-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.panel .window-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+  color: var(--window-bar-ink);
+}
+
+/* The map's title: the Mini Map's sky-blue panel, the Street Name over the Map Name, both
+   in the game's light lettering with its blue outline. */
+.titlebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: -9px;
+  padding: 6px 10px 8px 11px;
+  background: var(--title-panel);
+  border-bottom: 1px solid var(--window-edge);
+  text-shadow: none;
+}
+
+.street,
+.panel .map {
+  color: var(--title-ink);
+  text-shadow: var(--title-lettering);
+}
+
+.street {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.map-line {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-/* Wraps rather than truncates: an error must be read in full. */
+/* A long map name wraps to a second line rather than losing its end. */
+.panel .map {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 23px;
+  letter-spacing: 0.01em;
+}
+
+/* No map yet: the status reads as plain text, not as a map name. */
+.unreadable .panel .map {
+  font-size: 15px;
+  color: var(--ink);
+  text-shadow: none;
+}
+
+/* The game's small orange button (the Mini Map's WORLD, the Quest Helper's AUTO), used
+   once: the map shown isn't confirmed. */
+.doubt {
+  flex: none;
+  padding: 2px 7px 3px;
+  border: 1px solid var(--orange-deep);
+  border-radius: 3px;
+  background: linear-gradient(180deg, #ffd25a 0%, #f0a715 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-shadow:
+    0 1px 0 var(--orange-deep),
+    0 -1px 0 var(--orange-deep),
+    1px 0 0 var(--orange-deep),
+    -1px 0 0 var(--orange-deep);
+}
+
+/* The panel's buttons, one per hotkey action: the game's bright blue window buttons. */
+.toolbar {
+  flex: none;
+  display: flex;
+  gap: 2px;
+}
+
+.icon-button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  border: 1px solid var(--game-button-edge);
+  border-radius: 2px;
+  background: var(--game-button);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(0, 60, 110, 0.25);
+  color: #fff;
+  cursor: default;
+}
+
+.icon-button svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1px 0 rgba(0, 50, 90, 0.45));
+}
+
+.icon-button svg .dot {
+  fill: currentColor;
+  stroke: none;
+}
+
+.icon-button:hover {
+  background: var(--game-button-hover);
+}
+
+.icon-button:active {
+  background: var(--game-button-pressed);
+  box-shadow: inset 0 1px 2px rgba(0, 40, 80, 0.5);
+}
+
+/* Light, for a button inside the window's body rather than its bar. */
+.icon-button.light {
+  border-color: var(--window-edge);
+  background: var(--button-light);
+  box-shadow: inset 0 1px 0 #fff;
+  color: var(--ink);
+}
+
+.icon-button.light svg {
+  filter: none;
+}
+
+.icon-button.light:hover {
+  background: var(--button-light-hover);
+}
+
+.icon-button.light:active {
+  background: var(--button-light);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
+}
+
+/* The expanded panel's bottom corners: drag one to resize the panel. A few dots, like a
+   window's grip, in the corner's triangle. */
+.grip {
+  position: absolute;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  background-image: radial-gradient(circle, rgba(30, 45, 90, 0.55) 1px, transparent 1.6px);
+  background-size: 4px 4px;
+  background-position: 1px 1px;
+  opacity: 0.8;
+}
+
+.grip.left {
+  left: 0;
+  cursor: nesw-resize;
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+}
+
+.grip.right {
+  right: 0;
+  cursor: nwse-resize;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+
+.grip:hover {
+  opacity: 1;
+}
+
+.panel :focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 2px;
+}
+
+#data,
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* While the map shown isn't confirmed, its facts step back. */
+.not-sure .facts {
+  opacity: 0.7;
+}
+
+/* Wraps rather than truncates: a note must be read in full. */
 .panel .note {
   white-space: normal;
   font-size: 13px;
-  color: #c3ccd6;
+  line-height: 17px;
+  color: var(--ink-2);
 }
 
-.note.problem {
-  color: #f0c674;
+.panel .note.problem {
+  position: relative;
+  padding: 4px 8px 5px 24px;
+  border: 1px solid var(--problem-edge);
+  border-radius: 4px;
+  background: var(--problem-bg);
+  color: var(--problem-ink);
+}
+
+.note.problem::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--orange);
+  box-shadow: 0 0 0 1px var(--orange-deep);
+}
+
+/* Background progress: present, but quieter than a status note. */
+.panel .note.crawl {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* The current map's sections, marked with the minimap's legend: a portal ring for
+   Hidden Portals, a mob dot for Mobs. */
+.portals h2,
+.map-mobs h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+
+.portals h2::before,
+.map-mobs h2::before {
+  content: "";
+  flex: none;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+
+.portals h2::before {
+  width: 10px;
+  height: 10px;
+  border: 2.5px solid var(--portal);
+  background: var(--portal-fill);
+}
+
+.map-mobs h2::before {
+  width: 8px;
+  height: 8px;
+  margin: 0 1px;
+  background: var(--mob);
+  box-shadow: 0 0 0 1px var(--mob-edge);
+}
+
+/* Nothing to list: the heading and "None on this map" on one line. */
+.portals:has(> .none:not([hidden])),
+.map-mobs:has(> .none:not([hidden])):not(:has(> .summary:not([hidden]))) {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.portals:has(> .none:not([hidden])) h2,
+.map-mobs:has(> .none:not([hidden])):not(:has(> .summary:not([hidden]))) h2 {
+  margin: 0;
+}
+
+.portals .none,
+.map-mobs .none {
+  font-size: 13px;
+  color: var(--ink-2);
 }
 
 /* EXP tracking: Time to Level over the rates, one line per figure, so the panel's
@@ -60,7 +400,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-variant-numeric: tabular-nums;
 }
 
 #tracking-figures {
@@ -71,7 +410,7 @@ body {
 
 .tracking .waiting {
   font-size: 13px;
-  color: #c3ccd6;
+  color: var(--ink-2);
 }
 
 .tracking .headline {
@@ -82,26 +421,32 @@ body {
 
 .tracking .label {
   font-size: 12px;
-  color: #9fb6cc;
+  color: var(--ink-2);
 }
 
 .tracking .time-to-level {
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
 }
 
-.tracking .tag {
+.tracking .tag,
+.portals .tag {
   flex: none;
   padding: 0 5px;
+  border: 1px solid var(--tag-edge);
   border-radius: 3px;
-  font-size: 10px;
-  background: rgba(159, 182, 204, 0.2);
-  color: #c3d4e4;
+  background: var(--tag-bg);
+  color: var(--tag-ink);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 15px;
 }
 
+/* Paused, the figures are held: a state to notice, in the problem palette. */
 .tracking .tag.paused {
-  background: rgba(240, 198, 116, 0.2);
-  color: #f0c674;
+  border-color: var(--problem-edge);
+  background: var(--problem-bg);
+  color: var(--problem-ink);
 }
 
 /* Rates still settling, or held while paused: the figures show, quieter. */
@@ -109,73 +454,60 @@ body {
 .tracking:has(.tag.warmingUp) .rates td,
 .tracking:has(.tag.paused) .time-to-level,
 .tracking:has(.tag.paused) .rates td {
-  color: #c3ccd6;
+  color: var(--ink-2);
 }
 
 .rates td {
-  font-weight: 600;
+  font-weight: 700;
   min-width: 72px;
 }
 
 .tracking .extra {
   font-size: 12px;
-  color: #c3ccd6;
+  color: var(--ink-2);
 }
 
-/* Background progress: present, but quieter than a status note. */
-.panel .note.crawl {
-  font-size: 12px;
-  color: #9fb6cc;
-}
-
-/* The maps sharing the title, each with what sets it apart; the shown one marked. */
+/* The maps sharing the title, each led by what sets it apart; the shown one selected. */
 .candidates ol {
-  margin: 4px 0 0;
+  margin: 5px 0 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
   font-size: 12px;
-  color: #9fb6cc;
+  line-height: 16px;
+  color: var(--ink-2);
 }
 
 .candidates li {
-  position: relative;
-  padding-left: 14px;
+  padding: 3px 7px;
+  border-radius: 3px;
   overflow-wrap: anywhere;
-  line-height: 1.4;
-}
-
-.candidates li::before {
-  position: absolute;
-  left: 0;
-  top: 0;
 }
 
 .candidates li.current {
-  color: #f2f5f8;
-  font-weight: 600;
-}
-
-.candidates li.current::before {
-  content: "▶ ";
+  background: var(--select);
+  box-shadow: inset 0 0 0 1px var(--select-edge);
+  color: var(--ink);
+  font-weight: 700;
 }
 
 .candidate-mobs { display: block; }
 .candidate-facts { display: flex; flex-wrap: wrap; gap: 2px 8px; }
-.candidate-id { margin-left: auto; color: #9fb6cc; font-weight: 400; }
+.candidate-id { margin-left: auto; color: var(--ink-3); font-weight: 400; font-size: 11px; }
 .candidate-levels, .candidate-portals { white-space: nowrap; }
 
 table {
   border-collapse: collapse;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  line-height: 17px;
 }
 
 th {
+  font-size: 12px;
   font-weight: 400;
-  color: #9fb6cc;
+  color: var(--ink-2);
   text-align: right;
 }
 
@@ -195,9 +527,127 @@ td:first-child {
   text-align: left;
 }
 
-.summary td {
-  font-weight: 600;
-  min-width: 72px;
+.portals ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.portals li {
+  display: grid;
+  grid-template-columns: 47px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 9px;
+}
+
+.portals li > div {
+  min-width: 0;
+}
+
+.portals .dest {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.portals .to {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Quest Portals come from NPCs: the minimap's NPC green. */
+.portals .tag.quest {
+  border-color: #98c58a;
+  background: #dff0d8;
+  color: #2b6a20;
+}
+
+.portals .where {
+  display: block;
+  font-size: 12px;
+  line-height: 15px;
+  color: var(--ink-2);
+}
+
+.portals .where::first-letter {
+  text-transform: uppercase;
+}
+
+/* The minimap in miniature: its 5x3 grid, the portal's cell lit, the game's ring in it. */
+.minimap {
+  display: block;
+  width: 47px;
+  height: 29px;
+}
+
+.minimap .field {
+  fill: #eef3fb;
+}
+
+.minimap .frame {
+  fill: none;
+  stroke: #50648c;
+  stroke-width: 1;
+}
+
+.minimap .grid {
+  stroke: #b8c7e1;
+  stroke-width: 0.6;
+}
+
+.minimap .cell {
+  fill: #a9c3ec;
+}
+
+.minimap .ring {
+  fill: none;
+  stroke: var(--portal);
+  stroke-width: 1.7;
+}
+
+.minimap .core {
+  fill: var(--portal);
+}
+
+.minimap.unknown .frame {
+  stroke-dasharray: 2 1.5;
+}
+
+/* EXP and mobs per hour, each figure beside its party size. */
+.summary {
+  display: grid;
+  grid-template-columns: auto auto auto auto auto;
+  justify-content: start;
+  align-items: baseline;
+  row-gap: 1px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--ink-2);
+}
+
+.summary .label {
+  padding-right: 10px;
+}
+
+.summary .value {
+  min-width: 52px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.summary .unit {
+  padding: 0 14px 0 4px;
 }
 
 .mobs {
@@ -205,126 +655,37 @@ td:first-child {
   table-layout: fixed;
 }
 
-.mobs th:nth-child(1) { width: 32%; }
-.mobs th:nth-child(2) { width: 8%; }
+.mobs th:nth-child(1) { width: 40%; }
+.mobs th:nth-child(2) { width: 10%; }
 .mobs th:nth-child(3), .mobs th:nth-child(4) { width: 17%; }
-.mobs th:nth-child(5) { width: 11%; }
-.mobs th:nth-child(6) { width: 15%; }
+.mobs th:nth-child(5) { width: 16%; }
 .mobs th, .mobs td { box-sizing: border-box; padding-left: 6px; }
 .mobs th:first-child, .mobs td:first-child { padding-left: 0; }
 .mobs td:not(:first-child) { white-space: normal; overflow-wrap: anywhere; }
 
 .mobs td:first-child {
-  max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-weight: 700;
 }
 
-.portals h2 {
-  margin: 0 0 2px;
+/* Each mob wears the minimap's red mob dot. */
+.mobs td.mob::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 7px 1px 1px;
+  border-radius: 50%;
+  background: var(--mob);
+  box-shadow: 0 0 0 1px var(--mob-edge);
+  vertical-align: middle;
+}
+
+.panel .more {
+  margin-top: 3px;
   font-size: 12px;
-  font-weight: 400;
-  color: #9fb6cc;
-}
-
-.portals .none {
-  font-size: 12px;
-  color: #c3ccd6;
-}
-
-.portals ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-}
-
-.portals li div {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.portals .to {
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.portals .tag {
-  flex: none;
-  padding: 0 5px;
-  border-radius: 3px;
-  font-size: 11px;
-  background: rgba(159, 182, 204, 0.2);
-  color: #c3d4e4;
-}
-
-.portals .tag.quest {
-  background: rgba(240, 198, 116, 0.2);
-  color: #f0c674;
-}
-
-.portals .where {
-  display: block;
-  color: #9fb6cc;
-}
-
-.portals .where::first-letter {
-  text-transform: uppercase;
-}
-
-/* The panel's header: the current map, and a row of icons, one per hotkey action (🔍
-   search, ⇆ next candidate, ↗ MeowDB, ⧉ placement, ? help & setup, – collapse). The
-   player drags the panel by it (inside or detached), never by an icon. */
-.drag-handle {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.drag-handle .where {
-  flex: 1;
-  min-width: 0;
-}
-
-.toolbar {
-  flex: none;
-  display: flex;
-  gap: 4px;
-}
-
-/* A small secondary button (🔍, ×, ←): transparent, with a Slate border. */
-.icon-button {
-  flex: none;
-  box-sizing: border-box;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid #3a4a5c;
-  border-radius: 6px;
-  background: transparent;
-  color: #f2f5f8;
-  font: 13px/1 "Segoe UI", "Segoe UI Emoji", system-ui, sans-serif;
-  cursor: default;
-}
-
-#hunting-clear,
-#search-back {
-  font-size: 16px;
-}
-
-.icon-button:hover {
-  background: rgba(242, 245, 248, 0.08);
-}
-
-.panel :focus-visible {
-  outline: 2px solid #f5c542;
-  outline-offset: 3px;
+  color: var(--ink-2);
 }
 
 /* The long parts (the route, the suggestions, the map list) scroll once the panel is as
@@ -344,17 +705,17 @@ td:first-child {
 
 .scroll {
   overflow-y: auto;
-  scrollbar-color: #9fb6cc transparent;
+  scrollbar-color: var(--select-edge) transparent;
 }
 
 /* The Hunting section: its own section at the bottom of the normal view, divided from
-   the current map's info by a Slate rule, headed by the Hunting Target's mob and map. */
+   the current map's info by a rule, headed by the Hunting Target's mob and map. */
 .hunting {
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding-top: 8px;
-  border-top: 1px solid #3a4a5c;
+  border-top: 1px solid var(--rule);
 }
 
 .section-head,
@@ -369,8 +730,6 @@ td:first-child {
   flex: 1;
   min-width: 0;
   margin: 0;
-  font-size: 13px;
-  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -385,13 +744,24 @@ td:first-child {
 
 .hunting h2 .hunting-map {
   font-weight: 400;
-  color: #9fb6cc;
+  color: var(--ink-2);
+}
+
+/* The search view's title sits in its window bar, after the back button. */
+.search-view .window-bar {
+  gap: 7px;
+  padding-right: 8px;
+}
+
+.search-view h2 {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--window-bar-ink);
 }
 
 .search-view h2 .level {
   margin-left: 6px;
   font-weight: 400;
-  color: #9fb6cc;
 }
 
 /* Tier, Density, Share and Distance side by side, labels above figures. */
@@ -401,11 +771,10 @@ td:first-child {
   gap: 8px;
   margin: 0;
   font-size: 12px;
-  font-variant-numeric: tabular-nums;
 }
 
 .figures dt {
-  color: #9fb6cc;
+  color: var(--ink-2);
 }
 
 .figures dd {
@@ -413,30 +782,31 @@ td:first-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13px;
 }
 
 .figures dd:not(.tier) {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .route-title {
   margin: 0;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* The route there: each map in turn, with how it's reached, in an inset, bordered box. */
+/* The route there: each map in turn, with how it's reached, in an inset box. */
 .route-stops {
   margin: 0;
   padding: 4px 10px;
   list-style: none;
   font-size: 12px;
-  border: 1px solid #2a3846;
-  border-radius: 8px;
-  background: rgba(16, 24, 36, 0.9);
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--inset-bg);
 }
 
 .route-stops li {
@@ -447,17 +817,16 @@ td:first-child {
 }
 
 .route-stops .step {
-  color: #9fb6cc;
+  color: var(--ink-2);
   text-align: right;
 }
 
-/* Anything but a portal is worth noticing on the way: by text emphasis alone, like the
-   tiers, since the accent is kept for actions. */
+/* Anything but a portal is worth noticing on the way: by text emphasis alone. */
 .route-stops .step.ship,
 .route-stops .step.taxi,
 .route-stops .step.teleportScroll {
-  color: #f2f5f8;
-  font-weight: 600;
+  color: var(--ink);
+  font-weight: 700;
 }
 
 .route-stops .route-map,
@@ -469,24 +838,16 @@ td:first-child {
 
 .route-stops .route-street {
   grid-column: 2;
-  color: #9fb6cc;
+  color: var(--ink-2);
 }
 
 .search-credit {
   font-size: 12px;
-  color: #c3ccd6;
+  color: var(--ink-3);
 }
 
 /* The search view takes over the whole panel: the query box and its suggestions, then
    the picked mob's map list. */
-.view {
-  flex: 0 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
 .search-view .step {
   display: flex;
   flex-direction: column;
@@ -502,33 +863,34 @@ td:first-child {
 
 .field .label {
   font-size: 12px;
-  color: #9fb6cc;
+  color: var(--ink-2);
 }
 
 .field input {
   box-sizing: border-box;
   width: 100%;
   padding: 6px 10px;
-  border: 1px solid #3a4a5c;
-  border-radius: 6px;
-  background: rgba(16, 24, 36, 0.9);
-  color: #f2f5f8;
-  font: 14px "Segoe UI", system-ui, sans-serif;
+  border: 1px solid var(--frame);
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: inset 0 1px 2px rgba(20, 30, 60, 0.15);
+  color: var(--ink);
+  font: 14px var(--font);
   user-select: text;
 }
 
 .field input::placeholder {
-  color: #9fb6cc;
+  color: var(--ink-3);
 }
 
 /* The suggestions, in the panel's flow below the query box. */
 .suggestions {
   margin: 0;
-  padding: 4px;
+  padding: 3px;
   list-style: none;
-  border: 1px solid #2a3846;
-  border-radius: 8px;
-  background: rgba(16, 24, 36, 0.9);
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--inset-bg);
   font-size: 13px;
 }
 
@@ -536,21 +898,22 @@ td:first-child {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  padding: 1px 8px;
+  padding: 2px 8px;
   border-radius: 3px;
-  color: #9fb6cc;
+  color: var(--ink-2);
 }
 
 .suggestions li:hover,
 .results tbody tr:hover td {
-  background: rgba(242, 245, 248, 0.06);
+  background: rgba(47, 99, 200, 0.08);
 }
 
 /* The one Enter picks. */
 .suggestions li.current {
-  background: rgba(245, 197, 66, 0.12);
-  color: #f2f5f8;
-  font-weight: 600;
+  background: var(--select);
+  box-shadow: inset 0 0 0 1px var(--select-edge);
+  color: var(--ink);
+  font-weight: 700;
 }
 
 .suggestions .name {
@@ -561,14 +924,13 @@ td:first-child {
 
 .suggestions .level {
   flex: none;
-  font-variant-numeric: tabular-nums;
   font-weight: 400;
 }
 
 .panel .keys {
   white-space: normal;
   font-size: 12px;
-  color: #9fb6cc;
+  color: var(--ink-3);
 }
 
 /* The travel toggles: what else Distance counts besides portals and ships. */
@@ -586,7 +948,7 @@ td:first-child {
 .travel legend {
   float: left;
   padding: 0;
-  color: #9fb6cc;
+  color: var(--ink-2);
 }
 
 .travel label {
@@ -597,7 +959,7 @@ td:first-child {
 
 .travel input {
   margin: 0;
-  accent-color: #f5c542;
+  accent-color: var(--edit);
 }
 
 /* The map list (the table itself is in results.css). It takes the keys, but its
@@ -609,16 +971,17 @@ td:first-child {
 .results thead th {
   position: sticky;
   top: 0;
-  background: rgb(19, 27, 39);
+  /* Opaque, so rows scrolled under it don't show through: the see-through body's tone. */
+  background: #c5d0ec;
 }
 
 /* The map Enter makes the Hunting Target. */
 .results tr.current td {
-  background: rgba(245, 197, 66, 0.12);
+  background: var(--select);
 }
 
 .results tr.current .result-map {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* The nearest map with the mob, whatever its tier. */
@@ -628,51 +991,71 @@ td:first-child {
 }
 
 footer {
-  font-size: 12px;
-  color: #c3ccd6;
   display: flex;
   justify-content: space-between;
   gap: 4px 8px;
   flex-wrap: wrap;
+  padding-top: 6px;
+  border-top: 1px solid var(--rule);
+  font-size: 12px;
   line-height: 1.4;
+  color: var(--ink-3);
   overflow-wrap: anywhere;
 }
 
-
-.map-line { display: flex; align-items: baseline; gap: 6px; }
-.map-line .map { min-width: 0; }
-#uncertainty { flex: none; color: #f0c674; font-size: 17px; }
-
-.street {
-  font-size: 12px;
-  color: #9fb6cc;
-  letter-spacing: 0.02em;
-}
-
-.map {
-  font-size: 17px;
-  font-weight: 600;
-}
-
-.unreadable .map {
-  font-weight: 400;
-  font-size: 14px;
-  color: #c3ccd6;
-}
-
-/* The last confident map, while the latest frames don't confirm it. */
-.not-sure .map {
-  color: #c3ccd6;
-}
-
-/* Collapsed: only the icon shows; the window shrinks to fit it. */
+/* Collapsed: the app icon, the gold compass, with the map's Hidden Portal count on a
+   small chip and a dot when something needs a look. The window shrinks to fit it. */
 .icon {
   display: none;
+  position: relative;
   box-sizing: border-box;
   width: 100vw;
   height: 100vh;
-  border-radius: 10px;
-  opacity: 0.85;
+}
+
+.icon .art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.icon .count {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  min-width: 14px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  border: 1px solid #fff;
+  border-radius: 8px;
+  background: var(--ink);
+  color: #fff;
+  font: 700 10px/13px var(--font);
+  text-align: center;
+}
+
+.icon .count:empty {
+  display: none;
+}
+
+.icon .alert {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--orange);
+  box-shadow:
+    0 0 0 1px var(--orange-deep),
+    0 0 0 2px #fff;
+}
+
+/* With Time to Level along the bottom, the count chip sits above it. */
+body:has(#badge:not([hidden])) .icon .count {
+  bottom: 15px;
 }
 
 .collapsed .panel {
@@ -680,7 +1063,7 @@ footer {
 }
 
 .collapsed .icon {
-  display: block;
+  display: grid;
 }
 
 /* Time to Level on the collapsed icon ("47m", "3h 10m"), along its bottom edge. Clicks
@@ -693,10 +1076,9 @@ footer {
   bottom: 2px;
   padding: 0 2px;
   border-radius: 3px;
-  background: rgba(16, 24, 36, 0.88);
-  color: #f2f5f8;
-  font: 600 9px/12px "Segoe UI", system-ui, sans-serif;
-  font-variant-numeric: tabular-nums;
+  background: var(--ink);
+  color: #fff;
+  font: 700 9px/12px var(--font);
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -707,10 +1089,11 @@ footer {
   display: block;
 }
 
-/* Draggable (inside the game, or detached): the header, or the collapsed icon, moves the panel. */
+/* Draggable (inside the game, or detached): the title bar, or the collapsed icon, moves
+   the panel. */
 .draggable .icon,
 .draggable .drag-handle,
-.draggable .drag-handle :not(button) {
+.draggable .drag-handle :not(button):not(button *) {
   cursor: move;
 }
 
@@ -727,15 +1110,14 @@ footer {
 
 /* Increased text scale can leave less inline space in the fixed-width window. */
 @container (max-width: 300px) {
-  .summary td { min-width: 0; }
-  .summary th, .summary td { white-space: normal; padding-left: 4px; overflow-wrap: anywhere; }
-  .summary th:first-child { padding-left: 0; }
+  .summary { grid-template-columns: auto auto auto; }
+  .summary .unit { padding-right: 8px; }
   .mobs, .mobs tbody { display: block; width: 100%; }
   .mobs thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .mobs tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 8px; margin-bottom: 8px; }
   .mobs td { display: block; text-align: left; padding: 0; white-space: normal; overflow-wrap: anywhere; }
-  .mobs td:first-child { grid-column: 1 / -1; max-width: none; font-weight: 600; }
-  .mobs td:not(:first-child)::before { content: attr(data-label); display: block; color: #9fb6cc; }
-  .portals li div { flex-wrap: wrap; }
+  .mobs td:first-child { grid-column: 1 / -1; font-weight: 700; }
+  .mobs td:not(:first-child)::before { content: attr(data-label); display: block; color: var(--ink-2); }
+  .portals .dest { flex-wrap: wrap; }
   .portals .to { flex-basis: 100%; white-space: normal; }
 }

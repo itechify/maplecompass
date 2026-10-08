@@ -221,9 +221,21 @@ fn hotkeys_the_player_rebound_are_the_ones_that_act() {
 fn a_hotkey_another_app_has_taken_is_shown_as_unavailable() {
     let mut compass = Compass::new(FakeSource::meowdb());
 
-    let state = compass.hotkeys_unavailable(vec!["ctrl+shift+n".into()]);
+    let state = compass.hotkeys_unavailable(vec!["ctrl+shift+n".into()], vec![]);
 
     assert_eq!(state.unavailable_hotkeys, ["ctrl+shift+n"]);
+    assert!(state.invalid_hotkeys.is_empty());
+}
+
+#[test]
+fn a_hotkey_that_names_no_key_combination_is_shown_as_unavailable_and_invalid() {
+    let mut compass = Compass::new(FakeSource::meowdb());
+
+    let state = compass.hotkeys_unavailable(vec!["ctrl+shift+n".into()], vec!["ctrl+shift+banana".into()]);
+
+    // Both do nothing; only the second is the player's own typo to fix.
+    assert_eq!(state.unavailable_hotkeys, ["ctrl+shift+n", "ctrl+shift+banana"]);
+    assert_eq!(state.invalid_hotkeys, ["ctrl+shift+banana"]);
 }
 
 #[test]
@@ -256,7 +268,7 @@ fn a_rebound_search_hotkey_another_app_has_taken_is_shown_as_unavailable() {
     let hotkeys = Hotkeys { search: "ctrl+shift+q".into(), ..Hotkeys::default() };
     compass.restore(Settings { hotkeys, ..Settings::default() });
 
-    let state = compass.hotkeys_unavailable(vec!["ctrl+shift+q".into()]);
+    let state = compass.hotkeys_unavailable(vec!["ctrl+shift+q".into()], vec![]);
 
     assert_eq!(state.hotkeys.search, "ctrl+shift+q");
     assert_eq!(state.hotkeys.all().last(), Some(&"ctrl+shift+q"));
@@ -283,7 +295,7 @@ fn before_the_foreground_is_known_the_hotkeys_are_not_live() {
 fn a_hotkey_reported_unavailable_stays_listed_while_the_hotkeys_are_not_live() {
     let mut compass = Compass::new(FakeSource::meowdb());
     compass.on_foreground(Foreground::Game);
-    compass.hotkeys_unavailable(vec!["ctrl+shift+n".into()]);
+    compass.hotkeys_unavailable(vec!["ctrl+shift+n".into()], vec![]);
 
     let state = compass.on_foreground(Foreground::OtherApp);
 

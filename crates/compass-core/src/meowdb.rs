@@ -175,7 +175,17 @@ fn read_page(html: &str, id: &str, overrides: &[PortalOverride]) -> Result<MapDa
         None => return Err(format!("returnMap is {}, not a map ID", map["returnMap"])),
     };
     let (portals, hidden_portals) = portals(map, id, overrides)?;
-    Ok(MapData { summary, mobs, hidden_portals, connected_maps, portals, mob_rate_percent, nearest_town })
+    Ok(MapData {
+        summary,
+        mobs,
+        hidden_portals,
+        connected_maps,
+        portals,
+        mob_rate_percent,
+        nearest_town,
+        // The panel picks these out when it loads the data.
+        ..MapData::default()
+    })
 }
 
 /// The map's portals to other maps and its Hidden Portals, from its `portals`.
