@@ -41,8 +41,10 @@ struct SetupView<'a> {
     /// The window title looked for.
     game_title: &'a str,
     setup_hotkey: &'a str,
-    /// Hotkeys another app has taken.
+    /// Hotkeys that do nothing: another app has them, or they are invalid.
     unavailable_hotkeys: &'a [String],
+    /// Those of them that don't name a key combination.
+    invalid_hotkeys: &'a [String],
 }
 
 #[derive(Serialize)]
@@ -100,6 +102,7 @@ impl SetupWindows {
             game_title: &state.game_window_title,
             setup_hotkey: &state.hotkeys.setup,
             unavailable_hotkeys: &state.unavailable_hotkeys,
+            invalid_hotkeys: &state.invalid_hotkeys,
         };
         // Only send changes: the loop wakes up 20 times a second.
         let Ok(view) = serde_json::to_value(&view) else { return };
