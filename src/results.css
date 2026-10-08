@@ -1,4 +1,4 @@
-/* The mob search results table: the panel's top five, and every result in search mode. */
+/* The search view's map list: every map the picked mob spawns on. */
 .results {
   width: 100%;
   table-layout: fixed;

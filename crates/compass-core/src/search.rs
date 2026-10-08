@@ -1,5 +1,6 @@
-//! Mob search: search mode's state (query, suggestions, highlight) and the picked mob, as
-//! the overlay renders them, plus how far the world crawl behind it has got.
+//! Mob search: the search view (query, suggestions, the picked mob's map list and their
+//! highlights) and the Hunting Target it sets, as the overlay renders them, plus how far
+//! the world crawl behind it has got.
 
 use crate::MEOWDB_CREDIT;
 use crate::crawl::{Crawl, CrawlProgress};
@@ -8,8 +9,26 @@ use crate::map_index::MapEntry;
 use crate::world::{Distance, Distances, Here, Step, Travel, World};
 use serde::Serialize;
 
-/// How many results the panel shows outside search mode; search mode shows them all.
-pub const PANEL_RESULTS: usize = 5;
+/// Which step of the search view is open. It takes over the whole panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SearchView {
+    /// The query box and the mobs whose name contains it.
+    Mobs,
+    /// The picked mob's ranked map list, to pick the Hunting Target's map from.
+    Maps,
+}
+
+/// The mob and map the player picked to go and hunt, with the map's figures and the way
+/// there from the map the panel shows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HuntingTarget {
+    pub mob: MobChoice,
+    /// The map, as the mob's map list ranks it now: Density Tier, Density, Spawn Share,
+    /// and Distance and route from the map the panel shows.
+    pub map: SearchResult,
+}
 
 /// A mob the player can pick: one per MeowDB mob ID.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -74,29 +93,24 @@ pub struct RouteStop {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchState {
-    /// The overlay is in search mode: it shows the query box and every result, and has
-    /// the keyboard and the mouse (ADR 0001).
-    pub search_mode: bool,
+    /// The search view's open step; `None` for the normal view. While it is open the
+    /// overlay has the keyboard (ADR 0001).
+    pub view: Option<SearchView>,
     /// What the player has typed in the query box.
     pub query: String,
     /// The known mobs whose name contains the query (case-insensitive), by name.
     pub suggestions: Vec<MobChoice>,
     /// Which suggestion Enter would pick; `None` when there are none.
     pub highlighted: Option<usize>,
-    /// The mob the player picked, until they clear the search.
+    /// The mob whose map list the search view shows; `None` outside that step.
     pub picked: Option<MobChoice>,
     /// Every known map the picked mob spawns on (Event maps left out), by Density Tier
-    /// and then Density: search mode's list.
+    /// and then Density: the search view's map list.
     pub results: Vec<SearchResult>,
-    /// The first [`PANEL_RESULTS`] of the results: the list outside search mode.
-    pub top_results: Vec<SearchResult>,
-    /// How many results there are besides the panel's.
-    pub more_results: u32,
     /// The picked mob spawns only on Event maps (of the maps known so far), which
     /// search leaves out: why it has no results.
     pub only_on_event_maps: bool,
-    /// The result whose route search mode shows in full; `None` when there are
-    /// no results.
+    /// The map Enter would pick from the map list; `None` when there are no results.
     pub highlighted_result: Option<usize>,
     /// The headline: which of the results is the nearest with a route, whatever its
     /// tier (of those equally near, the densest). `None` with no map shown or no route
@@ -109,6 +123,9 @@ pub struct SearchState {
     pub crawl: CrawlProgress,
     /// What Distances count besides portals and ships (the checkboxes).
     pub travel: Travel,
+    /// The Hunting Target the panel's Hunting section shows, until the player arrives
+    /// there or clears it. Kept for this session only.
+    pub hunting: Option<HuntingTarget>,
 }
 
 /// What mob search works over: the maps the crawl knows (`None` before the map index
@@ -121,27 +138,47 @@ pub(crate) struct Searched<'a> {
     pub travel: Travel,
 }
 
-/// The player's side of mob search: what they typed, highlighted and picked.
+/// The player's side of mob search: what they typed, highlighted and picked, and the
+/// Hunting Target.
 #[derive(Default)]
 pub(crate) struct MobSearch {
-    search_mode: bool,
+    view: Option<SearchView>,
     query: String,
     /// The ID of the mob the player moved the highlight to; `None` for the first
     /// suggestion. Kept by ID, so the highlight stays on it as the crawl adds mobs.
     highlighted: Option<String>,
+    /// The mob whose map list the search view shows.
     picked: Option<MobChoice>,
-    /// The ID of the map the player moved the result highlight to; `None` for the
-    /// first result. Kept by ID, so the highlight stays on it as the results reorder.
+    /// The ID of the map the player moved the map list's highlight to; `None` for the
+    /// first map. Kept by ID, so the highlight stays on it as the list reorders.
     highlighted_result: Option<String>,
+    /// The Hunting Target: its mob and the ID of its map.
+    target: Option<(MobChoice, String)>,
 }
 
 impl MobSearch {
-    /// The search hotkey: enter search mode, with nothing typed yet.
+    /// Open the search view on its first step, with nothing typed yet. Already open, it
+    /// stays as it is.
     pub fn open(&mut self) {
-        if !self.search_mode {
-            self.search_mode = true;
+        if self.view.is_none() {
+            self.view = Some(SearchView::Mobs);
             self.type_query("");
         }
+    }
+
+    /// Open the search view on the Hunting Target mob's map list, highlighting its map.
+    /// Without a target, nothing happens.
+    pub fn reopen(&mut self) {
+        if let Some((mob, map_id)) = self.target.clone() {
+            self.type_query("");
+            self.view = Some(SearchView::Maps);
+            self.picked = Some(mob);
+            self.highlighted_result = Some(map_id);
+        }
+    }
+
+    pub fn is_open(&self) -> bool {
+        self.view.is_some()
     }
 
     /// The text box now holds `query`.
@@ -150,52 +187,92 @@ impl MobSearch {
         self.highlighted = None;
     }
 
-    /// Move the highlight `by` suggestions (up when negative), stopping at either end.
-    /// With no suggestions listed, move it through the results instead.
+    /// Move the open step's highlight `by` items (up when negative), stopping at either
+    /// end: through the suggestions, or through the map list.
     pub fn move_highlight(&mut self, by: isize, searched: &Searched) {
-        if !self.search_mode {
-            return;
-        }
-        let suggestions = self.suggestions(searched.crawl);
-        if !move_through(&mut self.highlighted, &suggestions, by, MobChoice::key) {
-            let results = self.results(searched);
-            move_through(&mut self.highlighted_result, &results, by, SearchResult::key);
-        }
-    }
-
-    /// Enter: pick the highlighted mob and leave search mode; with nothing typed, clear
-    /// the search. A query matching no mob stays in search mode.
-    pub fn enter(&mut self, crawl: Option<&Crawl>) {
-        if !self.search_mode {
-            return;
-        }
-        if self.query.trim().is_empty() {
-            self.clear();
-            return;
-        }
-        let suggestions = self.suggestions(crawl);
-        if let Some(at) = highlight_in(&suggestions, &self.highlighted, MobChoice::key) {
-            self.picked = Some(suggestions[at].clone());
-            self.highlighted_result = None;
-            self.search_mode = false;
+        match self.view {
+            Some(SearchView::Mobs) => {
+                let suggestions = self.suggestions(searched.crawl);
+                move_through(&mut self.highlighted, &suggestions, by, MobChoice::key);
+            }
+            Some(SearchView::Maps) => {
+                let results = self.results(searched);
+                move_through(&mut self.highlighted_result, &results, by, SearchResult::key);
+            }
+            None => {}
         }
     }
 
-    /// Esc: leave search mode, keeping the current search.
+    /// Enter: pick the highlighted mob and list its maps, or pick the highlighted map and
+    /// make it the Hunting Target. Nothing to pick (nothing typed, or a query matching no
+    /// mob) leaves the view as it is.
+    pub fn enter(&mut self, searched: &Searched) {
+        let id = match self.view {
+            Some(SearchView::Mobs) => {
+                let suggestions = self.suggestions(searched.crawl);
+                highlight_in(&suggestions, &self.highlighted, MobChoice::key).map(|at| suggestions[at].id.clone())
+            }
+            Some(SearchView::Maps) => {
+                let results = self.results(searched);
+                highlight_in(&results, &self.highlighted_result, SearchResult::key).map(|at| results[at].map_id.clone())
+            }
+            None => None,
+        };
+        if let Some(id) = id {
+            self.pick(&id, searched);
+        }
+    }
+
+    /// The player picked the mob or map with this MeowDB ID from the open step's list.
+    pub fn pick(&mut self, id: &str, searched: &Searched) {
+        match self.view {
+            Some(SearchView::Mobs) => {
+                if let Some(mob) = self.suggestions(searched.crawl).into_iter().find(|mob| mob.id == id) {
+                    self.picked = Some(mob);
+                    self.highlighted_result = None;
+                    self.view = Some(SearchView::Maps);
+                }
+            }
+            Some(SearchView::Maps) => {
+                let listed = self.results(searched).iter().any(|result| result.map_id == id);
+                if let (Some(mob), true) = (&self.picked, listed) {
+                    self.target = Some((mob.clone(), id.to_string()));
+                    self.close();
+                }
+            }
+            None => {}
+        }
+    }
+
+    /// Esc or the back arrow: back to the normal view, with nothing changed.
     pub fn escape(&mut self) {
-        self.search_mode = false;
+        self.close();
     }
 
-    /// Clear the search: no picked mob, so no results; out of search mode if it was on.
-    pub fn clear(&mut self) {
+    fn close(&mut self) {
+        self.view = None;
+        self.type_query("");
         self.picked = None;
         self.highlighted_result = None;
-        self.search_mode = false;
+    }
+
+    /// The Hunting section's ×: no Hunting Target any more.
+    pub fn clear(&mut self) {
+        self.target = None;
+    }
+
+    /// The panel now shows map `map_id`: if that is the Hunting Target's map, the player
+    /// is there, and the target is done with.
+    pub fn arrived(&mut self, map_id: &str) {
+        if self.target.as_ref().is_some_and(|(_, target)| target == map_id) {
+            self.clear();
+        }
     }
 
     /// The search state for the panel.
     pub fn state(&self, searched: &Searched) -> SearchState {
         let Searched { crawl, travel, .. } = *searched;
+        let hunting = self.hunting(searched);
         let suggestions = self.suggestions(crawl);
         let results = self.results(searched);
         let only_on_event_maps = match (&self.picked, crawl) {
@@ -205,24 +282,31 @@ impl MobSearch {
             _ => false,
         };
         SearchState {
-            search_mode: self.search_mode,
+            view: self.view,
             query: self.query.clone(),
             highlighted: highlight_in(&suggestions, &self.highlighted, MobChoice::key),
             picked: self.picked.clone(),
             suggestions,
-            credit: (!results.is_empty()).then_some(MEOWDB_CREDIT),
+            credit: (!results.is_empty() || hunting.is_some()).then_some(MEOWDB_CREDIT),
             nearest: nearest(&results),
             highlighted_result: highlight_in(&results, &self.highlighted_result, SearchResult::key),
-            top_results: results.iter().take(PANEL_RESULTS).cloned().collect(),
-            more_results: results.len().saturating_sub(PANEL_RESULTS) as u32,
             only_on_event_maps,
             results,
             crawl: crawl.map(Crawl::progress).unwrap_or_default(),
             travel,
+            hunting,
         }
     }
 
-    /// The picked mob's results; none with no mob picked.
+    /// The Hunting Target with its map's figures, ranked among the mob's maps as they
+    /// are known now, and its route from the map the panel shows.
+    fn hunting(&self, searched: &Searched) -> Option<HuntingTarget> {
+        let ((mob, map_id), crawl) = (self.target.as_ref()?, searched.crawl?);
+        let map = results(&mob.id, crawl, searched.here, searched.travel).into_iter().find(|r| &r.map_id == map_id)?;
+        Some(HuntingTarget { mob: mob.clone(), map })
+    }
+
+    /// The picked mob's map list; none outside that step.
     fn results(&self, searched: &Searched) -> Vec<SearchResult> {
         match (&self.picked, searched.crawl) {
             (Some(mob), Some(crawl)) => results(&mob.id, crawl, searched.here, searched.travel),
@@ -231,10 +315,11 @@ impl MobSearch {
     }
 
     /// The known mobs whose name contains the query, whatever the case: each once, by
-    /// name (then level and ID).
+    /// name (then level and ID). None outside the view's first step.
     fn suggestions(&self, crawl: Option<&Crawl>) -> Vec<MobChoice> {
         let query = self.query.trim().to_lowercase();
-        let Some(crawl) = crawl.filter(|_| !query.is_empty()) else { return Vec::new() };
+        let open = self.view == Some(SearchView::Mobs);
+        let Some(crawl) = crawl.filter(|_| open && !query.is_empty()) else { return Vec::new() };
         let mut found: Vec<MobChoice> = Vec::new();
         for (_, data) in crawl.known() {
             for mob in &data.mobs {

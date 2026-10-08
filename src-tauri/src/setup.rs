@@ -1,5 +1,5 @@
-//! First-run setup windows. The overlay can't take input (it is click-through and
-//! never takes focus), so setup has its own normal window, plus a "region" window laid
+//! First-run setup windows. The overlay never takes focus on a click and has no room
+//! for setup, so setup has its own normal window, plus a "region" window laid
 //! over the game's client area where the player marks the Title Region. Both are
 //! declared hidden in `tauri.conf.json`: creating windows inside commands can deadlock
 //! on Windows. Every decision is the core's; this only shows windows and relays.
