@@ -1,0 +1,242 @@
+//! The Hunting Target: the mob and map the player picked in the search view. The panel's
+//! Hunting section shows the map's Density Tier, Density, Spawn Share and Distance, and
+//! the route there from the player's current map, recomputed as they move. It goes away
+//! when they arrive, or when they clear it with ×.
+//!
+//! The maps the player stands on are titled like the minimap samples (Sunset Sky,
+//! Kerning City), so arriving with that sample puts the panel on them.
+
+mod common;
+
+use common::arrive;
+use common::world::{WorldMap, map, mob, orange, search_for, world};
+use compass_core::{Action, Compass, DensityTier, Distance, HuntingTarget, Mob, PanelState, SearchView, Step};
+
+const SUNSET: &str = "victoria-road__sunset-sky--window";
+const KERNING: &str = "victoria-road__kerning-city--window";
+
+/// A mob with this Spawn Share (whole percent).
+fn sharing(share: u32, mut mob: Mob) -> Mob {
+    mob.spawn_share_percent = share;
+    mob
+}
+
+/// Sunset Sky leads to Kerning City, Kerning City to the Mushroom Field, where Orange
+/// Mushrooms are a third as dense as on the Mushroom Grove, which is out of reach.
+fn mushroom_roads() -> Vec<WorldMap> {
+    vec![
+        map("100000000", "Sunset Sky", 100, vec![]).to(&["100000001"]),
+        map("100000001", "Kerning City", 100, vec![]).to(&["100000000", "100000002"]),
+        map("100000002", "Mushroom Field", 150, vec![sharing(40, orange(4)), mob("4", "Shroom", 2, 6)]),
+        map("100000003", "Mushroom Grove", 100, vec![orange(18)]),
+    ]
+}
+
+/// A core over `maps`, crawled, with the player arrived on Sunset Sky.
+fn on_sunset_sky(maps: Vec<WorldMap>) -> Compass {
+    let mut compass = Compass::new(world(maps));
+    compass.tick(0);
+    compass.tick(50);
+    arrive(&mut compass, SUNSET, 100);
+    compass
+}
+
+/// Make the Orange Mushroom on map `map_id` the Hunting Target.
+fn hunt_orange_on(compass: &mut Compass, map_id: &str) -> PanelState {
+    search_for(compass, "orange");
+    compass.search_pick(map_id).clone()
+}
+
+fn target(state: &PanelState) -> &HuntingTarget {
+    state.search.hunting.as_ref().expect("a Hunting Target")
+}
+
+/// The target's route, as its map names with how each is reached.
+fn route(state: &PanelState) -> Vec<String> {
+    target(state)
+        .map
+        .route
+        .iter()
+        .map(|stop| match stop.by {
+            None => stop.map_name.clone(),
+            Some(step) => format!("{step:?}: {}", stop.map_name),
+        })
+        .collect()
+}
+
+#[test]
+fn the_hunting_section_shows_the_mob_and_map_with_its_figures() {
+    let mut compass = on_sunset_sky(mushroom_roads());
+
+    let state = hunt_orange_on(&mut compass, "100000002");
+
+    let target = target(&state);
+    assert_eq!((target.mob.name.as_str(), target.mob.level), ("Orange Mushroom", 8));
+    assert_eq!((target.map.street_name.as_str(), target.map.map_name.as_str()), ("Victoria Road", "Mushroom Field"));
+    assert_eq!(target.map.tier, DensityTier::Medium, "6 is a third of the Grove's 18");
+    assert_eq!(target.map.density_hundredths, 600, "4 spawns at a 1.5x Mob Rate");
+    assert_eq!(target.map.spawn_share_percent, 40);
+    assert_eq!(target.map.distance, Distance::MapChanges(2));
+}
+
+#[test]
+fn the_route_goes_from_the_current_map_and_is_worked_out_again_as_the_player_moves() {
+    let mut compass = on_sunset_sky(mushroom_roads());
+
+    let state = hunt_orange_on(&mut compass, "100000002");
+    assert_eq!(route(&state), ["Sunset Sky", "Portal: Kerning City", "Portal: Mushroom Field"]);
+
+    let state = arrive(&mut compass, KERNING, 1_000);
+    assert_eq!(target(&state).map.distance, Distance::MapChanges(1));
+    assert_eq!(route(&state), ["Kerning City", "Portal: Mushroom Field"]);
+}
+
+#[test]
+fn a_target_with_no_route_says_so_and_the_travel_toggles_count_at_once() {
+    let henesys = "010001000";
+    let mut compass = on_sunset_sky(vec![
+        map("100000000", "Sunset Sky", 100, vec![]),
+        map(henesys, "Henesys", 100, vec![orange(10)]),
+    ]);
+
+    let state = hunt_orange_on(&mut compass, henesys);
+    assert_eq!(target(&state).map.distance, Distance::NoRoute);
+    assert!(route(&state).is_empty());
+
+    let state = compass.act(Action::ToggleTeleportScrolls).clone();
+    assert_eq!(route(&state), ["Sunset Sky", "TeleportScroll: Henesys"]);
+    assert_eq!(target(&state).map.travel, [Step::TeleportScroll]);
+}
+
+#[test]
+fn arriving_on_the_target_map_clears_the_hunting_target() {
+    let mut compass = on_sunset_sky(vec![
+        map("100000000", "Sunset Sky", 100, vec![]).to(&["100000001"]),
+        map("100000001", "Kerning City", 100, vec![orange(10)]),
+    ]);
+    hunt_orange_on(&mut compass, "100000001");
+
+    let state = arrive(&mut compass, KERNING, 1_000);
+
+    assert_eq!(state.search.hunting, None);
+}
+
+#[test]
+fn picking_the_map_the_player_is_on_keeps_it_until_they_leave_and_come_back() {
+    let mut compass = on_sunset_sky(vec![
+        map("100000000", "Sunset Sky", 100, vec![orange(10)]).to(&["100000001"]),
+        map("100000001", "Kerning City", 100, vec![]).to(&["100000000"]),
+    ]);
+
+    let state = hunt_orange_on(&mut compass, "100000000");
+    assert_eq!(target(&state).map.distance, Distance::MapChanges(0));
+    let state = arrive(&mut compass, KERNING, 1_000);
+    assert!(state.search.hunting.is_some());
+
+    let state = arrive(&mut compass, SUNSET, 2_000);
+    assert_eq!(state.search.hunting, None);
+}
+
+#[test]
+fn with_candidates_the_target_is_cleared_once_the_candidate_shown_is_the_target() {
+    // Two maps titled Kerning City, told apart by their mobs; the Orange Mushrooms are on
+    // the second.
+    let mut compass = on_sunset_sky(vec![
+        map("100000000", "Sunset Sky", 100, vec![]),
+        map("100000001", "Kerning City", 100, vec![mob("3", "Blue Snail", 4, 1)]),
+        map("100000002", "Kerning City", 100, vec![orange(10)]),
+    ]);
+    hunt_orange_on(&mut compass, "100000002");
+
+    let state = arrive(&mut compass, KERNING, 1_000);
+    assert!(state.candidates.is_some());
+    assert_eq!(state.map.as_ref().map(|m| m.id.as_str()), Some("100000001"));
+    assert!(state.search.hunting.is_some(), "the candidate shown isn't the target");
+
+    let state = compass.act(Action::ChooseCandidate);
+    assert_eq!(state.map.as_ref().map(|m| m.id.as_str()), Some("100000002"));
+    assert_eq!(state.search.hunting, None);
+}
+
+#[test]
+fn the_sections_x_clears_the_hunting_target() {
+    let mut compass = on_sunset_sky(mushroom_roads());
+    hunt_orange_on(&mut compass, "100000002");
+
+    let state = compass.act(Action::ClearHuntingTarget);
+
+    assert_eq!(state.search.hunting, None);
+    assert_eq!(state.search.credit, None);
+}
+
+/// Orange Mushrooms on the Near Field, next to Sunset Sky, and the denser Far Field.
+fn near_and_far_fields() -> Vec<WorldMap> {
+    vec![
+        map("100000000", "Sunset Sky", 100, vec![]).to(&["100000001"]),
+        map("100000001", "Near Field", 100, vec![orange(5)]).to(&["100000002"]),
+        map("100000002", "Far Field", 100, vec![orange(10)]),
+    ]
+}
+
+/// The highlighted map's name in the search view's map list.
+fn highlighted(state: &PanelState) -> Option<&str> {
+    state.search.highlighted_result.map(|at| state.search.results[at].map_name.as_str())
+}
+
+#[test]
+fn the_sections_search_button_reopens_the_mobs_map_list_on_the_target_map() {
+    let mut compass = on_sunset_sky(near_and_far_fields());
+    hunt_orange_on(&mut compass, "100000001");
+
+    let state = compass.act(Action::ReopenMapList).clone();
+
+    assert_eq!(state.search.view, Some(SearchView::Maps));
+    assert_eq!(state.search.picked.as_ref().map(|m| m.name.as_str()), Some("Orange Mushroom"));
+    assert_eq!(state.search.results[0].map_name, "Far Field");
+    assert_eq!(highlighted(&state), Some("Near Field"), "the current target");
+    assert_eq!(target(&state).map.map_name, "Near Field", "until another map is picked");
+}
+
+#[test]
+fn another_map_picked_from_the_reopened_list_becomes_the_target() {
+    let mut compass = on_sunset_sky(near_and_far_fields());
+    hunt_orange_on(&mut compass, "100000001");
+    compass.act(Action::ReopenMapList);
+
+    compass.act(Action::SearchPrevious);
+    let state = compass.act(Action::SearchEnter);
+
+    assert_eq!(state.search.view, None);
+    assert_eq!(target(state).map.map_name, "Far Field");
+}
+
+#[test]
+fn esc_from_the_reopened_list_keeps_the_target() {
+    let mut compass = on_sunset_sky(near_and_far_fields());
+    let before = hunt_orange_on(&mut compass, "100000001");
+    compass.act(Action::ReopenMapList);
+    compass.act(Action::SearchPrevious);
+
+    let state = compass.act(Action::SearchEscape);
+
+    assert_eq!(*state, before);
+}
+
+#[test]
+fn without_a_target_there_is_no_map_list_to_reopen() {
+    let mut compass = on_sunset_sky(near_and_far_fields());
+
+    let state = compass.act(Action::ReopenMapList);
+
+    assert_eq!(state.search.view, None);
+}
+
+#[test]
+fn the_hunting_target_is_kept_in_memory_only() {
+    let mut compass = on_sunset_sky(mushroom_roads());
+    hunt_orange_on(&mut compass, "100000002");
+
+    let json = serde_json::to_string(&compass.settings()).unwrap();
+
+    assert!(!json.contains("100000002") && !json.to_lowercase().contains("hunting"), "{json}");
+}

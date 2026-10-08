@@ -10,46 +10,72 @@
   </head>
   <body class="hidden">
     <main class="panel" id="panel">
-      <header>
-        <p class="street" id="street"></p>
-        <div class="map-line"><p class="map" id="map">Starting…</p><span id="uncertainty" aria-label="Current Map is uncertain" hidden>?</span></div>
-      </header>
-      <p class="note" id="edit-hint" hidden></p>
-      <p class="note" id="recovery" role="status" hidden></p>
-      <p class="note problem" id="hotkey-problem" role="status" hidden></p>
-      <section id="data" hidden>
-        <section class="candidates" id="candidates" hidden>
-          <p class="note" id="candidates-note"></p>
-          <ol id="candidate-rows"></ol>
+      <div class="view" id="normal-view">
+        <header class="drag-handle">
+          <div class="where">
+            <p class="street" id="street"></p>
+            <div class="map-line"><p class="map" id="map">Starting…</p><span id="uncertainty" aria-label="Current Map is uncertain" hidden>?</span></div>
+          </div>
+          <button type="button" class="icon-button" id="open-search" aria-label="Search a mob">🔍</button>
+        </header>
+        <p class="note" id="recovery" role="status" hidden></p>
+        <p class="note problem" id="hotkey-problem" role="status" hidden></p>
+        <section id="data" hidden>
+          <section class="candidates" id="candidates" hidden>
+            <p class="note" id="candidates-note"></p>
+            <ol id="candidate-rows"></ol>
+          </section>
+          <p class="note" id="note" role="status"></p>
+          <table class="summary" id="summary">
+            <thead>
+              <tr><th></th><th>Solo</th><th title="Party of six or more players" aria-label="Party of six or more players">6+</th></tr>
+            </thead>
+            <tbody>
+              <tr><th>Mobs/h</th><td id="mobs-solo"></td><td id="mobs-party"></td></tr>
+              <tr><th>EXP/h</th><td id="exp-solo"></td><td id="exp-party"></td></tr>
+            </tbody>
+          </table>
+          <table class="mobs" id="mobs">
+            <thead>
+              <tr><th>Mob</th><th>Lv</th><th>HP</th><th>EXP</th><th>Count</th><th title="Share of all mob spawns on this Map" aria-label="Spawn Share">Share</th></tr>
+            </thead>
+            <tbody id="mob-rows"></tbody>
+          </table>
+          <section class="portals" id="portals">
+            <h2>Hidden portals</h2>
+            <p class="none" id="no-portals">None on this map</p>
+            <ul id="portal-rows"></ul>
+          </section>
         </section>
-        <p class="note" id="note" role="status"></p>
-        <table class="summary" id="summary">
-          <thead>
-            <tr><th></th><th>Solo</th><th title="Party of six or more players" aria-label="Party of six or more players">6+</th></tr>
-          </thead>
-          <tbody>
-            <tr><th>Mobs/h</th><td id="mobs-solo"></td><td id="mobs-party"></td></tr>
-            <tr><th>EXP/h</th><td id="exp-solo"></td><td id="exp-party"></td></tr>
-          </tbody>
-        </table>
-        <table class="mobs" id="mobs">
-          <thead>
-            <tr><th>Mob</th><th>Lv</th><th>HP</th><th>EXP</th><th>Count</th><th title="Share of all mob spawns on this Map" aria-label="Spawn Share">Share</th></tr>
-          </thead>
-          <tbody id="mob-rows"></tbody>
-        </table>
-        <section class="portals" id="portals">
-          <h2>Hidden portals</h2>
-          <p class="none" id="no-portals">None on this map</p>
-          <ul id="portal-rows"></ul>
+        <section class="hunting" id="hunting" aria-labelledby="hunting-title" hidden>
+          <div class="section-head">
+            <h2 id="hunting-title"></h2>
+            <button type="button" class="icon-button" id="hunting-reopen" aria-label="Pick another map for this mob" title="Pick another map for this mob">🔍</button>
+            <button type="button" class="icon-button" id="hunting-clear" aria-label="Clear the Hunting Target" title="Clear the Hunting Target">×</button>
+          </div>
+          <dl class="figures">
+            <div><dt>Tier</dt><dd id="hunting-tier"></dd></div>
+            <div><dt title="Spawn Count × Mob Rate">Density</dt><dd id="hunting-density"></dd></div>
+            <div><dt title="Share of all mob spawns on the Map">Share</dt><dd id="hunting-share"></dd></div>
+            <div><dt title="Map changes from the map you're on">Distance</dt><dd id="hunting-distance"></dd></div>
+          </dl>
+          <h3 class="route-title" id="hunting-route-title"></h3>
+          <ol class="route-stops scroll" id="hunting-route"></ol>
+          <p class="note" id="hunting-route-none" hidden></p>
+          <p class="search-credit" id="hunting-credit" hidden></p>
         </section>
-      </section>
-      <section class="mob-search" id="mob-search" aria-labelledby="search-title" hidden>
-        <div class="search-head">
-          <h2 id="search-title">Mob search</h2>
-          <button type="button" class="clear" id="search-clear" data-control aria-label="Clear the mob search" title="Clear the mob search">×</button>
-        </div>
-        <div class="search-mode" id="search-mode" hidden>
+        <p class="note crawl" id="crawl-progress" role="status" hidden></p>
+        <footer id="footer" hidden>
+          <span id="credit"></span><span class="hint" id="open-hint"></span>
+          <span class="hint" id="help-hint"></span>
+        </footer>
+      </div>
+      <section class="view search-view" id="search-view" aria-labelledby="search-title" hidden>
+        <header class="drag-handle search-bar">
+          <button type="button" class="icon-button" id="search-back" aria-label="Back, changing nothing" title="Back, changing nothing (Esc)">←</button>
+          <h2 id="search-title"></h2>
+        </header>
+        <div class="step" id="mobs-step">
           <label class="field">
             <span class="label">Mob name</span>
             <input
@@ -64,9 +90,18 @@
               aria-autocomplete="list"
             />
           </label>
-          <ul class="suggestions" id="suggestions" role="listbox" aria-label="Mobs" hidden></ul>
+          <ul class="suggestions scroll" id="suggestions" role="listbox" aria-label="Mobs" hidden></ul>
           <p class="note" id="no-match" hidden></p>
-          <p class="keys">↑ ↓ choose a mob, or with nothing typed a map's route · Enter picks · Esc returns to the game · Enter with nothing typed, or ×, clears the search</p>
+          <p class="keys">↑ ↓ choose a mob · Enter or a click lists its maps · Esc goes back</p>
+        </div>
+        <div class="step" id="maps-step" hidden>
+          <p class="nearest" id="search-nearest" hidden></p>
+          <p class="note" id="search-note" role="status" hidden></p>
+          <div class="results-box scroll" id="results-box" tabindex="-1">
+            <table class="results" id="search-results">
+              <tbody id="search-rows"></tbody>
+            </table>
+          </div>
           <fieldset class="travel">
             <legend>Distance also counts</legend>
             <label title="Taxi rides between Lith Harbor, Henesys, Ellinia, Kerning City and Perion, one map change each">
@@ -76,27 +111,11 @@
               <input type="checkbox" id="teleport-scrolls" /> Teleport Scrolls
             </label>
           </fieldset>
+          <p class="keys">↑ ↓ choose a map · Enter or a click makes it your Hunting Target · Esc goes back</p>
         </div>
-        <p class="nearest" id="search-nearest" hidden></p>
-        <p class="note" id="search-note" role="status" hidden></p>
-        <div class="results-box" id="results-box">
-          <table class="results" id="search-results">
-            <tbody id="search-rows"></tbody>
-          </table>
-        </div>
-        <section class="route" id="route" aria-live="polite" hidden>
-          <h3 id="route-title"></h3>
-          <ol class="route-stops" id="route-stops"></ol>
-          <p class="note" id="route-none" hidden></p>
-        </section>
-        <p class="more" id="search-more" hidden></p>
+        <p class="note crawl" id="search-crawl" role="status" hidden></p>
         <p class="search-credit" id="search-credit" hidden></p>
       </section>
-      <p class="note crawl" id="crawl-progress" role="status" hidden></p>
-      <footer id="footer" hidden>
-        <span id="credit"></span><span class="hint" id="open-hint"></span>
-        <span class="hint" id="help-hint"></span>
-      </footer>
     </main>
     <img class="icon" src="/assets/icon.svg" alt="MapleCompass" draggable="false" />
   </body>
