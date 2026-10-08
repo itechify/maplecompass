@@ -3,7 +3,7 @@ name: MapleCompass
 description: The in-game overlay panel that names the map, shows its Hidden Portals, judges its mobs, tracks EXP and leads to a Hunting Target, with its setup and title-marking windows, all drawn in MapleStory's own window language.
 colors:
   panel-ink: "#16191f"
-  panel-ink-2: "#2c3446"
+  panel-ink-2: "#222938"
   panel-ink-3: "#343d51"
   glass: "rgba(178, 194, 232, 0.62)"
   window-edge: "#6f95ba"
@@ -77,6 +77,16 @@ typography:
     fontSize: "14px"
     fontWeight: 700
     lineHeight: "18px"
+  section-heading:
+    fontFamily: "Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontSize: "14px"
+    fontWeight: 700
+    lineHeight: "18px"
+  status:
+    fontFamily: "Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontSize: "15px"
+    fontWeight: 700
+    lineHeight: "23px"
   window-name:
     fontFamily: "Arial, \"Segoe UI\", system-ui, sans-serif"
     fontSize: "12px"
@@ -113,7 +123,6 @@ typography:
     fontSize: "11px"
     fontWeight: 700
     lineHeight: "15px"
-    letterSpacing: "0.04em"
 rounded:
   game-button: "2px"
   chip: "3px"
@@ -350,7 +359,7 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 
 **The Over the Game, See-Through Rule.** A window laid over the game is see-through: the overlay on the Quest Helper's glass, the title-marking hint on translucent Window Lavender. A window on the desktop (setup) is opaque. Same family, different footing.
 
-**The Two Inks Rule.** Text on the see-through glass is the Quest Helper's near-black Panel Ink; text on lavender is navy Ink. Never mix them in one window.
+**The Two Inks Rule.** Text on the see-through glass is the Quest Helper's near-black Panel Ink; text on lavender is navy Ink. Never mix them in one window. The panel sets its own `color`: inheriting the body's would carry navy into every figure that doesn't name its ink.
 
 ## Typography
 
@@ -358,18 +367,19 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 **Body Font:** the same family
 **Label/Mono Font:** none distinct; overlay figures use tabular numerals
 
-**Character:** The game sets its windows in a plain bold sans, so every window uses one face everywhere. Arial is a pinned exception to the usual system-face caution, because it is the game's own idiom. Weight (700 against 400) and colour carry the hierarchy, not a second family.
+**Character:** The game sets its windows in a plain bold sans, so every window uses one face everywhere. Arial is a pinned exception to the usual system-face caution, because it is the game's own idiom. Weight (700 against 400) and colour carry the hierarchy, not a second family. The game draws its window text heavier than Arial renders in the overlay (the Quest Helper's regular lines are near-bold), and Arial has no 500 or 600, so the panel gives all its text a 0.4px stroke in the text's own colour (`-webkit-text-stroke-width: var(--text-weight-stroke)`). The outlined title lettering and the doubt chip, whose outlines are their weight, take none.
 
 ### Hierarchy
-- **Headline** (700, 18px/23px, 0.01em): the Map Name, in Title Lettering on the title panel, in the overlay and in setup's recognised test read. Wraps to at most two lines rather than losing its end. When no map is read, the status takes this slot at 15px in plain Panel Ink with no outline, so it doesn't read as a map name. The Time to Level figure and setup's step headings use 18px bold in plain ink, without the outline. Setup's EXP test read sets its figures at 16px/22px bold.
+- **Headline** (700, 18px/23px, 0.01em): the Map Name, in Title Lettering on the title panel, in the overlay and in setup's recognised test read. Wraps to at most two lines rather than losing its end. It wraps in balanced lines (`text-wrap: balance`), so a second line is never a stranded word. When no map is read, the status takes this slot at 15px/23px bold (Status) in plain Panel Ink with no outline, so it doesn't read as a map name. The Time to Level figure and setup's step headings use 18px bold in plain ink, without the outline. Setup's EXP test read sets its figures at 16px/22px bold.
 - **Street** (700, 14px/18px): the Street Name above the Map Name, in the same Title Lettering, the Mini Map's own idiom.
+- **Section Heading** (700, 14px/18px): the overlay's section headings (Hidden Portals, Mobs, the Hunting Target's mob), in Panel Ink. The Street's size, one step above the 13px bold rows they head, so a heading never reads as one more row.
 - **Window Name** (700, 12px/16px): the window's name on the window bar ("MapleCompass") in Window Bar Ink, and the search view's title there, the mob's level beside it in regular weight. Setup's step count is the same size and weight; setup's window name is 14px.
-- **Title** (700, 13px/17px): section headings (Hidden Portals, Mobs, the Hunting Target's mob), portal destinations, summary and rate values, the Hunting Target's figures and "You're here".
+- **Title** (700, 13px/17px): portal destinations, summary and rate values, the Hunting Target's figures and "You're here".
 - **Body Reading** (400, 14px/20px): setup's prose, the search field's text, and the title-marking hint's heading (at 700). Setup is read at rest, not in glances, so it reads one step larger than the overlay.
-- **Body** (400, 13px/17px): overlay notes, the mob and rates tables, the suggestions. Mob names are 700. Setup's notices, test read and shortcuts use 13px at an 18px line; the title-marking hint's instructions are 13px.
-- **Body Small** (400, 12px/15–17px): positions, labels, summary units, table headers, figure labels, the route, the arrival's trip, candidate rows, key hints, the crawl note, the footer, setup's MeowDB credit, the title-marking status line.
+- **Body** (400, 13px/17px): overlay notes, the mob and rates tables, the suggestions, and any panel text without a role of its own (the panel sets 13px/17px). Mob names are 700. Setup's notices, test read and shortcuts use 13px at an 18px line; the title-marking hint's instructions are 13px.
+- **Body Small** (400, 12px/15–17px; 15px on a single line, 16px where it wraps, 17px in a table row): positions, labels, summary units, table headers, figure labels, the route, the arrival's trip, candidate rows, key hints, the crawl note, the footer, setup's MeowDB credit, the title-marking status line.
 - **Button** (700, 13px/18px): setup's button labels, sentence case. The Overlay guide button in setup's window bar is 12px.
-- **Label** (700, 11px, 0.04em; uppercase only on the doubt chip): tags and the "Not sure" chip. Candidate map IDs are 11px regular.
+- **Label** (700, 11px/15px): tags, in sentence case and untracked, so a tag never takes room from the destination beside it. The "Not sure" chip alone is uppercase, tracked 0.04em, at a 13px line. Candidate map IDs are 11px regular.
 
 The collapsed icon carries the system's two sizes below the Label step, held there because they share a 44px square with the compass: the Hidden Portal count at 10px/13px bold and the Time to Level badge at 9px/12px bold, both white on Ink. They are exceptions, not scale steps.
 
@@ -378,7 +388,7 @@ The collapsed icon carries the system's two sizes below the Label step, held the
 
 **The Outlined Lettering Rule.** Only a map's title, the Street Name and the Map Name, uses the Mini Map's light lettering outlined in blue (the shared `--title-lettering` text-shadow: a 1px title-outline stroke in eight directions plus one soft 0 2px 1px drop). It appears on the overlay's title panel and in setup's recognised test read, nowhere else. Everything else, Time to Level included, is ink.
 
-**The Notes Wrap, Names Truncate Rule.** Notes and the Map Name wrap so they can be read in full. Single-line facts (destinations, mob names, route stops, suggestion names, result maps) truncate with an ellipsis instead of growing the panel.
+**The Notes Wrap, Names Truncate Rule.** Notes and the Map Name wrap so they can be read in full; notes, key hints and the arrival's trip wrap with `text-wrap: pretty`, the Map Name with `balance`. Single-line facts (destinations, mob names, route stops, suggestion names, result maps) truncate with an ellipsis instead of growing the panel.
 
 ## Layout
 
@@ -390,7 +400,7 @@ Order is fixed: window bar, title panel, then any recovery or hotkey notes, then
 
 The search view replaces the whole panel: its own window bar (7px gaps, the back button then the title), then a 6px-gapped step: the query field, suggestions and the key hint; or, once a mob is picked, the nearest map, the results table, the travel checkboxes and the key hint; then the crawl note and credit.
 
-Collapsed, the window becomes a 44px square holding the compass. One container query (`max-width: 300px`, for raised text scale) folds the summary to three columns and turns mob rows into labelled cards.
+Collapsed, the window becomes a 44px square holding the compass. One container query (`max-width: 300px`, for raised text scale) narrows the panel without losing alignment or ends: the summary puts each figure on its own line beside its party size (solo, then 6+ party under it) with the label beside the pair; mob rows become labelled cards, the name over its four figures side by side; an empty section's heading stays on one line and "None on this map" goes under it if it must; and the EXP tracking line wraps, its deaths kept together.
 
 The setup window is a fixed 520×560 opaque window: a full-width window bar (padding 9px 20px 10px, 10px gaps, wrapping) holding the 28px compass, the window name, the step count ("Step N of 7" on first run, "of 6" when setup reopens, "Guide" in the overlay guide) and the Overlay guide button at the right, then a column with 22px side insets and 18px bottom padding that scrolls if it must. Each step is a heading (18px above, 8px below), prose in 10px-spaced paragraphs, and a footer pinned to the bottom of the window above a Window Rule, buttons right-aligned with 10px between them, the step forward always last. Notices sit above the step, 14px below the window bar and 8px apart.
 
@@ -408,7 +418,7 @@ No window has a drop shadow. Depth comes from the game's window chrome: a faint 
 - **Field inset** (`box-shadow: inset 0 1px 2px rgba(20, 30, 60, 0.15)`): the search field only.
 - **Glyph ring** (`box-shadow: 0 0 0 1px <edge>`): the dark edge on mob dots, the you dot and the orange dots. The alert dot adds a second white ring (`0 0 0 2px #fff`).
 - **Title lettering** (`--title-lettering`: eight 1px `text-shadow` offsets in title-outline, plus `0 2px 1px rgba(30, 60, 100, 0.3)`): a map's title only. The doubt chip's white label is outlined the same way in orange-deep, in four directions; setup's primary button label carries a 1px button-edge drop (`0 1px 0`).
-- **Light edge** (`text-shadow: 0 0 1px rgba(238, 242, 255, 0.9), 0 0 3px rgba(238, 242, 255, 0.75)`): every line of text on the panel's body, outside the window bar and title panel.
+- **Light edge** (`text-shadow: 0 0 2px rgba(238, 242, 255, 0.85), 0 0 4px rgba(238, 242, 255, 0.6)`, kept off the glyph's own edge so it doesn't thin the stroke): every line of text on the panel's body, outside the window bar and title panel.
 
 ### Named Rules
 **The Chrome, Not Lift Rule.** Depth is drawn the way the game draws it, with highlights, bevels and hairlines. Nothing floats on a blurred drop shadow.
@@ -453,7 +463,7 @@ The game's window buttons, solid and pressable, in setup.
 - **Disabled:** greyed and flat: disabled-bg, disabled-edge border, disabled-ink label, no highlight or text shadow. Next on the test read and Finish stay disabled until a read succeeds.
 
 ### Section Heading with Legend Mark
-A 13px bold heading led by a CSS minimap glyph: a 10px ring (2.5px portal border on portal-fill) for Hidden Portals, or an 8px red dot with a mob-edge ring for Mobs.
+A 14px/18px bold heading (Section Heading) led by a CSS minimap glyph: a 10px ring (2.5px portal border on portal-fill) for Hidden Portals, or an 8px red dot with a mob-edge ring for Mobs.
 
 ### Portal Row (signature)
 Each Hidden Portal is drawn on a miniature minimap: a 47x29px SVG of the minimap's 5x3 grid (9-unit cells). It is drawn in this order: the Minimap Paper field, the portal's cell lit in minimap-cell, the grid lines, then the unfilled minimap-frame border on top so no edge cell covers it, and last the game's hollow ring (portal stroke, 1.7 wide) with a solid portal core. When the spot is unknown, the frame is dashed and no cell is lit. Beside it: the destination (13px bold, truncating), any tags, and the position in words (12px Panel Ink Steel, first letter capitalised).
@@ -483,7 +493,7 @@ Shown 250ms after the pointer rests on a listed mob's name, gone as soon as it l
 - **Notes:** the panel's own notes at 12px/15px in place of the figures: "Loading from MeowDB…" plain, and a problem note (orange dot, Problem Peach) when MeowDB can't be reached or its page has changed. A saved copy keeps its figures and adds a problem note with its date.
 
 ### Hunting Target
-Its own section at the bottom of the normal view, 8px below a Panel Rule. A heading of two truncating lines (the mob in 13px bold, the map in regular Panel Ink Steel) with the two light icon buttons at its right; a four-column figures grid (Tier, Density, Share, Distance: 12px Panel Ink Steel labels over 13px values, bold except the tier); a 12px bold route title; and the route in an inset box on the near-opaque Body lavender (padding 5px 10px 5px 8px, 4px radius, 13px/17px), drawn as the minimap draws a way: a 2px Portal Inner rail joins a glyph per stop, the You Yellow dot where the player starts, a portal ring (2.5px Portal Blue on Portal Fill) for each portal, a Panel Ink Steel ring for a ship, taxi or teleport scroll, and the red mob dot at the target, whose map is bold. Each stop is its map, with a Tag naming the ride when it isn't a portal ("Taxi"), and its street in 12px Panel Ink Steel only where the street changes. Squeezed, the route keeps about three and a half stops. A Distance of 0 reads "here".
+Its own section at the bottom of the normal view, 8px below a Panel Rule. A heading of two truncating lines (the mob in 14px bold Section Heading, the map under it in 12px Panel Ink Steel, as a street sits under its map) with the two light icon buttons at its right; a four-column figures grid (Tier, Density, Share, Distance: 12px Panel Ink Steel labels over 13px values, bold except the tier); a 12px bold route title; and the route in an inset box on the near-opaque Body lavender (padding 5px 10px 5px 8px, 4px radius, 13px/17px), drawn as the minimap draws a way: a 2px Portal Inner rail joins a glyph per stop, the You Yellow dot where the player starts, a portal ring (2.5px Portal Blue on Portal Fill) for each portal, a Panel Ink Steel ring for a ship, taxi or teleport scroll, and the red mob dot at the target, whose map is bold. Each stop is its map, with a Tag naming the ride when it isn't a portal ("Taxi"), and its street in 12px Panel Ink Steel only where the street changes. Squeezed, the route keeps about three and a half stops. A Distance of 0 reads "here".
 
 **Arrival.** Once the player reaches the target's map from another, the route has done its job and its inset box resolves to its last stop: the same near-opaque inset box (padding 5px 10px 6px), the You Yellow dot, "You're here" in 13px bold, and beneath it the trip as it stood when the target was picked ("3 map changes from Construction Site North of Kerning City, by taxi") in 12px Panel Ink Steel, wrapping. It is a status, static like everything else, and stays until the player leaves the map or presses ×; a target picked on the map the player is on shows no arrival until they leave and come back.
 
@@ -493,7 +503,7 @@ Its own section at the bottom of the normal view, 8px below a Panel Rule. A head
 - **Results:** a fixed-layout table set into the body as an inset box (1px Inset Edge, 4px radius) on the near-opaque Body lavender rather than the light inset tint: the panel's densest reading, over the busiest scenes. Each map is its own row group, parted from the next by a Panel Rule: its name in bold across the row with its Distance (bold, a number, or "here") at the right, then its street in 12px Panel Ink Steel under Map with density, share and tier under their headers (columns 30/17/13/19/21%). The header sticks to the top on the opaque Results Header tone. The current map is Selection Periwinkle framed by Selection Edge hairlines. Tiers read by weight and ink (high bold, medium Panel Ink Steel, low Panel Ink Slate); a missing distance is Panel Ink Slate. The list takes the arrow keys, and its selection, not a focus ring, shows where they act.
 - **Row hover:** suggestion and result rows take Edit Blue at 8% under the pointer.
 - **Travel:** a Panel Ink Steel legend and checkboxes in Edit Blue (`accent-color`), 12px.
-- **Key hint:** one 12px Panel Ink Slate line naming the keys.
+- **Key hint:** one 12px/16px Panel Ink Slate line naming the keys, its arrows in text presentation (`font-variant-emoji: text`) so they stay ink rather than the emoji font's blue keycaps.
 
 ### Footer
 The credit, "NiaMeowDB (meowdb.com)", in 12px Panel Ink Slate, 6px below a Panel Rule. While the panel lists mobs, whose Mob Cards show maplestory.io's images, it reads "NiaMeowDB (meowdb.com) · images: maplestory.io".
