@@ -47,7 +47,7 @@ use setup::Setup;
 pub use recogniser::{TitleLines, TitleReader, TitleReading};
 use tracker::Tracker;
 use world::Here;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::task::Poll;
 
 /// A captured Title Region image: tightly packed RGBA, top-down rows.
@@ -185,6 +185,25 @@ pub enum Request {
     /// Bring the overlay, with the search view already open, back in front (the search
     /// hotkey): the game may have come in front of it. Our own window only (ADR 0001).
     RaiseOverlay,
+}
+
+/// Something the player can do with a hotkey or with the matching icon at the top of
+/// the panel. Either way it goes through [`Compass::press`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PanelControl {
+    /// Collapse the panel to its icon, or expand it again.
+    TogglePanel,
+    /// Switch placement: inside, docked right, docked left, detached.
+    CyclePlacement,
+    /// Open the shown map's MeowDB page in the browser.
+    OpenMeowdbPage,
+    /// Help & setup: open setup again.
+    Setup,
+    /// Show the next of the maps sharing the shown map's title.
+    ChooseCandidate,
+    /// Open the search view.
+    Search,
 }
 
 /// The game window's title, unless the player picked another by hand.
@@ -428,25 +447,39 @@ impl Compass {
     pub fn on_hotkey(&mut self, pressed: &str) -> Option<Request> {
         let hotkeys = &self.settings.hotkeys;
         let is = |hotkey: &str| same_hotkey(hotkey, pressed);
-        let action = if is(&hotkeys.toggle_panel) {
-            Action::ToggleExpanded
+        let control = if is(&hotkeys.toggle_panel) {
+            PanelControl::TogglePanel
         } else if is(&hotkeys.cycle_placement) {
-            Action::CyclePlacement
+            PanelControl::CyclePlacement
         } else if is(&hotkeys.setup) {
-            Action::RequestSetup
+            PanelControl::Setup
         } else if is(&hotkeys.choose_candidate) {
-            Action::ChooseCandidate
+            PanelControl::ChooseCandidate
         } else if is(&hotkeys.search) {
-            // An open search view stays as it is; the shell brings the overlay in front on
-            // opening it.
-            if self.search.is_open() {
-                return Some(Request::RaiseOverlay);
-            }
-            Action::OpenSearch
+            PanelControl::Search
         } else if is(&hotkeys.open_meowdb_page) {
-            return self.state.map.as_ref().map(|map| Request::OpenInBrowser { url: map.url.clone() });
+            PanelControl::OpenMeowdbPage
         } else {
             return None;
+        };
+        self.press(control)
+    }
+
+    /// The player used a control: its hotkey, or its icon at the top of the panel. Returns
+    /// what the shell must do at once, if anything.
+    pub fn press(&mut self, control: PanelControl) -> Option<Request> {
+        let action = match control {
+            PanelControl::TogglePanel => Action::ToggleExpanded,
+            PanelControl::CyclePlacement => Action::CyclePlacement,
+            PanelControl::Setup => Action::RequestSetup,
+            PanelControl::ChooseCandidate => Action::ChooseCandidate,
+            // An open search view stays as it is; the shell brings the overlay in front on
+            // opening it.
+            PanelControl::Search if self.search.is_open() => return Some(Request::RaiseOverlay),
+            PanelControl::Search => Action::OpenSearch,
+            PanelControl::OpenMeowdbPage => {
+                return self.state.map.as_ref().map(|map| Request::OpenInBrowser { url: map.url.clone() });
+            }
         };
         self.act(action);
         None

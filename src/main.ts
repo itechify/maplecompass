@@ -117,14 +117,15 @@ const noPortals = byId("no-portals");
 const portalRows = byId("portal-rows");
 const footer = byId("footer");
 const credit = byId("credit");
-const openHint = byId("open-hint");
 const hotkeyProblem = byId("hotkey-problem");
 const recovery = byId("recovery");
-const helpHint = byId("help-hint");
 const uncertainty = byId("uncertainty");
 const crawlProgress = byId("crawl-progress");
 const normalView = byId("normal-view");
-const openSearch = byId("open-search");
+const toolbar = byId("toolbar");
+const icon = document.querySelector<HTMLElement>(".icon")!;
+const nextCandidate = byId("next-candidate");
+const openMeowdb = byId("open-meowdb");
 const hunting = byId("hunting");
 const huntingTitle = byId("hunting-title");
 const huntingReopen = byId("hunting-reopen");
@@ -307,10 +308,33 @@ function renderData(panel: PanelState) {
   portalRows.replaceChildren(...(ready?.hiddenPortals ?? []).map(portalRow));
 
   credit.textContent = panel.credit ?? "";
-  openHint.textContent = sourceAvailable ? `${keyLabel(panel.hotkeys.openMeowdbPage)}: source page` : "";
-  helpHint.textContent = hotkeyAvailable(panel.hotkeys.setup, panel.unavailableHotkeys)
-    ? `${keyLabel(panel.hotkeys.setup)}: help & setup` : "";
-  helpHint.hidden = helpHint.textContent === "";
+}
+
+/** Which hotkey each icon at the top of the panel stands for. */
+const CONTROL_HOTKEYS: Record<string, keyof Hotkeys> = {
+  search: "search",
+  chooseCandidate: "chooseCandidate",
+  openMeowdbPage: "openMeowdbPage",
+  cyclePlacement: "cyclePlacement",
+  setup: "setup",
+  togglePanel: "togglePanel",
+};
+
+/**
+ * The icons at the top of the panel, one per hotkey action. Each tooltip names its
+ * hotkey (unless another app has it). The MeowDB icon shows only while a map is shown,
+ * the next-candidate icon only while maps share its title.
+ */
+function renderToolbar(panel: PanelState) {
+  for (const button of toolbar.querySelectorAll<HTMLButtonElement>("button[data-control]")) {
+    const label = button.getAttribute("aria-label") ?? "";
+    const hotkey = panel.hotkeys[CONTROL_HOTKEYS[button.dataset.control ?? ""]];
+    button.title = hotkey && hotkeyAvailable(hotkey, panel.unavailableHotkeys) ? `${label} (${keyLabel(hotkey)})` : label;
+  }
+  openMeowdb.hidden = !panel.map;
+  nextCandidate.hidden = !panel.candidates;
+  icon.title = hotkeyAvailable(panel.hotkeys.togglePanel, panel.unavailableHotkeys)
+    ? `Click to expand (${keyLabel(panel.hotkeys.togglePanel)})` : "Click to expand";
 }
 
 /**
@@ -497,8 +521,7 @@ function render(panel: PanelState) {
       : `Keep the minimap open with both title lines visible. If this persists, ${setupHint.charAt(0).toLowerCase() + setupHint.slice(1)}`;
   }
   recovery.hidden = recovery.textContent === "";
-  openSearch.title = hotkeyAvailable(hotkeys.search, panel.unavailableHotkeys)
-    ? `Search a mob (${keyLabel(hotkeys.search)})` : "Search a mob";
+  renderToolbar(panel);
   hotkeyProblem.textContent = takenHotkeys(panel.unavailableHotkeys);
   if (hotkeyProblem.textContent) {
     hotkeyProblem.textContent += hotkeyAvailable(hotkeys.setup, panel.unavailableHotkeys)
@@ -542,16 +565,44 @@ window.addEventListener("resize", reportHeight);
 // detached), never by its buttons. A click anywhere leaves the keyboard with the game:
 // the overlay can't be activated, except while the search view is open. The shell is
 // told first: only the window moves that follow are the player's.
-document.addEventListener("mousedown", async (e) => {
+async function startDrag() {
+  await invoke("panel_drag_started");
+  getCurrentWindow().startDragging();
+}
+
+document.addEventListener("mousedown", (e) => {
   const target = e.target instanceof Element ? e.target : null;
-  const onHeader = !!target?.closest(".drag-handle, .icon") && !target?.closest("button, input");
-  if (draggable && e.button === 0 && onHeader) {
-    await invoke("panel_drag_started");
-    getCurrentWindow().startDragging();
-  }
+  const onHeader = !!target?.closest(".drag-handle") && !target?.closest("button, input");
+  if (draggable && e.button === 0 && onHeader) startDrag();
 });
 
-openSearch.addEventListener("click", () => invoke("search_open"));
+// The collapsed icon: a click expands the panel again (like the collapse hotkey), and
+// pressing on it and moving the mouse drags it, where the panel can be dragged.
+const DRAG_AFTER_PX = 4;
+let iconPress: { x: number; y: number } | null = null;
+icon.addEventListener("mousedown", (e) => {
+  if (e.button === 0) iconPress = { x: e.screenX, y: e.screenY };
+});
+icon.addEventListener("mousemove", (e) => {
+  if (!iconPress || !draggable) return;
+  if (Math.abs(e.screenX - iconPress.x) + Math.abs(e.screenY - iconPress.y) >= DRAG_AFTER_PX) {
+    iconPress = null;
+    startDrag();
+  }
+});
+icon.addEventListener("mouseup", (e) => {
+  if (iconPress && e.button === 0) invoke("panel_press", { control: "togglePanel" });
+  iconPress = null;
+});
+icon.addEventListener("mouseleave", () => {
+  iconPress = null;
+});
+
+// Each icon at the top of the panel does what its hotkey does.
+toolbar.addEventListener("click", (e) => {
+  const button = e.target instanceof Element ? e.target.closest<HTMLButtonElement>("button[data-control]") : null;
+  if (button) invoke("panel_press", { control: button.dataset.control });
+});
 searchBack.addEventListener("click", () => invoke("search_escape"));
 huntingReopen.addEventListener("click", () => invoke("hunting_reopen"));
 huntingClear.addEventListener("click", () => invoke("hunting_clear"));
