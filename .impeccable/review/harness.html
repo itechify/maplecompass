@@ -113,6 +113,9 @@
         town: base({ map: { id: "010003000", streetName: "Victoria Road", mapName: "Kerning City", url: "" }, data: { status: "ready", summary: null, mobs: [], listedMobs: [], moreMobs: null, hiddenPortals: [] } }),
       };
       const s = new URLSearchParams(location.search).get("s") ?? "normal";
+      // ?w=: the panel resized to this width (CSS px).
+      const w = new URLSearchParams(location.search).get("w");
+      if (w) document.body.style.width = `${w}px`;
       window.__handlers["overlay-state"]({ event: "overlay-state", id: 1, payload: states[s] });
     </script>
   </body>

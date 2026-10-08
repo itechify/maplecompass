@@ -1,6 +1,9 @@
 @import "./theme.css";
 
-/* The overlay panel, in the shared window language of theme.css. */
+/* The overlay panel: one of the game's own windows laid over the screen, built like
+   the Mini Map and the Quest Helper. A light grey window bar with the name and the
+   game's blue buttons, the map's title on the Mini Map's sky blue, and the rest on the
+   Quest Helper's see-through periwinkle. */
 
 html,
 body {
@@ -25,15 +28,24 @@ body {
 
 /* As tall as its content: the overlay reports this height and the window fits it, up to
    600 px (MAX_EXPANDED_HEIGHT in the shell) or the space where the panel is placed,
-   whichever is less. Then it is as tall as the window, and its long part scrolls. */
+   whichever is less. Then it is as tall as the window, and its long part scrolls. As
+   wide as the player made it, by a bottom corner. */
 .panel {
+  /* On the see-through body the game's near-black text, as in the Quest Helper. */
+  --ink: #16191f;
+  --ink-2: #2c3446;
+  --ink-3: #343d51;
+  --rule: rgba(30, 45, 90, 0.25);
+  --inset-bg: rgba(255, 255, 255, 0.5);
+  --inset-edge: rgba(30, 45, 90, 0.3);
+  position: relative;
   box-sizing: border-box;
   max-height: 100vh;
   overflow: hidden;
-  border: 1px solid var(--frame);
-  border-radius: 6px;
-  background: var(--body);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+  border: 1px solid var(--window-edge);
+  border-radius: 4px;
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
   display: flex;
   flex-direction: column;
   container-type: inline-size;
@@ -46,54 +58,87 @@ body {
   text-overflow: ellipsis;
 }
 
-/* A view: the title bar full width, everything under it inset from the frame. */
+/* A view: the window bar and the map's title full width, the rest inset from the frame.
+   Text on the see-through body keeps a faint light edge, so a busy scene behind it
+   doesn't swallow it. */
 .view {
   flex: 0 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 9px;
-  padding-bottom: 8px;
+  padding-bottom: 10px;
+  text-shadow:
+    0 0 1px rgba(238, 242, 255, 0.9),
+    0 0 3px rgba(238, 242, 255, 0.75);
 }
 
-.view > :not(.titlebar) {
+.view > :not(.window-bar):not(.titlebar) {
   margin-inline: 11px;
 }
 
-/* Title bar: the minimap's. Its top row holds the Street Name and, at the right, the
-   panel's buttons, as the minimap holds its own; the Map Name runs under them. The
-   player drags the panel by it (inside or detached), never by a button. */
-.titlebar {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 5px 8px 7px 11px;
-  background: var(--bar);
-  border-bottom: 1px solid var(--bar-hairline);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+.view > .window-bar + :not(.titlebar) {
+  margin-top: 2px;
 }
 
-.bar-row {
+/* The window bar: the Mini Map's and the Quest Helper's light grey strip, with the
+   window's name at the left and its buttons at the right. The player drags the panel by
+   it (inside or detached), never by a button. */
+.window-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   min-height: 22px;
+  padding: 2px 3px 2px 5px;
+  background: var(--window-bar);
+  border-bottom: 1px solid var(--window-edge);
+  text-shadow: none;
 }
 
-.street {
+.window-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.panel .window-name {
   flex: 1;
   min-width: 0;
   font-size: 12px;
   font-weight: 700;
-  color: var(--street);
-  line-height: 15px;
+  line-height: 16px;
+  color: var(--window-bar-ink);
+}
+
+/* The map's title: the Mini Map's sky-blue panel, the Street Name over the Map Name, both
+   in the game's light lettering with its blue outline. */
+.titlebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: -9px;
+  padding: 6px 10px 8px 11px;
+  background: var(--title-panel);
+  border-bottom: 1px solid var(--window-edge);
+  text-shadow: none;
+}
+
+.street,
+.panel .map {
+  color: var(--title-ink);
+  text-shadow: var(--title-lettering);
+}
+
+.street {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 18px;
 }
 
 .map-line {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-right: 3px;
 }
 
 /* A long map name wraps to a second line rather than losing its end. */
@@ -108,8 +153,6 @@ body {
   font-weight: 700;
   line-height: 23px;
   letter-spacing: 0.01em;
-  color: #fff;
-  text-shadow: var(--lettering);
 }
 
 /* No map yet: the status reads as plain text, not as a map name. */
@@ -119,14 +162,15 @@ body {
   text-shadow: none;
 }
 
-/* The game's small orange button, used once: the map shown isn't confirmed. */
+/* The game's small orange button (the Mini Map's WORLD, the Quest Helper's AUTO), used
+   once: the map shown isn't confirmed. */
 .doubt {
   flex: none;
   padding: 2px 7px 3px;
   border: 1px solid var(--orange-deep);
   border-radius: 3px;
-  background: linear-gradient(180deg, #ffc469 0%, var(--orange) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  background: linear-gradient(180deg, #ffd25a 0%, #f0a715 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
   color: #fff;
   font-size: 11px;
   font-weight: 700;
@@ -139,11 +183,11 @@ body {
     -1px 0 0 var(--orange-deep);
 }
 
-/* The panel's buttons, one per hotkey action: the game's small window buttons. */
+/* The panel's buttons, one per hotkey action: the game's bright blue window buttons. */
 .toolbar {
   flex: none;
   display: flex;
-  gap: 3px;
+  gap: 2px;
 }
 
 .icon-button {
@@ -151,25 +195,28 @@ body {
   display: grid;
   place-items: center;
   box-sizing: border-box;
-  width: 22px;
-  height: 22px;
+  width: 19px;
+  height: 19px;
   padding: 0;
-  border: 1px solid var(--button-edge);
-  border-radius: 3px;
-  background: var(--button);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  border: 1px solid var(--game-button-edge);
+  border-radius: 2px;
+  background: var(--game-button);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(0, 60, 110, 0.25);
   color: #fff;
   cursor: default;
 }
 
 .icon-button svg {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.8;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+  filter: drop-shadow(0 1px 0 rgba(0, 50, 90, 0.45));
 }
 
 .icon-button svg .dot {
@@ -178,20 +225,24 @@ body {
 }
 
 .icon-button:hover {
-  background: var(--button-hover);
+  background: var(--game-button-hover);
 }
 
 .icon-button:active {
-  background: var(--button-hover);
-  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.45);
+  background: var(--game-button-pressed);
+  box-shadow: inset 0 1px 2px rgba(0, 40, 80, 0.5);
 }
 
-/* Light steel, for a button inside the window's body rather than its title bar. */
+/* Light, for a button inside the window's body rather than its bar. */
 .icon-button.light {
-  border-color: var(--frame);
+  border-color: var(--window-edge);
   background: var(--button-light);
   box-shadow: inset 0 1px 0 #fff;
   color: var(--ink);
+}
+
+.icon-button.light svg {
+  filter: none;
 }
 
 .icon-button.light:hover {
@@ -201,6 +252,35 @@ body {
 .icon-button.light:active {
   background: var(--button-light);
   box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
+}
+
+/* The expanded panel's bottom corners: drag one to resize the panel. A few dots, like a
+   window's grip, in the corner's triangle. */
+.grip {
+  position: absolute;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  background-image: radial-gradient(circle, rgba(30, 45, 90, 0.55) 1px, transparent 1.6px);
+  background-size: 4px 4px;
+  background-position: 1px 1px;
+  opacity: 0.8;
+}
+
+.grip.left {
+  left: 0;
+  cursor: nesw-resize;
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+}
+
+.grip.right {
+  right: 0;
+  cursor: nwse-resize;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+
+.grip:hover {
+  opacity: 1;
 }
 
 .panel :focus-visible {
@@ -217,7 +297,7 @@ body {
 
 /* While the map shown isn't confirmed, its facts step back. */
 .not-sure .facts {
-  opacity: 0.55;
+  opacity: 0.7;
 }
 
 /* Wraps rather than truncates: a note must be read in full. */
@@ -667,23 +747,21 @@ td:first-child {
   color: var(--ink-2);
 }
 
-/* The search view's title sits in its title bar, beside the back button. */
-.search-view .titlebar {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 11px 7px 8px;
+/* The search view's title sits in its window bar, after the back button. */
+.search-view .window-bar {
+  gap: 7px;
+  padding-right: 8px;
 }
 
 .search-view h2 {
-  font-size: 14px;
-  color: var(--street);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--window-bar-ink);
 }
 
 .search-view h2 .level {
   margin-left: 6px;
   font-weight: 400;
-  color: var(--ink-2);
 }
 
 /* Tier, Density, Share and Distance side by side, labels above figures. */
@@ -893,7 +971,8 @@ td:first-child {
 .results thead th {
   position: sticky;
   top: 0;
-  background: var(--body-solid);
+  /* Opaque, so rows scrolled under it don't show through: the see-through body's tone. */
+  background: #c5d0ec;
 }
 
 /* The map Enter makes the Hunting Target. */
