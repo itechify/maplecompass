@@ -19,7 +19,6 @@ use compass_core::{
     default_title_region,
 };
 use meowdb::MeowDbSource;
-use serde::Deserialize;
 use setup::{Bridge, SetupWindows};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -37,10 +36,16 @@ const WINDOW_TICK: Duration = Duration::from_millis(50);
 /// Settings are saved once they have stopped changing for this long (after a drag).
 const SAVE_DELAY: Duration = Duration::from_millis(500);
 /// The overlay's size in CSS px (logical); `src/styles.css` lays out to fit. The
-/// expanded panel's height follows its content, as the overlay reports it.
+/// expanded panel's height follows its content, as the overlay reports it; the core
+/// keeps it within the space where the panel is placed.
 const EXPANDED: (f64, f64) = (380.0, 72.0);
-const EXPANDED_HEIGHTS: std::ops::RangeInclusive<f64> = 44.0..=900.0;
+const MIN_EXPANDED_HEIGHT: f64 = 44.0;
 const COLLAPSED: (f64, f64) = (44.0, 44.0);
+/// A drag has ended once the overlay hasn't moved for this long: then the shell puts it
+/// where the core says again (clear of the Title Region, inside the game window).
+const DRAG_SETTLE: Duration = Duration::from_millis(300);
+/// How long a move of the shell's own can take to come back as a window event.
+const OWN_MOVE_ECHO: Duration = Duration::from_secs(1);
 
 /// What the compass loop is asked to do.
 #[derive(Debug, Clone)]
@@ -51,10 +56,13 @@ pub(crate) enum Command {
     Hotkey(String),
     /// The overlay's query box now holds this, for the core.
     SearchQuery(String),
+    /// The player clicked the search view's mob or map with this MeowDB ID.
+    SearchPick(String),
     /// The expanded panel's content is this tall (CSS px).
     PanelHeight(f64),
-    /// The overlay's clickable controls are here (CSS px, in the overlay's viewport).
-    OverlayControls(Vec<CssRect>),
+    /// The overlay window moved here (its outer top-left corner): the player dragged
+    /// it, or the shell moved or resized it.
+    Moved(PhysicalPosition<i32>),
     /// The title reader is done with a capture of `region`: what it read, or `None`
     /// if the capture failed.
     Read { region: ScreenRect, reading: Option<TitleReading> },
@@ -64,22 +72,6 @@ pub(crate) enum Command {
 #[tauri::command]
 fn panel_height(height: f64, commands: tauri::State<'_, Sender<Command>>) {
     let _ = commands.send(Command::PanelHeight(height));
-}
-
-/// A rectangle in the overlay's viewport, in CSS px, as the page measures it.
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
-pub(crate) struct CssRect {
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-}
-
-/// The overlay reports where its clickable controls are (the mob search section's ×),
-/// so the overlay can take the mouse while the pointer is over one.
-#[tauri::command]
-fn overlay_controls(controls: Vec<CssRect>, commands: tauri::State<'_, Sender<Command>>) {
-    let _ = commands.send(Command::OverlayControls(controls));
 }
 
 /// Capture the default Title Region of the game's client area (the probe's guess; the
@@ -104,7 +96,9 @@ pub fn run() {
             // Not content-protected: the panel shows in the player's screenshots and
             // streams. The core keeps it off the Title Region instead, so our own capture
             // never reads it.
-            // Clicks pass through to the game until the core says the overlay takes the mouse.
+            // Clicks pass through until there is a panel to show; then it is always
+            // clickable, but never activated by a click (`focusable: false` in
+            // tauri.conf.json is WS_EX_NOACTIVATE), so the game keeps the keyboard.
             overlay.set_ignore_cursor_events(true)?;
 
             // MeowDB pages are cached on disk (ADR 0003). WebView2 shares the app cache
@@ -127,14 +121,13 @@ pub fn run() {
             });
             let setup_windows = SetupWindows::new(app.handle())?;
             overlay.on_window_event(move |event| match event {
-                // The core only takes moves of a draggable panel, so the shell's own
-                // repositioning is harmless; otherwise they are the player's drag.
+                // The compass loop tells the player's drags from its own moves.
                 WindowEvent::Moved(to) => {
-                    let _ = commands.send(Command::Act(Action::PanelMoved { x: to.x, y: to.y }));
+                    let _ = commands.send(Command::Moved(*to));
                 }
-                // Leaving the overlay for another window (the game) in search mode is
-                // Esc: it has the keyboard only while it's in front. Not when focus only
-                // moved within our windows, as into the overlay's own webview.
+                // Leaving the overlay for another window (the game) with the search view
+                // open is Esc: it has the keyboard only while it's in front. Not when
+                // focus only moved within our windows, as into the overlay's own webview.
                 WindowEvent::Focused(false) if !gamewin::foreground_is_ours() => {
                     let _ = commands.send(Command::Act(Action::SearchEscape));
                 }
@@ -154,7 +147,6 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             panel_height,
-            overlay_controls,
             setup::setup_view,
             setup::pick_game_window,
             setup::start_marking,
@@ -163,11 +155,14 @@ pub fn run() {
             setup::mark_title_region,
             setup::cancel_marking,
             setup::finish_setup,
+            search::search_open,
             search::search_query,
             search::search_move,
             search::search_enter,
+            search::search_pick,
             search::search_escape,
-            search::search_clear,
+            search::hunting_reopen,
+            search::hunting_clear,
             search::search_toggle_taxis,
             search::search_toggle_teleport_scrolls,
         ])
@@ -250,8 +245,6 @@ fn compass_loop(
 ) {
     let Windows { overlay, setup: mut setup_windows, mut hotkeys } = windows;
     let mut window = OverlayWindow::new(overlay);
-    // Where the overlay last said its controls are, in its viewport.
-    let mut controls = Vec::new();
     let mut saved = compass.settings();
     let mut pending = (saved.clone(), Instant::now());
     let mut emitted: Option<PanelState> = None;
@@ -277,13 +270,17 @@ fn compass_loop(
             Ok(Command::SearchQuery(query)) => {
                 compass.search_query(&query);
             }
+            Ok(Command::SearchPick(id)) => {
+                compass.search_pick(&id);
+            }
             Ok(Command::PanelHeight(height)) => {
-                expanded.1 = height.clamp(*EXPANDED_HEIGHTS.start(), *EXPANDED_HEIGHTS.end());
+                expanded.1 = height.max(MIN_EXPANDED_HEIGHT);
                 set_panel_sizes(&mut compass, &window.overlay, expanded);
             }
-            Ok(Command::OverlayControls(reported)) => {
-                controls = reported;
-                compass.set_overlay_controls(on_screen(&window.overlay, &controls));
+            Ok(Command::Moved(to)) => {
+                if window.player_moved(to) {
+                    compass.act(Action::PanelMoved { x: to.x, y: to.y });
+                }
             }
             Ok(Command::Read { region, reading }) => {
                 reader.busy = false;
@@ -305,10 +302,6 @@ fn compass_loop(
         if Instant::now() >= next_window_check {
             next_window_check = Instant::now() + WINDOW_TICK;
             game = find_game(&mut compass, &window.overlay, expanded);
-            // The overlay's controls take the mouse while the pointer rests over them:
-            // the pointer position is polled, never hooked (ADR 0001).
-            compass.set_overlay_controls(on_screen(&window.overlay, &controls));
-            compass.on_pointer(gamewin::pointer());
             // The hotkeys are live only while the game or one of our windows is in front.
             compass.on_foreground(gamewin::foreground(game.map(|g| g.handle)));
             if let Some(unavailable) = hotkeys.sync(&app, compass.panel_state().hotkeys_live) {
@@ -382,26 +375,6 @@ fn open_in_browser(app: &AppHandle, url: &str) {
     }
 }
 
-/// Where the overlay's controls are on screen (physical px), from where it said they are
-/// in its viewport. None when the overlay's position or scale can't be had.
-fn on_screen(overlay: &WebviewWindow, controls: &[CssRect]) -> Vec<ScreenRect> {
-    let (Ok(at), Ok(scale)) = (overlay.inner_position(), overlay.scale_factor()) else { return Vec::new() };
-    controls
-        .iter()
-        .map(|c| {
-            // Every physical pixel the control touches.
-            let (left, top) = ((c.x * scale).floor(), (c.y * scale).floor());
-            let (right, bottom) = (((c.x + c.width) * scale).ceil(), ((c.y + c.height) * scale).ceil());
-            ScreenRect {
-                x: at.x + left as i32,
-                y: at.y + top as i32,
-                width: (right - left).max(0.0) as u32,
-                height: (bottom - top).max(0.0) as u32,
-            }
-        })
-        .collect()
-}
-
 /// CSS px to physical px, rounded up so the panel's content is never clipped.
 fn physical((width, height): (f64, f64), scale: f64) -> Size {
     Size { width: (width * scale).ceil() as u32, height: (height * scale).ceil() as u32 }
@@ -414,9 +387,15 @@ struct OverlayWindow {
     layer: Option<Layer>,
     click_through: bool,
     focusable: Option<bool>,
-    search_mode: bool,
+    search_open: bool,
     /// Tells the z-order keeper to hold the overlay just above the game.
     above_game: Arc<AtomicBool>,
+    /// Where the overlay was last seen (moved to, by anyone).
+    seen_at: Option<PhysicalPosition<i32>>,
+    /// Where the shell moved the overlay lately, and when: their move events are ours.
+    placed: Vec<(PhysicalPosition<i32>, Instant)>,
+    /// When the player last dragged the overlay.
+    dragged_at: Option<Instant>,
 }
 
 impl OverlayWindow {
@@ -432,11 +411,33 @@ impl OverlayWindow {
         if let Err(e) = spawned {
             eprintln!("z-order keeper not started: {e}");
         }
-        Self { overlay, layer: None, click_through: true, focusable: None, search_mode: false, above_game }
+        let seen_at = overlay.outer_position().ok();
+        Self {
+            overlay,
+            layer: None,
+            click_through: true,
+            focusable: None,
+            search_open: false,
+            above_game,
+            seen_at,
+            placed: Vec::new(),
+            dragged_at: None,
+        }
+    }
+
+    /// The overlay moved to `to`: whether the player dragged it there. Not when the shell
+    /// moved it there, nor when it didn't move (a resize).
+    fn player_moved(&mut self, to: PhysicalPosition<i32>) -> bool {
+        let now = Instant::now();
+        self.placed.retain(|(_, at)| now.duration_since(*at) < OWN_MOVE_ECHO);
+        let ours = self.seen_at.replace(to) == Some(to) || self.placed.iter().any(|(placed, _)| *placed == to);
+        if !ours {
+            self.dragged_at = Some(now);
+        }
+        !ours
     }
 
     fn show(&mut self, state: &PanelState) {
-        let overlay = &self.overlay;
         self.above_game.store(state.layer == Layer::AboveGame, Ordering::Relaxed);
         let layer_changed = self.layer != Some(state.layer);
         let free = state.layer == Layer::Free;
@@ -444,36 +445,41 @@ impl OverlayWindow {
             self.layer = Some(state.layer);
             // Detached, it is an ordinary window: it can be found in the taskbar. Never
             // topmost: above the game it is kept just above it in the z-order instead.
-            let _ = overlay.set_always_on_top(false);
-            let _ = overlay.set_skip_taskbar(!free);
+            let _ = self.overlay.set_always_on_top(false);
+            let _ = self.overlay.set_skip_taskbar(!free);
         }
-        // Detached, it can be activated like any window, and in search mode it takes the
-        // typing. Otherwise it never takes focus from the game.
-        let search_mode = state.search.search_mode;
-        let focusable = free || search_mode;
-        if self.focusable != Some(focusable) {
-            self.focusable = Some(focusable);
-            let _ = overlay.set_focusable(focusable);
+        // Only the open search view takes the typing. Otherwise the overlay can't be
+        // activated (WS_EX_NOACTIVATE), so a click on it leaves the keyboard with the game.
+        let search_open = state.search.view.is_some();
+        if self.focusable != Some(search_open) {
+            self.focusable = Some(search_open);
+            let _ = self.overlay.set_focusable(search_open);
         }
-        // Clicks pass through unless the core says the overlay takes the mouse (edit
-        // mode, detached, search mode, or the pointer over one of its controls). Hidden
-        // (the game is gone) the webview draws nothing, and nothing is in the way.
-        if self.click_through == state.takes_mouse {
-            self.click_through = !state.takes_mouse;
-            if let Err(e) = overlay.set_ignore_cursor_events(self.click_through) {
+        // Always clickable while it shows. Hidden (the game is gone) the webview draws
+        // nothing, so clicks pass through and nothing is in the way.
+        let click_through = state.layer == Layer::Hidden;
+        if self.click_through != click_through {
+            self.click_through = click_through;
+            if let Err(e) = self.overlay.set_ignore_cursor_events(click_through) {
                 eprintln!("click-through toggle failed: {e}");
             }
         }
-        // Search mode starts right after our hotkey, so Windows lets us take the
-        // foreground; when it ends, Windows gives focus back to the window below.
-        match (self.search_mode, search_mode) {
-            (false, true) => search::take_focus(overlay),
-            (true, false) if !free => search::give_focus_back(overlay),
+        // The search view opens right after our hotkey or a click on the overlay, so
+        // Windows lets us take the foreground; when it closes, Windows gives focus back
+        // to the window below.
+        match (self.search_open, search_open) {
+            (false, true) => search::take_focus(&self.overlay),
+            (true, false) => search::give_focus_back(&self.overlay),
             _ => {}
         }
-        self.search_mode = search_mode;
+        self.search_open = search_open;
         if let Some(placement) = state.placement {
-            place(overlay, placement, state.draggable && !layer_changed);
+            // While the player drags it the position is theirs; once the drag settles it
+            // goes where the core says (clear of the Title Region, inside the game).
+            let dragging = self.dragged_at.is_some_and(|at| at.elapsed() < DRAG_SETTLE);
+            if let Some(to) = place(&self.overlay, placement, dragging && !layer_changed) {
+                self.placed.push((to, Instant::now()));
+            }
         }
     }
 }
@@ -501,16 +507,16 @@ fn keep_above_game(overlay: WebviewWindow, above_game: Arc<AtomicBool>) {
     }
 }
 
-/// Move and size the overlay to the core's placement. While the player can drag it,
-/// the position is theirs; it is only re-anchored when the panel changes size.
-fn place(overlay: &WebviewWindow, placement: ScreenRect, player_moves_it: bool) {
+/// Size the overlay to the core's placement, and move it there unless the player is
+/// dragging it. Returns where it was moved to, if it was.
+fn place(overlay: &WebviewWindow, placement: ScreenRect, player_drags_it: bool) -> Option<PhysicalPosition<i32>> {
     let size = PhysicalSize::new(placement.width, placement.height);
-    let resized = overlay.inner_size().ok() != Some(size);
-    if resized {
+    if overlay.inner_size().ok() != Some(size) {
         let _ = overlay.set_size(size);
     }
     let to = PhysicalPosition::new(placement.x, placement.y);
-    if (!player_moves_it || resized) && overlay.outer_position().ok() != Some(to) {
-        let _ = overlay.set_position(to);
+    if player_drags_it || overlay.outer_position().ok() == Some(to) {
+        return None;
     }
+    overlay.set_position(to).ok().map(|()| to)
 }

@@ -1,7 +1,6 @@
 /** Display labels and availability for the bindings supplied by the core. */
 export type Hotkeys = {
   togglePanel: string;
-  editMode: string;
   cyclePlacement: string;
   openMeowdbPage: string;
   setup: string;
