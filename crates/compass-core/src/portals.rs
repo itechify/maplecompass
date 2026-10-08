@@ -1,7 +1,7 @@
 //! The Hidden Portal rule and position hints: which of a map's exits the player can't
 //! see, and roughly where each one is.
 
-use crate::map_data::HiddenPortal;
+use crate::map_data::{HiddenPortal, MapSpot};
 use crate::portal_overrides::PortalOverride;
 
 /// The street name of a Hidden Street.
@@ -67,36 +67,43 @@ pub(crate) fn hidden_portals(
                 (None, _) => false,
             }
         })
-        .map(|e| HiddenPortal {
-            position: position_hint(map.minimap, e.x, e.y),
-            to_hidden_street: e.to_street_name == HIDDEN_STREET,
-            quest: e.kind == SCRIPT,
-            name: e.name,
-            to_map_id: e.to_map_id,
-            to_map_name: e.to_map_name,
-            to_street_name: e.to_street_name,
+        .map(|e| {
+            let (position, spot) = position_hint(map.minimap, e.x, e.y);
+            HiddenPortal {
+                position,
+                spot,
+                to_hidden_street: e.to_street_name == HIDDEN_STREET,
+                quest: e.kind == SCRIPT,
+                name: e.name,
+                to_map_id: e.to_map_id,
+                to_map_name: e.to_map_name,
+                to_street_name: e.to_street_name,
+            }
         })
         .collect()
 }
 
-/// Roughly where (x, y) is on the map, in words: "far right, lower".
-fn position_hint(minimap: Minimap, x: f64, y: f64) -> String {
+/// Roughly where (x, y) is on the map: in words ("far right, lower") and as a cell of
+/// the minimap's 5x3 grid, which is `None` when the map has no minimap bounds.
+fn position_hint(minimap: Minimap, x: f64, y: f64) -> (String, Option<MapSpot>) {
     if minimap.width <= 0.0 || minimap.height <= 0.0 {
-        return "position unknown".into();
+        return ("position unknown".into(), None);
     }
     let across = (x + minimap.center_x) / minimap.width;
     let down = (y + minimap.center_y) / minimap.height;
-    let horizontal = match across {
-        a if a < 0.2 => "far left",
-        a if a < 0.4 => "left",
-        a if a < 0.6 => "centre",
-        a if a < 0.8 => "right",
-        _ => "far right",
+    let column: u8 = match across {
+        a if a < 0.2 => 0,
+        a if a < 0.4 => 1,
+        a if a < 0.6 => 2,
+        a if a < 0.8 => 3,
+        _ => 4,
     };
-    let vertical = match down {
-        d if d < 1.0 / 3.0 => "upper",
-        d if d < 2.0 / 3.0 => "middle",
-        _ => "lower",
+    let row: u8 = match down {
+        d if d < 1.0 / 3.0 => 0,
+        d if d < 2.0 / 3.0 => 1,
+        _ => 2,
     };
-    format!("{horizontal}, {vertical}")
+    let horizontal = ["far left", "left", "centre", "right", "far right"][column as usize];
+    let vertical = ["upper", "middle", "lower"][row as usize];
+    (format!("{horizontal}, {vertical}"), Some(MapSpot { column, row }))
 }

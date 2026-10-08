@@ -128,6 +128,9 @@ pub struct ScreenPoint {
 /// Gap between the default panel and the game client's right edge (physical px).
 const DEFAULT_RIGHT_MARGIN: i32 = 16;
 
+/// The default panel's top sits a third of the client's height down.
+const DEFAULT_TOP_FRACTION: i32 = 3;
+
 /// Where a panel detached before it was ever placed goes: near the top-left of the
 /// primary monitor, which always has its origin at (0, 0).
 const DEFAULT_DETACHED_AT: ScreenPoint = ScreenPoint { x: 100, y: 100 };
@@ -248,11 +251,12 @@ impl Panel {
         let (w, h) = (size.width as i32, size.height as i32);
         let (x, y) = match self.inside_offset {
             Some(offset) => (game.x + offset.x - w, game.y + offset.y),
-            // Vertically centred on the right edge: clear of the minimap (top-left)
-            // and the in-game Quest Helper (top-right).
+            // On the right edge, its top a third of the way down: clear of the minimap
+            // (top-left) and the in-game Quest Helper (top-right). The top stays put as
+            // the panel grows and shrinks with its content, so the map name doesn't move.
             None => (
                 game.x + game.width as i32 - DEFAULT_RIGHT_MARGIN - w,
-                game.y + (game.height as i32 - h) / 2,
+                game.y + game.height as i32 / DEFAULT_TOP_FRACTION,
             ),
         };
         // Keep the whole panel inside the client (its top-left wins if it can't fit).

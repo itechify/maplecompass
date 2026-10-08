@@ -121,7 +121,19 @@ fn hotkeys_the_player_rebound_are_the_ones_that_act() {
 fn a_hotkey_another_app_has_taken_is_shown_as_unavailable() {
     let mut compass = Compass::new(FakeSource::meowdb());
 
-    let state = compass.hotkeys_unavailable(vec!["super+alt+e".into()]);
+    let state = compass.hotkeys_unavailable(vec!["super+alt+e".into()], vec![]);
 
     assert_eq!(state.unavailable_hotkeys, ["super+alt+e"]);
+    assert!(state.invalid_hotkeys.is_empty());
+}
+
+#[test]
+fn a_hotkey_that_names_no_key_combination_is_shown_as_unavailable_and_invalid() {
+    let mut compass = Compass::new(FakeSource::meowdb());
+
+    let state = compass.hotkeys_unavailable(vec!["super+alt+e".into()], vec!["super+alt+banana".into()]);
+
+    // Both do nothing; only the second is the player's own typo to fix.
+    assert_eq!(state.unavailable_hotkeys, ["super+alt+e", "super+alt+banana"]);
+    assert_eq!(state.invalid_hotkeys, ["super+alt+banana"]);
 }
