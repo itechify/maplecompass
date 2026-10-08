@@ -210,6 +210,12 @@ components:
     typography: "{typography.title}"
     rounded: "{rounded.window}"
     padding: "5px 10px 6px"
+  mob-card:
+    backgroundColor: "{colors.body-solid}"
+    textColor: "{colors.panel-ink}"
+    typography: "{typography.body-small}"
+    rounded: "{rounded.window}"
+    padding: "6px 10px 7px"
   search-input:
     backgroundColor: "#ffffff"
     textColor: "{colors.panel-ink}"
