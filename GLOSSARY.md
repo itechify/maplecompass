@@ -1,6 +1,6 @@
 # MapleCompass
 
-A helper overlay for MapleStory Classic World that recognises which map the player is on and tells them what is there: the mobs they can hunt and the hidden portals they would otherwise miss.
+A helper overlay for MapleStory Classic World that recognises which map the player is on and tells them what is there: the mobs they can hunt and the hidden portals they would otherwise miss. While they hunt, it also measures how fast they are levelling.
 
 ## Language
 
@@ -23,7 +23,7 @@ The specific name of a map (e.g. "Henesys Hunting Ground I"). Not guaranteed uni
 _Avoid_: title, map title
 
 **Minimap Title**:
-The street name and map name as rendered at the top of the in-game minimap; the only signal MapleCompass reads from the game.
+The street name and map name as rendered at the top of the in-game minimap; the signal MapleCompass recognises the map from.
 
 **Candidate**:
 One of several maps that share a Minimap Title, offered to the player when the map they came from doesn't settle which one they are on.
@@ -69,5 +69,60 @@ How many of a given mob a map holds at once.
 **Spawn Share**:
 A mob's spawn count as a fraction of all mob spawns on the map.
 
+**Mob Rate**:
+A map's multiplier on how fast its mobs respawn (e.g. 0.5x, 1.6x).
+
+**Density**:
+How many of a given mob a player can kill on a map: its spawn count times the map's mob rate. A map with more of the mob, or that refills faster, is denser for that mob.
+_Avoid_: spawn rate, mob density (when meaning spawn share)
+
+**Density Tier**:
+High, Medium or Low: how a map's density for a mob compares with that mob's densest map (High from two-thirds of it, Medium from one-third).
+
+**Distance**:
+The fewest map changes it takes to get from the player's current map to another map. A map change is going through a portal (but not a Quest Portal) or a ship ride, and, if the player has turned them on, a taxi ride or a Teleport Scroll. MapleCompass knows only which map the player is on, never where on it they stand.
+_Avoid_: position, proximity
+
+**Hunting Target**:
+The mob and map the player picked from a mob search to go and hunt. MapleCompass shows the way there from the player's current map until they arrive or clear it.
+_Avoid_: destination, waypoint, goal
+
+**Ship**:
+An NPC-run crossing between regions (e.g. Ellinia, on Victoria Island, to Orbis, in Ossyria). The only way to reach Ossyria, so it always counts as a map change.
+
+**Taxi**:
+An NPC who carries the player between towns for mesos.
+_Avoid_: cab
+
+**Teleport Scroll**:
+An item that moves the player from any map to a town: either the map's own nearest town, or a named town.
+_Avoid_: return scroll, portal scroll
+
 **Map Summary**:
 The hunting figures for a map as a whole, such as the EXP-per-hour ceiling and mobs killed per hour by party size.
+
+### Tracking
+
+**Session**:
+The stretch of play MapleCompass measures rates over, from the first EXP gain until the player resets it or switches character. Idle stretches pause it rather than count against it.
+_Avoid_: run, grind
+
+**EXP Bar Region**:
+The rectangle the player marks around the EXP figures on the in-game EXP bar (e.g. "EXP 266 [6.33%]"), saved relative to the game window.
+_Avoid_: status bar region, EXP region
+
+**Rolling Rate**:
+A rate measured over the last few minutes of active play in a session, as opposed to the average over the whole session.
+_Avoid_: current rate, live rate
+
+**Time to Level**:
+How long the player would take to reach the next level at their net EXP rate.
+_Avoid_: ETA, time to next level
+
+**Pickup Log**:
+The fading lines in the bottom-right corner of the game screen that announce gained EXP, gained mesos and picked-up items.
+_Avoid_: chat, drop log, kill feed
+
+**Meso**:
+The in-game currency; the game itself says "mesos".
+_Avoid_: miso, gold, money

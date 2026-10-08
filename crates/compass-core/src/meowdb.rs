@@ -1,7 +1,7 @@
 //! MeowDB reader: turns MeowDB pages, fetched by the shell, into map data. Personal use
 //! only until MeowDB grants permission (ADR 0003); credit "NiaMeowDB (meowdb.com)".
 
-use crate::map_data::{HiddenPortal, MapData, MapSummary, Mob, PerParty};
+use crate::map_data::{HiddenPortal, MapData, MapSummary, Mob, PerParty, Portal};
 use crate::map_index::{MapEntry, SourceError};
 use crate::portals::{self, Exit, MapFacts, Minimap};
 use crate::portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
@@ -72,8 +72,10 @@ pub fn map_url(id: &str) -> String {
 /// or a mob that the summary or the Monsters table doesn't list. A map without mobs
 /// and without a summary (a town) is valid.
 ///
-/// The map's Hidden Portals follow the Hidden Portal rule and the app's hand-kept
-/// [`PORTAL_OVERRIDES`]. Its connected maps come from the map's `connectedMaps`.
+/// The map's portals to other maps, with their kinds, and its Hidden Portals follow the
+/// Hidden Portal rule and the app's hand-kept [`PORTAL_OVERRIDES`]. Its connected maps
+/// come from the map's `connectedMaps`, its Mob Rate from `mobRate` and its nearest
+/// town from `returnMap`.
 pub fn read_map_page(html: &str, id: &str) -> Result<MapData, SourceError> {
     read_map_page_with(html, id, PORTAL_OVERRIDES)
 }
@@ -152,6 +154,7 @@ fn read_page(html: &str, id: &str, overrides: &[PortalOverride]) -> Result<MapDa
                 return Err("mobs but no spawns".to_string());
             }
             Ok(Mob {
+                id: mob_id.to_string(),
                 name: name.trim().to_string(),
                 level: u32::try_from(uint(&rate["level"], "level")?).map_err(|e| e.to_string())?,
                 hp,
@@ -162,22 +165,37 @@ fn read_page(html: &str, id: &str, overrides: &[PortalOverride]) -> Result<MapDa
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
+    let mob_rate_percent = match map["mobRate"].as_f64() {
+        Some(rate) if rate >= 0.0 && rate.is_finite() => (rate * 100.0).round() as u32,
+        _ => return Err(format!("mobRate is {}, not a rate", map["mobRate"])),
+    };
+    let nearest_town = match map["returnMap"].as_str().map(str::trim) {
+        Some(portals::DEAD_END) => None,
+        Some(town) => Some(town.to_string()),
+        None => return Err(format!("returnMap is {}, not a map ID", map["returnMap"])),
+    };
+    let (portals, hidden_portals) = portals(map, id, overrides)?;
     Ok(MapData {
         summary,
         mobs,
-        hidden_portals: hidden_portals(map, id, overrides)?,
+        hidden_portals,
         connected_maps,
+        portals,
+        mob_rate_percent,
+        nearest_town,
+        // The panel picks these out when it loads the data.
         ..MapData::default()
     })
 }
 
-/// The map's Hidden Portals from its `portals` (exits to other maps). `intraPortals`,
-/// teleports within the map, are never Hidden Portals, but must be there all the same.
-fn hidden_portals(
+/// The map's portals to other maps and its Hidden Portals, from its `portals`.
+/// `intraPortals`, teleports within the map, are neither, but must be there all the
+/// same.
+fn portals(
     map: &Value,
     id: &str,
     overrides: &[PortalOverride],
-) -> Result<Vec<HiddenPortal>, String> {
+) -> Result<(Vec<Portal>, Vec<HiddenPortal>), String> {
     let text = |v: &Value, what: &str| -> Result<String, String> {
         v.as_str().map(|s| s.trim().to_string()).ok_or_else(|| format!("{what} is {v}, not text"))
     };
@@ -209,7 +227,7 @@ fn hidden_portals(
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
-    Ok(portals::hidden_portals(&facts, exits, overrides))
+    Ok(portals::portals(&facts, exits, overrides))
 }
 
 /// The page's flight stream: the strings of every `self.__next_f.push([1, "…"])`, joined

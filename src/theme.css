@@ -36,4 +36,19 @@
   --problem-edge: #e5a04f;
   --problem-ink: #6b3500;
   --edit: #2f63c8;
+  /* A hairline inside a window, between its sections. */
+  --rule: rgba(62, 82, 124, 0.2);
+  /* An inset list or box on the lavender body: the route, the suggestions. */
+  --inset-bg: rgba(255, 255, 255, 0.55);
+  --inset-edge: rgba(62, 82, 124, 0.3);
+  /* The game's window buttons: deep steel for an action (white text holds 4.5:1 even at
+     the light top), light steel beside it. Greyed out when it won't take a press. */
+  --button: linear-gradient(180deg, #4673c6 0%, #2a52a6 100%);
+  --button-hover: linear-gradient(180deg, #3d69bb 0%, #234897 100%);
+  --button-edge: #1c3672;
+  --button-light: linear-gradient(180deg, #f8fafe 0%, #d5dff0 100%);
+  --button-light-hover: linear-gradient(180deg, #ffffff 0%, #dfe7f6 100%);
+  --disabled-bg: #d3d9e5;
+  --disabled-edge: #aeb8cc;
+  --disabled-ink: #6b7591;
 }

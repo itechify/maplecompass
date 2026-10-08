@@ -6,11 +6,13 @@
 - `cargo clippy --workspace --all-targets -- -D warnings`: lint everything.
 - `pnpm install` then `pnpm tauri build --debug --no-bundle`: build the app. `pnpm tauri dev` runs it.
 - `cargo run -p maplecompass --example probe [reads] [out.png]`: read-only smoke test against a running game, with no UI.
+- `cargo run -p maplecompass --example probe record <out-dir> <name>=<x>,<y>,<w>,<h>@<hz> ... [--seconds <n>]`: record timestamped crops of client-area regions from a running game, for samples.
 
 ## Code rules
 
 - All logic goes in `crates/compass-core`, which takes plain data in and returns a `PanelState`. It has no OS, UI, network or file dependencies.
 - Tests drive the core's public inputs and assert on `PanelState` only, never on internals. Every file in `samples/minimap` must be recognised; there, `--window` samples go through `default_title_region` (the probe's capture). The app captures the Title Region the player marks at setup, which `tests/setup.rs` covers with marks on the `--window` samples.
+- Every file in `samples/exp-bar` must read as its name (or its recording's `readings.json`) says, or as unreadable, never as a wrong number. A frame that is ever read wrong becomes a sample there.
 - `src-tauri` only adapts window lookup, capture and rendering. It must follow ADR 0001: no `PrintWindow`, no messages, input, hooks or process access to the game.
 
 ## Agent skills
