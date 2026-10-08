@@ -51,6 +51,11 @@ body {
   container-type: inline-size;
 }
 
+/* For a moment while the overlay measures the panel's full height. */
+.panel.measuring {
+  max-height: none;
+}
+
 .panel p {
   margin: 0;
   white-space: nowrap;
@@ -67,7 +72,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 9px;
-  padding-bottom: 10px;
+  /* Clear of the 14px corner grips, so the last line never sits beside one. */
+  padding-bottom: 16px;
   text-shadow:
     0 0 1px rgba(238, 242, 255, 0.9),
     0 0 3px rgba(238, 242, 255, 0.75);
@@ -127,6 +133,10 @@ body {
 .panel .map {
   color: var(--title-ink);
   text-shadow: var(--title-lettering);
+  /* Room for the 1px outline at the sides, which a line cuts off past its box (to end a
+     long name in an ellipsis), without moving the text. */
+  padding-inline: 1px;
+  margin-inline: -1px;
 }
 
 .street {
@@ -254,8 +264,8 @@ body {
   box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
 }
 
-/* The expanded panel's bottom corners: drag one to resize the panel. A few dots, like a
-   window's grip, in the corner's triangle. */
+/* The expanded panel's bottom corners: drag one sideways to resize the panel (its height
+   follows its content). A few dots, like a window's grip, in the corner's triangle. */
 .grip {
   position: absolute;
   bottom: 0;
@@ -269,13 +279,13 @@ body {
 
 .grip.left {
   left: 0;
-  cursor: nesw-resize;
+  cursor: ew-resize;
   clip-path: polygon(0 0, 100% 100%, 0 100%);
 }
 
 .grip.right {
   right: 0;
-  cursor: nwse-resize;
+  cursor: ew-resize;
   clip-path: polygon(100% 0, 100% 100%, 0 100%);
 }
 
@@ -697,8 +707,7 @@ td:first-child {
 }
 
 .scroll,
-.view > .step,
-.view > .hunting {
+.view > .step {
   flex: 0 1 auto;
   min-height: 0;
 }
@@ -708,14 +717,57 @@ td:first-child {
   scrollbar-color: var(--select-edge) transparent;
 }
 
+/* Squeezed by everything above it, the route still shows two and a half stops, the cut
+   third saying it scrolls; a route that short in full never shrinks. Should even that
+   not fit, the whole view scrolls rather than lose its end. */
+.route-stops:has(> li:nth-child(3)) {
+  min-height: 6.5em;
+}
+
+.route-stops:not(:has(> li:nth-child(3))) {
+  flex-shrink: 0;
+}
+
+.view {
+  overflow-y: auto;
+  scrollbar-color: var(--select-edge) transparent;
+}
+
+/* Scrolled, the window bar and the map's title stay put: the bar's 22px row, its 4px of
+   padding and its 1px rule, then the title just under it. */
+.view > .window-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.view > .titlebar {
+  position: sticky;
+  top: calc(22px + 4px + 1px);
+  z-index: 1;
+}
+
 /* The Hunting section: its own section at the bottom of the normal view, divided from
-   the current map's info by a rule, headed by the Hunting Target's mob and map. */
+   the current map's info by a rule, headed by the Hunting Target's mob and map. Its parts
+   sit in the view's own column, so its route gives way to everything else in the panel
+   (down to its floor) rather than the section shrinking past its parts. */
 .hunting {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: contents;
+}
+
+/* Over the parts' own margins (the figures', the route's). */
+.panel .hunting > * {
+  margin-inline: 11px;
+}
+
+.hunting > .section-head {
   padding-top: 8px;
   border-top: 1px solid var(--rule);
+}
+
+/* 6px apart within the section, not the view's 9px. */
+.panel .hunting > * + * {
+  margin-top: -3px;
 }
 
 .section-head,
@@ -839,6 +891,45 @@ td:first-child {
 .route-stops .route-street {
   grid-column: 2;
   color: var(--ink-2);
+}
+
+/* Arrived on the Hunting Target's map: the route's inset box resolves to its last stop.
+   The player's own mark on the minimap, a yellow dot, then "You're here" and the way
+   they came. */
+.arrival {
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  column-gap: 7px;
+  align-items: baseline;
+  padding: 5px 10px 6px;
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--inset-bg);
+}
+
+.arrival::before {
+  content: "";
+  align-self: center;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--you-light) 0 18%, var(--you) 45%);
+  box-shadow: 0 0 0 1px var(--you-edge);
+}
+
+.panel .arrival-here {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 17px;
+}
+
+.panel .arrival-trip {
+  grid-column: 2;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-2);
+  white-space: normal;
 }
 
 .search-credit {

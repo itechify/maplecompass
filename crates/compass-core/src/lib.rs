@@ -38,7 +38,7 @@ pub use panel::{
     PlacementMode, ScreenPoint,
     ScreenRect, Size,
 };
-pub use search::{DensityTier, HuntingTarget, MobChoice, RouteStop, SearchResult, SearchState, SearchView};
+pub use search::{DensityTier, HuntingTarget, MobChoice, RouteStop, SearchResult, SearchState, SearchView, Trip};
 pub use session::{Deaths, ExpRate, ExpTracking, TrackingState};
 pub use settings::{Hotkeys, Settings};
 pub use setup::{
@@ -374,7 +374,8 @@ impl Compass {
         // and its page's exits count before the crawl gets to it.
         let moved = map.as_ref().map(|m| &m.id) != self.state.map.as_ref().map(|m| &m.id);
         let paged = data.data() != self.state.data.data();
-        // Arriving on the Hunting Target's map (with Candidates, showing it) ends the hunt.
+        // Arriving on the Hunting Target's map (with Candidates, showing it), or leaving it
+        // after.
         if let (true, Some(map)) = (moved, &map) {
             self.search.arrived(&map.id);
         }
