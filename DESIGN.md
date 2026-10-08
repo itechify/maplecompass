@@ -178,7 +178,7 @@ The palette combines Midnight Slate and cool light text with Compass Gold for co
 
 ### Primary
 
-- **Compass Gold** (`accent`): primary setup buttons, the marking rectangle, and the dashed edit outline.
+- **Compass Gold** (`accent`): primary setup buttons, the marking rectangle, and keyboard focus.
 - **Gold Ink** (`accent-ink`): dark text on filled Compass Gold buttons.
 - **Compass Gold washes** (`notice-fill`, `selection-fill`): the setup notice and the translucent interior of the Title Region selection.
 
@@ -246,7 +246,7 @@ Depth comes from flat tonal layers: the opaque setup background, translucent ove
 
 Corners are gently rounded, with progressively smaller curves for panels, inset containers, buttons, and tags. Use the `rounded` tokens for those roles. The collapsed icon shares the panel corner treatment; the asset's own silhouette remains defined by its SVG.
 
-The Title Region selection is a square-cornered, solid outline (2px). Edit mode uses a dashed outline of the same thickness, inset into the panel or icon (outline offset −2px). Setup notices have a left rule (3px) without a rounded outer container. These are distinct functional shapes, not interchangeable card variants.
+The Title Region selection is a square-cornered, solid outline (2px). Setup notices have a left rule (3px) without a rounded outer container. These are distinct functional shapes, not interchangeable card variants.
 
 ## Components
 
@@ -260,7 +260,7 @@ Disabled controls reduce opacity (0.45). Enabled buttons brighten slightly on ho
 
 The compact information container uses the translucent `panel` fill and its namesake corner token. A small Street Name precedes the semibold Map Name. Grouped data and a low-emphasis attribution footer follow beneath; credit and the source-page hint share a wrapping row, followed by the help/setup shortcut. The footer uses Soft Frost for contrast on bright game scenes.
 
-An uncertain Map Name becomes Soft Frost and gains an amber question mark. Edit mode adds the dashed Compass Gold outline and marks its guidance text in the accent. Draggable states use a move cursor. Hidden and collapsed states switch the displayed content immediately.
+An uncertain Map Name becomes Soft Frost and gains an amber question mark. When the panel can be dragged, its header uses a move cursor. Hidden and collapsed states switch the displayed content immediately.
 
 ### Map Summary and mob tables
 
@@ -288,11 +288,17 @@ A crosshair cursor over the marking scrim, a centered inset instruction, and a C
 
 ### Text field
 
-The query box of the overlay's mob search, shown in search mode: the app's one text field. It fills its row on the `inset` fill, with a Slate border (1px), the `button` corner token and Clear Frost text; a small Blue Grey label sits above it, and its placeholder is Blue Grey. Keyboard focus uses the buttons' two-pixel Compass Gold outline with a three-pixel offset. Its suggestions drop below in an inset, bordered list with the `inset` corner token: rows are Blue Grey with the level right-aligned, and the highlighted row, the one Enter picks, is Clear Frost and semibold on the `selection-fill` wash. It is a keyboard-controlled combobox: the arrow keys move the highlight while the text box keeps the focus.
+The query box of the overlay's search view: the app's one text field. It fills its row on the `inset` fill, with a Slate border (1px), the `button` corner token and Clear Frost text; a small Blue Grey label sits above it, and its placeholder is Blue Grey. Keyboard focus uses the buttons' two-pixel Compass Gold outline with a three-pixel offset. Its suggestions drop below in an inset, bordered list with the `inset` corner token: rows are Blue Grey with the level right-aligned, and the highlighted row, the one Enter picks, is Clear Frost and semibold on the `selection-fill` wash. It is a keyboard-controlled combobox: the arrow keys move the highlight while the text box keeps the focus.
 
-### Mob search section
+### Search view and Hunting section
 
-Its own section of the overlay panel, below the current map's info and divided from it by a Slate rule (1px) above. A semibold note-size heading names it ("Mob search · Green Mushroom", the level in Blue Grey), and a small × at its right clears it: a secondary button (transparent fill, Slate border, `button` corner) and the overlay's one control that takes a click while the rest of the panel lets clicks through. In search mode the section holds the text field, its suggestions, the travel checkboxes, every result in a scrolling list with the highlighted one on the `selection-fill` wash, and that result's route in an inset, bordered box. Outside search mode it keeps the top five results.
+The panel's header has a small 🔍 at its right that opens the search view: a small secondary icon button (22px square, transparent fill, Slate border, `button` corner). The whole panel is clickable, and the header is where it is dragged from.
+
+The search view takes over the whole panel. A bar with a ← icon button (back, changing nothing) and a semibold note-size heading tops it. Its first step holds the text field and its suggestions; its second, headed by the picked mob (the level in Blue Grey), holds the nearest-map headline, every map in a results table with the highlighted one on the `selection-fill` wash and a sticky header, the travel checkboxes, and a key hint. Rows and suggestions take a click, with a faint Clear Frost wash on hover.
+
+The Hunting section is its own section at the bottom of the normal view, divided from the current map's info by a Slate rule (1px) above. A semibold note-size heading names the Hunting Target ("Axe Stump · Deep Valley III"), with a 🔍 and a × icon button at its right. Below it sit Tier, Density, Share and Distance side by side (Blue Grey labels over the figures), then the route from the current map in an inset, bordered box.
+
+The panel is never taller than the space where it is placed. When its content is longer, only its long part scrolls: the Hunting section's route, the suggestions, or the map list.
 
 ### App icon
 

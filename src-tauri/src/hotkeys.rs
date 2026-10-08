@@ -1,7 +1,7 @@
 //! Global hotkeys. On Windows these are `RegisterHotKey`: the system tells us when the
 //! combination is pressed, whichever window has focus. No keyboard hook and no polling
-//! of key state, and nothing is sent to the game (ADR 0001). They are the only way out
-//! of click-through, because a click-through overlay never sees the mouse.
+//! of key state, and nothing is sent to the game (ADR 0001). They act while the game
+//! keeps the keyboard, which a click on the overlay never takes from it.
 //!
 //! A registered combination reaches no other app, so they are registered only while the
 //! core says they are live (the game or one of our windows is in front) and released
