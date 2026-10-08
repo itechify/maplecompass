@@ -7,7 +7,10 @@
 mod common;
 
 use common::{FakeSource, arrive};
-use compass_core::{Compass, Foreground, Hotkeys, PlacementMode, Request, Settings, SetupReason};
+use compass_core::{
+    Compass, ExpBar, ExpBarReading, ExpBarRegion, ExpTracking, Foreground, GameWindow, Hotkeys, PanelControl,
+    PlacementMode, Rect, Request, ScreenRect, Settings, SetupReason, Size, TitleRegion, TrackingState,
+};
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
 
@@ -28,6 +31,7 @@ fn the_hotkeys_are_ctrl_shift_letters() {
             setup: ctrl_shift("s"),
             choose_candidate: ctrl_shift("n"),
             search: ctrl_shift("f"),
+            reset_session: ctrl_shift("r"),
         }
     );
 }
@@ -242,7 +246,7 @@ fn every_hotkey_the_panel_lists_is_one_to_register_the_search_one_included() {
 
     assert_eq!(
         to_register,
-        ["ctrl+shift+c", "ctrl+shift+p", "ctrl+shift+m", "ctrl+shift+s", "ctrl+shift+n", "ctrl+shift+f"]
+        ["ctrl+shift+c", "ctrl+shift+p", "ctrl+shift+m", "ctrl+shift+s", "ctrl+shift+n", "ctrl+shift+r", "ctrl+shift+f"]
     );
 }
 
@@ -284,4 +288,89 @@ fn a_hotkey_reported_unavailable_stays_listed_while_the_hotkeys_are_not_live() {
     let state = compass.on_foreground(Foreground::OtherApp);
 
     assert_eq!(state.unavailable_hotkeys, ["ctrl+shift+n"]);
+}
+
+/// A core with EXP tracking on (both regions kept, on a 1920x1200 game window) and
+/// these hotkeys.
+fn tracking_with(hotkeys: Hotkeys) -> Compass {
+    let client = Size { width: 1920, height: 1200 };
+    let mut compass = Compass::new(FakeSource::meowdb());
+    compass.restore(Settings {
+        title_region: Some(TitleRegion { marked: Rect { x: 70, y: 40, width: 130, height: 48 }, client }),
+        exp_bar_region: Some(ExpBarRegion { marked: Rect { x: 1005, y: 1144, width: 240, height: 32 }, client }),
+        hotkeys,
+        ..Settings::default()
+    });
+    let screen = ScreenRect { x: 0, y: 0, width: 1920, height: 1200 };
+    compass.on_game_window(Some(GameWindow { client: screen, frame: screen, screens: vec![screen] }));
+    compass
+}
+
+/// Start a Session: the EXP bar reads `160 [3.81%]`, then `266 [6.33%]`.
+fn start_session(compass: &mut Compass) {
+    for (at_ms, exp, percent_hundredths) in [(0, 160, 381), (10_000, 266, 633)] {
+        compass.on_exp_bar_reading(ExpBarReading { bar: Some(ExpBar { exp, percent_hundredths }), at_ms });
+    }
+    assert_eq!(compass.panel_state().exp_tracking.state, TrackingState::WarmingUp);
+}
+
+fn waiting() -> ExpTracking {
+    ExpTracking { state: TrackingState::Waiting, ..ExpTracking::default() }
+}
+
+#[test]
+fn ctrl_shift_r_resets_the_session_back_to_waiting() {
+    let mut compass = tracking_with(Hotkeys::default());
+    start_session(&mut compass);
+
+    assert_eq!(compass.on_hotkey("ctrl+shift+r"), None);
+
+    assert_eq!(compass.panel_state().exp_tracking, waiting());
+}
+
+#[test]
+fn the_reset_icon_at_the_top_of_the_panel_resets_the_session_too() {
+    let mut compass = tracking_with(Hotkeys::default());
+    start_session(&mut compass);
+
+    assert_eq!(compass.press(PanelControl::ResetSession), None);
+
+    assert_eq!(compass.panel_state().exp_tracking, waiting());
+}
+
+/// Settings saved before the reset hotkey existed, with a hotkey the player rebound.
+const SETTINGS_WITHOUT_RESET_SESSION: &str = r#"{
+  "version": 4,
+  "hotkeys": {
+    "togglePanel": "ctrl+shift+x",
+    "cyclePlacement": "ctrl+shift+p",
+    "openMeowdbPage": "ctrl+shift+m",
+    "setup": "ctrl+shift+s",
+    "chooseCandidate": "ctrl+shift+n",
+    "search": "ctrl+shift+f"
+  }
+}"#;
+
+#[test]
+fn settings_from_before_the_reset_hotkey_get_ctrl_shift_r_and_keep_the_rest() {
+    let mut compass = Compass::new(FakeSource::meowdb());
+
+    let state = compass.restore(serde_json::from_str(SETTINGS_WITHOUT_RESET_SESSION).unwrap());
+
+    assert_eq!(state.hotkeys.reset_session, ctrl_shift("r"));
+    assert_eq!(state.hotkeys.toggle_panel, ctrl_shift("x"));
+}
+
+#[test]
+fn a_rebound_reset_hotkey_is_kept_and_is_the_one_that_resets() {
+    let json = SETTINGS_WITHOUT_RESET_SESSION.replace(r#""search""#, r#""resetSession": "ctrl+shift+z", "search""#);
+    let saved: Settings = serde_json::from_str(&json).unwrap();
+    let mut compass = tracking_with(saved.hotkeys);
+    assert_eq!(compass.panel_state().hotkeys.reset_session, ctrl_shift("z"));
+    start_session(&mut compass);
+
+    compass.on_hotkey("ctrl+shift+r");
+    assert_eq!(compass.panel_state().exp_tracking.state, TrackingState::WarmingUp);
+    compass.on_hotkey("Ctrl+Shift+Z");
+    assert_eq!(compass.panel_state().exp_tracking, waiting());
 }

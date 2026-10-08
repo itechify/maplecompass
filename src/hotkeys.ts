@@ -6,6 +6,7 @@ export type Hotkeys = {
   setup: string;
   chooseCandidate: string;
   search: string;
+  resetSession: string;
 };
 
 export function keyLabel(accelerator: string): string {

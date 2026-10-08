@@ -4,11 +4,24 @@ import { listen } from "@tauri-apps/api/event";
 // The shell lays this window exactly over the game's client area, so a point here in
 // CSS px times the device pixel ratio is the same point in client px.
 
+/** What the player marks: mirror of `compass_core::MarkTarget`. */
+type Target = "title" | "expBar";
+
+/** The window's heading for each. */
+const TITLES: Record<Target, string> = {
+  title: "Mark both lines of the minimap title",
+  expBar: "Mark the EXP figures on the EXP bar, like EXP. 160 [3.81%]",
+};
+
 const box = document.getElementById("box")!;
 const hint = document.getElementById("marking-hint")!;
+const heading = document.getElementById("marking-title")!;
 const status = document.getElementById("selection-status")!;
 type Rect = { x: number; y: number; width: number; height: number };
+/** Mirror of the shell's `SelectionView`. */
+type SelectionView = { selection: Rect | null; target: Target | null };
 let selection: Rect | null = null;
+let target: Target = "title";
 let start: { x: number; y: number } | null = null;
 
 function reset() {
@@ -27,6 +40,15 @@ function update(next: Rect | null) {
   if (beginning) hint.focus();
 }
 
+/** What the window is marking: its heading, and where the instructions go (the EXP
+ *  figures are at the bottom of the game, where the instructions would cover them). */
+function markingTarget(next: Target | null) {
+  if (!next) return;
+  target = next;
+  heading.textContent = TITLES[target];
+  hint.classList.toggle("top", target === "expBar");
+}
+
 function draw(r: { left: number; top: number; width: number; height: number }) {
   Object.assign(box.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
   box.hidden = false;
@@ -35,7 +57,7 @@ function draw(r: { left: number; top: number; width: number; height: number }) {
 function actionError(error: unknown) {
   start = null;
   update(selection);
-  status.textContent = `Couldn't update the Title Region: ${String(error)}. Press Esc to return to setup and try again.`;
+  status.textContent = `Couldn't update the marked box: ${String(error)}. Press Esc to return to setup and try again.`;
 }
 
 function rectTo(x: number, y: number) {
@@ -67,7 +89,8 @@ document.addEventListener("mouseup", (e) => {
   // A click, not a drag.
   if (r.width < 8 || r.height < 8) { update(selection); return; }
   const px = (v: number) => Math.round(v * window.devicePixelRatio);
-  invoke("mark_title_region", {
+  invoke("mark_region", {
+    target,
     x: px(r.left),
     y: px(r.top),
     width: px(r.width),
@@ -84,18 +107,24 @@ document.addEventListener("keydown", (e) => {
   } else if (selection && e.key === "Enter") {
     e.preventDefault();
     reset();
-    invoke("confirm_title_selection").catch(actionError);
+    invoke("confirm_selection", { target }).catch(actionError);
   } else if (selection && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
     e.preventDefault();
     start = null;
-    invoke("adjust_title_selection", {
+    invoke("adjust_selection", {
       direction: e.key.slice(5).toLowerCase(), resize: e.altKey, coarse: e.shiftKey,
     }).catch(actionError);
   }
 });
 
-listen<Rect | null>("selection-state", (e) => update(e.payload));
+listen<SelectionView>("selection-state", (e) => {
+  markingTarget(e.payload.target);
+  update(e.payload.selection);
+});
 window.addEventListener("resize", () => update(selection));
-invoke<{ setup: { selection: Rect | null } } | null>("setup_view").then((view) => {
-  if (view && !selection) update(view.setup.selection);
+invoke<{ setup: { selection: Rect | null; selectionTarget: Target | null } } | null>("setup_view").then((view) => {
+  if (view && !selection) {
+    markingTarget(view.setup.selectionTarget);
+    update(view.setup.selection);
+  }
 }).catch(actionError);

@@ -54,6 +54,74 @@ body {
   color: #f0c674;
 }
 
+/* EXP tracking: Time to Level over the rates, one line per figure, so the panel's
+   height only changes when a line comes or goes. */
+.tracking {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+#tracking-figures {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tracking .waiting {
+  font-size: 13px;
+  color: #c3ccd6;
+}
+
+.tracking .headline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.tracking .label {
+  font-size: 12px;
+  color: #9fb6cc;
+}
+
+.tracking .time-to-level {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.tracking .tag {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  background: rgba(159, 182, 204, 0.2);
+  color: #c3d4e4;
+}
+
+.tracking .tag.paused {
+  background: rgba(240, 198, 116, 0.2);
+  color: #f0c674;
+}
+
+/* Rates still settling, or held while paused: the figures show, quieter. */
+.tracking:has(.tag.warmingUp) .time-to-level,
+.tracking:has(.tag.warmingUp) .rates td,
+.tracking:has(.tag.paused) .time-to-level,
+.tracking:has(.tag.paused) .rates td {
+  color: #c3ccd6;
+}
+
+.rates td {
+  font-weight: 600;
+  min-width: 72px;
+}
+
+.tracking .extra {
+  font-size: 12px;
+  color: #c3ccd6;
+}
+
 /* Background progress: present, but quieter than a status note. */
 .panel .note.crawl {
   font-size: 12px;
@@ -615,6 +683,30 @@ footer {
   display: block;
 }
 
+/* Time to Level on the collapsed icon ("47m", "3h 10m"), along its bottom edge. Clicks
+   and drags go through it to the icon. */
+.badge {
+  display: none;
+  position: fixed;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+  padding: 0 2px;
+  border-radius: 3px;
+  background: rgba(16, 24, 36, 0.88);
+  color: #f2f5f8;
+  font: 600 9px/12px "Segoe UI", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.collapsed .badge {
+  display: block;
+}
+
 /* Draggable (inside the game, or detached): the header, or the collapsed icon, moves the panel. */
 .draggable .icon,
 .draggable .drag-handle,
@@ -622,9 +714,14 @@ footer {
   cursor: move;
 }
 
+.draggable button {
+  cursor: pointer;
+}
+
 /* No game window (minimised or closed): the overlay window stays but draws nothing. */
 .hidden .panel,
-.hidden .icon {
+.hidden .icon,
+.hidden .badge {
   display: none;
 }
 
