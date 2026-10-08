@@ -6,7 +6,7 @@ mod common;
 
 use common::{FakeSource, black_frame, requests_for, sample_frame};
 use compass_core::{
-    Compass, LevelRange, MEOWDB_CREDIT, MapData, MapDataStatus, Mob, MoreMobs, PanelState, Request,
+    Compass, LevelRange, MEOWDB_AND_IMAGES_CREDIT, MEOWDB_CREDIT, MapData, MapDataStatus, Mob, MoreMobs, PanelState, Request,
 };
 use std::task::Poll;
 
@@ -128,7 +128,8 @@ fn the_shown_map_carries_its_meowdb_page_and_the_meowdb_credit() {
         state.map.as_ref().map(|m| m.url.as_str()),
         Some("https://meowdb.com/msclassic/maps/010003070")
     );
-    assert_eq!(state.credit, Some("NiaMeowDB (meowdb.com)"));
+    // Its listed mobs' Mob Cards show images from maplestory.io.
+    assert_eq!(state.credit, Some("NiaMeowDB (meowdb.com) · images: maplestory.io"));
     assert_eq!(MEOWDB_CREDIT, "NiaMeowDB (meowdb.com)");
 }
 
@@ -160,7 +161,7 @@ fn when_meowdb_is_unreachable_a_saved_copy_of_the_page_is_shown_with_when_it_was
     let MapDataStatus::SavedCopy { data, saved_at_unix_ms } = &state.data else { panic!("{:?}", state.data) };
     assert_eq!(*saved_at_unix_ms, SAVED_AT);
     assert_eq!(data.mobs.len(), 5);
-    assert_eq!(state.credit, Some(MEOWDB_CREDIT));
+    assert_eq!(state.credit, Some(MEOWDB_AND_IMAGES_CREDIT));
 }
 
 /// The overlay gets the panel state as JSON: a saved copy is the map's data with its
