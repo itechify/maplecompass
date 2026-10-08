@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/setup.css" />
+    <title>Setup review harness</title>
+    <script>
+      // ?s=<state>: which setup state and step to render, with a mocked Tauri IPC.
+      const q = new URLSearchParams(location.search);
+      const s = q.get("s") ?? "warning";
+      const base = {
+        setup: { needed: "firstRun", testRead: null, credit: "NiaMeowDB (meowdb.com)" },
+        unavailableHotkeys: [],
+        invalidHotkeys: [],
+        recognition: { status: "ready" },
+        game: { width: 1920, height: 1200 },
+        gameTitle: "MapleStory",
+        setupHotkey: "super+alt+s",
+      };
+      const views = {
+        missing: { game: null },
+        recognised: { setup: { ...base.setup, testRead: { status: "recognised", map: { id: "010003000", streetName: "Victoria Road", mapName: "Kerning City" } } } },
+        failed: { setup: { ...base.setup, testRead: { status: "failed" } } },
+        unavailable: { setup: { ...base.setup, testRead: { status: "failed" } }, recognition: { status: "unavailable" } },
+        resized: { setup: { ...base.setup, needed: "resolutionChanged" }, unavailableHotkeys: ["super+alt+o", "super+alt+banana"], invalidHotkeys: ["super+alt+banana"] },
+        requested: { setup: { ...base.setup, needed: "requested" } },
+      };
+      window.__view = { ...base, ...(views[s] ?? {}) };
+      const cbs = {};
+      let next = 1;
+      window.__handlers = {};
+      window.__TAURI_INTERNALS__ = {
+        metadata: { currentWindow: { label: "setup" }, currentWebview: { windowLabel: "setup", label: "setup" } },
+        transformCallback(cb) { const id = next++; cbs[id] = cb; return id; },
+        unregisterCallback(id) { delete cbs[id]; },
+        async invoke(cmd, args) {
+          if (cmd === "plugin:event|listen") { window.__handlers[args.event] = cbs[args.handler]; return 1; }
+          if (cmd === "setup_view") return window.__view;
+          if (cmd === "pick_game_window") return new Promise(() => {});
+          return null;
+        },
+      };
+      window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
+    </script>
+  </head>
+  <body>
+    <script type="module">
+      const page = new DOMParser().parseFromString(await (await fetch("/setup.html")).text(), "text/html");
+      document.body.replaceChildren(...page.body.children);
+      await import("/src/setup.ts");
+      await new Promise((r) => setTimeout(r, 50));
+      const next = () => document.querySelector("section:not([hidden]) [data-action=next]").click();
+      const steps = { warning: 0, window: 1, missing: 1, picking: 1, requirements: 2, mark: 3 };
+      if (s in steps) for (let i = 0; i < steps[s]; i++) next();
+      if (s === "picking") document.getElementById("pick").click();
+      if (["reading", "recognised", "failed", "unavailable"].includes(s)) {
+        window.__handlers["title-marked"]({ event: "title-marked", id: 2, payload: null });
+      }
+      if (s === "recognised") document.getElementById("finish").focus();
+      if (s === "focus") { next(); document.querySelector("section:not([hidden]) [data-action=next]").focus(); }
+    </script>
+  </body>
+</html>

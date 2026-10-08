@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Region review harness</title>
+    <script>
+      const cbs = {};
+      let next = 1;
+      window.__TAURI_INTERNALS__ = {
+        metadata: { currentWindow: { label: "region" }, currentWebview: { windowLabel: "region", label: "region" } },
+        transformCallback(cb) { const id = next++; cbs[id] = cb; return id; },
+        unregisterCallback(id) { delete cbs[id]; },
+        async invoke() { return 1; },
+      };
+      window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
+    </script>
+  </head>
+  <body>
+    <script type="module">
+      // The real region.html, laid over a real game screenshot, mid-drag around the title.
+      const page = new DOMParser().parseFromString(await (await fetch("/region.html")).text(), "text/html");
+      for (const el of page.head.querySelectorAll("link, style")) document.head.append(el);
+      document.body.replaceChildren(...page.body.children);
+      const backdrop = document.createElement("style");
+      backdrop.textContent = `html { background: url("/samples/minimap/victoria-road__kerning-city--window.png") 0 -28px / 1916px auto no-repeat; }`;
+      document.head.append(backdrop);
+      await import("/src/region.ts");
+      const at = (type, x, y) => document.dispatchEvent(new MouseEvent(type, { clientX: x, clientY: y, button: 0 }));
+      at("mousedown", 66, 40);
+      at("mousemove", 206, 92);
+    </script>
+  </body>
+</html>
