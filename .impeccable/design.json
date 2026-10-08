@@ -269,20 +269,6 @@
           "oklch(84% 0.0296 85.80)",
           "oklch(95% 0.0296 85.80)"
         ]
-      },
-      "icon": {
-        "role": "tertiary",
-        "displayName": "Icon Turquoise",
-        "tonalRamp": [
-          "oklch(15% 0.1109 221.72)",
-          "oklch(25% 0.1109 221.72)",
-          "oklch(35% 0.1109 221.72)",
-          "oklch(45% 0.1109 221.72)",
-          "oklch(60% 0.1109 221.72)",
-          "oklch(72% 0.1109 221.72)",
-          "oklch(84% 0.1109 221.72)",
-          "oklch(95% 0.1109 221.72)"
-        ]
       }
     },
     "typographyMeta": {
@@ -456,7 +442,7 @@
       "Do keep attribution and source-page hints legible within the low-emphasis footer."
     ],
     "donts": [
-      "Don't substitute the icon's turquoise for the Compass Gold action accent.",
+      "Don't sample interface colors from the app icon artwork.",
       "Don't turn descriptive portal tags or Candidate rows into controls without an explicit interaction change.",
       "Don't ellipsize status explanations using the name-row clipping treatment.",
       "Don't describe shadows, blur, hover animation, mobile breakpoints as established parts of this system.",
