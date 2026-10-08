@@ -273,6 +273,37 @@ fn a_level_up_counts_what_was_left_of_the_old_level_and_what_is_in_the_new() {
     assert_eq!(after.exp_tracking.time_to_level_badge.as_deref(), Some("1h 40m"));
 }
 
+/// The percentage the game shows for `exp` on a level of 20,000 EXP.
+fn percent_20k(exp: u64) -> u32 {
+    ((exp * 20_000 + 20_000) / (2 * 20_000)) as u32
+}
+
+#[test]
+fn a_level_up_barely_into_the_new_level_is_not_a_death() {
+    let mut compass = tracking();
+    // 100 EXP every 10 s on the recording's ~16,682 EXP level, up to 16,600 [99.51%]...
+    for (k, exp) in (16_200..=16_600).step_by(100).enumerate() {
+        read(&mut compass, k as u64 * 10 * S, exp, percent_lv15(exp));
+    }
+
+    // ...then 84 more: 82 to finish the level and 2 into the next, of 20,000 EXP. The
+    // bar reads 2 [0.01%], which a level of 13,334 to 40,000 EXP allows, the old one
+    // among them; but EXP dropping from 99.51% to next to nothing is the bar wrapping.
+    let levelled = read(&mut compass, 50 * S, 2, percent_20k(2));
+    assert_eq!(levelled.exp_tracking.deaths, Deaths::default());
+    // The Session started at 10 s: 300 EXP to 16,600, then 84 over the level-up, in 40 s.
+    assert_eq!(exp_per_hour(&levelled), (Some(34_560), Some(34_560)), "no jump at the level-up");
+
+    for (k, exp) in [102, 202, 302].into_iter().enumerate() {
+        read(&mut compass, (60 + k as u64 * 10) * S, exp, percent_20k(exp));
+    }
+    // 120 s, the start of a half minute: 300 more, 684 EXP in the Session's 110 s.
+    let after = compass.tick(120 * S).clone();
+    assert_eq!(after.exp_tracking.deaths, Deaths::default());
+    assert_eq!(after.exp_tracking.state, TrackingState::Active);
+    assert_eq!(exp_per_hour(&after), (Some(22_385), Some(22_385)));
+}
+
 #[test]
 fn a_death_near_the_end_of_a_level_is_a_death_not_a_level_up() {
     let mut compass = tracking();

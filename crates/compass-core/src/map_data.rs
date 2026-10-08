@@ -1,6 +1,7 @@
 //! One map's hunting information from MeowDB, and the panel's progress getting it.
 
 use crate::map_index::{Fetched, MapDataSource, SourceError};
+use crate::shown_map::LevelRange;
 use serde::Serialize;
 use std::task::Poll;
 
@@ -31,6 +32,22 @@ pub struct MapData {
     /// rendered.
     #[serde(skip_serializing)]
     pub nearest_town: Option<String>,
+    /// In the panel, the mobs it lists: the [`LISTED_MOBS`] with the largest spawn
+    /// share, sorted as `mobs` is. From a source, empty.
+    pub listed_mobs: Vec<Mob>,
+    /// In the panel, the mobs it doesn't list, summed up; `None` when it lists them all.
+    pub more_mobs: Option<MoreMobs>,
+}
+
+/// How many mobs the panel lists; the rest are summed up in [`MoreMobs`].
+pub const LISTED_MOBS: usize = 5;
+
+/// The mobs the panel doesn't list: how many, and their levels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoreMobs {
+    pub count: usize,
+    pub levels: LevelRange,
 }
 
 /// A portal from a map to another map.
@@ -74,6 +91,20 @@ pub struct HiddenPortal {
     /// Roughly where the portal is on the map, in words: "far right, lower", or
     /// "position unknown" when MeowDB has no minimap bounds for the map.
     pub position: String,
+    /// The same spot as a cell of the minimap, for the panel to draw; `None` when the
+    /// position is unknown.
+    pub spot: Option<MapSpot>,
+}
+
+/// A cell of the minimap cut into 5 columns and 3 rows, counted from its top-left: the
+/// grid [`HiddenPortal::position`] names in words.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MapSpot {
+    /// 0 (far left) to 4 (far right).
+    pub column: u8,
+    /// 0 (upper) to 2 (lower).
+    pub row: u8,
 }
 
 /// The Map Summary: MeowDB's ceiling figures (every mob killed as soon as it spawns),
@@ -163,6 +194,28 @@ impl MapData {
     }
 }
 
+/// A source's data as the panel shows it: mobs sorted by level (then name), and the
+/// ones it lists picked out.
+fn for_panel(mut data: MapData) -> MapData {
+    data.mobs.sort_by(|a, b| a.level.cmp(&b.level).then_with(|| a.name.cmp(&b.name)));
+    // The most common mobs, ties going to the lower level, as they come in `mobs`.
+    let mut by_share: Vec<usize> = (0..data.mobs.len()).collect();
+    by_share.sort_by_key(|&i| std::cmp::Reverse(data.mobs[i].spawn_share_percent));
+    let listed = &by_share[..by_share.len().min(LISTED_MOBS)];
+    let (shown, rest): (Vec<_>, Vec<_>) =
+        data.mobs.iter().enumerate().partition(|(i, _)| listed.contains(i));
+    // Both in level order, so the rest's first and last are its lowest and highest.
+    data.more_mobs = match (rest.first(), rest.last()) {
+        (Some((_, lowest)), Some((_, highest))) => Some(MoreMobs {
+            count: rest.len(),
+            levels: LevelRange { lowest: lowest.level, highest: highest.level },
+        }),
+        _ => None,
+    };
+    data.listed_mobs = shown.into_iter().map(|(_, mob)| mob.clone()).collect();
+    data
+}
+
 /// Asks the source for maps' data, each only when the core needs it (ADR 0003: never
 /// ahead of time), and keeps the answers until told to forget them.
 #[derive(Default)]
@@ -184,15 +237,11 @@ impl MapDataLoader {
         };
         let status = &mut self.statuses[at].1;
         if *status == MapDataStatus::Loading {
-            let sorted = |mut data: MapData| {
-                data.mobs.sort_by(|a, b| a.level.cmp(&b.level).then_with(|| a.name.cmp(&b.name)));
-                data
-            };
             *status = match source.map_data(id) {
                 Poll::Pending => MapDataStatus::Loading,
-                Poll::Ready(Ok(Fetched::Fresh(data))) => MapDataStatus::Ready(sorted(data)),
+                Poll::Ready(Ok(Fetched::Fresh(data))) => MapDataStatus::Ready(for_panel(data)),
                 Poll::Ready(Ok(Fetched::SavedCopy { data, saved_at_unix_ms })) => {
-                    MapDataStatus::SavedCopy { saved_at_unix_ms, data: sorted(data) }
+                    MapDataStatus::SavedCopy { saved_at_unix_ms, data: for_panel(data) }
                 }
                 Poll::Ready(Err(SourceError::Unreachable(_))) => MapDataStatus::Unavailable,
                 Poll::Ready(Err(SourceError::FormatChanged(_))) => MapDataStatus::FormatChanged,

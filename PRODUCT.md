@@ -45,6 +45,7 @@ The companion follows the player's current Map by recognising the displayed Mini
 - Product name: MapleCompass. The app icon is the pixel-art gold compass in [assets/icon.png](assets/icon.png), with packaged variants in `src-tauri/icons`.
 - Every screen displaying MeowDB data credits it as `NiaMeowDB (meowdb.com)`.
 - Preserve the explicit first-run account-risk disclosure. The product is a third-party companion, not made or approved by Nexon.
+- The windows lean into MapleStory: they borrow the game's own window language (the minimap and the Quest Helper), so they read as if they shipped with the game (chosen by the user in the October 2026 critique; see DESIGN.md).
 
 ## Evidence on Hand
 
@@ -61,8 +62,13 @@ The companion follows the player's current Map by recognising the displayed Mini
 3. Make recognition uncertainty, ambiguous Maps, unavailable data, and Saved Copies clear.
 4. Keep setup grounded in a successful test read, and preserve the player's placement and Candidate choices.
 5. Credit source data and honor the existing limits on public distribution.
+6. One glance per map change: the most useful thing comes first, starting with the Hidden Portals the game doesn't show.
+7. Speak the game's language: its terms, and its look.
+
+## Accessibility & Inclusion
+
+The panel is read over busy, saturated game scenes, often on high-DPI screens or through stream compression. Text has to stay legible over any background, and states can't rely on colour alone.
 
 ## Open Decisions
 
-- No product-specific accessibility requirements were established during init. Do not treat their absence as a reason to omit accessibility from future UI work.
 - Release timing and support commitments beyond Windows remain undecided. Public distribution remains constrained by the accepted ADRs.

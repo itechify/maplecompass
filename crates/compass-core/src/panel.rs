@@ -57,6 +57,9 @@ pub enum Action {
     /// physical screen px. It moves an inside or detached panel, and a docked panel
     /// never.
     PanelMoved { x: i32, y: i32 },
+    /// The player dragged a bottom corner of the expanded panel so it is `width` CSS px
+    /// (logical) wide. Its height follows its content all the same.
+    PanelResized { width: u32 },
     /// Switch to the next placement: inside, docked right, docked left, detached.
     CyclePlacement,
     /// Show the next of the maps sharing the shown map's title, when the core couldn't
@@ -178,13 +181,25 @@ pub struct ScreenPoint {
 /// Gap between the default panel and the game client's right edge (physical px).
 const DEFAULT_RIGHT_MARGIN: i32 = 16;
 
+/// The default panel's top sits a third of the client's height down.
+const DEFAULT_TOP_FRACTION: i32 = 3;
+
 /// Where a panel detached before it was ever placed goes: near the top-left of the
 /// primary monitor, which always has its origin at (0, 0).
 const DEFAULT_DETACHED_AT: ScreenPoint = ScreenPoint { x: 100, y: 100 };
 
+/// The expanded panel's width until the player resizes it (CSS px, logical).
+pub const DEFAULT_PANEL_WIDTH: u32 = 380;
+/// The narrowest the player can make the panel (CSS px, logical): its header's buttons
+/// and the Map Summary's figures still fit side by side.
+pub const MIN_PANEL_WIDTH: u32 = 320;
+
 #[derive(Debug, Clone)]
 pub(crate) struct Panel {
     pub sizes: PanelSizes,
+    /// The expanded panel's width as the player set it (CSS px, logical); the shell
+    /// turns it into [`PanelSizes::expanded`] for the display.
+    pub width: u32,
     pub game: Option<GameWindow>,
     pub expanded: bool,
     /// `None` until the player drags the panel: then it uses the default position.
@@ -205,6 +220,7 @@ impl Default for Panel {
         let zero = Size { width: 0, height: 0 };
         Self {
             sizes: PanelSizes { expanded: zero, collapsed: zero },
+            width: DEFAULT_PANEL_WIDTH,
             game: None,
             expanded: true,
             inside_offset: None,
@@ -230,6 +246,12 @@ impl Panel {
             // Docked panels stay docked.
             _ => {}
         }
+    }
+
+    /// The player resized the panel to `width` (see [`Action::PanelResized`]): never
+    /// narrower than [`MIN_PANEL_WIDTH`].
+    pub fn resized_to(&mut self, width: u32) {
+        self.width = width.max(MIN_PANEL_WIDTH);
     }
 
     pub fn cycle_placement(&mut self) {
@@ -323,11 +345,12 @@ impl Panel {
         let (w, h) = (size.width as i32, size.height as i32);
         let (x, y) = match self.inside_offset {
             Some(offset) => (game.x + offset.x - w, game.y + offset.y),
-            // Vertically centred on the right edge: clear of the minimap (top-left)
-            // and the in-game Quest Helper (top-right).
+            // On the right edge, its top a third of the way down: clear of the minimap
+            // (top-left) and the in-game Quest Helper (top-right). The top stays put as
+            // the panel grows and shrinks with its content, so the map name doesn't move.
             None => (
                 game.x + game.width as i32 - DEFAULT_RIGHT_MARGIN - w,
-                game.y + (game.height as i32 - h) / 2,
+                game.y + game.height as i32 / DEFAULT_TOP_FRACTION,
             ),
         };
         // Keep the whole panel inside the client (its top-left wins if it can't fit).

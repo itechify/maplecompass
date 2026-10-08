@@ -1,0 +1,73 @@
+/* The game's own window language (the minimap and the Quest Helper), shared by every
+   MapleCompass window: a light lavender body under a steel-blue title bar, navy text,
+   the map name in white lettering with a navy outline, and the minimap's blue portal
+   ring. Game orange only for doubt and problems. See DESIGN.md. */
+:root {
+  --font: Arial, "Segoe UI", system-ui, sans-serif;
+  --ink: #1b2648;
+  --ink-2: #44527a;
+  --ink-3: #505c7d;
+  --body: rgba(234, 232, 245, 0.95);
+  /* The same lavender, opaque, for windows that aren't laid over the game. */
+  --body-solid: #eae8f5;
+  --frame: #3e527c;
+  --bar: linear-gradient(180deg, #dfe8f7 0%, #b4c6e6 48%, #94abd6 100%);
+  --bar-hairline: #2e4170;
+  --street: #1d2b52;
+  --outline: #22325a;
+  /* White lettering outlined in navy, as the minimap draws its title. Map names only. */
+  --lettering:
+    -1px -1px 0 var(--outline), 0 -1px 0 var(--outline), 1px -1px 0 var(--outline),
+    -1px 0 0 var(--outline), 1px 0 0 var(--outline), -1px 1px 0 var(--outline),
+    0 1px 0 var(--outline), 1px 1px 0 var(--outline), 0 2px 2px rgba(20, 30, 60, 0.35);
+  --portal: #1f63d6;
+  --portal-fill: #eef5ff;
+  --portal-inner: #8db3ee;
+  --mob: #d8342a;
+  --mob-edge: #8e1c15;
+  --select: #d3def3;
+  --select-edge: #98afda;
+  --tag-bg: #dae3f3;
+  --tag-edge: #a3b6d8;
+  --tag-ink: #284a86;
+  --orange: #f08a1c;
+  --orange-deep: #b85e00;
+  --problem-bg: #fff1dc;
+  --problem-edge: #e5a04f;
+  --problem-ink: #6b3500;
+  --edit: #2f63c8;
+  /* A hairline inside a window, between its sections. */
+  --rule: rgba(62, 82, 124, 0.2);
+  /* An inset list or box on the lavender body: the route, the suggestions. */
+  --inset-bg: rgba(255, 255, 255, 0.55);
+  --inset-edge: rgba(62, 82, 124, 0.3);
+  /* The game's window buttons: deep steel for an action (white text holds 4.5:1 even at
+     the light top), light steel beside it. Greyed out when it won't take a press. */
+  --button: linear-gradient(180deg, #4673c6 0%, #2a52a6 100%);
+  --button-hover: linear-gradient(180deg, #3d69bb 0%, #234897 100%);
+  --button-edge: #1c3672;
+  --button-light: linear-gradient(180deg, #f8fafe 0%, #d5dff0 100%);
+  --button-light-hover: linear-gradient(180deg, #ffffff 0%, #dfe7f6 100%);
+  --disabled-bg: #d3d9e5;
+  --disabled-edge: #aeb8cc;
+  --disabled-ink: #6b7591;
+  /* The game's windows laid over the screen (the Mini Map, the Quest Helper), as the
+     overlay panel is: colours sampled from them. */
+  --window-edge: #6f95ba;
+  --window-bar: linear-gradient(180deg, #ececec 0%, #dfdfdf 55%, #d6d6d6 100%);
+  --window-bar-ink: #3d4048;
+  --title-panel: #a4c8da;
+  --title-ink: #eef3f7;
+  --title-outline: #4f7499;
+  /* The Mini Map's title lettering: light, outlined in blue. */
+  --title-lettering:
+    -1px -1px 0 var(--title-outline), 0 -1px 0 var(--title-outline), 1px -1px 0 var(--title-outline),
+    -1px 0 0 var(--title-outline), 1px 0 0 var(--title-outline), -1px 1px 0 var(--title-outline),
+    0 1px 0 var(--title-outline), 1px 1px 0 var(--title-outline), 0 2px 1px rgba(30, 60, 100, 0.3);
+  /* The Quest Helper's see-through periwinkle. */
+  --glass: rgba(178, 194, 232, 0.62);
+  --game-button: linear-gradient(180deg, #27b5fe 0%, #44c4ff 55%, #66d4ff 100%);
+  --game-button-hover: linear-gradient(180deg, #45c2ff 0%, #66d0ff 55%, #8ae0ff 100%);
+  --game-button-pressed: linear-gradient(180deg, #1c9be0 0%, #2eb1f2 100%);
+  --game-button-edge: #2f7595;
+}
