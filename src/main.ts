@@ -789,7 +789,7 @@ document.addEventListener("mousedown", (e) => {
 });
 
 // The expanded panel's bottom corners resize it, whatever its placement. The shell is
-// told first, so the sizes that follow are the player's; once the resize settles the
+// told first, so the sizes that follow are the player's; once they let go the
 // core keeps the width (never under its minimum) and the height follows the content.
 for (const grip of document.querySelectorAll<HTMLElement>(".grip")) {
   grip.addEventListener("mousedown", async (e) => {
