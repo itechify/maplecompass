@@ -1167,7 +1167,7 @@ td:first-child {
 }
 
 .suggestions li:hover,
-.results tbody tr:hover td {
+.results tbody:hover td {
   background: rgba(47, 99, 200, 0.08);
 }
 
@@ -1225,8 +1225,17 @@ td:first-child {
   accent-color: var(--edit);
 }
 
-/* The map list (the table itself is in results.css). It takes the keys, but its
+/* The map list (the table itself is in results.css), set into the body as an inset box.
+   It is the panel's densest reading, over the busiest scenes, so its box is the near-
+   opaque lavender body rather than the light inset tint. It takes the keys, but its
    highlight shows where they act, not a focus ring. */
+.results-box {
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--body);
+  text-shadow: none;
+}
+
 .results-box:focus {
   outline: none;
 }
@@ -1238,13 +1247,18 @@ td:first-child {
   background: #c5d0ec;
 }
 
-/* The map Enter makes the Hunting Target. */
-.results tr.current td {
+/* The map Enter makes the Hunting Target, framed by the selection's edge. */
+.results tbody.current td {
   background: var(--select);
 }
 
-.results tr.current .result-map {
-  font-weight: 700;
+.results tbody.current tr:first-child td {
+  border-top: 1px solid var(--select-edge);
+}
+
+.results tbody.current tr:last-child td,
+.results tbody.current td.distance {
+  border-bottom: 1px solid var(--select-edge);
 }
 
 /* The nearest map with the mob, whatever its tier. */

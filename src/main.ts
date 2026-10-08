@@ -9,7 +9,7 @@ import {
   distanceText,
   distanceWithTravel,
   nearestLine,
-  resultRow,
+  resultGroup,
   resultsHead,
   resultsNote,
   routeStops,
@@ -224,10 +224,10 @@ const searchNearest = byId("search-nearest");
 const searchNote = byId("search-note");
 const resultsBox = byId("results-box");
 const resultsTable = byId("search-results") as HTMLTableElement;
-const resultRows = byId("search-rows");
 const searchCrawl = byId("search-crawl");
 const searchCredit = byId("search-credit");
-resultsTable.prepend(resultsHead());
+const resultsHeader = resultsHead();
+resultsTable.append(resultsHeader);
 let draggable = false;
 /** The search view's open step, as last rendered. */
 let step: SearchState["view"] = null;
@@ -621,16 +621,16 @@ function renderMaps(search: SearchState) {
   searchNearest.hidden = searchNearest.textContent === "";
   searchNote.textContent = resultsNote(search);
   searchNote.hidden = searchNote.textContent === "";
-  const rows = search.results.map((result, i) => {
-    const row = resultRow(result);
+  const groups = search.results.map((result, i) => {
+    const group = resultGroup(result);
     const current = i === search.highlightedResult;
-    row.classList.toggle("current", current);
-    row.setAttribute("aria-selected", String(current));
-    return row;
+    group.classList.toggle("current", current);
+    group.setAttribute("aria-selected", String(current));
+    return group;
   });
-  resultsBox.hidden = rows.length === 0;
-  resultRows.replaceChildren(...rows);
-  const current = resultRows.querySelector<HTMLElement>("tr.current");
+  resultsBox.hidden = groups.length === 0;
+  resultsTable.replaceChildren(resultsHeader, ...groups);
+  const current = resultsTable.querySelector<HTMLElement>("tbody.current");
   if (current) scrollWithin(resultsBox, current);
 }
 
@@ -1059,7 +1059,7 @@ function pickOnClick(list: HTMLElement, item: string) {
   });
 }
 pickOnClick(suggestions, "li[data-id]");
-pickOnClick(resultRows, "tr[data-id]");
+pickOnClick(resultsTable, "tbody[data-id]");
 
 /** The search view's keys: the arrows move the highlight, Enter picks, Esc goes back. */
 function searchKey(e: KeyboardEvent): boolean {

@@ -165,37 +165,37 @@ export function distanceWithTravel(result: SearchResult): { text: string; title:
     : distance;
 }
 
-/** One result as table cells: map (name over street), Density, Spawn Share, tier, Distance. */
-export function resultRow(result: SearchResult): HTMLTableRowElement {
-  const row = document.createElement("tr");
-  row.id = `map-${result.mapId}`;
-  row.dataset.id = result.mapId;
-  const where = document.createElement("td");
-  const name = document.createElement("span");
-  name.className = "result-map";
-  name.textContent = result.mapName;
-  const street = document.createElement("span");
-  street.className = "result-street";
-  street.textContent = result.streetName;
-  where.append(name, street);
+/**
+ * One result as its own row group, so the map reads as one unit: the map's name across
+ * the row with its Distance at the right, then its street under Map, with Density, Spawn
+ * Share and tier under theirs.
+ */
+export function resultGroup(result: SearchResult): HTMLTableSectionElement {
+  const group = document.createElement("tbody");
+  group.id = `map-${result.mapId}`;
+  group.dataset.id = result.mapId;
   const cell = (text: string, className = "") => {
     const td = document.createElement("td");
     td.textContent = text;
     td.className = className;
     return td;
   };
+  const name = cell(result.mapName, "result-map");
+  name.colSpan = 4;
+  name.title = result.mapName;
   // "5 · ship": a route that isn't just portals says what else it takes.
   const distance = distanceWithTravel(result);
   const distanceCell = cell(distance.text, typeof result.distance === "string" ? "distance none" : "distance");
   distanceCell.title = distance.title;
-  row.append(
-    where,
+  distanceCell.rowSpan = 2;
+  group.insertRow().append(name, distanceCell);
+  group.insertRow().append(
+    cell(result.streetName, "result-street"),
     cell(density(result.densityHundredths)),
     cell(`${result.spawnSharePercent}%`),
     cell(TIER_NAMES[result.tier], `tier ${result.tier}`),
-    distanceCell,
   );
-  return row;
+  return group;
 }
 
 /** A route's maps in order, each with how it's reached: "you're here", "portal", "taxi", "scroll"… */
