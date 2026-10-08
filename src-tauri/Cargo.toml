@@ -1,6 +1,6 @@
 [package]
 name = "maplecompass"
-version = "0.2.0"
+version = "0.2.1"
 description = "MapleCompass overlay shell: window lookup, Title Region capture and rendering around compass-core"
 authors = ["Jeffrey Davis"]
 edition.workspace = true
@@ -18,11 +18,13 @@ tauri-build = { version = "2.7", features = [] }
 
 [dependencies]
 compass-core = { path = "../crates/compass-core" }
-tauri = { version = "2.12", features = [] }
+tauri = { version = "2.12", features = ["tray-icon"] }
 # RegisterHotKey on Windows: no keyboard hook, no input sent anywhere (ADR 0001).
 tauri-plugin-global-shortcut = "2.4"
 # Opens the shown map's MeowDB page in the player's browser.
 tauri-plugin-opener = "2"
+# A second launch exits and tells the running MapleCompass, which shows itself.
+tauri-plugin-single-instance = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 # MeowDB pages (ADR 0003). OS TLS (SChannel on Windows): reqwest's default rustls
