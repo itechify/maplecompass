@@ -11,6 +11,7 @@ pub mod meowdb;
 mod search;
 mod settings;
 mod setup;
+mod tray;
 mod view;
 
 use compass_core::{
@@ -78,6 +79,10 @@ pub(crate) enum Command {
     /// The overlay window is now this size. The player's resize only during a resize;
     /// otherwise the shell's own.
     Resized(PhysicalSize<u32>),
+    /// The player chose Quit in the tray icon's menu: save the settings and exit.
+    Quit,
+    /// The player started MapleCompass again; that one exited, and this one shows itself.
+    LaunchedAgain,
     /// The reader is done with a capture of the Title Region `region`: what it read, or
     /// `None` if the capture failed.
     Read { region: ScreenRect, reading: Option<TitleReading> },
@@ -122,6 +127,13 @@ pub fn capture_title_frame(client: ScreenRect, at_ms: u64) -> Result<Frame, Stri
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // First, so a second launch exits before it sets anything up: only one
+        // MapleCompass runs, and the running one shows itself instead.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(commands) = app.try_state::<Sender<Command>>() {
+                let _ = commands.send(Command::LaunchedAgain);
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let overlay = app.get_webview_window("overlay").expect("overlay window in tauri.conf.json");
@@ -143,6 +155,8 @@ pub fn run() {
             let (commands, commands_rx) = mpsc::channel();
             // Registered only while the game or one of our windows is in front.
             let hotkeys = hotkeys::install(app, &compass.panel_state().hotkeys, commands.clone())?;
+            // The one way to quit at any time, the game open or not.
+            tray::install(app, commands.clone())?;
             app.manage(commands.clone());
             let (picks, picks_rx) = mpsc::channel();
             app.manage(Bridge {
@@ -346,6 +360,21 @@ fn compass_loop(
                 set_panel_sizes(&mut compass, &window.overlay, expanded_height);
             }
             Ok(Command::DragStarted) => window.drag_started(),
+            Ok(Command::LaunchedAgain) => {
+                compass.act(Action::LaunchedAgain);
+                setup_windows.bring_to_front();
+            }
+            Ok(Command::Quit) => {
+                // Whatever the player changed last (a drag, say) is saved first.
+                let current = compass.settings();
+                if current != saved
+                    && let Err(e) = settings::save(&settings_path, &current)
+                {
+                    eprintln!("saving settings failed: {e}");
+                }
+                app.exit(0);
+                return;
+            }
             Ok(Command::ResizeStarted) => window.resize_started(),
             Ok(Command::Resized(size)) => window.player_resized(size),
             Ok(Command::Moved(to)) => {
