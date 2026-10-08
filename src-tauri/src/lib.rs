@@ -65,6 +65,8 @@ pub(crate) enum Command {
     SearchQuery(String),
     /// The player clicked the search view's mob or map with this MeowDB ID.
     SearchPick(String),
+    /// The player clicked the name of the listed mob with this MeowDB ID in the panel.
+    OpenMobPage(String),
     /// The expanded panel's content is this tall (CSS px).
     PanelHeight(f64),
     /// The overlay window moved here (its outer top-left corner). The player's move only
@@ -100,6 +102,12 @@ fn panel_height(height: f64, commands: tauri::State<'_, Sender<Command>>) {
     let _ = commands.send(Command::PanelHeight(height));
 }
 
+/// Where MeowDB's pages and maplestory.io's mob images are cached. WebView2 shares the app
+/// cache folder, hence the subfolder.
+fn cache_dir(app: &AppHandle) -> tauri::Result<PathBuf> {
+    Ok(app.path().app_cache_dir()?.join("cache"))
+}
+
 /// Capture the default Title Region of the game's client area (the probe's guess; the
 /// app captures the region the player marked at setup).
 pub fn capture_title_frame(client: ScreenRect, at_ms: u64) -> Result<Frame, String> {
@@ -124,6 +132,11 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
+        // The Mob Cards' images, from our saved copies of maplestory.io's.
+        .register_uri_scheme_protocol(meowdb::MOB_IMAGE_SCHEME, |ctx, request| match cache_dir(ctx.app_handle()) {
+            Ok(dir) => meowdb::serve_mob_image(&dir, &request),
+            Err(_) => tauri::http::Response::builder().status(500).body(Vec::new()).unwrap_or_default(),
+        })
         .setup(|app| {
             let overlay = app.get_webview_window("overlay").expect("overlay window in tauri.conf.json");
             // Not content-protected: the panel shows in the player's screenshots and
@@ -134,9 +147,9 @@ pub fn run() {
             // tauri.conf.json is WS_EX_NOACTIVATE), so the game keeps the keyboard.
             overlay.set_ignore_cursor_events(true)?;
 
-            // MeowDB pages are cached on disk (ADR 0003). WebView2 shares the app cache
-            // folder, hence the subfolder.
-            let source = MeowDbSource::new(app.path().app_cache_dir()?.join("cache"))?;
+            // MeowDB pages are cached on disk (ADR 0003), and maplestory.io's mob images
+            // (ADR 0006).
+            let source = MeowDbSource::new(cache_dir(app.handle())?)?;
             let mut compass = Compass::new(source);
             let settings_path = settings::path(app.handle())?;
             // The core brings older settings up to date (hotkeys included).
@@ -201,6 +214,7 @@ pub fn run() {
             setup::cancel_marking,
             setup::finish_setup,
             search::panel_press,
+            search::open_mob_page,
             search::search_query,
             search::search_move,
             search::search_enter,
@@ -345,6 +359,10 @@ fn compass_loop(
             }
             Ok(Command::SearchPick(id)) => {
                 compass.search_pick(&id);
+            }
+            Ok(Command::OpenMobPage(id)) => {
+                let request = compass.open_mob_page(&id);
+                carry_out(&app, &window.overlay, request);
             }
             Ok(Command::PanelHeight(height)) => {
                 expanded_height = height.clamp(MIN_EXPANDED_HEIGHT, MAX_EXPANDED_HEIGHT);

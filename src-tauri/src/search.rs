@@ -64,6 +64,12 @@ pub fn panel_press(control: PanelControl, commands: State<'_, Sender<Command>>) 
     let _ = commands.send(Command::Press(control));
 }
 
+/// A click on a listed mob's name in the panel (its MeowDB ID): open its MeowDB page.
+#[tauri::command]
+pub fn open_mob_page(id: String, commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::OpenMobPage(id));
+}
+
 /// The query box now holds `query`.
 #[tauri::command]
 pub fn search_query(query: String, commands: State<'_, Sender<Command>>) {
