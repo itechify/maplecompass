@@ -248,10 +248,11 @@ pub fn mob_url(id: &str) -> String {
 /// - `HP per EXP`, its value and its rank ("#34 of 182 · Lower is better");
 /// - `Touch DMG` ("5-7"), `P.DEF`, `M.DEF`, `ACC`, `AVOID`, "—" when there is none;
 /// - `Speed` ("Slow") and `Movement` ("Stays on its floor");
-/// - `Other Attributes`, whose list may hold "MP 30" (a boss's may not).
+/// - `Other Attributes`, whose list may hold "MP 30". A boss's may not, and a mob with
+///   nothing to list (Pig) has no such section at all.
 ///
 /// A page missing any of these labels is [`SourceError::FormatChanged`], never a card
-/// with figures missing; only MP may be absent.
+/// with figures missing; only MP (and the section that holds it) may be absent.
 pub fn read_mob_page(html: &str) -> Result<MobDetails, SourceError> {
     mob_details(&text_runs(html)).map_err(|why| SourceError::FormatChanged(format!("mob page: {why}")))
 }
@@ -312,7 +313,8 @@ fn mob_details(text: &[String]) -> Result<MobDetails, String> {
         }
     };
 
-    let attributes = &stats[at("Other Attributes")? + 1..];
+    // MP is listed under Other Attributes, which a mob with nothing to list doesn't have.
+    let attributes = at("Other Attributes").map_or(&[][..], |i| &stats[i + 1..]);
     let mp = attributes.iter().find_map(|t| whole(t.strip_prefix("MP ")?));
 
     Ok(MobDetails {

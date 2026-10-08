@@ -149,6 +149,23 @@ fn a_card_says_how_its_mob_moves_and_shows_figures_meowdb_leaves_blank_as_none()
 }
 
 #[test]
+fn a_mob_page_without_other_attributes_reads_with_no_mp() {
+    // Pig's page lists no Other Attributes at all: no MP, no tags.
+    let mut compass = Compass::new(sunset_listing(&["8", "10"]));
+    arrive(&mut compass, SUNSET, 0);
+
+    let state = tick_through(&mut compass, 400, 20_000);
+
+    let pig = details(&state, "8");
+    assert_eq!(pig.mp, None);
+    assert_eq!(pig.touch_damage, Some(DamageRange { min: 16, max: 22 }));
+    assert_eq!((pig.accuracy, pig.avoid), (Some(54), None));
+    assert_eq!((pig.speed.as_str(), pig.movement.as_str()), ("Normal", "Jumps between floors"));
+    assert_eq!(pig.hp_per_exp, Some(HpPerExp { hundredths: 985, rank: 15, ranked: 182 }));
+    details(&state, "10");
+}
+
+#[test]
 fn every_saved_mob_page_reads_into_a_card() {
     let ids = saved_mob_ids();
     assert!(ids.len() >= 12, "{ids:?}");
