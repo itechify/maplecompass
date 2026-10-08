@@ -8,7 +8,9 @@
 //! - A reading that fits the range is the same level: less EXP than before is a death.
 //!   One that doesn't fit is a level-up if it allows only bigger totals and the bar was
 //!   near 100%, a misread otherwise, unless [`SWITCH_READINGS`] in a row fit another
-//!   level: a character switch, which starts a new Session.
+//!   level: a character switch, which starts a new Session. A reading barely into the
+//!   next level may fit the range too (2 [0.01%] allows a wide range of totals); when
+//!   the bar went from near 100% to as near 0%, it is a level-up all the same.
 //! - The Session starts on the first EXP change, from the EXP the bar shows then.
 //! - Active time runs while the EXP keeps changing. A gap of up to [`IDLE_MS`] between
 //!   changes counts; a longer one is a break, which pauses the Session and counts for
@@ -307,7 +309,8 @@ impl Session {
             self.last = Some(bar);
             return;
         };
-        if let Some(narrowed) = total.meet(allowed) {
+        let wrapped = self.wrapped(total, last, bar, allowed);
+        if !wrapped && let Some(narrowed) = total.meet(allowed) {
             self.accept(narrowed, bar);
             if bar.percent_hundredths > last.percent_hundredths {
                 let gain = bar.percent_hundredths - last.percent_hundredths;
@@ -323,11 +326,13 @@ impl Session {
                     last.percent_hundredths.saturating_sub(bar.percent_hundredths);
             }
         } else if let Some(doubled_total) = total.doubled_midpoint()
-            && self.levelled_up(total, last, allowed)
+            && (wrapped || self.levelled_up(total, last, allowed))
         {
             // What was left of the old level, and what is in the new one.
             let gain = (doubled_total as i64 - 2 * last.exp as i64 + 1) / 2 + bar.exp as i64;
-            self.accept(allowed, bar);
+            // The new level is bigger than the old: of the totals the reading allows,
+            // only those count.
+            self.accept(Total { lo: allowed.lo.max(total.hi + 1), ..allowed }, bar);
             self.change(gain, at_ms);
             self.level_ups += 1;
         } else {
@@ -348,8 +353,25 @@ impl Session {
     /// near 100%. "Near" is within 10 points, or twice the largest gain seen in the
     /// Session if that is more.
     fn levelled_up(&self, total: Total, last: ExpBar, allowed: Total) -> bool {
-        let near = (2 * self.largest_gain_hundredths).max(NEAR_LEVEL_UP_HUNDREDTHS);
-        last.percent_hundredths + near >= HUNDRED_PERCENT && allowed.lo > total.hi
+        last.percent_hundredths + self.near() >= HUNDRED_PERCENT && allowed.lo > total.hi
+    }
+
+    /// A reading `bar` barely into the next level after `last`: the bar was near 100%
+    /// and now is as near 0%, with less EXP, and it allows a bigger total than the level
+    /// learned (`total`). It may allow the old level's total too (2 [0.01%] allows
+    /// 13,334 to 40,000 EXP), but a death costs far less than a whole level.
+    fn wrapped(&self, total: Total, last: ExpBar, bar: ExpBar, allowed: Total) -> bool {
+        let near = self.near();
+        last.percent_hundredths + near >= HUNDRED_PERCENT
+            && bar.percent_hundredths <= near
+            && bar.exp < last.exp
+            && allowed.hi > total.hi
+    }
+
+    /// How near 100% (or 0%) the bar must be for a level-up: within 10 points, or twice
+    /// the largest gain seen in the Session if that is more.
+    fn near(&self) -> u32 {
+        (2 * self.largest_gain_hundredths).max(NEAR_LEVEL_UP_HUNDREDTHS)
     }
 
     /// Take `bar` as the last reading, in a level of `total`.
