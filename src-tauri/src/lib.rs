@@ -17,6 +17,7 @@ mod view;
 
 use compass_core::{
     Action, Compass, ExpBarReader, ExpBarReading, Frame, GameWindow, Layer, MIN_PANEL_WIDTH, PanelControl, PanelSizes,
+    PlacementMode,
     PanelState, Request, ScreenRect, Size, TitleReader, TitleReading, default_title_region,
 };
 use meowdb::MeowDbSource;
@@ -544,6 +545,8 @@ struct OverlayWindow {
     layer: Option<Layer>,
     click_through: bool,
     focusable: Option<bool>,
+    /// Whether the overlay is listed in the taskbar (only while detached).
+    in_taskbar: Option<bool>,
     search_open: bool,
     /// Tells the z-order keeper to hold the overlay just above the game.
     above_game: Arc<AtomicBool>,
@@ -559,21 +562,31 @@ struct OverlayWindow {
 impl OverlayWindow {
     fn new(overlay: WebviewWindow) -> Self {
         let above_game = Arc::new(AtomicBool::new(false));
-        let (keeper_overlay, keeper_flag) = (overlay.clone(), above_game.clone());
         // Its own thread, at its own steady pace: the overlay should be back above the
         // game within a tick of the game coming to the front, whatever the compass loop
-        // is doing (setting window sizes and positions can take a while).
-        let spawned = std::thread::Builder::new()
-            .name("z-order".into())
-            .spawn(move || keep_above_game(keeper_overlay, keeper_flag));
-        if let Err(e) = spawned {
-            eprintln!("z-order keeper not started: {e}");
+        // is doing (setting window sizes and positions can take a while). It gets the
+        // overlay's handle once, here: asking Tauri for it from another thread waits on
+        // the main thread's event loop, which can leave the keeper idle for seconds while
+        // another app covers the game, and the overlay stays topmost over that app.
+        #[cfg(windows)]
+        match overlay.hwnd() {
+            Ok(hwnd) => {
+                let (handle, keeper_flag) = (hwnd.0 as isize, above_game.clone());
+                let spawned = std::thread::Builder::new()
+                    .name("z-order".into())
+                    .spawn(move || keep_above_game(handle, keeper_flag));
+                if let Err(e) = spawned {
+                    eprintln!("z-order keeper not started: {e}");
+                }
+            }
+            Err(e) => eprintln!("z-order keeper not started: no overlay window handle: {e}"),
         }
         Self {
             overlay,
             layer: None,
             click_through: true,
             focusable: None,
+            in_taskbar: None,
             search_open: false,
             above_game,
             gesture: None,
@@ -636,13 +649,17 @@ impl OverlayWindow {
     fn show(&mut self, state: &PanelState) {
         self.above_game.store(state.layer == Layer::AboveGame, Ordering::Relaxed);
         let layer_changed = self.layer != Some(state.layer);
-        let free = state.layer == Layer::Free;
         if layer_changed {
             self.layer = Some(state.layer);
-            // Detached, it is an ordinary window: it can be found in the taskbar. Never
-            // topmost: above the game it is kept just above it in the z-order instead.
+            // Never topmost by itself: above the game it is kept just above it in the
+            // z-order instead, wherever it is placed.
             let _ = self.overlay.set_always_on_top(false);
-            let _ = self.overlay.set_skip_taskbar(!free);
+        }
+        // Detached, it can be found in the taskbar.
+        let detached = state.placement_mode == PlacementMode::Detached;
+        if self.in_taskbar != Some(detached) {
+            self.in_taskbar = Some(detached);
+            let _ = self.overlay.set_skip_taskbar(!detached);
         }
         // Only the open search view takes the typing. Otherwise the overlay can't be
         // activated (WS_EX_NOACTIVATE), so a click on it leaves the keyboard with the game.
@@ -689,26 +706,26 @@ impl OverlayWindow {
     }
 }
 
-/// While `above_game` is set, check every `WINDOW_TICK` that the overlay is still just
-/// above the game in the z-order, and restack it if not (the game came to the front).
-fn keep_above_game(overlay: WebviewWindow, above_game: Arc<AtomicBool>) {
+/// While `above_game` is set, check every `WINDOW_TICK` that the overlay (its window
+/// handle) is still just above the game in the z-order, and restack it if not: the game
+/// came to the front, or another app did. Nothing here waits on the main thread.
+#[cfg(windows)]
+fn keep_above_game(overlay: isize, above_game: Arc<AtomicBool>) {
+    let overlay = windows::Win32::Foundation::HWND(overlay as *mut _);
     let mut last_error = None;
     loop {
         std::thread::sleep(WINDOW_TICK);
         if !above_game.load(Ordering::Relaxed) {
             continue;
         }
-        #[cfg(windows)]
-        if let (Some(game), Ok(hwnd)) = (gamewin::find_game(), overlay.hwnd()) {
+        if let Some(game) = gamewin::find_game() {
             // Polled 20 times a second: report a failure once, not every time.
-            let error = gamewin::keep_above(hwnd, game.handle).err().map(|e| e.to_string());
+            let error = gamewin::keep_above(overlay, game.handle).err().map(|e| e.to_string());
             if error.is_some() && error != last_error {
                 eprintln!("keeping the overlay above the game failed: {}", error.as_deref().unwrap_or_default());
             }
             last_error = error;
         }
-        #[cfg(not(windows))]
-        let _ = (&overlay, &mut last_error);
     }
 }
 
