@@ -33,7 +33,7 @@ The panel starts on the right edge of the game window. You can click it at any t
 
 Hidden Portals are exits to other maps that MeowDB marks invisible (type 1), hidden (10) or script (11, shown as a Quest Portal). Each shows where it leads (tagged when that is a Hidden Street) and roughly where it is on the map. Invisible exits on a town are its building doors, which you can see, so they aren't listed. Walk-into portals (type 3) count as visible until checked in-game. When play shows a portal the rule gets wrong, add it to the override list in `crates/compass-core/src/portal_overrides.rs`, by map ID and MeowDB portal name.
 
-These hotkeys work while the game or one of MapleCompass's windows is in front; in any other app the same keys do what that app makes them do:
+Each of these also has an icon at the top of the panel: 🔍 search, ⇆ next map with the same title (only when maps share it), ↗ MeowDB page (while a map is shown), ⧉ placement, ? help & setup, and – collapse; click the collapsed icon to expand the panel again. Hover an icon to see its hotkey. The hotkeys work while the game or one of MapleCompass's windows is in front; in any other app the same keys do what that app makes them do:
 
 - **Ctrl+Shift+C** collapses the panel to an icon, or expands it again.
 - **Ctrl+Shift+P** switches placement: inside the game window, docked to its right edge, docked to its left edge, or detached.

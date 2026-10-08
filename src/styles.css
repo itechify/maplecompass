@@ -210,8 +210,9 @@ td:first-child {
   text-transform: uppercase;
 }
 
-/* The panel's header: the current map, and the 🔍 that opens the search view. The
-   player drags the panel by it (inside or detached). */
+/* The panel's header: the current map, and a row of icons, one per hotkey action (🔍
+   search, ⇆ next candidate, ↗ MeowDB, ⧉ placement, ? help & setup, – collapse). The
+   player drags the panel by it (inside or detached), never by an icon. */
 .drag-handle {
   display: flex;
   align-items: flex-start;
@@ -221,6 +222,12 @@ td:first-child {
 .drag-handle .where {
   flex: 1;
   min-width: 0;
+}
+
+.toolbar {
+  flex: none;
+  display: flex;
+  gap: 4px;
 }
 
 /* A small secondary button (🔍, ×, ←): transparent, with a Slate border. */
@@ -563,7 +570,6 @@ footer {
   overflow-wrap: anywhere;
 }
 
-#help-hint { flex-basis: 100%; }
 
 .map-line { display: flex; align-items: baseline; gap: 6px; }
 .map-line .map { min-width: 0; }

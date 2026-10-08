@@ -8,7 +8,7 @@
 //! relays the player's typing, keys and clicks.
 
 use crate::Command;
-use compass_core::Action;
+use compass_core::{Action, PanelControl};
 use std::sync::mpsc::Sender;
 use tauri::{State, WebviewWindow};
 
@@ -57,10 +57,11 @@ fn act(commands: &Sender<Command>, action: Action) {
     let _ = commands.send(Command::Act(action));
 }
 
-/// The 🔍 at the top of the panel: open the search view.
+/// One of the icons at the top of the panel (🔍, help & setup, placement and the rest):
+/// the same as its hotkey.
 #[tauri::command]
-pub fn search_open(commands: State<'_, Sender<Command>>) {
-    act(&commands, Action::OpenSearch);
+pub fn panel_press(control: PanelControl, commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::Press(control));
 }
 
 /// The query box now holds `query`.
