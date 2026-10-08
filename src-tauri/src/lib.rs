@@ -11,6 +11,7 @@ pub mod meowdb;
 mod search;
 mod settings;
 mod setup;
+mod sizemove;
 mod tray;
 mod view;
 
@@ -20,6 +21,7 @@ use compass_core::{
 };
 use meowdb::MeowDbSource;
 use setup::{Bridge, SetupWindows};
+use sizemove::Gesture;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -46,10 +48,9 @@ const EXPANDED_HEIGHT: f64 = 72.0;
 const MIN_EXPANDED_HEIGHT: f64 = 44.0;
 const MAX_EXPANDED_HEIGHT: f64 = 600.0;
 const COLLAPSED: (f64, f64) = (44.0, 44.0);
-/// A drag has ended once the overlay hasn't moved for this long since it started or last
-/// moved (Windows' move loop tells the page nothing when the mouse is let go): then the
-/// shell puts it where the core says again (clear of the Title Region, inside the game).
-const DRAG_SETTLE: Duration = Duration::from_millis(300);
+/// A drag or resize the player started whose move or size loop hasn't started within this
+/// long never will (the mouse was let go first): the shell places the panel again.
+const LOOP_START_GRACE: Duration = Duration::from_secs(1);
 
 /// What the compass loop is asked to do.
 #[derive(Debug, Clone)]
@@ -66,19 +67,21 @@ pub(crate) enum Command {
     SearchPick(String),
     /// The expanded panel's content is this tall (CSS px).
     PanelHeight(f64),
-    /// The overlay is about to start a drag of its window: the player pressed the mouse
-    /// on its header or its collapsed icon.
-    DragStarted,
     /// The overlay window moved here (its outer top-left corner). The player's move only
     /// during a drag; otherwise the shell's own, or the system's (a DPI or monitor
     /// change).
     Moved(PhysicalPosition<i32>),
-    /// The overlay is about to start resizing its window: the player pressed the mouse
-    /// on one of the expanded panel's bottom corners.
-    ResizeStarted,
+    /// The player pressed the mouse to drag the overlay (by its header or collapsed icon)
+    /// or to resize it (by a corner grip or an edge), so the moves or sizes that follow
+    /// are theirs.
+    GestureStarted(Gesture),
     /// The overlay window is now this size. The player's resize only during a resize;
     /// otherwise the shell's own.
     Resized(PhysicalSize<u32>),
+    /// Windows' move or size loop on the overlay started: a drag or resize is running.
+    SizeMoveStarted,
+    /// Windows' move or size loop on the overlay ended: the player let go of the mouse.
+    SizeMoveEnded,
     /// The player chose Quit in the tray icon's menu: save the settings and exit.
     Quit,
     /// The player started MapleCompass again; that one exited, and this one shows itself.
@@ -95,20 +98,6 @@ pub(crate) enum Command {
 #[tauri::command]
 fn panel_height(height: f64, commands: tauri::State<'_, Sender<Command>>) {
     let _ = commands.send(Command::PanelHeight(height));
-}
-
-/// The overlay is about to start dragging its window, so the moves that follow are the
-/// player's.
-#[tauri::command]
-fn panel_drag_started(commands: tauri::State<'_, Sender<Command>>) {
-    let _ = commands.send(Command::DragStarted);
-}
-
-/// The overlay is about to start resizing its window by a bottom corner, so the sizes
-/// that follow are the player's.
-#[tauri::command]
-fn panel_resize_started(commands: tauri::State<'_, Sender<Command>>) {
-    let _ = commands.send(Command::ResizeStarted);
 }
 
 /// Capture the default Title Region of the game's client area (the probe's guess; the
@@ -166,6 +155,10 @@ pub fn run() {
                 view: Default::default(),
             });
             let setup_windows = SetupWindows::new(app.handle())?;
+            // Without it the player's drags and resizes don't stick, but the panel works.
+            if let Err(e) = sizemove::watch(&overlay, commands.clone()) {
+                eprintln!("{e}");
+            }
             overlay.on_window_event(move |event| match event {
                 // Only moves during a drag the overlay started are the player's.
                 WindowEvent::Moved(to) => {
@@ -197,8 +190,6 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             panel_height,
-            panel_drag_started,
-            panel_resize_started,
             setup::setup_view,
             setup::pick_game_window,
             setup::start_marking,
@@ -359,7 +350,6 @@ fn compass_loop(
                 expanded_height = height.clamp(MIN_EXPANDED_HEIGHT, MAX_EXPANDED_HEIGHT);
                 set_panel_sizes(&mut compass, &window.overlay, expanded_height);
             }
-            Ok(Command::DragStarted) => window.drag_started(),
             Ok(Command::LaunchedAgain) => {
                 compass.act(Action::LaunchedAgain);
                 setup_windows.bring_to_front();
@@ -375,8 +365,23 @@ fn compass_loop(
                 app.exit(0);
                 return;
             }
-            Ok(Command::ResizeStarted) => window.resize_started(),
+            Ok(Command::GestureStarted(gesture)) => window.gesture_started(gesture),
             Ok(Command::Resized(size)) => window.player_resized(size),
+            Ok(Command::SizeMoveStarted) => window.size_move_started(),
+            Ok(Command::SizeMoveEnded) => {
+                // Once the player lets go of a resize, its width is the panel's (the core
+                // keeps it over the minimum), and where the window ended up is where the
+                // panel is: a bottom-left corner moves its left edge.
+                if let Some(size) = window.size_move_ended()
+                    && let Ok(scale) = window.overlay.scale_factor()
+                {
+                    compass.act(Action::PanelResized { width: (f64::from(size.width) / scale).round() as u32 });
+                    set_panel_sizes(&mut compass, &window.overlay, expanded_height);
+                    if let Ok(at) = window.overlay.outer_position() {
+                        compass.act(Action::PanelMoved { x: at.x, y: at.y });
+                    }
+                }
+            }
             Ok(Command::Moved(to)) => {
                 if window.player_moved() {
                     compass.act(Action::PanelMoved { x: to.x, y: to.y });
@@ -429,18 +434,6 @@ fn compass_loop(
             // None while EXP tracking is off.
             if let Some(region) = compass.panel_state().exp_bar_region {
                 reader.read_exp_bar(region);
-            }
-        }
-        // Once the player's resize settles, its width is the panel's (the core keeps it
-        // over the minimum), and where the window ended up is where the panel is: a
-        // bottom-left corner moves its left edge.
-        if let Some(size) = window.resize_settled()
-            && let Ok(scale) = window.overlay.scale_factor()
-        {
-            compass.act(Action::PanelResized { width: (f64::from(size.width) / scale).round() as u32 });
-            set_panel_sizes(&mut compass, &window.overlay, expanded_height);
-            if let Ok(at) = window.overlay.outer_position() {
-                compass.act(Action::PanelMoved { x: at.x, y: at.y });
             }
         }
         let state = compass.panel_state();
@@ -517,6 +510,15 @@ fn physical((width, height): (f64, f64), scale: f64) -> Size {
     Size { width: (width * scale).ceil() as u32, height: (height * scale).ceil() as u32 }
 }
 
+/// The player's drag or resize: it runs in Windows' move or size loop until the mouse is
+/// let go.
+#[derive(Debug, Clone, Copy)]
+struct PlayerGesture {
+    gesture: Gesture,
+    /// When the player pressed the mouse to start it, until Windows' loop has started too.
+    starting_since: Option<Instant>,
+}
+
 /// The overlay window, kept in line with the panel state. Window properties are only
 /// set when they change.
 struct OverlayWindow {
@@ -527,11 +529,9 @@ struct OverlayWindow {
     search_open: bool,
     /// Tells the z-order keeper to hold the overlay just above the game.
     above_game: Arc<AtomicBool>,
-    /// When the player's drag started or last moved the overlay; `None` before any drag.
-    dragged_at: Option<Instant>,
-    /// When the player's resize started or last resized the overlay; `None` when no
-    /// resize is under way.
-    resized_at: Option<Instant>,
+    /// The player's drag or resize, from the mouse press that starts it until Windows'
+    /// move or size loop ends.
+    gesture: Option<PlayerGesture>,
     /// The size the player's resize last gave the overlay.
     resized_to: Option<PhysicalSize<u32>>,
     /// Whether the window's minimum size is the expanded panel's (or none, collapsed).
@@ -558,64 +558,61 @@ impl OverlayWindow {
             focusable: None,
             search_open: false,
             above_game,
-            dragged_at: None,
-            resized_at: None,
+            gesture: None,
             resized_to: None,
             min_size_expanded: None,
         }
     }
 
-    /// The overlay page is about to resize the window: the player pressed the mouse on
-    /// a bottom corner of the expanded panel.
-    fn resize_started(&mut self) {
-        self.resized_at = Some(Instant::now());
+    /// The player pressed the mouse to drag or resize the overlay.
+    fn gesture_started(&mut self, gesture: Gesture) {
+        self.gesture = Some(PlayerGesture { gesture, starting_since: Some(Instant::now()) });
         self.resized_to = None;
     }
 
-    /// The player is resizing the overlay: a resize started, and it has changed size
-    /// within `DRAG_SETTLE` of that or of its last change.
-    fn resizing(&self) -> bool {
-        self.resized_at.is_some_and(|at| at.elapsed() < DRAG_SETTLE)
+    /// Windows' move or size loop started: the drag or resize the player started is
+    /// running. Any other loop isn't the player's.
+    fn size_move_started(&mut self) {
+        self.under_way();
+        if let Some(player) = &mut self.gesture {
+            player.starting_since = None;
+        }
+    }
+
+    /// Windows' move or size loop ended: the player let go of the mouse. The size their
+    /// resize left the overlay, once (when it changed anything).
+    fn size_move_ended(&mut self) -> Option<PhysicalSize<u32>> {
+        let ended = self.gesture.take_if(|player| player.starting_since.is_none())?;
+        if ended.gesture == Gesture::Resize { self.resized_to.take() } else { None }
+    }
+
+    /// The player's drag or resize, from the mouse press until they let go. One
+    /// whose loop hasn't started within `LOOP_START_GRACE` never will.
+    fn under_way(&mut self) -> Option<Gesture> {
+        let starting_since = self.gesture.and_then(|player| player.starting_since);
+        if starting_since.is_some_and(|at| at.elapsed() >= LOOP_START_GRACE) {
+            self.gesture = None;
+        }
+        self.gesture.map(|player| player.gesture)
+    }
+
+    /// The player's drag or resize while Windows' loop runs it.
+    fn running(&self) -> Option<Gesture> {
+        self.gesture.filter(|player| player.starting_since.is_none()).map(|player| player.gesture)
     }
 
     /// The overlay window is now `size`: the player's, while they resize it. Any other
     /// size is the shell's own.
     fn player_resized(&mut self, size: PhysicalSize<u32>) {
-        if self.resizing() {
-            self.resized_at = Some(Instant::now());
+        if self.running() == Some(Gesture::Resize) {
             self.resized_to = Some(size);
         }
     }
 
-    /// The size the player's resize settled on, once (when it changed anything).
-    fn resize_settled(&mut self) -> Option<PhysicalSize<u32>> {
-        if self.resized_at.is_some() && !self.resizing() {
-            self.resized_at = None;
-            return self.resized_to.take();
-        }
-        None
-    }
-
-    /// The overlay page is about to drag the window: the player pressed the mouse on its
-    /// header or collapsed icon.
-    fn drag_started(&mut self) {
-        self.dragged_at = Some(Instant::now());
-    }
-
-    /// The player is dragging the overlay: a drag started, and it has moved within
-    /// `DRAG_SETTLE` of that or of its last move.
-    fn dragging(&self) -> bool {
-        self.dragged_at.is_some_and(|at| at.elapsed() < DRAG_SETTLE)
-    }
-
     /// The overlay window moved: whether that was the player's drag. Any other move is
     /// the shell's own or the system's, and the core never hears of it.
-    fn player_moved(&mut self) -> bool {
-        let dragging = self.dragging();
-        if dragging {
-            self.dragged_at = Some(Instant::now());
-        }
-        dragging
+    fn player_moved(&self) -> bool {
+        self.running() == Some(Gesture::Drag)
     }
 
     fn show(&mut self, state: &PanelState) {
@@ -655,19 +652,21 @@ impl OverlayWindow {
         }
         self.search_open = search_open;
         // Expanded, the player can't resize the panel narrower than the core allows;
-        // collapsed, the window is the icon's size.
+        // collapsed, the window is the icon's size, and they can't resize it.
+        sizemove::set_resizable(state.expanded);
         if self.min_size_expanded != Some(state.expanded) {
             self.min_size_expanded = Some(state.expanded);
             let min = LogicalSize::new(f64::from(MIN_PANEL_WIDTH), MIN_EXPANDED_HEIGHT);
             let _ = self.overlay.set_min_size(state.expanded.then_some(min));
         }
         // While the player resizes it the size (and position) is theirs too.
+        let gesture = self.under_way();
         if let Some(placement) = state.placement
-            && !self.resizing()
+            && gesture != Some(Gesture::Resize)
         {
-            // While the player drags it the position is theirs; once the drag settles it
-            // goes where the core says (clear of the Title Region, inside the game).
-            place(&self.overlay, placement, self.dragging() && !layer_changed);
+            // While the player drags it the position is theirs; once they let go it goes
+            // where the core says (clear of the Title Region, inside the game).
+            place(&self.overlay, placement, gesture == Some(Gesture::Drag) && !layer_changed);
         }
     }
 }

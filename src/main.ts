@@ -13,6 +13,7 @@ import {
   resultsHead,
   resultsNote,
   routeStops,
+  tripLine,
   type HuntingTarget,
   type SearchState,
 } from "./search-state";
@@ -183,6 +184,8 @@ const huntingRouteTitle = byId("hunting-route-title");
 const huntingRoute = byId("hunting-route");
 const huntingRouteNone = byId("hunting-route-none");
 const huntingCredit = byId("hunting-credit");
+const huntingArrival = byId("hunting-arrival");
+const huntingTrip = byId("hunting-trip");
 const searchView = byId("search-view");
 const searchBack = byId("search-back");
 const searchTitle = byId("search-title");
@@ -490,14 +493,20 @@ function renderHunting(panel: PanelState) {
   distanceEl.title = distance.title;
   distanceEl.className = typeof map.distance === "string" ? "distance none" : "distance";
 
-  // The route from the map you're on (its first stop); without one, why not.
-  const routed = map.route.length > 0;
+  // The route from the map you're on (its first stop); without one, why not. Once you've
+  // arrived the route has done its job: in its place, that you're here and the way you
+  // came, until you leave the map.
+  const { arrived, trip } = target;
+  const routed = !arrived && map.route.length > 0;
   huntingRouteTitle.textContent = routed ? `Route from ${map.route[0].mapName}` : "";
   huntingRouteTitle.hidden = !routed;
-  huntingRoute.replaceChildren(...routeStops(map));
+  huntingRoute.replaceChildren(...(routed ? routeStops(map) : []));
   huntingRoute.hidden = !routed;
-  huntingRouteNone.textContent = routed ? "" : distanceText(map.distance).title;
-  huntingRouteNone.hidden = routed;
+  huntingRouteNone.textContent = routed || arrived ? "" : distanceText(map.distance).title;
+  huntingRouteNone.hidden = routed || arrived;
+  huntingArrival.hidden = !arrived;
+  huntingTrip.textContent = trip ? tripLine(trip) : "";
+  huntingTrip.hidden = !trip;
   // The footer credits MeowDB whenever a map is shown; otherwise the section does.
   huntingCredit.textContent = panel.search.credit ?? "";
   huntingCredit.hidden = !panel.search.credit || !!panel.credit;
@@ -755,17 +764,21 @@ function render(panel: PanelState) {
 
 // The shell sizes the window to the expanded panel's content, and the core keeps it
 // within the space where the panel is placed. The panel is then no taller than the
-// window, and its long part (the route, the suggestions, the map list) scrolls. What
-// is scrolled out of sight counts too, so the core always learns the content's full
-// height.
+// window, and its long part (the route, the suggestions, the map list) scrolls. So the
+// core always learns the content's full height, borders and bottom padding included,
+// the panel is measured without the window's limit: measured within it, the cut-off
+// padding would not count, and the window would shrink a little with every report.
+// Lifting the limit scrolls the long parts back to the top, so they are put back.
 let expanded = true;
 let reportedHeight = 0;
 function reportHeight() {
   if (!expanded) return;
-  const scrolledAway = [...panelEl.querySelectorAll<HTMLElement>(".scroll")]
-    .filter((el) => el.getClientRects().length > 0)
-    .reduce((sum, el) => sum + el.scrollHeight - el.clientHeight, 0);
-  const height = Math.ceil(panelEl.scrollHeight + scrolledAway);
+  const scrolls = [...panelEl.querySelectorAll<HTMLElement>(".scroll")];
+  const scrolledTo = scrolls.map((el) => el.scrollTop);
+  panelEl.classList.add("measuring");
+  const height = Math.ceil(panelEl.getBoundingClientRect().height);
+  panelEl.classList.remove("measuring");
+  scrolls.forEach((el, i) => (el.scrollTop = scrolledTo[i]));
   if (height > 0 && height !== reportedHeight) {
     reportedHeight = height;
     invoke("panel_height", { height });
@@ -775,10 +788,8 @@ window.addEventListener("resize", reportHeight);
 
 // The panel is dragged by its header, or collapsed by its icon (inside the game, or
 // detached), never by its buttons. A click anywhere leaves the keyboard with the game:
-// the overlay can't be activated, except while the search view is open. The shell is
-// told first: only the window moves that follow are the player's.
-async function startDrag() {
-  await invoke("panel_drag_started");
+// the overlay can't be activated, except while the search view is open.
+function startDrag() {
   getCurrentWindow().startDragging();
 }
 
@@ -788,14 +799,13 @@ document.addEventListener("mousedown", (e) => {
   if (draggable && e.button === 0 && onHeader) startDrag();
 });
 
-// The expanded panel's bottom corners resize it, whatever its placement. The shell is
-// told first, so the sizes that follow are the player's; once the resize settles the
-// core keeps the width (never under its minimum) and the height follows the content.
+// The expanded panel's bottom corners resize it, whatever its placement, as its edges
+// do: its width only, as the height follows the content. Once the player lets go the
+// core keeps the width (never under its minimum).
 for (const grip of document.querySelectorAll<HTMLElement>(".grip")) {
-  grip.addEventListener("mousedown", async (e) => {
+  grip.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
-    await invoke("panel_resize_started");
-    getCurrentWindow().startResizeDragging(grip.dataset.resize === "SouthWest" ? "SouthWest" : "SouthEast");
+    getCurrentWindow().startResizeDragging(grip.dataset.resize === "West" ? "West" : "East");
   });
 }
 

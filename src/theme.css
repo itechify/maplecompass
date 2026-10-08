@@ -25,6 +25,10 @@
   --portal-inner: #8db3ee;
   --mob: #d8342a;
   --mob-edge: #8e1c15;
+  /* The player's own dot on the minimap: where you are. */
+  --you: #ffd21f;
+  --you-light: #fff6c2;
+  --you-edge: #7a5a00;
   --select: #d3def3;
   --select-edge: #98afda;
   --tag-bg: #dae3f3;
