@@ -1,26 +1,51 @@
-/* The search view's map list: every map the picked mob spawns on. */
+/* The search view's map list: every map the picked mob spawns on. Each map is a row group
+   read as one unit: its name across the row with its Distance at the right, then its
+   street under Map with its Density, Share and tier under their headers. A hairline
+   parts one map from the next. */
 .results {
   width: 100%;
   table-layout: fixed;
 }
 
-.results th:nth-child(1) { width: 38%; }
-.results th:nth-child(2) { width: 14%; }
-.results th:nth-child(3) { width: 12%; }
-.results th:nth-child(4) { width: 17%; }
-.results th:nth-child(5) { width: 19%; }
+/* The name spans the row, so Map needs only the street's room; the figures get the rest,
+   and their headers fit down to the narrowest panel. */
+.results th:nth-child(1) { width: 30%; }
+.results th:nth-child(2) { width: 17%; }
+.results th:nth-child(3) { width: 13%; }
+.results th:nth-child(4) { width: 19%; }
+.results th:nth-child(5) { width: 21%; }
 .results th, .results td { box-sizing: border-box; padding-left: 6px; vertical-align: top; }
-.results th:first-child, .results td:first-child { padding-left: 0; }
+/* Inside the inset box, the first and last columns keep clear of its edge. */
+.results th:first-child, .results td:first-child { padding-left: 8px; }
+.results th:last-child, .results td.distance { padding-right: 8px; }
+
+.results tbody + tbody tr:first-child td {
+  border-top: 1px solid var(--rule);
+}
+
+.results tbody tr:first-child td {
+  padding-top: 3px;
+}
+
+.results tbody tr:last-child td,
+.results td.distance {
+  padding-bottom: 3px;
+}
 
 .result-map,
 .result-street {
-  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.result-street {
+.result-map {
+  font-weight: 700;
+  text-align: left;
+}
+
+.results .result-street {
+  text-align: left;
+  font-size: 12px;
   color: var(--ink-2);
 }
 
@@ -29,5 +54,13 @@
 .tier.medium { color: var(--ink-2); }
 .tier.low { color: var(--ink-3); }
 
+/* Distance reads with the map's name, the two things a pick weighs first. */
+.results td.distance {
+  font-weight: 700;
+}
+
 /* "no route", "quest only" and "?" read as a lack of a number, not as one. */
-.distance.none { color: var(--ink-3); }
+.results td.distance.none {
+  font-weight: 400;
+  color: var(--ink-3);
+}

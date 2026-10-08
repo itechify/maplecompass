@@ -322,9 +322,9 @@ fn the_chosen_placement_survives_a_restart() {
     assert_eq!(state.placement, Some(rect(2733, 110, 340, 72)));
 }
 
-// Z-order and the mouse. Inside and docked, the overlay belongs to the game: it sits just
-// above it, so whatever covers the game covers the overlay too, and it disappears with
-// the game. Detached, it is an ordinary window.
+// Z-order and the mouse. Wherever it is placed, the overlay belongs to the game: it sits
+// just above it, so whatever covers the game covers the overlay too, and it disappears
+// with the game.
 
 #[test]
 fn inside_or_docked_the_overlay_sits_above_the_game_and_disappears_without_it() {
@@ -343,15 +343,22 @@ fn inside_or_docked_the_overlay_sits_above_the_game_and_disappears_without_it() 
 }
 
 #[test]
-fn a_detached_panel_is_an_ordinary_window_that_stays_when_the_game_is_gone() {
+fn a_detached_panel_also_sits_above_the_game_and_disappears_without_it() {
     let mut compass = compass();
     compass.on_game_window(game(GAME));
     detach(&mut compass);
+    let state = compass.panel_state().clone();
+    assert_eq!(state.layer, Layer::AboveGame);
+    assert!(state.draggable);
 
     let state = compass.on_game_window(None);
     assert!(!state.game_found);
-    assert_eq!(state.layer, Layer::Free);
-    assert!(state.draggable);
+    assert_eq!(state.layer, Layer::Hidden);
+    assert!(!state.draggable);
+
+    // It comes back where it was with the game.
+    let state = compass.on_game_window(game(GAME));
+    assert_eq!(state.layer, Layer::AboveGame);
     assert_eq!(state.placement, Some(rect(471, 110, 340, 72)));
 }
 

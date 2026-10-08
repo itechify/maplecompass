@@ -440,7 +440,9 @@ h2 {
 }
 
 .tracking .tag,
-.portals .tag {
+.portals .tag,
+.mob-card .tag,
+.route-stops .tag {
   flex: none;
   padding: 0 5px;
   border: 1px solid var(--tag-edge);
@@ -692,6 +694,177 @@ td:first-child {
   vertical-align: middle;
 }
 
+/* A mob's name opens its MeowDB page, and resting on it shows its Mob Card. Plain at rest,
+   so the table reads as before; Portal Blue and underlined under the pointer, deeper
+   while pressed. */
+.mob-name {
+  all: unset;
+  cursor: pointer;
+  /* A button is one box, so it truncates itself, beside the mob dot. */
+  display: inline-block;
+  max-width: calc(100% - 14px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.mob-name:hover,
+.mob-name.hovered {
+  color: var(--portal);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.mob-name:active {
+  color: var(--frame);
+}
+
+.mob-name:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* The Mob Card: the hovered mob's image and the figures its row doesn't show. One of the
+   game's windows, opaque (the panel's content goes on under it), floating beside the
+   mob's row and never outside the panel, which it never resizes. The pointer passes
+   through it. */
+.mob-card {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  z-index: 5;
+  box-sizing: border-box;
+  padding: 6px 10px 8px 6px;
+  border: 1px solid var(--window-edge);
+  border-radius: 4px;
+  background: var(--body-solid);
+  /* The window's inner ring, not a drop shadow: chrome, not lift. */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+  pointer-events: none;
+  font-size: 12px;
+  line-height: 15px;
+  color: var(--ink);
+}
+
+/* The mob standing in its 64px box, then its name, level and gait, then its elements. */
+.mob-card-head {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: center;
+}
+
+/* The same box with or without an image, so the card doesn't jump when one arrives. The
+   sprite stands on the box's floor at its own size, or scaled down to fit (smoothly, as
+   pixel doubling can't shrink), never up. */
+.mob-card-sprite {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: end center;
+}
+
+.mob-card-sprite img {
+  max-width: 64px;
+  max-height: 64px;
+  image-rendering: pixelated;
+}
+
+.mob-card-sprite img.scaled {
+  image-rendering: auto;
+}
+
+.mob-card-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mob-card-who > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mob-card-name {
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 700;
+}
+
+.mob-card-gait {
+  color: var(--ink-2);
+}
+
+.mob-card-elements {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.mob-card-elements .none {
+  color: var(--ink-2);
+}
+
+/* Two columns of figures, each label at the left and its value right-aligned, so the
+   figures line up as in the game's stat window. HP per EXP takes the full width. */
+.mob-card-figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 18px;
+  row-gap: 1px;
+  margin: 7px 0 0 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--rule);
+}
+
+.mob-card-figures > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mob-card-figures .wide {
+  grid-column: 1 / -1;
+}
+
+.mob-card-figures dt {
+  color: var(--ink-2);
+}
+
+.mob-card-figures dd {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.mob-card-figures dd .rank {
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+/* Loading, or why there are no figures: the panel's own notes. */
+.panel .mob-card .note {
+  margin: 7px 0 0 4px;
+  font-size: 12px;
+  line-height: 15px;
+}
+
+.panel .mob-card .note.problem::before {
+  top: 7px;
+}
+
 .panel .more {
   margin-top: 3px;
   font-size: 12px;
@@ -717,14 +890,14 @@ td:first-child {
   scrollbar-color: var(--select-edge) transparent;
 }
 
-/* Squeezed by everything above it, the route still shows two and a half stops, the cut
-   third saying it scrolls; a route that short in full never shrinks. Should even that
+/* Squeezed by everything above it, the route still shows about three and a half stops,
+   the cut one saying it scrolls; a route that short in full never shrinks. Should even that
    not fit, the whole view scrolls rather than lose its end. */
-.route-stops:has(> li:nth-child(3)) {
-  min-height: 6.5em;
+.route-stops:has(> li:nth-child(4)) {
+  min-height: 5.75em;
 }
 
-.route-stops:not(:has(> li:nth-child(3))) {
+.route-stops:not(:has(> li:nth-child(4))) {
   flex-shrink: 0;
 }
 
@@ -850,47 +1023,109 @@ td:first-child {
   white-space: nowrap;
 }
 
-/* The route there: each map in turn, with how it's reached, in an inset box. */
+/* The route there, drawn the way the minimap draws a way: a rail from your yellow dot,
+   through a portal ring for each portal and a plain ring for each ride, to the red mob
+   dot where the mob is. Each stop's map, with its street only where the street changes.
+   Set into the body as the map list is: the near-opaque lavender, read over any scene. */
 .route-stops {
   margin: 0;
-  padding: 4px 10px;
+  padding: 5px 10px 5px 8px;
   list-style: none;
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 17px;
   border: 1px solid var(--inset-edge);
   border-radius: 4px;
-  background: var(--inset-bg);
+  background: var(--body);
+  text-shadow: none;
 }
 
 .route-stops li {
+  position: relative;
   display: grid;
-  grid-template-columns: 6.5em 1fr;
+  grid-template-columns: 12px minmax(0, 1fr);
   column-gap: 8px;
-  padding: 1px 0;
+  padding: 2px 0;
 }
 
-.route-stops .step {
-  color: var(--ink-2);
-  text-align: right;
+/* The rail, from this stop's glyph to the next one's (each glyph sits at the same height
+   in its stop). */
+.route-stops li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 10.5px;
+  width: 2px;
+  height: 100%;
+  background: var(--portal-inner);
 }
 
-/* Anything but a portal is worth noticing on the way: by text emphasis alone. */
-.route-stops .step.ship,
-.route-stops .step.taxi,
-.route-stops .step.teleportScroll {
-  color: var(--ink);
-  font-weight: 700;
+.route-stops .glyph {
+  position: relative;
+  grid-row: 1;
+  align-self: start;
+  justify-self: center;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  margin-top: 3.5px;
+  border-radius: 50%;
+  border: 2.5px solid var(--portal);
+  background: var(--portal-fill);
+}
+
+.route-stops .start .glyph {
+  border: 0;
+  background: radial-gradient(circle at 35% 30%, var(--you-light) 0 18%, var(--you) 45%);
+  box-shadow: 0 0 0 1px var(--you-edge);
+}
+
+.route-stops .end .glyph {
+  width: 9px;
+  height: 9px;
+  margin-top: 4px;
+  border: 0;
+  background: var(--mob);
+  box-shadow: 0 0 0 1px var(--mob-edge);
+}
+
+.route-stops .ship .glyph,
+.route-stops .taxi .glyph,
+.route-stops .teleportScroll .glyph {
+  border-color: var(--ink-2);
+  background: var(--body-solid);
 }
 
 .route-stops .route-map,
 .route-stops .route-street {
+  grid-column: 2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.route-stops .route-map .tag {
+  margin-left: 6px;
+  vertical-align: 1px;
+}
+
+.route-stops .end .route-map {
+  font-weight: 700;
+}
+
 .route-stops .route-street {
-  grid-column: 2;
+  font-size: 12px;
+  line-height: 15px;
   color: var(--ink-2);
+}
+
+/* Read aloud, not shown: what a glyph says. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* Arrived on the Hunting Target's map: the route's inset box resolves to its last stop.
@@ -904,7 +1139,9 @@ td:first-child {
   padding: 5px 10px 6px;
   border: 1px solid var(--inset-edge);
   border-radius: 4px;
-  background: var(--inset-bg);
+  /* The route's own box, on the near-opaque lavender. */
+  background: var(--body);
+  text-shadow: none;
 }
 
 .arrival::before {
@@ -995,7 +1232,7 @@ td:first-child {
 }
 
 .suggestions li:hover,
-.results tbody tr:hover td {
+.results tbody:hover td {
   background: rgba(47, 99, 200, 0.08);
 }
 
@@ -1053,8 +1290,17 @@ td:first-child {
   accent-color: var(--edit);
 }
 
-/* The map list (the table itself is in results.css). It takes the keys, but its
+/* The map list (the table itself is in results.css), set into the body as an inset box.
+   It is the panel's densest reading, over the busiest scenes, so its box is the near-
+   opaque lavender body rather than the light inset tint. It takes the keys, but its
    highlight shows where they act, not a focus ring. */
+.results-box {
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--body);
+  text-shadow: none;
+}
+
 .results-box:focus {
   outline: none;
 }
@@ -1066,13 +1312,18 @@ td:first-child {
   background: #c5d0ec;
 }
 
-/* The map Enter makes the Hunting Target. */
-.results tr.current td {
+/* The map Enter makes the Hunting Target, framed by the selection's edge. */
+.results tbody.current td {
   background: var(--select);
 }
 
-.results tr.current .result-map {
-  font-weight: 700;
+.results tbody.current tr:first-child td {
+  border-top: 1px solid var(--select-edge);
+}
+
+.results tbody.current tr:last-child td,
+.results tbody.current td.distance {
+  border-bottom: 1px solid var(--select-edge);
 }
 
 /* The nearest map with the mob, whatever its tier. */

@@ -9,7 +9,7 @@ import {
   distanceText,
   distanceWithTravel,
   nearestLine,
-  resultRow,
+  resultGroup,
   resultsHead,
   resultsNote,
   routeStops,
@@ -68,6 +68,27 @@ type MapDataStatus =
   | ({ status: "ready" } & MapData)
   | ({ status: "savedCopy"; savedAtUnixMs: number } & MapData);
 
+/** Mirror of `compass_core::MobDetails`: a figure MeowDB shows as "—" is null. */
+type MobDetails = {
+  elements: { weak: string[]; strong: string[]; immune: string[] };
+  touchDamage: { min: number; max: number } | null;
+  mp: number | null;
+  accuracy: number | null;
+  avoid: number | null;
+  physicalDefense: number | null;
+  magicDefense: number | null;
+  speed: string;
+  movement: string;
+  hpPerExp: { hundredths: number; rank: number; ranked: number } | null;
+};
+
+/** Mirror of `compass_core::MobCard`: one listed mob's Mob Card. */
+type MobCard = { id: string; url: string; image: string | null } & (
+  | { status: "loading" | "unavailable" | "formatChanged" }
+  | ({ status: "ready" } & MobDetails)
+  | ({ status: "savedCopy"; savedAtUnixMs: number } & MobDetails)
+);
+
 /** Mirror of `compass_core::Recognition`. */
 type Recognition =
   | { status: "starting" | "ready" | "unavailable" }
@@ -113,10 +134,12 @@ type PanelState = {
   candidates: Candidates | null;
   data: MapDataStatus;
   credit: string | null;
+  /** The Mob Card of each mob the panel lists, in its order. */
+  mobCards: MobCard[];
   expanded: boolean;
   gameFound: boolean;
   placementMode: PlacementMode;
-  layer: "aboveGame" | "free" | "hidden";
+  layer: "aboveGame" | "hidden";
   /** The player can drag the panel by its header (inside or detached). */
   draggable: boolean;
   setup: { needed: "firstRun" | "resolutionChanged" | "requested" | null };
@@ -166,6 +189,7 @@ const badge = byId("badge");
 const mapMobs = byId("map-mobs");
 const noMobs = byId("no-mobs");
 const moreMobs = byId("more-mobs");
+const mobCardEl = byId("mob-card");
 const iconCount = byId("icon-count");
 const iconAlert = byId("icon-alert");
 const recovery = byId("recovery");
@@ -200,10 +224,10 @@ const searchNearest = byId("search-nearest");
 const searchNote = byId("search-note");
 const resultsBox = byId("results-box");
 const resultsTable = byId("search-results") as HTMLTableElement;
-const resultRows = byId("search-rows");
 const searchCrawl = byId("search-crawl");
 const searchCredit = byId("search-credit");
-resultsTable.prepend(resultsHead());
+const resultsHeader = resultsHead();
+resultsTable.append(resultsHeader);
 let draggable = false;
 /** The search view's open step, as last rendered. */
 let step: SearchState["view"] = null;
@@ -413,8 +437,17 @@ function renderData(panel: PanelState) {
   mobRows.replaceChildren(
     ...(ready?.listedMobs ?? []).map((mob) => {
       const row = document.createElement("tr");
-      const name = cell(mob.name);
+      // The name opens the mob's MeowDB page, and resting on it shows its Mob Card.
+      const name = document.createElement("td");
       name.className = "mob";
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "mob-name";
+      button.textContent = mob.name;
+      button.dataset.id = mob.id;
+      button.setAttribute("aria-describedby", "mob-card");
+      button.classList.toggle("hovered", mob.id === hoveredMob);
+      name.append(button);
       row.append(
         name,
         cell(String(mob.level)),
@@ -588,16 +621,16 @@ function renderMaps(search: SearchState) {
   searchNearest.hidden = searchNearest.textContent === "";
   searchNote.textContent = resultsNote(search);
   searchNote.hidden = searchNote.textContent === "";
-  const rows = search.results.map((result, i) => {
-    const row = resultRow(result);
+  const groups = search.results.map((result, i) => {
+    const group = resultGroup(result);
     const current = i === search.highlightedResult;
-    row.classList.toggle("current", current);
-    row.setAttribute("aria-selected", String(current));
-    return row;
+    group.classList.toggle("current", current);
+    group.setAttribute("aria-selected", String(current));
+    return group;
   });
-  resultsBox.hidden = rows.length === 0;
-  resultRows.replaceChildren(...rows);
-  const current = resultRows.querySelector<HTMLElement>("tr.current");
+  resultsBox.hidden = groups.length === 0;
+  resultsTable.replaceChildren(resultsHeader, ...groups);
+  const current = resultsTable.querySelector<HTMLElement>("tbody.current");
   if (current) scrollWithin(resultsBox, current);
 }
 
@@ -678,6 +711,182 @@ function renderBadge(panel: PanelState) {
   badge.textContent = text ?? "";
 }
 
+/** How long the pointer rests on a mob's name before its Mob Card shows. */
+const MOB_CARD_DELAY_MS = 250;
+/** The listed mob whose name the pointer is on, if any, and whether its card is due. */
+let hoveredMob: string | null = null;
+let mobCardDue = false;
+let mobCardTimer: number | undefined;
+/** The panel state last rendered, for the card to follow. */
+let shownPanel: PanelState | null = null;
+/** What the card last showed, so a render that changes nothing on it doesn't rebuild it. */
+let mobCardShown = "";
+
+function hoverMob(id: string | null) {
+  if (id === hoveredMob) return;
+  hoveredMob = id;
+  mobCardDue = false;
+  window.clearTimeout(mobCardTimer);
+  for (const button of mobRows.querySelectorAll<HTMLElement>(".mob-name")) {
+    button.classList.toggle("hovered", button.dataset.id === id);
+  }
+  if (id) {
+    mobCardTimer = window.setTimeout(() => {
+      mobCardDue = true;
+      renderMobCard();
+    }, MOB_CARD_DELAY_MS);
+  }
+  renderMobCard();
+}
+
+/** "—" for a figure the mob doesn't have. */
+const figure = (n: number | null) => (n === null ? "—" : number(n));
+
+/** A tag per element: "Weak to Fire", "Resists Ice", "Immune to Poison". */
+function elementTags({ weak, strong, immune }: MobDetails["elements"]): HTMLElement {
+  const tags = document.createElement("span");
+  tags.className = "mob-card-elements";
+  const all = [
+    ...weak.map((e) => `Weak to ${e}`),
+    ...strong.map((e) => `Resists ${e}`),
+    ...immune.map((e) => `Immune to ${e}`),
+  ];
+  tags.append(...(all.length ? all.map((text) => span("tag", text)) : [span("none", "No element")]));
+  return tags;
+}
+
+/** Touch and MP, ACC and AVOID, the defences in pairs, then HP per EXP and its rank. */
+function mobFigures(details: MobDetails): HTMLDListElement {
+  const list = document.createElement("dl");
+  list.className = "mob-card-figures";
+  const add = (label: string, ...value: (string | Node)[]) => {
+    const pair = document.createElement("div");
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.append(...value);
+    pair.append(dt, dd);
+    list.append(pair);
+    return pair;
+  };
+  const touch = details.touchDamage;
+  add("Touch", touch ? `${number(touch.min)}–${number(touch.max)}` : "—");
+  add("MP", figure(details.mp));
+  add("ACC", figure(details.accuracy));
+  add("AVOID", figure(details.avoid));
+  add("P.DEF", figure(details.physicalDefense));
+  add("M.DEF", figure(details.magicDefense));
+  const perExp = details.hpPerExp;
+  const hpPerExp = perExp
+    ? [(perExp.hundredths / 100).toFixed(2), span("rank", ` · #${perExp.rank} of ${perExp.ranked}`)]
+    : ["—"];
+  add("HP per EXP", ...hpPerExp).className = "wide";
+  return list;
+}
+
+/** The Mob Card's content: the mob, then its figures or why there are none. */
+function mobCardContent(mob: Mob, card: MobCard): Node[] {
+  const sprite = document.createElement("div");
+  sprite.className = "mob-card-sprite";
+  if (card.image) {
+    const img = document.createElement("img");
+    img.alt = "";
+    // Shrunk to fit, a sprite is smoothed: pixel doubling only works upward.
+    img.addEventListener("load", () => img.classList.toggle("scaled", img.naturalWidth > 64 || img.naturalHeight > 64));
+    // No saved image after all: the box stays empty.
+    img.addEventListener("error", () => img.remove());
+    img.src = card.image;
+    sprite.append(img);
+  }
+  const ready = card.status === "ready" || card.status === "savedCopy" ? card : null;
+  const who = document.createElement("div");
+  who.className = "mob-card-who";
+  who.append(
+    span("mob-card-name", mob.name),
+    span("mob-card-gait", ready ? `Lv ${mob.level} · ${ready.speed} · ${ready.movement.toLowerCase()}` : `Lv ${mob.level}`),
+  );
+  if (ready) who.append(elementTags(ready.elements));
+  const head = document.createElement("div");
+  head.className = "mob-card-head";
+  head.append(sprite, who);
+  const note = (text: string, problem = false) => {
+    const p = document.createElement("p");
+    p.className = problem ? "note problem" : "note";
+    p.textContent = text;
+    return p;
+  };
+  switch (card.status) {
+    case "loading":
+      return [head, note("Loading from MeowDB…")];
+    case "unavailable":
+      return [head, note("Couldn't reach MeowDB. MapleCompass tries again in a few minutes.", true)];
+    case "formatChanged":
+      return [head, note("MeowDB's page for this mob has changed. Click its name to read it there.", true)];
+    case "ready":
+      return [head, mobFigures(card)];
+    case "savedCopy":
+      return [head, mobFigures(card), note(`MeowDB unreachable — saved copy from ${savedOn(card.savedAtUnixMs)}`, true)];
+  }
+}
+
+/** The space kept between the card and the hovered row, and the panel's edges. */
+const MOB_CARD_GAP = 4;
+
+/**
+ * The hovered mob's Mob Card, once the pointer has rested on its name: below its row if it
+ * fits in the panel, otherwise above it, never over the window bar. Where it fits on
+ * neither side, it takes the roomier one. Only over the normal view of the expanded
+ * panel, and gone once the mob isn't listed.
+ */
+function renderMobCard() {
+  const panel = shownPanel;
+  const button = hoveredMob
+    ? mobRows.querySelector<HTMLElement>(`.mob-name[data-id="${CSS.escape(hoveredMob)}"]`)
+    : null;
+  const ready = panel?.data.status === "ready" || panel?.data.status === "savedCopy" ? panel.data : null;
+  const mob = ready?.listedMobs.find((m) => m.id === hoveredMob);
+  const card = panel?.mobCards.find((c) => c.id === hoveredMob);
+  if (!mobCardDue || !panel?.expanded || step !== null || !button || !mob || !card) {
+    mobCardEl.hidden = true;
+    mobCardShown = "";
+    return;
+  }
+  const shown = JSON.stringify([mob, card]);
+  if (shown !== mobCardShown) {
+    mobCardEl.replaceChildren(...mobCardContent(mob, card));
+    mobCardShown = shown;
+  }
+  mobCardEl.hidden = false;
+  const frame = panelEl.getBoundingClientRect();
+  const row = (button.closest("tr") ?? button).getBoundingClientRect();
+  const bar = normalView.querySelector(".window-bar")?.getBoundingClientRect();
+  const height = mobCardEl.offsetHeight;
+  const highest = (bar ? bar.bottom - frame.top : 0) + MOB_CARD_GAP;
+  const lowest = panelEl.clientHeight - MOB_CARD_GAP - height;
+  const below = row.bottom - frame.top + MOB_CARD_GAP;
+  const above = row.top - frame.top - MOB_CARD_GAP - height;
+  const roomBelow = panelEl.clientHeight - MOB_CARD_GAP - below;
+  const roomAbove = row.top - frame.top - MOB_CARD_GAP - highest;
+  let top: number;
+  if (below <= lowest) top = below;
+  else if (above >= highest) top = above;
+  else top = roomBelow >= roomAbove ? below : above;
+  mobCardEl.style.top = `${Math.max(highest, Math.min(top, lowest))}px`;
+}
+
+// Resting on a listed mob's name shows its Mob Card; clicking it opens its MeowDB page.
+mobRows.addEventListener("mouseover", (e) => {
+  const button = e.target instanceof Element ? e.target.closest<HTMLElement>(".mob-name") : null;
+  hoverMob(button?.dataset.id ?? null);
+});
+mobRows.addEventListener("mouseleave", () => hoverMob(null));
+mobRows.addEventListener("click", (e) => {
+  const button = e.target instanceof Element ? e.target.closest<HTMLElement>(".mob-name") : null;
+  if (!button?.dataset.id) return;
+  invoke("open_mob_page", { id: button.dataset.id });
+  hoverMob(null);
+});
+
 /** The collapsed icon: the shown map's Hidden Portal count, and a dot when something needs a look. */
 function renderIcon(panel: PanelState) {
   const data = panel.data.status === "ready" || panel.data.status === "savedCopy" ? panel.data : null;
@@ -756,6 +965,8 @@ function render(panel: PanelState) {
   renderData(panel);
   renderHunting(panel);
   renderSearchView(panel);
+  shownPanel = panel;
+  renderMobCard();
   renderBadge(panel);
   renderIcon(panel);
   expanded = panel.expanded;
@@ -848,7 +1059,7 @@ function pickOnClick(list: HTMLElement, item: string) {
   });
 }
 pickOnClick(suggestions, "li[data-id]");
-pickOnClick(resultRows, "tr[data-id]");
+pickOnClick(resultsTable, "tbody[data-id]");
 
 /** The search view's keys: the arrows move the highlight, Enter picks, Esc goes back. */
 function searchKey(e: KeyboardEvent): boolean {

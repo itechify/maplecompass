@@ -1,8 +1,9 @@
-//! MeowDB reader: turns MeowDB pages, fetched by the shell, into map data. Personal use
+//! MeowDB reader: turns MeowDB pages, fetched by the shell, into map and mob data. Personal use
 //! only until MeowDB grants permission (ADR 0003); credit "NiaMeowDB (meowdb.com)".
 
 use crate::map_data::{HiddenPortal, MapData, MapSummary, Mob, PerParty, Portal};
 use crate::map_index::{MapEntry, SourceError};
+use crate::mob_card::{DamageRange, Elements, HpPerExp, MobDetails};
 use crate::portals::{self, Exit, MapFacts, Minimap};
 use crate::portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 use serde_json::Value;
@@ -228,6 +229,146 @@ fn portals(
         })
         .collect::<Result<Vec<_>, String>>()?;
     Ok(portals::portals(&facts, exits, overrides))
+}
+
+/// The MeowDB page of the mob with this ID (e.g. `"3"`, Blue Snail).
+pub fn mob_url(id: &str) -> String {
+    format!("https://meowdb.com/msclassic/monsters/{id}")
+}
+
+/// Read a mob's Mob Card figures from its MeowDB page ([`mob_url`]).
+///
+/// Unlike a map page's, a mob page's figures aren't in its flight data as such, only
+/// as rendered text, so they're read from the page's text: from the `Level` heading up
+/// to "Check your build against …", each figure the text after its label (`ACC`, `39`).
+/// The labels come in this order:
+///
+/// - `Level`, its value, then the element tags ("Fire weak", "Ice strong", "Poison
+///   immune", among others such as "Boss") up to `Mesos per kill`;
+/// - `HP per EXP`, its value and its rank ("#34 of 182 · Lower is better");
+/// - `Touch DMG` ("5-7"), `P.DEF`, `M.DEF`, `ACC`, `AVOID`, "—" when there is none;
+/// - `Speed` ("Slow") and `Movement` ("Stays on its floor");
+/// - `Other Attributes`, whose list may hold "MP 30" (a boss's may not).
+///
+/// A page missing any of these labels is [`SourceError::FormatChanged`], never a card
+/// with figures missing; only MP may be absent.
+pub fn read_mob_page(html: &str) -> Result<MobDetails, SourceError> {
+    mob_details(&text_runs(html)).map_err(|why| SourceError::FormatChanged(format!("mob page: {why}")))
+}
+
+fn mob_details(text: &[String]) -> Result<MobDetails, String> {
+    let level = text.windows(2).position(|w| w[0] == "Level" && w[1].parse::<u32>().is_ok());
+    let start = level.ok_or("no Level")?;
+    let end = text[start..].iter().position(|t| t.starts_with("Check your build")).ok_or("no build check")?;
+    let stats = &text[start..start + end];
+    let at = |label: &str| stats.iter().position(|t| t == label).ok_or_else(|| format!("no {label}"));
+    let after = |label: &str, n: usize| -> Result<&str, String> {
+        let i = at(label)?;
+        stats.get(i + n).map(String::as_str).ok_or_else(|| format!("nothing after {label}"))
+    };
+    let figure = |label: &str| -> Result<Option<u64>, String> {
+        let value = after(label, 1)?;
+        if value == NONE {
+            return Ok(None);
+        }
+        whole(value).map(Some).ok_or_else(|| format!("{label} is {value:?}"))
+    };
+    let small = |label: &str| -> Result<Option<u32>, String> {
+        figure(label)?.map(|n| u32::try_from(n).map_err(|_| format!("{label} is {n}"))).transpose()
+    };
+
+    let mut elements = Elements::default();
+    for tag in &stats[2..at("Mesos per kill")?] {
+        let Some((element, affinity)) = tag.split_once(' ') else { continue };
+        match affinity {
+            "weak" => elements.weak.push(element.to_string()),
+            "strong" => elements.strong.push(element.to_string()),
+            "immune" => elements.immune.push(element.to_string()),
+            _ => {}
+        }
+    }
+
+    let touch = after("Touch DMG", 1)?;
+    let touch_damage = match touch {
+        NONE => None,
+        _ => {
+            let range = touch.split_once('-');
+            let range = range.and_then(|(min, max)| Some(DamageRange { min: whole(min)?, max: whole(max)? }));
+            Some(range.ok_or_else(|| format!("Touch DMG is {touch:?}"))?)
+        }
+    };
+
+    let hp_per_exp = match after("HP per EXP", 1)? {
+        NONE => None,
+        value => {
+            let hundredths = hundredths(value).ok_or_else(|| format!("HP per EXP is {value:?}"))?;
+            let rank = after("HP per EXP", 2)?;
+            let (place, of) = rank.strip_prefix('#').and_then(|r| r.split_once(" of ")).ok_or("no HP per EXP rank")?;
+            let of: String = of.chars().take_while(char::is_ascii_digit).collect();
+            match (place.parse(), of.parse()) {
+                (Ok(rank), Ok(ranked)) => Some(HpPerExp { hundredths, rank, ranked }),
+                _ => return Err(format!("HP per EXP rank is {rank:?}")),
+            }
+        }
+    };
+
+    let attributes = &stats[at("Other Attributes")? + 1..];
+    let mp = attributes.iter().find_map(|t| whole(t.strip_prefix("MP ")?));
+
+    Ok(MobDetails {
+        elements,
+        touch_damage,
+        mp,
+        accuracy: small("ACC")?,
+        avoid: small("AVOID")?,
+        physical_defense: small("P.DEF")?,
+        magic_defense: small("M.DEF")?,
+        speed: after("Speed", 1)?.to_string(),
+        movement: after("Movement", 1)?.to_string(),
+        hp_per_exp,
+    })
+}
+
+/// What a mob page shows for a figure the mob doesn't have.
+const NONE: &str = "—";
+
+/// A whole number, maybe with thousands separators ("34,440").
+fn whole(s: &str) -> Option<u64> {
+    let digits = s.replace(',', "");
+    (!digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())).then(|| digits.parse().ok())?
+}
+
+/// A number with two decimals ("12.75", "1,012.50") in hundredths.
+fn hundredths(s: &str) -> Option<u64> {
+    let (units, cents) = s.split_once('.')?;
+    (cents.len() == 2).then_some(())?;
+    Some(whole(units)? * 100 + whole(cents)?)
+}
+
+/// The page's text outside scripts and styles: each run between two tags, decoded and
+/// trimmed, empty ones left out. React's empty comments between adjacent text nodes are
+/// dropped first, so "No. <!-- -->003" is one run.
+fn text_runs(html: &str) -> Vec<String> {
+    let html = html.replace("<!-- -->", "");
+    let mut runs = Vec::new();
+    let mut rest = html.as_str();
+    while let Some(lt) = rest.find('<') {
+        let run = decode_entities(&rest[..lt]);
+        if !run.trim().is_empty() {
+            runs.push(run.trim().to_string());
+        }
+        rest = &rest[lt..];
+        let skip_to = ["<script", "<style"]
+            .into_iter()
+            .find(|open| rest.starts_with(open))
+            .map(|open| format!("</{}>", &open[1..]));
+        let end = match skip_to {
+            Some(close) => rest.find(&close).map(|e| e + close.len()),
+            None => rest.find('>').map(|e| e + 1),
+        };
+        rest = &rest[end.unwrap_or(rest.len())..];
+    }
+    runs
 }
 
 /// The page's flight stream: the strings of every `self.__next_f.push([1, "…"])`, joined
