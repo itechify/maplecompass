@@ -33,11 +33,21 @@ body {
 .panel {
   /* On the see-through body the game's near-black text, as in the Quest Helper. */
   --ink: #16191f;
-  --ink-2: #2c3446;
+  --ink-2: #222938;
   --ink-3: #343d51;
   --rule: rgba(30, 45, 90, 0.25);
+  /* The game draws its window text heavier than Arial renders here (the Quest Helper's
+     regular lines are near-bold). Arial has no 500 or 600, so a hairline stroke in the
+     text's own colour gives every line that weight. */
+  --text-weight-stroke: 0.4px;
   --inset-bg: rgba(255, 255, 255, 0.5);
   --inset-edge: rgba(30, 45, 90, 0.3);
+  /* Set here, not inherited: the body's ink is resolved before the panel's is. Text
+     with no role of its own reads as Body. */
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 17px;
+  -webkit-text-stroke-width: var(--text-weight-stroke);
   position: relative;
   box-sizing: border-box;
   max-height: 100vh;
@@ -75,8 +85,8 @@ body {
   /* Clear of the 14px corner grips, so the last line never sits beside one. */
   padding-bottom: 16px;
   text-shadow:
-    0 0 1px rgba(238, 242, 255, 0.9),
-    0 0 3px rgba(238, 242, 255, 0.75);
+    0 0 2px rgba(238, 242, 255, 0.85),
+    0 0 4px rgba(238, 242, 255, 0.6);
 }
 
 .view > :not(.window-bar):not(.titlebar) {
@@ -133,6 +143,8 @@ body {
 .panel .map {
   color: var(--title-ink);
   text-shadow: var(--title-lettering);
+  /* The lettering's outline is its weight: a stroke would eat into it. */
+  -webkit-text-stroke-width: 0;
   /* Room for the 1px outline at the sides, which a line cuts off past its box (to end a
      long name in an ellipsis), without moving the text. */
   padding-inline: 1px;
@@ -151,11 +163,12 @@ body {
   gap: 8px;
 }
 
-/* A long map name wraps to a second line rather than losing its end. */
+/* A long map name wraps to a second line rather than losing its end, in two even lines. */
 .panel .map {
   flex: 1;
   min-width: 0;
   white-space: normal;
+  text-wrap: balance;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -170,6 +183,7 @@ body {
   font-size: 15px;
   color: var(--ink);
   text-shadow: none;
+  -webkit-text-stroke-width: var(--text-weight-stroke);
 }
 
 /* The game's small orange button (the Mini Map's WORLD, the Quest Helper's AUTO), used
@@ -184,8 +198,10 @@ body {
   color: #fff;
   font-size: 11px;
   font-weight: 700;
+  line-height: 13px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  -webkit-text-stroke-width: 0;
   text-shadow:
     0 1px 0 var(--orange-deep),
     0 -1px 0 var(--orange-deep),
@@ -313,6 +329,7 @@ body {
 /* Wraps rather than truncates: a note must be read in full. */
 .panel .note {
   white-space: normal;
+  text-wrap: pretty;
   font-size: 13px;
   line-height: 17px;
   color: var(--ink-2);
@@ -342,13 +359,16 @@ body {
 /* Background progress: present, but quieter than a status note. */
 .panel .note.crawl {
   font-size: 12px;
+  line-height: 16px;
   color: var(--ink-3);
 }
 
+/* A section's heading, a step above its rows' 13px bold: the Street Name's size. */
 h2 {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
+  line-height: 18px;
   color: var(--ink);
 }
 
@@ -404,7 +424,7 @@ h2 {
   color: var(--ink-2);
 }
 
-/* EXP tracking: Time to Level over the rates, one line per figure, so the panel's
+/* The Grind Tracker: Time to Level over the rates, one line per figure, so the panel's
    height only changes when a line comes or goes. */
 .tracking {
   display: flex;
@@ -431,12 +451,14 @@ h2 {
 
 .tracking .label {
   font-size: 12px;
+  line-height: 15px;
   color: var(--ink-2);
 }
 
 .tracking .time-to-level {
   font-size: 18px;
   font-weight: 700;
+  line-height: 23px;
 }
 
 .tracking .tag,
@@ -476,6 +498,7 @@ h2 {
 
 .tracking .extra {
   font-size: 12px;
+  line-height: 15px;
   color: var(--ink-2);
 }
 
@@ -858,16 +881,13 @@ td:first-child {
 .panel .mob-card .note {
   margin: 7px 0 0 4px;
   font-size: 12px;
-  line-height: 15px;
-}
-
-.panel .mob-card .note.problem::before {
-  top: 7px;
+  line-height: 16px;
 }
 
 .panel .more {
   margin-top: 3px;
   font-size: 12px;
+  line-height: 15px;
   color: var(--ink-2);
 }
 
@@ -967,7 +987,10 @@ td:first-child {
   text-overflow: ellipsis;
 }
 
+/* The map under the mob, as a street sits under its map. */
 .hunting h2 .hunting-map {
+  font-size: 12px;
+  line-height: 15px;
   font-weight: 400;
   color: var(--ink-2);
 }
@@ -996,6 +1019,7 @@ td:first-child {
   gap: 8px;
   margin: 0;
   font-size: 12px;
+  line-height: 15px;
 }
 
 .figures dt {
@@ -1008,6 +1032,7 @@ td:first-child {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
+  line-height: 17px;
 }
 
 .figures dd:not(.tier) {
@@ -1017,6 +1042,7 @@ td:first-child {
 .route-title {
   margin: 0;
   font-size: 12px;
+  line-height: 15px;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1167,10 +1193,12 @@ td:first-child {
   line-height: 16px;
   color: var(--ink-2);
   white-space: normal;
+  text-wrap: pretty;
 }
 
 .search-credit {
   font-size: 12px;
+  line-height: 15px;
   color: var(--ink-3);
 }
 
@@ -1191,6 +1219,7 @@ td:first-child {
 
 .field .label {
   font-size: 12px;
+  line-height: 15px;
   color: var(--ink-2);
 }
 
@@ -1257,7 +1286,11 @@ td:first-child {
 
 .panel .keys {
   white-space: normal;
+  text-wrap: pretty;
   font-size: 12px;
+  line-height: 16px;
+  /* The arrows in ink, not as the emoji font's blue keycaps. */
+  font-variant-emoji: text;
   color: var(--ink-3);
 }
 
@@ -1271,6 +1304,7 @@ td:first-child {
   padding: 0;
   border: 0;
   font-size: 12px;
+  line-height: 15px;
 }
 
 .travel legend {
@@ -1330,6 +1364,7 @@ td:first-child {
 .search-view .nearest {
   margin: 0;
   font-size: 12px;
+  line-height: 15px;
 }
 
 footer {
@@ -1340,7 +1375,7 @@ footer {
   padding-top: 6px;
   border-top: 1px solid var(--rule);
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 15px;
   color: var(--ink-3);
   overflow-wrap: anywhere;
 }
@@ -1452,14 +1487,29 @@ body:has(#badge:not([hidden])) .icon .count {
 
 /* Increased text scale can leave less inline space in the fixed-width window. */
 @container (max-width: 300px) {
+  /* Each figure on its own line beside its party size, the 6+ party one under solo, and
+     the label beside the pair, so the columns still line up. */
   .summary { grid-template-columns: auto auto auto; }
-  .summary .unit { padding-right: 8px; }
+  .summary .label { grid-column: 1; grid-row: span 2; }
+  .summary .value { grid-column: 2; }
+  .summary .unit { grid-column: 3; padding-right: 0; }
+  .summary .label:not(:first-child) { margin-top: 4px; }
+  .summary .label:not(:first-child) + .value,
+  .summary .label:not(:first-child) + .value + .unit { margin-top: 4px; }
+  /* Each mob a card: its name, then its four figures side by side, labels over them. */
   .mobs, .mobs tbody { display: block; width: 100%; }
   .mobs thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .mobs tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 8px; margin-bottom: 8px; }
+  .mobs tr { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px 8px; margin-bottom: 8px; }
   .mobs td { display: block; text-align: left; padding: 0; white-space: normal; overflow-wrap: anywhere; }
   .mobs td:first-child { grid-column: 1 / -1; font-weight: 700; }
-  .mobs td:not(:first-child)::before { content: attr(data-label); display: block; color: var(--ink-2); }
+  .mobs td:not(:first-child)::before { content: attr(data-label); display: block; font-size: 12px; line-height: 15px; color: var(--ink-2); }
   .portals .dest { flex-wrap: wrap; }
   .portals .to { flex-basis: 100%; white-space: normal; }
+  /* An empty section's heading stays on one line; "None on this map" goes under it
+     rather than losing its end. */
+  .portals, .map-mobs { flex-wrap: wrap; row-gap: 2px; }
+  .portals > h2, .map-mobs > h2 { flex: none; }
+  .portals > .none, .map-mobs > .none { flex: none; max-width: 100%; }
+  /* The ceiling share and deaths wrap rather than lose the deaths. */
+  .panel .tracking .extra { white-space: normal; text-wrap: pretty; line-height: 16px; }
 }

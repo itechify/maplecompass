@@ -666,7 +666,7 @@ const TRACKING_TAGS: Partial<Record<ExpTracking["state"], string>> = {
   paused: "paused",
 };
 
-/** The EXP tracking section: nothing while tracking is off, a quiet line until the
+/** The Grind Tracker section: nothing while tracking is off, a quiet line until the
  *  Session starts, then Time to Level, the rates, and the ceiling and deaths when the
  *  state carries them. "—" for any figure not there yet. */
 function renderTracking(panel: PanelState) {
@@ -698,7 +698,8 @@ function renderTracking(panel: PanelState) {
   }
   const { deaths } = tracking;
   if (deaths.count > 0) {
-    extra.push(`deaths: ${deaths.count} (${percent(-deaths.percentLostHundredths)})`);
+    // No-break spaces: on a narrow panel, where the line wraps, the deaths read as one.
+    extra.push(`deaths: ${deaths.count} (${percent(-deaths.percentLostHundredths)})`);
   }
   trackingExtra.textContent = extra.join(" · ");
   trackingExtra.hidden = extra.length === 0;
