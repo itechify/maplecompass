@@ -666,7 +666,7 @@ const TRACKING_TAGS: Partial<Record<ExpTracking["state"], string>> = {
   paused: "paused",
 };
 
-/** The EXP tracking section: nothing while tracking is off, a quiet line until the
+/** The Grind Tracker section: nothing while tracking is off, a quiet line until the
  *  Session starts, then Time to Level, the rates, and the ceiling and deaths when the
  *  state carries them. "—" for any figure not there yet. */
 function renderTracking(panel: PanelState) {
