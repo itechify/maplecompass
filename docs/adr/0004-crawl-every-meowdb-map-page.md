@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted, amended by ADR-0006 (the listed mobs' pages are fetched for their Mob Cards)
 ---
 
 # Crawl every MeowDB map page for personal use
