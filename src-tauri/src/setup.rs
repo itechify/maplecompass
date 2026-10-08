@@ -97,6 +97,15 @@ impl SetupWindows {
         })
     }
 
+    /// The player started MapleCompass again: bring an open setup window in front, where
+    /// they can see it. Right after their launch, so Windows lets us take the foreground.
+    pub fn bring_to_front(&self) {
+        if self.shown {
+            let _ = self.setup.unminimize();
+            let _ = self.setup.set_focus();
+        }
+    }
+
     /// Follow the core's setup state, and send the setup window what it renders.
     pub fn sync(&mut self, state: &PanelState, game: Option<ScreenRect>) {
         *self.app.state::<Bridge>().game.lock().unwrap() = game;
