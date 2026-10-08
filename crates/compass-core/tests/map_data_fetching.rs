@@ -5,7 +5,7 @@
 mod common;
 
 use common::{FakeSource, black_frame, requests_for, sample_frame};
-use compass_core::{Compass, MEOWDB_CREDIT, MapData, MapDataStatus, Mob, OpenInBrowser, PanelState};
+use compass_core::{Compass, MEOWDB_CREDIT, MapData, MapDataStatus, Mob, PanelState, Request};
 use std::task::Poll;
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
@@ -91,6 +91,7 @@ fn before_any_map_is_shown_no_page_is_asked_for_and_there_is_no_data() {
 #[test]
 fn mobs_are_sorted_by_level_then_name_whatever_order_the_source_gives() {
     let mob = |name: &str, level| Mob {
+        id: name.into(),
         name: name.into(),
         level,
         hp: 100,
@@ -129,18 +130,18 @@ fn the_shown_map_carries_its_meowdb_page_and_the_meowdb_credit() {
     assert_eq!(MEOWDB_CREDIT, "NiaMeowDB (meowdb.com)");
 }
 
-/// Settings from before this hotkey existed get Win+Alt+O.
+/// Settings from before this hotkey existed get Ctrl+Shift+M.
 #[test]
-fn win_alt_o_opens_the_shown_maps_page_even_with_settings_from_before_it_existed() {
+fn ctrl_shift_m_opens_the_shown_maps_page_even_with_settings_from_before_it_existed() {
     let older = r#"{"version":1,"expanded":true,"hotkeys":{"togglePanel":"ctrl+shift+m","editMode":"ctrl+shift+e"}}"#;
     let mut compass = Compass::new(FakeSource::meowdb());
     compass.restore(serde_json::from_str(older).unwrap());
     compass.on_frame(sample_frame(SUNSET, 0));
     compass.on_frame(sample_frame(SUNSET, 333));
 
-    let opened = compass.on_hotkey("super+alt+o");
+    let opened = compass.on_hotkey("ctrl+shift+m");
 
-    assert_eq!(opened, Some(OpenInBrowser { url: "https://meowdb.com/msclassic/maps/010003070".into() }));
+    assert_eq!(opened, Some(Request::OpenInBrowser { url: "https://meowdb.com/msclassic/maps/010003070".into() }));
 }
 
 /// When a saved copy was made: 2026-10-01 00:00 UTC, in ms since the Unix epoch.
