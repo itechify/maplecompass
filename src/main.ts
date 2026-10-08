@@ -788,14 +788,16 @@ document.addEventListener("mousedown", (e) => {
   if (draggable && e.button === 0 && onHeader) startDrag();
 });
 
-// The expanded panel's bottom corners resize it, whatever its placement. The shell is
-// told first, so the sizes that follow are the player's; once they let go the
-// core keeps the width (never under its minimum) and the height follows the content.
+// The expanded panel's bottom corners resize it, whatever its placement: its width only,
+// as the height follows the content (a resize that could change the height would let
+// Windows snap the window to the screen's edge). The shell is told first, so the sizes
+// that follow are the player's; once they let go the core keeps the width (never under
+// its minimum).
 for (const grip of document.querySelectorAll<HTMLElement>(".grip")) {
   grip.addEventListener("mousedown", async (e) => {
     if (e.button !== 0) return;
     await invoke("panel_resize_started");
-    getCurrentWindow().startResizeDragging(grip.dataset.resize === "SouthWest" ? "SouthWest" : "SouthEast");
+    getCurrentWindow().startResizeDragging(grip.dataset.resize === "West" ? "West" : "East");
   });
 }
 
