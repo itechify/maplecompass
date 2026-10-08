@@ -133,6 +133,10 @@ body {
 .panel .map {
   color: var(--title-ink);
   text-shadow: var(--title-lettering);
+  /* Room for the 1px outline at the sides, which a line cuts off past its box (to end a
+     long name in an ellipsis), without moving the text. */
+  padding-inline: 1px;
+  margin-inline: -1px;
 }
 
 .street {
