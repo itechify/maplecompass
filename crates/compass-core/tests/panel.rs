@@ -13,7 +13,8 @@ mod common;
 use common::FakeSource;
 use common::world::SEARCH;
 use compass_core::{
-    Action, Compass, ExpBarRegion, GameWindow, Layer, PanelSizes, PlacementMode, Rect, ScreenRect,
+    Action, Compass, DEFAULT_PANEL_WIDTH, ExpBarRegion, GameWindow, Layer, MIN_PANEL_WIDTH, PanelSizes,
+    PlacementMode, Rect, ScreenRect,
     Settings, Size, TitleRegion,
 };
 
@@ -563,4 +564,46 @@ fn a_panel_dragged_onto_the_exp_bar_is_moved_clear_of_it() {
     assert_eq!(placement, rect(962, 110 + 176, 340, 72));
     assert!(!overlaps(placement, state.title_region.unwrap()));
     assert!(!overlaps(placement, state.exp_bar_region.unwrap()));
+}
+
+#[test]
+fn the_panel_starts_at_its_default_width() {
+    let compass = compass();
+
+    assert_eq!(compass.panel_state().panel_width, DEFAULT_PANEL_WIDTH);
+    assert_eq!(DEFAULT_PANEL_WIDTH, 380);
+}
+
+#[test]
+fn a_panel_widened_by_its_bottom_corner_keeps_that_width_across_restarts() {
+    let mut compass = compass();
+
+    let state = compass.act(Action::PanelResized { width: 460 });
+    assert_eq!(state.panel_width, 460);
+    assert_eq!(compass.settings().panel_width, Some(460));
+
+    let mut restarted = restored(compass.settings());
+    assert_eq!(restarted.panel_state().panel_width, 460);
+    // Narrowed again later, the new width holds.
+    assert_eq!(restarted.act(Action::PanelResized { width: 400 }).panel_width, 400);
+}
+
+#[test]
+fn the_panel_is_never_narrower_than_its_minimum_width() {
+    let mut compass = compass();
+
+    let state = compass.act(Action::PanelResized { width: 120 });
+    assert_eq!(state.panel_width, MIN_PANEL_WIDTH);
+    assert_eq!(MIN_PANEL_WIDTH, 320);
+
+    // Nor when a settings file says otherwise.
+    let narrow = Settings { panel_width: Some(90), ..Settings::default() };
+    assert_eq!(restored(narrow).panel_state().panel_width, MIN_PANEL_WIDTH);
+}
+
+/// A core restored from these settings.
+fn restored(settings: Settings) -> Compass {
+    let mut compass = compass();
+    compass.restore(settings);
+    compass
 }
