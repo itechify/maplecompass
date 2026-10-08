@@ -734,7 +734,7 @@ function render(panel: PanelState) {
   const causes = hotkeyCauses(panel);
   hotkeyProblem.textContent = causes && `${causes} ${
     hotkeyAvailable(hotkeys.setup, panel.unavailableHotkeys)
-      ? `${keyLabel(hotkeys.setup)} opens setup; select Overlay guide for shortcut help.`
+      ? `${keyLabel(hotkeys.setup)} opens setup; select Guide for shortcut help.`
       : "Close the other app, or edit %APPDATA%\com.itechify.maplecompass\settings.json, then restart MapleCompass."
   }`;
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
