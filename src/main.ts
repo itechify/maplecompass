@@ -531,12 +531,12 @@ function reportHeight() {
 }
 window.addEventListener("resize", reportHeight);
 
-// The panel is dragged by its header (inside the game, or detached), never by its
-// buttons. A click anywhere leaves the keyboard with the game: the overlay can't be
-// activated, except while the search view is open.
+// The panel is dragged by its header, or collapsed by its icon (inside the game, or
+// detached), never by its buttons. A click anywhere leaves the keyboard with the game:
+// the overlay can't be activated, except while the search view is open.
 document.addEventListener("mousedown", (e) => {
   const target = e.target instanceof Element ? e.target : null;
-  const onHeader = !!target?.closest(".drag-handle") && !target?.closest("button, input");
+  const onHeader = !!target?.closest(".drag-handle, .icon") && !target?.closest("button, input");
   if (draggable && e.button === 0 && onHeader) {
     getCurrentWindow().startDragging();
   }
