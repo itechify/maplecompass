@@ -12,12 +12,14 @@
       <img src="/assets/icon.svg" width="28" height="28" alt="" />
       <h1>MapleCompass setup</h1>
       <span class="progress" id="progress"></span>
+      <button class="secondary guide-button" id="guide-open">Overlay guide</button>
     </header>
     <p class="notice" id="notice" hidden></p>
-    <p class="notice" id="hotkey-problem" hidden></p>
+    <p class="notice" id="hotkey-problem" role="status" hidden></p>
+    <p class="notice error" id="action-error" role="alert" hidden></p>
 
     <section data-step="warning">
-      <h2>Before you start: your account</h2>
+      <h2 tabindex="-1">Before you start: your account</h2>
       <p>
         MapleCompass is a third-party tool, not made or approved by Nexon. Nexon's terms forbid
         some third-party programs, and a penalty in Classic World applies to your whole account,
@@ -39,9 +41,9 @@
     </section>
 
     <section data-step="window">
-      <h2>Find the game window</h2>
-      <p id="window-status"></p>
-      <p id="pick-status" class="muted"></p>
+      <h2 tabindex="-1">Find the game window</h2>
+      <p id="window-status" role="status"></p>
+      <p id="pick-status" class="muted" role="status" aria-atomic="true"></p>
       <footer>
         <button class="secondary" id="pick">Pick the game window by hand</button>
         <button data-action="next" id="window-next">Next</button>
@@ -49,7 +51,7 @@
     </section>
 
     <section data-step="requirements">
-      <h2>Set up the game</h2>
+      <h2 tabindex="-1">Set up the game</h2>
       <ul class="checklist">
         <li>
           <strong>Keep the minimap open, with its title showing.</strong>
@@ -68,12 +70,13 @@
     </section>
 
     <section data-step="mark">
-      <h2>Mark the minimap title</h2>
+      <h2 tabindex="-1">Mark the minimap title</h2>
       <p>
-        Drag a box around the two lines of the minimap title: the street name and the map name.
+        Draw or adjust a box around the two lines of the minimap title: the street name and the map name.
         Leave a little of the blue panel around them.
       </p>
-      <p class="muted">Press Esc to cancel. Long map names are read whole, even if the title is short now.</p>
+      <p class="muted">Drag to draw a box, or use Arrow keys to move it and Alt+Arrow to resize. Hold Shift for larger steps. Enter tests the box; Esc cancels.</p>
+      <p class="muted">Long map names are read whole, even if the title is short now.</p>
       <footer>
         <button class="secondary" data-action="back">Back</button>
         <button class="secondary" id="keep-title" hidden>Keep the current title</button>
@@ -82,9 +85,17 @@
     </section>
 
     <section data-step="test">
-      <h2>Test read</h2>
-      <div class="test-read" id="test-read"></div>
+      <h2 tabindex="-1">Test read</h2>
+      <div class="test-read" id="test-read" role="status" aria-atomic="true"></div>
       <p class="muted credit" id="test-credit"></p>
+      <div id="handoff" hidden>
+        <h3>While you play</h3>
+        <dl class="shortcuts compact">
+          <dt>Collapse / expand</dt><dd data-shortcut="togglePanel"></dd>
+          <dt>Move</dt><dd>Drag the panel's header</dd>
+          <dt>Change placement</dt><dd data-shortcut="cyclePlacement"></dd>
+        </dl>
+      </div>
       <footer>
         <button class="secondary mark">Mark again</button>
         <button id="title-next">Next</button>
@@ -92,7 +103,7 @@
     </section>
 
     <section data-step="exp">
-      <h2>Track your EXP (optional)</h2>
+      <h2 tabindex="-1">Track your EXP (optional)</h2>
       <p>
         To see how fast you level, drag a box around the EXP figures on the EXP bar at the
         bottom of the game, like <strong>EXP. 160 [3.81%]</strong>. Take in the number and the
@@ -109,13 +120,31 @@
     </section>
 
     <section data-step="expTest">
-      <h2>Test read</h2>
-      <div class="test-read" id="exp-test-read"></div>
+      <h2 tabindex="-1">Test read</h2>
+      <div class="test-read" id="exp-test-read" role="status" aria-atomic="true"></div>
       <footer>
         <button class="secondary mark-exp">Mark again</button>
         <button class="secondary" id="exp-test-skip">Skip</button>
         <button id="finish">Finish</button>
       </footer>
+    </section>
+
+    <section data-step="guide" hidden>
+      <h2 tabindex="-1">Using the overlay</h2>
+      <p>Clicking the panel never takes the keyboard from the game. Use these shortcuts while you play.</p>
+      <dl class="shortcuts">
+        <dt>Collapse / expand</dt><dd data-shortcut="togglePanel"></dd>
+        <dt>Move</dt><dd>Drag the panel's header</dd>
+        <dt>Change placement</dt><dd data-shortcut="cyclePlacement"></dd>
+        <dt>Next Candidate</dt><dd data-shortcut="chooseCandidate"></dd>
+        <dt>Open MeowDB page</dt><dd data-shortcut="openMeowdbPage"></dd>
+        <dt>Search a mob</dt><dd data-shortcut="search"></dd>
+        <dt>Reset the Session</dt><dd data-shortcut="resetSession"></dd>
+        <dt>Help & setup</dt><dd data-shortcut="setup"></dd>
+      </dl>
+      <p>Drag the panel by its header to move it, Inside or Detached; Docked panels stay beside the game. Placement cycles through Inside, Docked right, Docked left, and Detached. The 🔍 at the top of the panel, or the search shortcut, finds a mob and the maps it spawns on; pick one to make it your Hunting Target, and the panel shows the way there until you arrive.</p>
+      <p class="muted"><strong>Map Summary:</strong> 6+ means a party of six or more players. Share is a mob's share of all spawns on the Map.</p>
+      <footer><button id="guide-back">Back to setup</button></footer>
     </section>
   </body>
 </html>

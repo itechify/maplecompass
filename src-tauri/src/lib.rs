@@ -1,19 +1,21 @@
 //! MapleCompass shell: a thin adapter around `compass-core`. It finds the game window,
-//! captures the Title Region and the EXP Bar Region, feeds frames, hotkeys and drags to the core and renders
-//! the panel state in an overlay that sits just above the game (or, detached, in an
-//! ordinary window). All logic lives in the core.
+//! captures the Title Region and the EXP Bar Region, feeds frames, hotkeys and drags to
+//! the core and renders the panel state in an overlay that sits just above the game
+//! (or, detached, in an ordinary window). All logic lives in the core.
 
 pub mod capture;
 pub mod gamewin;
 mod files;
 mod hotkeys;
 pub mod meowdb;
+mod search;
 mod settings;
 mod setup;
+mod view;
 
 use compass_core::{
-    Action, Compass, ExpBarReader, ExpBarReading, Frame, GameWindow, Layer, PanelSizes, PanelState,
-    ScreenRect, Size, TitleReader, TitleReading, default_title_region,
+    Action, Compass, ExpBarReader, ExpBarReading, Frame, GameWindow, Layer, PanelControl, PanelSizes,
+    PanelState, Request, ScreenRect, Size, TitleReader, TitleReading, default_title_region,
 };
 use meowdb::MeowDbSource;
 use setup::{Bridge, SetupWindows};
@@ -35,10 +37,17 @@ const WINDOW_TICK: Duration = Duration::from_millis(50);
 /// Settings are saved once they have stopped changing for this long (after a drag).
 const SAVE_DELAY: Duration = Duration::from_millis(500);
 /// The overlay's size in CSS px (logical); `src/styles.css` lays out to fit. The
-/// expanded panel's height follows its content, as the overlay reports it.
+/// expanded panel's height follows its content, as the overlay reports it; the core
+/// keeps it within the space where the panel is placed. It is never taller than
+/// [`MAX_EXPANDED_HEIGHT`]: past that the route or the map list scrolls.
 const EXPANDED: (f64, f64) = (380.0, 72.0);
-const EXPANDED_HEIGHTS: std::ops::RangeInclusive<f64> = 44.0..=900.0;
+const MIN_EXPANDED_HEIGHT: f64 = 44.0;
+const MAX_EXPANDED_HEIGHT: f64 = 600.0;
 const COLLAPSED: (f64, f64) = (44.0, 44.0);
+/// A drag has ended once the overlay hasn't moved for this long since it started or last
+/// moved (Windows' move loop tells the page nothing when the mouse is let go): then the
+/// shell puts it where the core says again (clear of the Title Region, inside the game).
+const DRAG_SETTLE: Duration = Duration::from_millis(300);
 
 /// What the compass loop is asked to do.
 #[derive(Debug, Clone)]
@@ -47,10 +56,23 @@ pub(crate) enum Command {
     Act(Action),
     /// The player pressed this hotkey (its accelerator string), for the core.
     Hotkey(String),
+    /// The player clicked one of the icons at the top of the panel, for the core.
+    Press(PanelControl),
+    /// The overlay's query box now holds this, for the core.
+    SearchQuery(String),
+    /// The player clicked the search view's mob or map with this MeowDB ID.
+    SearchPick(String),
     /// The expanded panel's content is this tall (CSS px).
     PanelHeight(f64),
-    /// The reader is done with a capture of the Title Region `region`: what it read, or `None`
-    /// if the capture failed.
+    /// The overlay is about to start a drag of its window: the player pressed the mouse
+    /// on its header or its collapsed icon.
+    DragStarted,
+    /// The overlay window moved here (its outer top-left corner). The player's move only
+    /// during a drag; otherwise the shell's own, or the system's (a DPI or monitor
+    /// change).
+    Moved(PhysicalPosition<i32>),
+    /// The reader is done with a capture of the Title Region `region`: what it read, or
+    /// `None` if the capture failed.
     Read { region: ScreenRect, reading: Option<TitleReading> },
     /// The reader is done with a capture of the EXP Bar Region `region`: what it read,
     /// or `None` if the capture failed.
@@ -63,10 +85,11 @@ fn panel_height(height: f64, commands: tauri::State<'_, Sender<Command>>) {
     let _ = commands.send(Command::PanelHeight(height));
 }
 
-/// The player clicked the panel's Reset Session button (in edit mode).
+/// The overlay is about to start dragging its window, so the moves that follow are the
+/// player's.
 #[tauri::command]
-fn reset_session(commands: tauri::State<'_, Sender<Command>>) {
-    let _ = commands.send(Command::Act(Action::ResetSession));
+fn panel_drag_started(commands: tauri::State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::DragStarted);
 }
 
 /// Capture the default Title Region of the game's client area (the probe's guess; the
@@ -91,7 +114,9 @@ pub fn run() {
             // Not content-protected: the panel shows in the player's screenshots and
             // streams. The core keeps it off the Title Region instead, so our own capture
             // never reads it.
-            // Clicks pass through to the game until the panel is draggable.
+            // Clicks pass through until there is a panel to show; then it is always
+            // clickable, but never activated by a click (`focusable: false` in
+            // tauri.conf.json is WS_EX_NOACTIVATE), so the game keeps the keyboard.
             overlay.set_ignore_cursor_events(true)?;
 
             // MeowDB pages are cached on disk (ADR 0003). WebView2 shares the app cache
@@ -102,23 +127,29 @@ pub fn run() {
             // The core brings older settings up to date (hotkeys included).
             compass.restore(settings::load(&settings_path));
             let (commands, commands_rx) = mpsc::channel();
-            let unavailable = hotkeys::install(app, &compass.panel_state().hotkeys, commands.clone())?;
-            compass.hotkeys_unavailable(unavailable);
+            // Registered only while the game or one of our windows is in front.
+            let hotkeys = hotkeys::install(app, &compass.panel_state().hotkeys, commands.clone())?;
             app.manage(commands.clone());
             let (picks, picks_rx) = mpsc::channel();
             app.manage(Bridge {
                 commands: commands.clone(),
                 picks,
                 game: Mutex::new(None),
-                view: Mutex::new(None),
+                view: Default::default(),
             });
             let setup_windows = SetupWindows::new(app.handle())?;
-            // The core only takes moves of a draggable panel, so the shell's own
-            // repositioning is harmless; otherwise they are the player's drag.
-            overlay.on_window_event(move |event| {
-                if let WindowEvent::Moved(to) = event {
-                    let _ = commands.send(Command::Act(Action::PanelMoved { x: to.x, y: to.y }));
+            overlay.on_window_event(move |event| match event {
+                // Only moves during a drag the overlay started are the player's.
+                WindowEvent::Moved(to) => {
+                    let _ = commands.send(Command::Moved(*to));
                 }
+                // Leaving the overlay for another window (the game) with the search view
+                // open is Esc: it has the keyboard only while it's in front. Not when
+                // focus only moved within our windows, as into the overlay's own webview.
+                WindowEvent::Focused(false) if !gamewin::foreground_is_ours() => {
+                    let _ = commands.send(Command::Act(Action::SearchEscape));
+                }
+                _ => {}
             });
 
             let handle = app.handle().clone();
@@ -126,25 +157,46 @@ pub fn run() {
             // Per-Monitor-V2 DPI aware.
             let reader = ReaderThread::spawn(app.state::<Sender<Command>>().inner().clone())?;
             let channels = Channels { commands: commands_rx, picks: picks_rx };
+            let windows = Windows { overlay, setup: setup_windows, hotkeys };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
-                compass_loop(handle, overlay, setup_windows, compass, reader, channels, settings_path)
+                compass_loop(handle, windows, compass, reader, channels, settings_path)
             })?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             panel_height,
-            reset_session,
+            panel_drag_started,
             setup::setup_view,
             setup::pick_game_window,
             setup::start_marking,
+            setup::adjust_selection,
+            setup::confirm_selection,
             setup::mark_region,
             setup::discard_exp_bar_mark,
             setup::clear_exp_bar_region,
             setup::cancel_marking,
             setup::finish_setup,
+            search::panel_press,
+            search::search_query,
+            search::search_move,
+            search::search_enter,
+            search::search_pick,
+            search::search_escape,
+            search::hunting_reopen,
+            search::hunting_clear,
+            search::search_toggle_taxis,
+            search::search_toggle_teleport_scrolls,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Our windows: the overlay (with mob search in it) and setup (with its region window).
+struct Windows {
+    overlay: WebviewWindow,
+    setup: SetupWindows,
+    /// Not a window, but registered and released as the foreground changes.
+    hotkeys: hotkeys::GlobalHotkeys,
 }
 
 /// What the compass loop hears from hotkeys, the overlay, the setup window and the
@@ -233,13 +285,13 @@ impl ReaderThread {
 
 fn compass_loop(
     app: AppHandle,
-    overlay: WebviewWindow,
-    mut setup_windows: SetupWindows,
+    windows: Windows,
     mut compass: Compass,
     mut reader: ReaderThread,
     channels: Channels,
     settings_path: PathBuf,
 ) {
+    let Windows { overlay, setup: mut setup_windows, mut hotkeys } = windows;
     let mut window = OverlayWindow::new(overlay);
     let mut saved = compass.settings();
     let mut pending = (saved.clone(), Instant::now());
@@ -257,13 +309,28 @@ fn compass_loop(
                 compass.act(action);
             }
             Ok(Command::Hotkey(pressed)) => {
-                if let Some(page) = compass.on_hotkey(&pressed) {
-                    open_in_browser(&app, &page.url);
-                }
+                let request = compass.on_hotkey(&pressed);
+                carry_out(&app, &window.overlay, request);
+            }
+            Ok(Command::Press(control)) => {
+                let request = compass.press(control);
+                carry_out(&app, &window.overlay, request);
+            }
+            Ok(Command::SearchQuery(query)) => {
+                compass.search_query(&query);
+            }
+            Ok(Command::SearchPick(id)) => {
+                compass.search_pick(&id);
             }
             Ok(Command::PanelHeight(height)) => {
-                expanded.1 = height.clamp(*EXPANDED_HEIGHTS.start(), *EXPANDED_HEIGHTS.end());
+                expanded.1 = height.clamp(MIN_EXPANDED_HEIGHT, MAX_EXPANDED_HEIGHT);
                 set_panel_sizes(&mut compass, &window.overlay, expanded);
+            }
+            Ok(Command::DragStarted) => window.drag_started(),
+            Ok(Command::Moved(to)) => {
+                if window.player_moved() {
+                    compass.act(Action::PanelMoved { x: to.x, y: to.y });
+                }
             }
             Ok(Command::Read { region, reading }) => {
                 reader.title_busy = false;
@@ -291,6 +358,11 @@ fn compass_loop(
         if Instant::now() >= next_window_check {
             next_window_check = Instant::now() + WINDOW_TICK;
             game = find_game(&mut compass, &window.overlay, expanded);
+            // The hotkeys are live only while the game or one of our windows is in front.
+            compass.on_foreground(gamewin::foreground(game.map(|g| g.handle)));
+            if let Some(unavailable) = hotkeys.sync(&app, compass.panel_state().hotkeys_live) {
+                compass.hotkeys_unavailable(unavailable);
+            }
         }
         // Fetches in flight (map index, map pages) are checked on, never waited for.
         compass.tick(reader.now_ms());
@@ -359,6 +431,16 @@ fn set_panel_sizes(compass: &mut Compass, overlay: &WebviewWindow, expanded: (f6
     }
 }
 
+/// Do what a hotkey or a panel icon asked of the shell at once. Right after the player's
+/// own key press or click, so Windows lets us take the foreground.
+fn carry_out(app: &AppHandle, overlay: &WebviewWindow, request: Option<Request>) {
+    match request {
+        Some(Request::OpenInBrowser { url }) => open_in_browser(app, &url),
+        Some(Request::RaiseOverlay) => search::take_focus(overlay),
+        None => {}
+    }
+}
+
 /// Open a page (the shown map's on MeowDB) in the player's browser.
 fn open_in_browser(app: &AppHandle, url: &str) {
     if let Err(e) = app.opener().open_url(url, None::<&str>) {
@@ -377,8 +459,12 @@ struct OverlayWindow {
     overlay: WebviewWindow,
     layer: Option<Layer>,
     click_through: bool,
+    focusable: Option<bool>,
+    search_open: bool,
     /// Tells the z-order keeper to hold the overlay just above the game.
     above_game: Arc<AtomicBool>,
+    /// When the player's drag started or last moved the overlay; `None` before any drag.
+    dragged_at: Option<Instant>,
 }
 
 impl OverlayWindow {
@@ -394,33 +480,79 @@ impl OverlayWindow {
         if let Err(e) = spawned {
             eprintln!("z-order keeper not started: {e}");
         }
-        Self { overlay, layer: None, click_through: true, above_game }
+        Self {
+            overlay,
+            layer: None,
+            click_through: true,
+            focusable: None,
+            search_open: false,
+            above_game,
+            dragged_at: None,
+        }
+    }
+
+    /// The overlay page is about to drag the window: the player pressed the mouse on its
+    /// header or collapsed icon.
+    fn drag_started(&mut self) {
+        self.dragged_at = Some(Instant::now());
+    }
+
+    /// The player is dragging the overlay: a drag started, and it has moved within
+    /// `DRAG_SETTLE` of that or of its last move.
+    fn dragging(&self) -> bool {
+        self.dragged_at.is_some_and(|at| at.elapsed() < DRAG_SETTLE)
+    }
+
+    /// The overlay window moved: whether that was the player's drag. Any other move is
+    /// the shell's own or the system's, and the core never hears of it.
+    fn player_moved(&mut self) -> bool {
+        let dragging = self.dragging();
+        if dragging {
+            self.dragged_at = Some(Instant::now());
+        }
+        dragging
     }
 
     fn show(&mut self, state: &PanelState) {
-        let overlay = &self.overlay;
         self.above_game.store(state.layer == Layer::AboveGame, Ordering::Relaxed);
         let layer_changed = self.layer != Some(state.layer);
+        let free = state.layer == Layer::Free;
         if layer_changed {
             self.layer = Some(state.layer);
-            // Detached, it is an ordinary window: it can be activated and found in the
-            // taskbar. Otherwise it never takes focus from the game. Never topmost:
-            // above the game it is kept just above it in the z-order instead.
-            let free = state.layer == Layer::Free;
-            let _ = overlay.set_always_on_top(false);
-            let _ = overlay.set_focusable(free);
-            let _ = overlay.set_skip_taskbar(!free);
+            // Detached, it is an ordinary window: it can be found in the taskbar. Never
+            // topmost: above the game it is kept just above it in the z-order instead.
+            let _ = self.overlay.set_always_on_top(false);
+            let _ = self.overlay.set_skip_taskbar(!free);
         }
-        // Clicks pass through unless the player can drag the panel. Hidden (the game
-        // is gone) the webview draws nothing, so nothing shows and nothing is in the way.
-        if self.click_through == state.draggable {
-            self.click_through = !state.draggable;
-            if let Err(e) = overlay.set_ignore_cursor_events(self.click_through) {
+        // Only the open search view takes the typing. Otherwise the overlay can't be
+        // activated (WS_EX_NOACTIVATE), so a click on it leaves the keyboard with the game.
+        let search_open = state.search.view.is_some();
+        if self.focusable != Some(search_open) {
+            self.focusable = Some(search_open);
+            let _ = self.overlay.set_focusable(search_open);
+        }
+        // Always clickable while it shows. Hidden (the game is gone) the webview draws
+        // nothing, so clicks pass through and nothing is in the way.
+        let click_through = state.layer == Layer::Hidden;
+        if self.click_through != click_through {
+            self.click_through = click_through;
+            if let Err(e) = self.overlay.set_ignore_cursor_events(click_through) {
                 eprintln!("click-through toggle failed: {e}");
             }
         }
+        // The search view opens right after our hotkey or a click on the overlay, so
+        // Windows lets us take the foreground; when it closes, Windows gives focus back
+        // to the window below.
+        match (self.search_open, search_open) {
+            (false, true) => search::take_focus(&self.overlay),
+            (true, false) => search::give_focus_back(&self.overlay),
+            _ => {}
+        }
+        self.search_open = search_open;
         if let Some(placement) = state.placement {
-            place(overlay, placement, state.draggable && !layer_changed);
+            // While the player drags it the position is theirs; once the drag settles it
+            // goes where the core says (clear of the Title Region, inside the game).
+            place(&self.overlay, placement, self.dragging() && !layer_changed);
         }
     }
 }
@@ -448,16 +580,15 @@ fn keep_above_game(overlay: WebviewWindow, above_game: Arc<AtomicBool>) {
     }
 }
 
-/// Move and size the overlay to the core's placement. While the player can drag it,
-/// the position is theirs; it is only re-anchored when the panel changes size.
-fn place(overlay: &WebviewWindow, placement: ScreenRect, player_moves_it: bool) {
+/// Size the overlay to the core's placement, and move it there unless the player is
+/// dragging it.
+fn place(overlay: &WebviewWindow, placement: ScreenRect, player_drags_it: bool) {
     let size = PhysicalSize::new(placement.width, placement.height);
-    let resized = overlay.inner_size().ok() != Some(size);
-    if resized {
+    if overlay.inner_size().ok() != Some(size) {
         let _ = overlay.set_size(size);
     }
     let to = PhysicalPosition::new(placement.x, placement.y);
-    if (!player_moves_it || resized) && overlay.outer_position().ok() != Some(to) {
+    if !player_drags_it && overlay.outer_position().ok() != Some(to) {
         let _ = overlay.set_position(to);
     }
 }

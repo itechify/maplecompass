@@ -2,7 +2,7 @@
 //! after it, their test reads, and when to ask for setup again.
 
 use crate::panel::{ScreenRect, Size};
-use crate::{CurrentMap, ExpBar, MEOWDB_CREDIT, Rect};
+use crate::{CurrentMap, ExpBar, MEOWDB_CREDIT, Rect, default_title_region};
 use serde::{Deserialize, Serialize};
 
 /// Why the player needs to (re)do setup.
@@ -57,10 +57,35 @@ pub struct SetupState {
     /// The setup window shows: when setup becomes needed, and when the player asks
     /// for it, until it is finished or closed.
     pub window_open: bool,
+    /// The keyboard-adjustable region in MapleCompass's own marking window, before it
+    /// is committed for a test read.
+    pub selection: Option<Rect>,
+    /// What `selection` is being marked around.
+    pub selection_target: Option<MarkTarget>,
     /// The test read of the EXP Bar Region just marked; `None` when none is being marked.
     pub exp_bar_test_read: Option<ExpBarTestRead>,
     /// An EXP Bar Region is kept and fits the game window: EXP tracking is on.
     pub exp_bar_kept: bool,
+}
+
+/// What the player marks in the marking window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MarkTarget {
+    /// The minimap title: the Title Region.
+    Title,
+    /// The figures on the EXP bar: the EXP Bar Region.
+    ExpBar,
+}
+
+/// An arrow key in MapleCompass's own marking window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SelectionDirection {
+    Left,
+    Right,
+    Up,
+    Down,
 }
 
 /// A marked Title Region and the size of the game client area it was marked on.
@@ -98,6 +123,9 @@ const FALLBACK_LONGEST_NAME: usize = 43;
 /// covers wide letters and a mark cut tighter than the text.
 const CHAR_WIDTH_PER_MARKED_HEIGHT: f32 = 0.3;
 
+/// The smallest mark, either way.
+const MIN_MARK_SIZE: u32 = 8;
+
 #[derive(Debug, Default)]
 pub(crate) struct Setup {
     pub game: Option<ScreenRect>,
@@ -109,6 +137,9 @@ pub(crate) struct Setup {
     marking: Option<(TitleRegion, TestRead)>,
     /// The EXP Bar Region being test-read, and how that is going.
     marking_exp_bar: Option<(ExpBarRegion, ExpBarTestRead)>,
+    /// The keyboard-adjustable selection in the marking window, what it is around, and
+    /// the client area's size it was made on.
+    selection: Option<(MarkTarget, Rect, Size)>,
     /// The player asked to redo setup and hasn't finished or cancelled it.
     requested: bool,
     /// The setup window is showing.
@@ -120,16 +151,76 @@ pub(crate) struct Setup {
 impl Setup {
     /// The player marked the Title Region: test-read it.
     pub fn mark(&mut self, marked: Rect) {
-        if let Some(client) = self.client() {
+        if let Some((client, marked)) = self.fitted(marked) {
             self.marking = Some((TitleRegion { marked, client }, TestRead::Reading));
+            self.selection = None;
         }
     }
 
     /// The player marked the EXP Bar Region: test-read it.
     pub fn mark_exp_bar(&mut self, marked: Rect) {
-        if let Some(client) = self.client() {
+        if let Some((client, marked)) = self.fitted(marked) {
             self.marking_exp_bar = Some((ExpBarRegion { marked, client }, ExpBarTestRead::Reading));
+            self.selection = None;
         }
+    }
+
+    /// `marked` kept inside the game's client area, and that area's size.
+    fn fitted(&self, marked: Rect) -> Option<(Size, Rect)> {
+        let game = self.game?;
+        let marked = fit_mark(marked, game)?;
+        Some((Size { width: game.width, height: game.height }, marked))
+    }
+
+    /// Open the marking window on `target`, with a keyboard-adjustable selection where
+    /// it was last marked (being marked, or kept, if that fits), or else where it
+    /// usually is.
+    pub fn begin_selection(&mut self, target: MarkTarget) {
+        let Some(game) = self.game.filter(|_| self.window_open) else { return };
+        let client = Size { width: game.width, height: game.height };
+        let fits = |marked: Rect, on: Size| (on == client).then_some(marked);
+        let marked = match target {
+            MarkTarget::Title => self.marking.as_ref().map(|(region, _)| region).or(self.saved.as_ref())
+                .and_then(|region| fits(region.marked, region.client))
+                .unwrap_or_else(|| default_title_region(game.width, game.height)),
+            MarkTarget::ExpBar => self.marking_exp_bar.as_ref().map(|(region, _)| region)
+                .or(self.saved_exp_bar.as_ref())
+                .and_then(|region| fits(region.marked, region.client))
+                .unwrap_or_else(|| default_exp_bar_mark(game.width, game.height)),
+        };
+        self.selection = fit_mark(marked, game).map(|marked| (target, marked, client));
+    }
+
+    pub fn adjust_selection(&mut self, direction: SelectionDirection, resize: bool, coarse: bool) {
+        let Some(game) = self.game else { return };
+        let Some((_, r, _)) = &mut self.selection else { return };
+        let step = if coarse { 10 } else { 1 };
+        let (value, limit, increasing) = match (direction, resize) {
+            (SelectionDirection::Left, false) => (&mut r.x, game.width - r.width, false),
+            (SelectionDirection::Right, false) => (&mut r.x, game.width - r.width, true),
+            (SelectionDirection::Up, false) => (&mut r.y, game.height - r.height, false),
+            (SelectionDirection::Down, false) => (&mut r.y, game.height - r.height, true),
+            (SelectionDirection::Left, true) => (&mut r.width, game.width - r.x, false),
+            (SelectionDirection::Right, true) => (&mut r.width, game.width - r.x, true),
+            (SelectionDirection::Up, true) => (&mut r.height, game.height - r.y, false),
+            (SelectionDirection::Down, true) => (&mut r.height, game.height - r.y, true),
+        };
+        *value = if increasing { value.saturating_add(step).min(limit) }
+            else { value.saturating_sub(step).max(if resize { MIN_MARK_SIZE } else { 0 }) };
+    }
+
+    /// Test-read the selection, as a mark around what it was opened on. Returns that.
+    pub fn confirm_selection(&mut self) -> Option<MarkTarget> {
+        let (target, marked, _) = self.selection?;
+        match target {
+            MarkTarget::Title => self.mark(marked),
+            MarkTarget::ExpBar => self.mark_exp_bar(marked),
+        }
+        Some(target)
+    }
+
+    pub fn cancel_selection(&mut self) {
+        self.selection = None;
     }
 
     /// Drop the EXP Bar Region being marked; the one kept (if any) stays.
@@ -141,10 +232,6 @@ impl Setup {
     pub fn clear_exp_bar(&mut self) {
         self.saved_exp_bar = None;
         self.marking_exp_bar = None;
-    }
-
-    fn client(&self) -> Option<Size> {
-        self.game.map(|g| Size { width: g.width, height: g.height })
     }
 
     /// Finish setup, keeping:
@@ -172,6 +259,7 @@ impl Setup {
         self.saved_exp_bar = exp_bar;
         self.marking = None;
         self.marking_exp_bar = None;
+        self.selection = None;
         self.requested = false;
     }
 
@@ -185,6 +273,7 @@ impl Setup {
     pub fn cancel(&mut self) {
         self.marking = None;
         self.marking_exp_bar = None;
+        self.selection = None;
         self.requested = false;
         self.window_open = false;
     }
@@ -192,6 +281,9 @@ impl Setup {
     /// Open the setup window when setup becomes needed (or needed for a new reason),
     /// and close it once it isn't.
     pub fn follow_needed(&mut self) {
+        if self.selection.is_some_and(|(_, _, client)| self.game.is_none() || !self.fits(client)) {
+            self.selection = None;
+        }
         let needed = self.needed();
         if needed.is_none() {
             self.window_open = false;
@@ -224,6 +316,8 @@ impl Setup {
             credit: matches!(test_read, Some(TestRead::Recognised { .. })).then_some(MEOWDB_CREDIT),
             test_read,
             window_open: self.window_open,
+            selection: self.selection.map(|(_, marked, _)| marked),
+            selection_target: self.selection.map(|(target, _, _)| target),
             exp_bar_test_read: self.marking_exp_bar.as_ref().map(|(_, read)| read.clone()),
             exp_bar_kept: self.saved_exp_bar.is_some_and(|r| self.fits(r.client)),
         }
@@ -278,6 +372,31 @@ impl Setup {
         let fit = region.marked.height * EXP_WIDTH_PER_MARKED_HEIGHT;
         Some(on_screen(extend(region.marked, game, fit), game))
     }
+}
+
+/// Where the marking window first puts the selection for the EXP Bar Region when none
+/// has been marked: around the EXP figures on the samples (client (1005, h-56) 240x32 of
+/// a 1920-wide client: the status bar is anchored to the bottom, its middle to the
+/// centre). A starting point the player moves onto their own EXP bar.
+fn default_exp_bar_mark(client_width: u32, client_height: u32) -> Rect {
+    Rect {
+        x: (u64::from(client_width) * 1005 / 1920) as u32,
+        y: client_height.saturating_sub(56),
+        width: 240,
+        height: 32,
+    }
+}
+
+/// Both pointer and keyboard marks stay inside the game client area.
+fn fit_mark(marked: Rect, game: ScreenRect) -> Option<Rect> {
+    if game.width < MIN_MARK_SIZE || game.height < MIN_MARK_SIZE {
+        return None;
+    }
+    let width = marked.width.clamp(MIN_MARK_SIZE, game.width);
+    let height = marked.height.clamp(MIN_MARK_SIZE, game.height);
+    Some(Rect {
+        x: marked.x.min(game.width - width), y: marked.y.min(game.height - height), width, height,
+    })
 }
 
 /// The region to capture for a mark: the marked top-left corner and height, widened to

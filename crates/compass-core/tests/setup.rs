@@ -11,7 +11,8 @@ mod common;
 
 use common::FakeSource;
 use compass_core::{
-    Action, Compass, CurrentMap, GameWindow, Rect, ScreenRect, SetupReason, TestRead,
+    Action, Compass, CurrentMap, GameWindow, MarkTarget, Rect, ScreenRect, SelectionDirection, SetupReason,
+    TestRead,
 };
 
 const KERNING: &str = "victoria-road__kerning-city--window";
@@ -292,7 +293,7 @@ fn an_empty_settings_file_has_a_re_setup_hotkey_and_needs_setup() {
     let state = compass.on_game_window(window(game(KERNING)));
 
     assert_eq!(state.setup.needed, Some(SetupReason::FirstRun));
-    assert_eq!(state.hotkeys.setup, "super+alt+s");
+    assert_eq!(state.hotkeys.setup, "ctrl+shift+s");
 }
 
 // The setup window: the core says when it shows, and what closing it does.
@@ -380,4 +381,114 @@ fn the_region_never_extends_past_the_game_window() {
     let state = compass.act(Action::MarkTitleRegion(MARK));
 
     assert_eq!(state.title_region, Some(ScreenRect { x: 882, y: 150, width: 330, height: 48 }));
+}
+
+#[test]
+fn keyboard_marking_starts_with_a_visible_box_without_committing_a_read() {
+    let mut compass = Compass::new(FakeSource::meowdb());
+    compass.on_game_window(window(game(KERNING)));
+
+    let state = compass.act(Action::BeginSelection(MarkTarget::Title));
+
+    assert_eq!(state.setup.selection, Some(Rect { x: 0, y: 16, width: 560, height: 96 }));
+    assert_eq!(state.setup.test_read, None);
+    assert_eq!(state.title_region, None);
+}
+
+#[test]
+fn keyboard_marking_can_move_resize_and_test_the_previous_mark() {
+    let mut compass = set_up();
+    compass.act(Action::RequestSetup);
+    assert_eq!(compass.act(Action::BeginSelection(MarkTarget::Title)).setup.selection, Some(MARK));
+    for (direction, resize, coarse) in [
+        (SelectionDirection::Right, false, true),
+        (SelectionDirection::Down, false, false),
+        (SelectionDirection::Left, true, true),
+        (SelectionDirection::Down, true, true),
+    ] {
+        compass.act(Action::AdjustSelection { direction, resize, coarse });
+    }
+    assert_eq!(compass.panel_state().setup.selection, Some(Rect { x: 80, y: 41, width: 120, height: 58 }));
+
+    let state = compass.act(Action::ConfirmSelection);
+
+    assert_eq!(state.setup.selection, None);
+    assert_eq!(state.setup.test_read, Some(TestRead::Reading));
+    let region = state.title_region.unwrap();
+    assert_eq!((region.x, region.y, region.height), (892, 151, 58));
+}
+
+#[test]
+fn keyboard_selection_stays_inside_the_client_and_never_shrinks_below_eight_pixels() {
+    let mut compass = Compass::new(FakeSource::meowdb());
+    compass.on_game_window(window(ScreenRect { x: 100, y: 50, width: 40, height: 30 }));
+    compass.act(Action::BeginSelection(MarkTarget::Title));
+    for direction in [SelectionDirection::Left, SelectionDirection::Up] {
+        for _ in 0..10 {
+            compass.act(Action::AdjustSelection { direction, resize: true, coarse: true });
+        }
+    }
+    for direction in [SelectionDirection::Right, SelectionDirection::Down] {
+        for _ in 0..10 {
+            let state = compass.act(Action::AdjustSelection { direction, resize: false, coarse: true });
+            let r = state.setup.selection.unwrap();
+            assert!(r.x + r.width <= 40 && r.y + r.height <= 30);
+        }
+    }
+    assert_eq!(compass.panel_state().setup.selection, Some(Rect { x: 32, y: 22, width: 8, height: 8 }));
+    for direction in [SelectionDirection::Right, SelectionDirection::Down] {
+        compass.act(Action::AdjustSelection { direction, resize: true, coarse: true });
+    }
+    assert_eq!(compass.panel_state().setup.selection, Some(Rect { x: 32, y: 22, width: 8, height: 8 }));
+    for direction in [SelectionDirection::Left, SelectionDirection::Up] {
+        for _ in 0..10 {
+            compass.act(Action::AdjustSelection { direction, resize: false, coarse: true });
+        }
+    }
+    assert_eq!(compass.panel_state().setup.selection, Some(Rect { x: 0, y: 0, width: 8, height: 8 }));
+}
+
+#[test]
+fn cancelling_keyboard_marking_keeps_the_existing_test_read() {
+    let mut compass = Compass::new(FakeSource::meowdb());
+    mark_and_test_read(&mut compass, KERNING);
+    let read = compass.panel_state().setup.test_read.clone();
+    let region = compass.panel_state().title_region;
+    compass.act(Action::BeginSelection(MarkTarget::Title));
+    compass.act(Action::AdjustSelection { direction: SelectionDirection::Right, resize: false, coarse: true });
+
+    let state = compass.act(Action::CancelSelection);
+
+    assert_eq!(state.setup.selection, None);
+    assert_eq!(state.setup.test_read, read);
+    assert_eq!(state.title_region, region);
+    assert!(state.setup.window_open);
+}
+
+#[test]
+fn a_selection_is_discarded_if_the_game_disappears_or_changes_size() {
+    let mut compass = set_up();
+    compass.act(Action::RequestSetup);
+    compass.act(Action::BeginSelection(MarkTarget::Title));
+    assert_eq!(compass.on_game_window(None).setup.selection, None);
+    assert_eq!(compass.act(Action::ConfirmSelection).setup.test_read, None);
+    compass.on_game_window(window(game(KERNING)));
+    compass.act(Action::BeginSelection(MarkTarget::Title));
+
+    let state = compass.on_game_window(window(ScreenRect { width: 1280, height: 720, ..game(KERNING) }));
+
+    assert_eq!(state.setup.selection, None);
+    assert_eq!(state.setup.needed, Some(SetupReason::ResolutionChanged));
+    assert_eq!(state.title_region, None);
+}
+
+#[test]
+fn a_pointer_mark_is_bounded_before_it_is_test_read() {
+    let mut compass = Compass::new(FakeSource::meowdb());
+    compass.on_game_window(window(ScreenRect { x: 100, y: 50, width: 40, height: 30 }));
+
+    let state = compass.act(Action::MarkTitleRegion(Rect { x: 999, y: 999, width: 100, height: 4 }));
+
+    assert_eq!(state.setup.test_read, Some(TestRead::Reading));
+    assert_eq!(state.title_region, Some(ScreenRect { x: 100, y: 72, width: 40, height: 8 }));
 }

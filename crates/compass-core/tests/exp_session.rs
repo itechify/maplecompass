@@ -1,4 +1,4 @@
-//! The Session (ADR 0004): timestamped EXP bar readings become Time to Level, the
+//! The Session (ADR 0005): timestamped EXP bar readings become Time to Level, the
 //! Rolling Rate and the Session average, with idle pauses, level-ups, deaths and
 //! character switches told apart. Time comes only from the readings' and ticks'
 //! timestamps.
