@@ -23,7 +23,6 @@ fn the_hotkeys_are_ctrl_shift_letters() {
         compass.panel_state().hotkeys,
         Hotkeys {
             toggle_panel: ctrl_shift("c"),
-            edit_mode: ctrl_shift("e"),
             cycle_placement: ctrl_shift("p"),
             open_meowdb_page: ctrl_shift("m"),
             setup: ctrl_shift("s"),
@@ -130,15 +129,50 @@ fn ctrl_shift_c_collapses_the_panel_and_expands_it_again() {
 }
 
 #[test]
-fn ctrl_shift_e_enters_and_leaves_edit_mode_and_ctrl_shift_p_cycles_the_placement() {
+fn ctrl_shift_p_cycles_the_placement() {
     let mut compass = Compass::new(FakeSource::meowdb());
 
-    compass.on_hotkey("ctrl+shift+e");
-    assert!(compass.panel_state().edit_mode);
     compass.on_hotkey("ctrl+shift+p");
+
     assert_eq!(compass.panel_state().placement_mode, PlacementMode::DockedRight);
-    compass.on_hotkey("ctrl+shift+e");
-    assert!(!compass.panel_state().edit_mode);
+}
+
+/// Settings saved before edit mode was retired, with its hotkey.
+const WITH_EDIT_MODE: &str = r#"{
+  "version": 4,
+  "placementMode": "detached",
+  "hotkeys": {
+    "togglePanel": "ctrl+shift+x",
+    "editMode": "ctrl+shift+e",
+    "cyclePlacement": "ctrl+shift+p",
+    "openMeowdbPage": "ctrl+shift+m",
+    "setup": "ctrl+shift+s",
+    "chooseCandidate": "ctrl+shift+n",
+    "search": "ctrl+shift+f"
+  }
+}"#;
+
+#[test]
+fn settings_with_the_retired_edit_mode_hotkey_still_load_and_it_is_neither_registered_nor_saved() {
+    let mut compass = Compass::new(FakeSource::meowdb());
+
+    let state = compass.restore(serde_json::from_str(WITH_EDIT_MODE).unwrap()).clone();
+
+    assert_eq!(state.placement_mode, PlacementMode::Detached);
+    assert_eq!(state.hotkeys.toggle_panel, "ctrl+shift+x", "the rest is kept");
+    assert!(!state.hotkeys.all().contains(&"ctrl+shift+e"));
+    let saved = serde_json::to_string(&compass.settings()).unwrap();
+    assert!(!saved.contains("editMode"), "{saved}");
+}
+
+#[test]
+fn ctrl_shift_e_does_nothing_any_more() {
+    let mut compass = Compass::new(FakeSource::meowdb());
+    let before = compass.panel_state().clone();
+
+    assert_eq!(compass.on_hotkey("ctrl+shift+e"), None);
+
+    assert_eq!(*compass.panel_state(), before);
 }
 
 #[test]
@@ -183,9 +217,9 @@ fn hotkeys_the_player_rebound_are_the_ones_that_act() {
 fn a_hotkey_another_app_has_taken_is_shown_as_unavailable() {
     let mut compass = Compass::new(FakeSource::meowdb());
 
-    let state = compass.hotkeys_unavailable(vec!["ctrl+shift+e".into()]);
+    let state = compass.hotkeys_unavailable(vec!["ctrl+shift+n".into()]);
 
-    assert_eq!(state.unavailable_hotkeys, ["ctrl+shift+e"]);
+    assert_eq!(state.unavailable_hotkeys, ["ctrl+shift+n"]);
 }
 
 #[test]
@@ -208,7 +242,7 @@ fn every_hotkey_the_panel_lists_is_one_to_register_the_search_one_included() {
 
     assert_eq!(
         to_register,
-        ["ctrl+shift+c", "ctrl+shift+e", "ctrl+shift+p", "ctrl+shift+m", "ctrl+shift+s", "ctrl+shift+n", "ctrl+shift+f"]
+        ["ctrl+shift+c", "ctrl+shift+p", "ctrl+shift+m", "ctrl+shift+s", "ctrl+shift+n", "ctrl+shift+f"]
     );
 }
 
@@ -231,7 +265,7 @@ fn the_hotkeys_are_live_only_while_the_game_or_maplecompass_is_in_front() {
 
     assert!(compass.on_foreground(Foreground::Game).hotkeys_live);
     assert!(!compass.on_foreground(Foreground::OtherApp).hotkeys_live, "other apps keep their Ctrl+Shift keys");
-    assert!(compass.on_foreground(Foreground::MapleCompass).hotkeys_live, "e.g. the overlay in search mode, or setup");
+    assert!(compass.on_foreground(Foreground::MapleCompass).hotkeys_live, "e.g. the overlay with the search view open, or setup");
 }
 
 #[test]
@@ -245,9 +279,9 @@ fn before_the_foreground_is_known_the_hotkeys_are_not_live() {
 fn a_hotkey_reported_unavailable_stays_listed_while_the_hotkeys_are_not_live() {
     let mut compass = Compass::new(FakeSource::meowdb());
     compass.on_foreground(Foreground::Game);
-    compass.hotkeys_unavailable(vec!["ctrl+shift+e".into()]);
+    compass.hotkeys_unavailable(vec!["ctrl+shift+n".into()]);
 
     let state = compass.on_foreground(Foreground::OtherApp);
 
-    assert_eq!(state.unavailable_hotkeys, ["ctrl+shift+e"]);
+    assert_eq!(state.unavailable_hotkeys, ["ctrl+shift+n"]);
 }

@@ -33,7 +33,7 @@ pub struct Settings {
     /// The title of the game window the player picked by hand; `None` to look for the
     /// "MapleStory" window.
     pub game_window_title: Option<String>,
-    /// What Distance counts besides portals and ships (search mode's
+    /// What Distance counts besides portals and ships (the map list's
     /// checkboxes). Saved as top-level `taxis` and `teleportScrolls`.
     #[serde(flatten)]
     pub travel: Travel,
@@ -60,14 +60,13 @@ impl Default for Settings {
 /// They fire while the game has focus and the game never sees them. The defaults use
 /// Ctrl+Shift+letter: Windows and other apps already hold many Win+Alt letters
 /// (Win+Alt+F among them), so a player who binds one of these in the game rebinds it
-/// here instead.
+/// here instead. Files saved before edit mode was retired also have `editMode`, which
+/// is ignored.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Hotkeys {
     /// Collapse the panel to its icon, or expand it again.
     pub toggle_panel: String,
-    /// Make the overlay draggable, or return it to click-through.
-    pub edit_mode: String,
     /// Switch placement: inside, docked right, docked left, detached, and round again.
     pub cycle_placement: String,
     /// Open the shown map's MeowDB page in the browser.
@@ -77,16 +76,15 @@ pub struct Hotkeys {
     /// Show the next of the maps sharing the shown map's title, when the core couldn't
     /// tell which one the player is on.
     pub choose_candidate: String,
-    /// Put the overlay in mob search mode.
+    /// Open the mob search view.
     pub search: String,
 }
 
 impl Hotkeys {
     /// Every hotkey, for the shell to register: one list, so none is forgotten.
-    pub fn all(&self) -> [&str; 7] {
+    pub fn all(&self) -> [&str; 6] {
         [
             &self.toggle_panel,
-            &self.edit_mode,
             &self.cycle_placement,
             &self.open_meowdb_page,
             &self.setup,
@@ -100,7 +98,6 @@ impl Default for Hotkeys {
     fn default() -> Self {
         Self {
             toggle_panel: "ctrl+shift+c".into(),
-            edit_mode: "ctrl+shift+e".into(),
             cycle_placement: "ctrl+shift+p".into(),
             open_meowdb_page: "ctrl+shift+m".into(),
             setup: "ctrl+shift+s".into(),
