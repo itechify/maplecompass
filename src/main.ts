@@ -155,7 +155,7 @@ let draggable = false;
 /** The search view's open step, as last rendered. */
 let step: SearchState["view"] = null;
 
-/** "Ctrl+Shift+E is taken by another app, so it does nothing here" */
+/** "Ctrl+Shift+N is taken by another app, so it does nothing here" */
 function takenHotkeys(hotkeys: string[]): string {
   if (hotkeys.length === 0) return "";
   const one = hotkeys.length === 1;
