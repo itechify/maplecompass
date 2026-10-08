@@ -7,3 +7,7 @@
 node_modules/
 dist/
 *.local
+
+# Impeccable review captures and critique runs (the PR evidence in review/pr is kept)
+.impeccable/review/*.png
+.impeccable/critique/
