@@ -200,21 +200,31 @@ export function resultGroup(result: SearchResult): HTMLTableSectionElement {
 
 /** A route's maps in order, each with how it's reached: "you're here", "portal", "taxi", "scroll"… */
 export function routeStops(result: SearchResult): HTMLLIElement[] {
-  return result.route.map((stop) => {
+  const span = (className: string, text: string) => {
+    const el = document.createElement("span");
+    el.className = className;
+    el.textContent = text;
+    return el;
+  };
+  const last = result.route.length - 1;
+  return result.route.map((stop, i) => {
+    // Drawn as the minimap draws it: your yellow dot where you start, a portal ring for
+    // each portal, a plain ring for a ride, the red mob dot where the mob is.
+    const kind = i === 0 ? "start" : i === last ? "end" : (stop.by ?? "portal");
     const item = document.createElement("li");
-    const step = document.createElement("span");
-    step.className = `step ${stop.by ?? "start"}`;
-    step.textContent = stop.by ? STEP_NAMES[stop.by] : "you're here";
-    if (stop.by) step.title = STEP_TITLES[stop.by];
-    const map = document.createElement("span");
-    map.className = "route-map";
-    map.textContent = stop.mapName;
-    item.append(step, map);
-    if (stop.streetName) {
-      const street = document.createElement("span");
-      street.className = "route-street";
-      street.textContent = stop.streetName;
-      item.append(street);
+    item.className = kind;
+    const glyph = span("glyph", "");
+    glyph.setAttribute("aria-hidden", "true");
+    // Screen readers hear what the glyph shows.
+    const how = span("sr-only", stop.by ? `then by ${STEP_TITLES[stop.by].toLowerCase()}: ` : "you're here: ");
+    const map = span("route-map", stop.mapName);
+    item.append(glyph, how, map);
+    if (stop.by) item.title = `By ${STEP_TITLES[stop.by].toLowerCase()}`;
+    // Anything but a portal is worth noticing on the way.
+    if (stop.by && stop.by !== "portal") map.append(span("tag", STEP_TITLES[stop.by]));
+    // The street only where it changes: most routes stay on one.
+    if (stop.streetName && stop.streetName !== result.route[i - 1]?.streetName) {
+      item.append(span("route-street", stop.streetName));
     }
     return item;
   });
