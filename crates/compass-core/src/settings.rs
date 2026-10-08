@@ -2,13 +2,14 @@
 //! JSON in the app's config directory and hands it back to the core at startup.
 
 use crate::panel::{InsideOffset, PlacementMode, ScreenPoint};
-use crate::setup::TitleRegion;
+use crate::setup::{ExpBarRegion, TitleRegion};
 use crate::world::Travel;
 use serde::{Deserialize, Serialize};
 
 /// The settings version this core writes. Version 1 had other Ctrl+Shift letters, and
 /// versions 2 and 3 had Win+Alt hotkeys (3 was written by the EXP tracking branch);
-/// [`crate::Compass::restore`] replaces all of them with the defaults.
+/// [`crate::Compass::restore`] replaces all of them with the defaults. Files without an
+/// EXP Bar Region (all before version 3) start with EXP tracking off.
 pub(crate) const VERSION: u32 = 4;
 
 /// The player's settings. Missing fields (an older or empty file) take their defaults.
@@ -30,6 +31,8 @@ pub struct Settings {
     pub hotkeys: Hotkeys,
     /// The Title Region marked at setup; `None` until setup is first finished.
     pub title_region: Option<TitleRegion>,
+    /// The EXP Bar Region marked at setup; `None` while EXP tracking is off.
+    pub exp_bar_region: Option<ExpBarRegion>,
     /// The title of the game window the player picked by hand; `None` to look for the
     /// "MapleStory" window.
     pub game_window_title: Option<String>,
@@ -49,6 +52,7 @@ impl Default for Settings {
             detached_at: None,
             hotkeys: Hotkeys::default(),
             title_region: None,
+            exp_bar_region: None,
             game_window_title: None,
             travel: Travel::default(),
         }
@@ -78,17 +82,20 @@ pub struct Hotkeys {
     pub choose_candidate: String,
     /// Open the mob search view.
     pub search: String,
+    /// Clear the Session back to waiting for the next EXP change.
+    pub reset_session: String,
 }
 
 impl Hotkeys {
     /// Every hotkey, for the shell to register: one list, so none is forgotten.
-    pub fn all(&self) -> [&str; 6] {
+    pub fn all(&self) -> [&str; 7] {
         [
             &self.toggle_panel,
             &self.cycle_placement,
             &self.open_meowdb_page,
             &self.setup,
             &self.choose_candidate,
+            &self.reset_session,
             &self.search,
         ]
     }
@@ -103,6 +110,7 @@ impl Default for Hotkeys {
             setup: "ctrl+shift+s".into(),
             choose_candidate: "ctrl+shift+n".into(),
             search: "ctrl+shift+f".into(),
+            reset_session: "ctrl+shift+r".into(),
         }
     }
 }

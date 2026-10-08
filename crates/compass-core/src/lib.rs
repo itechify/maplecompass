@@ -1,10 +1,12 @@
 //! MapleCompass core: the single test seam.
 //!
-//! Inputs are plain data (captured Title Region frames or their readings, the game
-//! window, the clock, the player's actions and hotkeys); the output is a [`PanelState`]
-//! holding everything the overlay renders. No OS or UI dependencies live here.
+//! Inputs are plain data (captured Title Region and EXP Bar Region frames or their
+//! readings, the game window, the clock, the player's actions and hotkeys); the output
+//! is a [`PanelState`] holding everything the overlay renders. No OS or UI dependencies
+//! live here.
 
 mod crawl;
+mod exp_bar;
 mod map_data;
 mod map_index;
 mod matcher;
@@ -15,6 +17,7 @@ mod portals;
 mod prep;
 mod recogniser;
 mod search;
+mod session;
 mod settings;
 mod setup;
 mod shown_map;
@@ -23,6 +26,7 @@ mod travel_links;
 mod world;
 
 pub use crawl::CrawlProgress;
+pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use map_data::{
     HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty, Portal, PortalKind,
 };
@@ -33,8 +37,12 @@ pub use panel::{
     ScreenRect, Size,
 };
 pub use search::{DensityTier, HuntingTarget, MobChoice, RouteStop, SearchResult, SearchState, SearchView};
+pub use session::{Deaths, ExpRate, ExpTracking, TrackingState};
 pub use settings::{Hotkeys, Settings};
-pub use setup::{SelectionDirection, SetupReason, SetupState, TestRead, TitleRegion};
+pub use setup::{
+    ExpBarRegion, ExpBarTestRead, MarkTarget, SelectionDirection, SetupReason, SetupState, TestRead,
+    TitleRegion,
+};
 pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
 pub use world::{Distance, Step, Travel};
 
@@ -43,6 +51,7 @@ use search::{MobSearch, Searched};
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
 use panel::Panel;
+use session::Session;
 use setup::Setup;
 pub use recogniser::{TitleLines, TitleReader, TitleReading};
 use tracker::Tracker;
@@ -50,7 +59,7 @@ use world::Here;
 use serde::{Deserialize, Serialize};
 use std::task::Poll;
 
-/// A captured Title Region image: tightly packed RGBA, top-down rows.
+/// A captured Title Region or EXP Bar Region image: tightly packed RGBA, top-down rows.
 #[derive(Debug, Clone)]
 pub struct Frame {
     pub width: u32,
@@ -147,8 +156,8 @@ pub struct PanelState {
     /// Where the player wants the panel: inside, docked or detached.
     pub placement_mode: PlacementMode,
     /// Where the overlay goes on screen; `None` while there is no game window, unless
-    /// the panel is detached. Inside the game it never covers `title_region`: the
-    /// overlay shows in screen captures, ours included.
+    /// the panel is detached. Inside the game it never covers `title_region` or
+    /// `exp_bar_region`: the overlay shows in screen captures, ours included.
     pub placement: Option<ScreenRect>,
     /// Where the overlay sits in the z-order, or hidden.
     pub layer: Layer,
@@ -160,6 +169,14 @@ pub struct PanelState {
     /// Where on screen to capture the Title Region (physical px); `None` while there
     /// is no game window or the region isn't known to fit it.
     pub title_region: Option<ScreenRect>,
+    /// Where on screen to capture the EXP Bar Region (physical px); `None` while EXP
+    /// tracking is off, there is no game window, or the region isn't known to fit it.
+    pub exp_bar_region: Option<ScreenRect>,
+    /// What the EXP bar showed when its figures last read whole; `None` while there is
+    /// no `exp_bar_region` or nothing has read yet.
+    pub exp_bar: Option<ExpBar>,
+    /// EXP tracking: the Session's state, Time to Level, rates and deaths.
+    pub exp_tracking: ExpTracking,
     /// The title of the game window to look for: "MapleStory", or one the player
     /// picked by hand.
     pub game_window_title: String,
@@ -204,6 +221,8 @@ pub enum PanelControl {
     ChooseCandidate,
     /// Open the search view.
     Search,
+    /// Start the Session afresh, back to waiting for an EXP change.
+    ResetSession,
 }
 
 /// The game window's title, unless the player picked another by hand.
@@ -218,6 +237,12 @@ pub struct Compass {
     /// Reads frames fed to [`Compass::on_frame`]; loaded on the first one, so a shell
     /// that reads on its own thread never loads it twice.
     reader: Option<TitleReader>,
+    /// Reads frames fed to [`Compass::on_exp_bar_frame`]; loaded on the first one.
+    exp_bar_reader: Option<ExpBarReader>,
+    /// What the EXP bar showed when its figures last read whole.
+    exp_bar: Option<ExpBar>,
+    /// The Session measured from the EXP bar's readings.
+    session: Session,
     source: Box<dyn MapDataSource + Send>,
     matcher: Option<Matcher>,
     /// When asking for the map index last failed (frame time).
@@ -241,6 +266,9 @@ impl Compass {
     pub fn new(source: impl MapDataSource + Send + 'static) -> Self {
         let mut compass = Self {
             reader: None,
+            exp_bar_reader: None,
+            exp_bar: None,
+            session: Session::default(),
             source: Box::new(source),
             matcher: None,
             index_failed_at: None,
@@ -310,6 +338,28 @@ impl Compass {
         self.sync_panel()
     }
 
+    /// Read a captured EXP Bar Region frame and update the panel state: the same as
+    /// [`Compass::on_exp_bar_reading`] with what an [`ExpBarReader`] reads in it, here.
+    pub fn on_exp_bar_frame(&mut self, frame: Frame) -> &PanelState {
+        let reading = self.exp_bar_reader.get_or_insert_with(ExpBarReader::bundled).read(&frame);
+        self.on_exp_bar_reading(reading)
+    }
+
+    /// Take what an EXP Bar Region frame read as (read by an [`ExpBarReader`], possibly
+    /// on another thread) and update the panel state. A frame whose figures don't read
+    /// whole keeps the last reading; time still passes for the Session.
+    pub fn on_exp_bar_reading(&mut self, reading: ExpBarReading) -> &PanelState {
+        self.setup.on_exp_bar_read(reading.bar);
+        match reading.bar {
+            Some(bar) if self.tracking_on() => self.session.on_bar(bar, reading.at_ms),
+            _ => self.session.tick(reading.at_ms),
+        }
+        if reading.bar.is_some() {
+            self.exp_bar = reading.bar;
+        }
+        self.sync_panel()
+    }
+
     fn sync_shown_map(&mut self) {
         let map = self.shown_map.map().cloned();
         let data = self.shown_map.data();
@@ -365,18 +415,30 @@ impl Compass {
                 self.sync_shown_map();
             }
             Action::MarkTitleRegion(marked) => self.setup.mark(marked),
-            Action::BeginTitleSelection => self.setup.begin_selection(),
-            Action::AdjustTitleSelection { direction, resize, coarse } => {
+            Action::MarkExpBarRegion(marked) => {
+                // The reading of the region marked before doesn't belong to this one.
+                self.exp_bar = None;
+                self.setup.mark_exp_bar(marked);
+            }
+            Action::DiscardExpBarMark => self.setup.discard_exp_bar_mark(),
+            Action::ClearExpBarRegion => self.setup.clear_exp_bar(),
+            Action::BeginSelection(target) => self.setup.begin_selection(target),
+            Action::AdjustSelection { direction, resize, coarse } => {
                 self.setup.adjust_selection(direction, resize, coarse);
             }
-            Action::ConfirmTitleSelection => self.setup.confirm_selection(),
-            Action::CancelTitleSelection => self.setup.cancel_selection(),
+            Action::ConfirmSelection => {
+                if self.setup.confirm_selection() == Some(MarkTarget::ExpBar) {
+                    self.exp_bar = None;
+                }
+            }
+            Action::CancelSelection => self.setup.cancel_selection(),
             Action::FinishSetup => self.setup.finish(),
             Action::RequestSetup => self.setup.request(),
             Action::CancelSetup => {
                 self.state.quit |= self.setup.state().needed == Some(SetupReason::FirstRun);
                 self.setup.cancel();
             }
+            Action::ResetSession => self.session.reset(),
             Action::OpenSearch => {
                 // The search view is on the expanded panel.
                 self.panel.expanded = true;
@@ -457,6 +519,8 @@ impl Compass {
             PanelControl::ChooseCandidate
         } else if is(&hotkeys.search) {
             PanelControl::Search
+        } else if is(&hotkeys.reset_session) {
+            PanelControl::ResetSession
         } else if is(&hotkeys.open_meowdb_page) {
             PanelControl::OpenMeowdbPage
         } else {
@@ -473,6 +537,7 @@ impl Compass {
             PanelControl::CyclePlacement => Action::CyclePlacement,
             PanelControl::Setup => Action::RequestSetup,
             PanelControl::ChooseCandidate => Action::ChooseCandidate,
+            PanelControl::ResetSession => Action::ResetSession,
             // An open search view stays as it is; the shell brings the overlay in front on
             // opening it.
             PanelControl::Search if self.search.is_open() => return Some(Request::RaiseOverlay),
@@ -500,17 +565,20 @@ impl Compass {
 
     /// Pick up settings saved by an earlier session. Hotkeys from before version 4
     /// (version 1's Ctrl+Shift letters, versions 2 and 3's Win+Alt) are replaced by the
-    /// defaults.
+    /// defaults; files without an EXP Bar Region (all before version 3) start with EXP
+    /// tracking off.
     pub fn restore(&mut self, mut settings: Settings) -> &PanelState {
-        if settings.version < settings::VERSION {
+        // Version 4 brought the Ctrl+Shift defaults; a later version keeps the hotkeys.
+        if settings.version < 4 {
             settings.hotkeys = Hotkeys::default();
-            settings.version = settings::VERSION;
         }
+        settings.version = settings::VERSION;
         self.panel.expanded = settings.expanded;
         self.panel.inside_offset = settings.inside_offset;
         self.panel.mode = settings.placement_mode;
         self.panel.detached_at = settings.detached_at;
         self.setup.saved = settings.title_region;
+        self.setup.saved_exp_bar = settings.exp_bar_region;
         self.settings = settings;
         // The travel toggles change Distances.
         self.sync_search();
@@ -532,14 +600,17 @@ impl Compass {
             placement_mode: self.panel.mode,
             detached_at: self.panel.detached_at,
             title_region: self.setup.saved,
+            exp_bar_region: self.setup.saved_exp_bar,
             ..self.settings.clone()
         }
     }
 
-    /// Time passed: check on fetches in flight, and move the world crawl on. The shell
+    /// Time passed: check on fetches in flight, move the world crawl on, and let the
+    /// Session pause. The shell
     /// calls this many times a second (`at_ms` on the same clock as frames), so nothing
     /// waits for the network.
     pub fn tick(&mut self, at_ms: u64) -> &PanelState {
+        self.session.tick(at_ms);
         self.load_map_index(at_ms);
         if self.matcher.is_some() {
             self.shown_map.poll(&mut *self.source);
@@ -594,8 +665,8 @@ impl Compass {
 
     fn sync_panel(&mut self) -> &PanelState {
         self.sync_setup();
-        // Never over the Title Region: the capture would read the panel.
-        self.panel.avoid = self.state.title_region;
+        // Never over a captured region: the capture would read the panel.
+        self.panel.avoid = [self.state.title_region, self.state.exp_bar_region].into_iter().flatten().collect();
         self.state.expanded = self.panel.expanded;
         self.state.game_found = self.panel.game.is_some();
         self.state.placement_mode = self.panel.mode;
@@ -612,6 +683,23 @@ impl Compass {
         self.setup.follow_needed();
         self.state.setup = self.setup.state();
         self.state.title_region = self.setup.title_region(self.matcher.as_ref().map(Matcher::longest_name));
+        self.state.exp_bar_region = self.setup.exp_bar_region();
+        if !self.tracking_on() {
+            self.exp_bar = None;
+        }
+        self.state.exp_bar = self.exp_bar;
+        // Off while there is no region to read; the Session itself carries on.
+        self.state.exp_tracking = if self.tracking_on() {
+            self.session.tracking(self.state.data.solo_exp_ceiling())
+        } else {
+            ExpTracking::default()
+        };
+    }
+
+    /// Whether EXP tracking is on: there is an EXP Bar Region to read, kept and fitting
+    /// the game window.
+    fn tracking_on(&self) -> bool {
+        self.setup.exp_bar_region().is_some()
     }
 }
 
