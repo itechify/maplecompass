@@ -788,6 +788,17 @@ document.addEventListener("mousedown", (e) => {
   if (draggable && e.button === 0 && onHeader) startDrag();
 });
 
+// The expanded panel's bottom corners resize it, whatever its placement. The shell is
+// told first, so the sizes that follow are the player's; once the resize settles the
+// core keeps the width (never under its minimum) and the height follows the content.
+for (const grip of document.querySelectorAll<HTMLElement>(".grip")) {
+  grip.addEventListener("mousedown", async (e) => {
+    if (e.button !== 0) return;
+    await invoke("panel_resize_started");
+    getCurrentWindow().startResizeDragging(grip.dataset.resize === "SouthWest" ? "SouthWest" : "SouthEast");
+  });
+}
+
 // The collapsed icon: a click expands the panel again (like the collapse hotkey), and
 // pressing on it and moving the mouse drags it, where the panel can be dragged.
 const DRAG_AFTER_PX = 4;
