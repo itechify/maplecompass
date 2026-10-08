@@ -775,10 +775,8 @@ window.addEventListener("resize", reportHeight);
 
 // The panel is dragged by its header, or collapsed by its icon (inside the game, or
 // detached), never by its buttons. A click anywhere leaves the keyboard with the game:
-// the overlay can't be activated, except while the search view is open. The shell is
-// told first: only the window moves that follow are the player's.
-async function startDrag() {
-  await invoke("panel_drag_started");
+// the overlay can't be activated, except while the search view is open.
+function startDrag() {
   getCurrentWindow().startDragging();
 }
 
@@ -788,15 +786,12 @@ document.addEventListener("mousedown", (e) => {
   if (draggable && e.button === 0 && onHeader) startDrag();
 });
 
-// The expanded panel's bottom corners resize it, whatever its placement: its width only,
-// as the height follows the content (a resize that could change the height would let
-// Windows snap the window to the screen's edge). The shell is told first, so the sizes
-// that follow are the player's; once they let go the core keeps the width (never under
-// its minimum).
+// The expanded panel's bottom corners resize it, whatever its placement, as its edges
+// do: its width only, as the height follows the content. Once the player lets go the
+// core keeps the width (never under its minimum).
 for (const grip of document.querySelectorAll<HTMLElement>(".grip")) {
-  grip.addEventListener("mousedown", async (e) => {
+  grip.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
-    await invoke("panel_resize_started");
     getCurrentWindow().startResizeDragging(grip.dataset.resize === "West" ? "West" : "East");
   });
 }
