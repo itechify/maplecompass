@@ -92,8 +92,8 @@ pub fn run() {
             // The core brings older settings up to date (hotkeys included).
             compass.restore(settings::load(&settings_path));
             let (commands, commands_rx) = mpsc::channel();
-            let unavailable = hotkeys::install(app, &compass.panel_state().hotkeys, commands.clone())?;
-            compass.hotkeys_unavailable(unavailable);
+            let (taken, invalid) = hotkeys::install(app, &compass.panel_state().hotkeys, commands.clone())?;
+            compass.hotkeys_unavailable(taken, invalid);
             app.manage(commands.clone());
             let (picks, picks_rx) = mpsc::channel();
             app.manage(Bridge {

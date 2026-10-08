@@ -12,9 +12,13 @@ use std::sync::mpsc::Sender;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 /// Register the player's hotkeys; each press sends its accelerator string to the
-/// compass loop. Returns the ones that couldn't be registered (invalid, or taken by
-/// another app), for the core to show the player.
-pub fn install(app: &tauri::App, hotkeys: &Hotkeys, commands: Sender<Command>) -> tauri::Result<Vec<String>> {
+/// compass loop. Returns the ones that couldn't be registered, for the core to show
+/// the player: those taken by another app, then those that aren't valid.
+pub fn install(
+    app: &tauri::App,
+    hotkeys: &Hotkeys,
+    commands: Sender<Command>,
+) -> tauri::Result<(Vec<String>, Vec<String>)> {
     let all = [
         &hotkeys.toggle_panel,
         &hotkeys.edit_mode,
@@ -23,14 +27,14 @@ pub fn install(app: &tauri::App, hotkeys: &Hotkeys, commands: Sender<Command>) -
         &hotkeys.setup,
         &hotkeys.choose_candidate,
     ];
-    let mut unavailable = Vec::new();
+    let (mut taken, mut invalid) = (Vec::new(), Vec::new());
     let mut bindings: Vec<(Shortcut, String)> = Vec::new();
     for text in all {
         match text.parse::<Shortcut>() {
             Ok(shortcut) => bindings.push((shortcut, text.clone())),
             Err(e) => {
                 eprintln!("hotkey {text:?} invalid: {e}");
-                unavailable.push(text.clone());
+                invalid.push(text.clone());
             }
         }
     }
@@ -50,8 +54,8 @@ pub fn install(app: &tauri::App, hotkeys: &Hotkeys, commands: Sender<Command>) -
     for (shortcut, text) in bindings {
         if let Err(e) = app.global_shortcut().register(shortcut) {
             eprintln!("hotkey {text} unavailable: {e}");
-            unavailable.push(text);
+            taken.push(text);
         }
     }
-    Ok(unavailable)
+    Ok((taken, invalid))
 }

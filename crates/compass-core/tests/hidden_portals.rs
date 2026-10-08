@@ -6,7 +6,9 @@
 mod common;
 
 use common::{FakeSource, arrive, saved_index, saved_page};
-use compass_core::{Compass, HiddenPortal, MapDataStatus, MapEntry, PanelState, PortalOverride, meowdb};
+use compass_core::{
+    Compass, HiddenPortal, MapDataStatus, MapEntry, MapSpot, PanelState, PortalOverride, meowdb,
+};
 use std::task::Poll;
 
 const CONSTRUCTION_SITE: &str = "victoria-road__construction-site-north-of-kerning-city--window";
@@ -61,6 +63,7 @@ fn the_construction_site_north_of_kerning_city_has_a_hidden_portal_up_on_the_rig
             to_hidden_street: true,
             quest: false,
             position: "right, upper".into(),
+            spot: Some(MapSpot { column: 3, row: 0 }),
         }]
     );
 }
@@ -261,4 +264,22 @@ fn on_a_map_without_a_minimap_a_hidden_portals_position_is_unknown() {
     let state = arrive_on(ORBIS_TOWER_HIDDEN_ROOM, FakeSource::with_index);
 
     assert_eq!(destinations(&state), [("Orbis Tower <8th Floor>", "position unknown")]);
+}
+
+/// The panel draws each portal on a small minimap, in the cell its position names.
+#[test]
+fn each_hidden_portal_has_the_minimap_cell_its_position_names() {
+    let cases = [
+        (FIELD_EAST_OF_AMHERST, vec![Some(MapSpot { column: 4, row: 1 })]),
+        (
+            THREE_WAY_ROAD_SPLIT,
+            vec![Some(MapSpot { column: 1, row: 2 }), Some(MapSpot { column: 2, row: 2 })],
+        ),
+        (ORBIS_TOWER_HIDDEN_ROOM, vec![None]),
+    ];
+    for (id, expected) in cases {
+        let state = arrive_on(id, FakeSource::with_index);
+        let spots: Vec<_> = hidden_portals(&state).iter().map(|p| p.spot).collect();
+        assert_eq!(spots, expected, "{id}");
+    }
 }

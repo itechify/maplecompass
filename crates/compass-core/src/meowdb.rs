@@ -162,7 +162,13 @@ fn read_page(html: &str, id: &str, overrides: &[PortalOverride]) -> Result<MapDa
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
-    Ok(MapData { summary, mobs, hidden_portals: hidden_portals(map, id, overrides)?, connected_maps })
+    Ok(MapData {
+        summary,
+        mobs,
+        hidden_portals: hidden_portals(map, id, overrides)?,
+        connected_maps,
+        ..MapData::default()
+    })
 }
 
 /// The map's Hidden Portals from its `portals` (exits to other maps). `intraPortals`,

@@ -18,7 +18,9 @@ mod setup;
 mod shown_map;
 mod tracker;
 
-pub use map_data::{HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty};
+pub use map_data::{
+    HiddenPortal, LISTED_MOBS, MapData, MapDataStatus, MapSpot, MapSummary, Mob, MoreMobs, PerParty,
+};
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 pub use panel::{
@@ -156,8 +158,10 @@ pub struct PanelState {
     pub game_window_title: String,
     /// The global hotkeys to register, as the overlay names them.
     pub hotkeys: Hotkeys,
-    /// Hotkeys the shell couldn't register (another app has them), to tell the player.
+    /// Hotkeys the shell couldn't register, so they do nothing, to tell the player.
     pub unavailable_hotkeys: Vec<String>,
+    /// Those of them that don't name a key combination; the rest another app has.
+    pub invalid_hotkeys: Vec<String>,
     /// The player closed first-run setup: with no Title Region there is nothing to
     /// read, so the app quits.
     pub quit: bool,
@@ -335,9 +339,11 @@ impl Compass {
         None
     }
 
-    /// These hotkeys couldn't be registered (another app has them).
-    pub fn hotkeys_unavailable(&mut self, hotkeys: Vec<String>) -> &PanelState {
-        self.state.unavailable_hotkeys = hotkeys;
+    /// These hotkeys couldn't be registered: `taken` because another app has them,
+    /// `invalid` because they don't name a key combination.
+    pub fn hotkeys_unavailable(&mut self, taken: Vec<String>, invalid: Vec<String>) -> &PanelState {
+        self.state.unavailable_hotkeys = taken.into_iter().chain(invalid.iter().cloned()).collect();
+        self.state.invalid_hotkeys = invalid;
         self.sync_panel()
     }
 
