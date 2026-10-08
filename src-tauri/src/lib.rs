@@ -380,8 +380,6 @@ fn compass_loop(
                     if let Ok(at) = window.overlay.outer_position() {
                         compass.act(Action::PanelMoved { x: at.x, y: at.y });
                     }
-                    // TEMP: resize diagnosis
-                    eprintln!("[gesture] core placed the panel at {:?}", compass.panel_state().placement);
                 }
             }
             Ok(Command::Moved(to)) => {
@@ -568,7 +566,6 @@ impl OverlayWindow {
 
     /// The player pressed the mouse to drag or resize the overlay.
     fn gesture_started(&mut self, gesture: Gesture) {
-        eprintln!("[gesture] {gesture:?} started"); // TEMP: resize diagnosis
         self.gesture = Some(PlayerGesture { gesture, starting_since: Some(Instant::now()) });
         self.resized_to = None;
     }
@@ -577,7 +574,6 @@ impl OverlayWindow {
     /// running. Any other loop isn't the player's.
     fn size_move_started(&mut self) {
         self.under_way();
-        eprintln!("[gesture] move/size loop started, gesture {:?}", self.gesture); // TEMP: resize diagnosis
         if let Some(player) = &mut self.gesture {
             player.starting_since = None;
         }
@@ -586,7 +582,6 @@ impl OverlayWindow {
     /// Windows' move or size loop ended: the player let go of the mouse. The size their
     /// resize left the overlay, once (when it changed anything).
     fn size_move_ended(&mut self) -> Option<PhysicalSize<u32>> {
-        eprintln!("[gesture] move/size loop ended, gesture {:?}, last size {:?}", self.gesture, self.resized_to); // TEMP: resize diagnosis
         let ended = self.gesture.take_if(|player| player.starting_since.is_none())?;
         if ended.gesture == Gesture::Resize { self.resized_to.take() } else { None }
     }
@@ -596,7 +591,6 @@ impl OverlayWindow {
     fn under_way(&mut self) -> Option<Gesture> {
         let starting_since = self.gesture.and_then(|player| player.starting_since);
         if starting_since.is_some_and(|at| at.elapsed() >= LOOP_START_GRACE) {
-            eprintln!("[gesture] {:?} given up: its loop never started", self.gesture); // TEMP: resize diagnosis
             self.gesture = None;
         }
         self.gesture.map(|player| player.gesture)
