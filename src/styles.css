@@ -692,6 +692,116 @@ td:first-child {
   vertical-align: middle;
 }
 
+/* A mob's name opens its MeowDB page, and resting on it shows its Mob Card. Plain at rest,
+   so the table reads as before; underlined in the portal blue under the pointer. */
+.mob-name {
+  all: unset;
+  cursor: pointer;
+}
+
+.mob-name:hover,
+.mob-name.hovered {
+  color: var(--portal);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* The Mob Card: the hovered mob's image and the figures its row doesn't show. Opaque
+   (the panel's content goes on under it), floating beside the mob's row and never
+   outside the panel, which it never resizes. The pointer passes through it. */
+.mob-card {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  z-index: 5;
+  box-sizing: border-box;
+  padding: 6px 10px 7px;
+  border: 1px solid var(--window-edge);
+  border-radius: 4px;
+  background: var(--body-solid);
+  /* The window's inner ring, not a drop shadow: chrome, not lift. */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+  pointer-events: none;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink);
+}
+
+.mob-card-head {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+}
+
+/* The same box with or without an image, so the card doesn't jump when one arrives.
+   The sprite at its own size, or scaled down to fit; never up. */
+.mob-card-sprite {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+}
+
+.mob-card-sprite img {
+  max-width: 64px;
+  max-height: 64px;
+  image-rendering: pixelated;
+}
+
+.mob-card-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mob-card-level {
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.mob-card-figures {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+  column-gap: 8px;
+  row-gap: 1px;
+  margin: 6px 0 0;
+  padding-top: 5px;
+  border-top: 1px solid var(--rule);
+}
+
+.mob-card-figures dt {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+}
+
+.mob-card-figures dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.mob-card-figures .wide {
+  grid-column: 2 / -1;
+}
+
+.panel .mob-card-note {
+  margin-top: 6px;
+  white-space: normal;
+  color: var(--ink-2);
+}
+
+.panel .mob-card-note.problem {
+  padding: 3px 7px 4px;
+  border: 1px solid var(--problem-edge);
+  border-radius: 4px;
+  background: var(--problem-bg);
+  color: var(--problem-ink);
+}
+
 .panel .more {
   margin-top: 3px;
   font-size: 12px;
