@@ -1,6 +1,21 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { hotkeyAvailable, keyLabel, type Hotkeys } from "./hotkeys";
+import {
+  TIER_NAMES,
+  crawlLine,
+  density,
+  distanceText,
+  distanceWithTravel,
+  nearestLine,
+  resultRow,
+  resultsHead,
+  resultsNote,
+  routeStops,
+  type HuntingTarget,
+  type SearchState,
+} from "./search-state";
 
 type PlacementMode = "inside" | "dockedRight" | "dockedLeft" | "detached";
 
@@ -9,6 +24,7 @@ type PerParty = { solo: number; fullParty: number };
 
 /** Mirror of `compass_core::Mob`. */
 type Mob = {
+  id: string;
   name: string;
   level: number;
   hp: number;
@@ -87,26 +103,21 @@ type PanelState = {
   data: MapDataStatus;
   credit: string | null;
   expanded: boolean;
-  editMode: boolean;
   gameFound: boolean;
   placementMode: PlacementMode;
   layer: "aboveGame" | "free" | "hidden";
+  /** The player can drag the panel by its header (inside or detached). */
   draggable: boolean;
   setup: { needed: "firstRun" | "resolutionChanged" | "requested" | null };
-  hotkeys: {
-    togglePanel: string;
-    editMode: string;
-    cyclePlacement: string;
-    openMeowdbPage: string;
-    setup: string;
-    chooseCandidate: string;
-    resetSession: string;
-  };
+  hotkeys: Hotkeys;
   unavailableHotkeys: string[];
+  /** The shell has the hotkeys registered: the game or one of our windows is in front. */
+  hotkeysLive: boolean;
   gameWindowTitle: string;
   expBarRegion: { x: number; y: number; width: number; height: number } | null;
   expBar: ExpBar | null;
   expTracking: ExpTracking;
+  search: SearchState;
 };
 
 const byId = (id: string) => document.getElementById(id)!;
@@ -126,7 +137,6 @@ const noPortals = byId("no-portals");
 const portalRows = byId("portal-rows");
 const footer = byId("footer");
 const credit = byId("credit");
-const openHint = byId("open-hint");
 const hotkeyProblem = byId("hotkey-problem");
 const trackingEl = byId("tracking");
 const trackingWaiting = byId("tracking-waiting");
@@ -140,24 +150,45 @@ const sessionPercent = byId("session-percent");
 const trackingExtra = byId("tracking-extra");
 const resetSession = byId("reset-session");
 const badge = byId("badge");
+const recovery = byId("recovery");
+const uncertainty = byId("uncertainty");
+const crawlProgress = byId("crawl-progress");
+const normalView = byId("normal-view");
+const toolbar = byId("toolbar");
+const icon = document.querySelector<HTMLElement>(".icon")!;
+const nextCandidate = byId("next-candidate");
+const openMeowdb = byId("open-meowdb");
+const hunting = byId("hunting");
+const huntingTitle = byId("hunting-title");
+const huntingReopen = byId("hunting-reopen");
+const huntingClear = byId("hunting-clear");
+const huntingRouteTitle = byId("hunting-route-title");
+const huntingRoute = byId("hunting-route");
+const huntingRouteNone = byId("hunting-route-none");
+const huntingCredit = byId("hunting-credit");
+const searchView = byId("search-view");
+const searchBack = byId("search-back");
+const searchTitle = byId("search-title");
+const mobsStep = byId("mobs-step");
+const mapsStep = byId("maps-step");
+const query = byId("query") as HTMLInputElement;
+const suggestions = byId("suggestions");
+const noMatch = byId("no-match");
+const taxis = byId("taxis") as HTMLInputElement;
+const teleportScrolls = byId("teleport-scrolls") as HTMLInputElement;
+const searchNearest = byId("search-nearest");
+const searchNote = byId("search-note");
+const resultsBox = byId("results-box");
+const resultsTable = byId("search-results") as HTMLTableElement;
+const resultRows = byId("search-rows");
+const searchCrawl = byId("search-crawl");
+const searchCredit = byId("search-credit");
+resultsTable.prepend(resultsHead());
 let draggable = false;
+/** The search view's open step, as last rendered. */
+let step: SearchState["view"] = null;
 
-const PLACEMENT_NAMES: Record<PlacementMode, string> = {
-  inside: "Inside",
-  dockedRight: "Docked right",
-  dockedLeft: "Docked left",
-  detached: "Detached",
-};
-
-/** "super+alt+e" -> "Win+Alt+E" */
-function keyLabel(accelerator: string): string {
-  return accelerator
-    .split("+")
-    .map((k) => (k.toLowerCase() === "super" ? "Win" : k.charAt(0).toUpperCase() + k.slice(1)))
-    .join("+");
-}
-
-/** "Win+Alt+E is taken by another app, so it does nothing here" */
+/** "Ctrl+Shift+N is taken by another app, so it does nothing here" */
 function takenHotkeys(hotkeys: string[]): string {
   if (hotkeys.length === 0) return "";
   const one = hotkeys.length === 1;
@@ -190,24 +221,30 @@ function portalRow(portal: HiddenPortal): HTMLLIElement {
   return row;
 }
 
-/** "090040200 · Lv 2–14 · Blue Snail, Stump, Orange Mushroom · 1 hidden portal" */
-function candidateLine(id: string, outline: Outline | null): string {
-  // Its page is still on its way, or MeowDB can't give it.
-  if (!outline) return `${id} · no MeowDB data yet`;
-  const parts = [id];
+/** Keep player-recognizable clues ahead of the secondary map ID. */
+function candidateRow(id: string, outline: Outline | null): HTMLLIElement {
+  const row = document.createElement("li");
+  const facts = document.createElement("div");
+  facts.className = "candidate-facts";
+  if (!outline) {
+    row.append(span("candidate-mobs", "Comparison data unavailable"));
+    facts.append(span("candidate-id", `Map ${id}`));
+    row.append(facts);
+    return row;
+  }
   const { mobLevels, firstMobs, hiddenPortals } = outline;
+  row.append(span("candidate-mobs", firstMobs.length ? firstMobs.join(", ") : "No mobs"));
   if (mobLevels) {
-    parts.push(
+    facts.append(span("candidate-levels",
       mobLevels.lowest === mobLevels.highest
         ? `Lv ${mobLevels.lowest}`
         : `Lv ${mobLevels.lowest}–${mobLevels.highest}`,
-      firstMobs.join(", "),
-    );
-  } else {
-    parts.push("no mobs");
+    ));
   }
-  parts.push(`${hiddenPortals} hidden portal${hiddenPortals === 1 ? "" : "s"}`);
-  return parts.join(" · ");
+  facts.append(span("candidate-portals", `${hiddenPortals} hidden portal${hiddenPortals === 1 ? "" : "s"}`));
+  facts.append(span("candidate-id", `Map ${id}`));
+  row.append(facts);
+  return row;
 }
 
 /** "7 Oct 2026", in the player's time zone. */
@@ -215,15 +252,15 @@ const savedOn = (unixMs: number) =>
   new Date(unixMs).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
 /** The note shown in place of (or above) the map's data. */
-function dataNote(data: MapDataStatus, recognition: Recognition): string {
+function dataNote(data: MapDataStatus, recognition: Recognition, sourceHint: string): string {
   const noMobs = (data: MapData) => (data.mobs.length === 0 ? " · No mobs here" : "");
   switch (data.status) {
     case "loading":
       return "Loading MeowDB data…";
     case "unavailable":
-      return "MeowDB data unavailable";
+      return `Couldn't reach MeowDB. Check your connection, then restart MapleCompass to retry.${sourceHint}`;
     case "formatChanged":
-      return "MeowDB's page format has changed, so its data isn't shown";
+      return `MeowDB's page format has changed. MapleCompass needs an update to read it.${sourceHint}`;
     case "savedCopy":
       return `MeowDB unreachable — showing a saved copy from ${savedOn(data.savedAtUnixMs)}${noMobs(data)}`;
     case "ready":
@@ -246,22 +283,26 @@ function renderData(panel: PanelState) {
   const { candidates } = panel;
   candidatesEl.hidden = !candidates;
   if (candidates) {
-    const next = `${keyLabel(panel.hotkeys.chooseCandidate)} for the next`;
+    const next = hotkeyAvailable(panel.hotkeys.chooseCandidate, panel.unavailableHotkeys)
+      ? `${keyLabel(panel.hotkeys.chooseCandidate)} for the next`
+      : "Candidate shortcut unavailable; check shortcut settings";
     candidatesNote.textContent = candidates.chosen
       ? `Your pick of ${candidates.maps.length} maps with this title · ${next}`
       : `${candidates.maps.length} maps share this title; not sure which you're on · ${next}`;
     candidatesNote.classList.toggle("problem", !candidates.chosen);
     candidateRows.replaceChildren(
       ...candidates.maps.map((candidate, i) => {
-        const row = document.createElement("li");
-        row.textContent = candidateLine(candidate.id, candidate.outline);
+        const row = candidateRow(candidate.id, candidate.outline);
         row.classList.toggle("current", i === candidates.shown);
+        if (i === candidates.shown) row.setAttribute("aria-current", "true");
         return row;
       }),
     );
   }
 
-  note.textContent = dataNote(data, panel.recognition);
+  const sourceAvailable = hotkeyAvailable(panel.hotkeys.openMeowdbPage, panel.unavailableHotkeys);
+  const sourceHint = sourceAvailable ? ` ${keyLabel(panel.hotkeys.openMeowdbPage)} opens the source page.` : "";
+  note.textContent = dataNote(data, panel.recognition, sourceHint);
   note.hidden = note.textContent === "";
   const problem = ["unavailable", "formatChanged", "savedCopy"].includes(data.status);
   note.classList.toggle("problem", problem || panel.recognition.status === "savedCopy");
@@ -287,6 +328,9 @@ function renderData(panel: PanelState) {
         cell(String(mob.spawnCount)),
         cell(`${mob.spawnSharePercent}%`),
       );
+      ["Mob", "Lv", "HP", "EXP", "Count", "Share"].forEach((label, i) => {
+        row.cells[i].dataset.label = label;
+      });
       return row;
     }),
   );
@@ -296,7 +340,176 @@ function renderData(panel: PanelState) {
   portalRows.replaceChildren(...(ready?.hiddenPortals ?? []).map(portalRow));
 
   credit.textContent = panel.credit ?? "";
-  openHint.textContent = `${keyLabel(panel.hotkeys.openMeowdbPage)} opens the page`;
+}
+
+/** Which hotkey each icon at the top of the panel stands for. */
+const CONTROL_HOTKEYS: Record<string, keyof Hotkeys> = {
+  search: "search",
+  chooseCandidate: "chooseCandidate",
+  openMeowdbPage: "openMeowdbPage",
+  cyclePlacement: "cyclePlacement",
+  setup: "setup",
+  togglePanel: "togglePanel",
+  resetSession: "resetSession",
+};
+
+/**
+ * The icons at the top of the panel, one per hotkey action. Each tooltip names its
+ * hotkey (unless another app has it). The MeowDB icon shows only while a map is shown,
+ * the next-candidate icon only while maps share its title.
+ */
+function renderToolbar(panel: PanelState) {
+  for (const button of toolbar.querySelectorAll<HTMLButtonElement>("button[data-control]")) {
+    const label = button.getAttribute("aria-label") ?? "";
+    const hotkey = panel.hotkeys[CONTROL_HOTKEYS[button.dataset.control ?? ""]];
+    button.title = hotkey && hotkeyAvailable(hotkey, panel.unavailableHotkeys) ? `${label} (${keyLabel(hotkey)})` : label;
+  }
+  openMeowdb.hidden = !panel.map;
+  nextCandidate.hidden = !panel.candidates;
+  icon.title = hotkeyAvailable(panel.hotkeys.togglePanel, panel.unavailableHotkeys)
+    ? `Click to expand (${keyLabel(panel.hotkeys.togglePanel)})` : "Click to expand";
+}
+
+/**
+ * The Hunting section, at the bottom of the normal view: the Hunting Target's mob and
+ * map, the map's figures, and the route there from the map you're on, which scrolls
+ * when the panel runs out of room. Its 🔍 reopens the mob's map list; its × clears it.
+ */
+function renderHunting(panel: PanelState) {
+  const target: HuntingTarget | null = panel.search.hunting;
+  hunting.hidden = !target;
+  if (!target) return;
+  const { mob, map } = target;
+  // The mob on the first line, the map on the next.
+  const mobLine = document.createElement("span");
+  mobLine.className = "hunting-mob";
+  mobLine.textContent = mob.name;
+  const mapLine = document.createElement("span");
+  mapLine.className = "hunting-map";
+  mapLine.textContent = map.mapName;
+  huntingTitle.replaceChildren(mobLine, mapLine);
+  huntingTitle.title = `${mob.name} (Lv ${mob.level}) on ${map.streetName}: ${map.mapName}`;
+  const tier = byId("hunting-tier");
+  tier.textContent = TIER_NAMES[map.tier];
+  tier.className = `tier ${map.tier}`;
+  byId("hunting-density").textContent = density(map.densityHundredths);
+  byId("hunting-share").textContent = `${map.spawnSharePercent}%`;
+  const distance = distanceWithTravel(map);
+  const distanceEl = byId("hunting-distance");
+  distanceEl.textContent = distance.text;
+  distanceEl.title = distance.title;
+  distanceEl.className = typeof map.distance === "string" ? "distance none" : "distance";
+
+  // The route from the map you're on (its first stop); without one, why not.
+  const routed = map.route.length > 0;
+  huntingRouteTitle.textContent = routed ? `Route from ${map.route[0].mapName}` : "";
+  huntingRouteTitle.hidden = !routed;
+  huntingRoute.replaceChildren(...routeStops(map));
+  huntingRoute.hidden = !routed;
+  huntingRouteNone.textContent = routed ? "" : distanceText(map.distance).title;
+  huntingRouteNone.hidden = routed;
+  // The footer credits MeowDB whenever a map is shown; otherwise the section does.
+  huntingCredit.textContent = panel.search.credit ?? "";
+  huntingCredit.hidden = !panel.search.credit || !!panel.credit;
+}
+
+/**
+ * The search view, which takes over the whole panel: first the query box and the mobs
+ * it suggests, then the picked mob's ranked map list. Picking a map makes it the Hunting
+ * Target; the back arrow or Esc returns to the normal view with nothing changed.
+ */
+function renderSearchView(panel: PanelState) {
+  const { search } = panel;
+  const view = search.view;
+  normalView.hidden = view !== null;
+  searchView.hidden = view === null;
+  const opened = view !== step;
+  step = view;
+  if (view === null) return;
+  mobsStep.hidden = view !== "mobs";
+  mapsStep.hidden = view !== "maps";
+  // Before the lists, which scroll their highlight into what room is left.
+  // The world crawl, while it runs: search only knows the mobs on the maps known so far.
+  const crawl = crawlLine(search);
+  searchCrawl.textContent = crawl && `Mapping the world: ${crawl}`;
+  searchCrawl.hidden = !crawl;
+  searchCredit.textContent = search.credit ?? "";
+  searchCredit.hidden = !search.credit;
+  if (view === "mobs") {
+    searchTitle.textContent = "Search a mob";
+    renderMobs(search);
+    // A fresh query box, and the typing goes to it.
+    if (opened) {
+      query.value = search.query;
+      query.focus({ preventScroll: true });
+    }
+  } else {
+    searchTitle.textContent = search.picked?.name ?? "";
+    if (search.picked) searchTitle.append(span("level", `Lv ${search.picked.level}`));
+    renderMaps(search);
+    if (opened) resultsBox.focus({ preventScroll: true });
+  }
+}
+
+/** The first step: the suggestions (the highlighted one is what Enter picks). */
+function renderMobs(search: SearchState) {
+  suggestions.replaceChildren(
+    ...search.suggestions.map((mob, i) => {
+      const row = document.createElement("li");
+      row.id = `mob-${mob.id}`;
+      row.dataset.id = mob.id;
+      row.setAttribute("role", "option");
+      row.append(span("name", mob.name), span("level", `Lv ${mob.level}`));
+      const current = i === search.highlighted;
+      row.classList.toggle("current", current);
+      row.setAttribute("aria-selected", String(current));
+      return row;
+    }),
+  );
+  const listed = search.suggestions.length > 0;
+  suggestions.hidden = !listed;
+  query.setAttribute("aria-expanded", String(listed));
+  const highlighted = search.highlighted === null ? null : search.suggestions[search.highlighted];
+  if (highlighted) {
+    query.setAttribute("aria-activedescendant", `mob-${highlighted.id}`);
+    scrollWithin(suggestions, byId(`mob-${highlighted.id}`));
+  } else {
+    query.removeAttribute("aria-activedescendant");
+  }
+  noMatch.textContent = search.crawl.total === 0 ? "Loading MeowDB's Map list…" : "No known mob has that in its name.";
+  noMatch.hidden = listed || search.query.trim() === "";
+}
+
+/** The second step: the picked mob's maps, the highlighted one first to Enter, and the travel toggles. */
+function renderMaps(search: SearchState) {
+  // The core keeps the toggles (and saves them); the checkboxes follow it.
+  taxis.checked = search.travel.taxis;
+  teleportScrolls.checked = search.travel.teleportScrolls;
+  searchNearest.textContent = nearestLine(search);
+  searchNearest.hidden = searchNearest.textContent === "";
+  searchNote.textContent = resultsNote(search);
+  searchNote.hidden = searchNote.textContent === "";
+  const rows = search.results.map((result, i) => {
+    const row = resultRow(result);
+    const current = i === search.highlightedResult;
+    row.classList.toggle("current", current);
+    row.setAttribute("aria-selected", String(current));
+    return row;
+  });
+  resultsBox.hidden = rows.length === 0;
+  resultRows.replaceChildren(...rows);
+  const current = resultRows.querySelector<HTMLElement>("tr.current");
+  if (current) scrollWithin(resultsBox, current);
+}
+
+/** Scroll `box` just enough to show `item`. Not `scrollIntoView`, which would scroll the overlay's page too. */
+function scrollWithin(box: HTMLElement, item: HTMLElement) {
+  const outer = box.getBoundingClientRect();
+  const inner = item.getBoundingClientRect();
+  // Below a sticky table header, if there is one.
+  const top = outer.top + (box.querySelector("thead")?.getBoundingClientRect().height ?? 0);
+  if (inner.top < top) box.scrollTop -= top - inner.top;
+  else if (inner.bottom > outer.bottom) box.scrollTop += inner.bottom - outer.bottom;
 }
 
 /** "−" (U+2212) for a negative figure, as the deaths counter writes it. */
@@ -330,8 +543,8 @@ function renderTracking(panel: PanelState) {
   const waiting = tracking.state === "waiting";
   trackingWaiting.hidden = !waiting;
   trackingFigures.hidden = waiting;
-  // Only while the overlay takes the mouse: edit mode inside the game, or detached.
-  resetSession.hidden = waiting || !(panel.editMode && panel.draggable);
+  // The toolbar's reset icon, while there is a Session to reset.
+  resetSession.hidden = tracking.state === "off" || waiting;
 
   timeToLevel.textContent = tracking.timeToLevelBadge ?? "—";
   const tag = TRACKING_TAGS[tracking.state];
@@ -373,10 +586,14 @@ function render(panel: PanelState) {
   // Hidden while the game is minimised or gone: the window stays, but draws nothing.
   document.body.classList.toggle("hidden", panel.layer === "hidden");
   document.body.classList.toggle("collapsed", !panel.expanded);
-  document.body.classList.toggle("editing", panel.editMode);
   document.body.classList.toggle("draggable", panel.draggable);
   document.body.classList.toggle("unreadable", !current);
   document.body.classList.toggle("not-sure", !!current && notSure);
+  uncertainty.hidden = !current || !notSure;
+  const setupHint = hotkeyAvailable(hotkeys.setup, panel.unavailableHotkeys)
+    ? `Re-mark with ${keyLabel(hotkeys.setup)}.`
+    : "Setup shortcut unavailable. Close the app using it, or change hotkeys in %APPDATA%\\com.itechify.maplecompass\\settings.json, then restart MapleCompass.";
+  recovery.textContent = "";
   if (!panel.gameFound) {
     street.textContent = "";
     map.textContent = `Looking for ${panel.gameWindowTitle}…`;
@@ -384,53 +601,168 @@ function render(panel: PanelState) {
     // Nothing is read until the Title Region is marked (again).
     street.textContent =
       panel.setup.needed === "firstRun" ? "Finish setup to start" : "The game window changed size";
-    map.textContent = `Set up: ${keyLabel(panel.hotkeys.setup)}`;
+    map.textContent = "Mark the minimap title";
+    recovery.textContent = setupHint;
   } else if (recognition.status === "unavailable") {
     street.textContent = "Couldn't load the map list from MeowDB";
     map.textContent = "Map recognition unavailable";
+    recovery.textContent = "Check your connection. The Map list retries every minute.";
   } else if (current) {
     street.textContent = current.streetName;
     map.textContent = current.mapName;
+    if (notSure && !panel.candidates) {
+      recovery.textContent = `Title not confirmed. Keep both minimap title lines visible. ${setupHint}`;
+    }
   } else {
     street.textContent = "";
     map.textContent = "Reading the minimap title…";
+    recovery.textContent = recognition.status === "starting"
+      ? "Loading MeowDB's Map list…"
+      : `Keep the minimap open with both title lines visible. If this persists, ${setupHint.charAt(0).toLowerCase() + setupHint.slice(1)}`;
   }
-  if (panel.editMode) {
-    const place = `${PLACEMENT_NAMES[panel.placementMode]} · ${keyLabel(hotkeys.cyclePlacement)} to change`;
-    street.textContent =
-      panel.placementMode === "inside"
-        ? `Drag to move · ${keyLabel(hotkeys.editMode)} when done`
-        : place;
-  }
+  recovery.hidden = recovery.textContent === "";
+  renderToolbar(panel);
   hotkeyProblem.textContent = takenHotkeys(panel.unavailableHotkeys);
+  if (hotkeyProblem.textContent) {
+    hotkeyProblem.textContent += hotkeyAvailable(hotkeys.setup, panel.unavailableHotkeys)
+      ? `. ${keyLabel(hotkeys.setup)} opens setup; select Overlay guide for shortcut help.`
+      : ". Close the app using these shortcuts, or edit %APPDATA%\\com.itechify.maplecompass\\settings.json, then restart MapleCompass.";
+  }
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
   renderTracking(panel);
+  // The world crawl, while it runs, with or without a search: "Mapping the world: 312
+  // of 422 maps known". Search can only find mobs on the maps known so far.
+  const crawl = crawlLine(panel.search);
+  crawlProgress.textContent = crawl && `Mapping the world: ${crawl}`;
+  crawlProgress.hidden = !panel.gameFound || !crawl;
   renderData(panel);
+  renderHunting(panel);
+  renderSearchView(panel);
   renderBadge(panel);
-  reportHeight(panel.expanded);
+  expanded = panel.expanded;
+  reportHeight();
 }
 
-// The shell sizes the window to the expanded panel's content.
+// The shell sizes the window to the expanded panel's content, and the core keeps it
+// within the space where the panel is placed. The panel is then no taller than the
+// window, and its long part (the route, the suggestions, the map list) scrolls. What
+// is scrolled out of sight counts too, so the core always learns the content's full
+// height.
+let expanded = true;
 let reportedHeight = 0;
-function reportHeight(expanded: boolean) {
+function reportHeight() {
   if (!expanded) return;
-  const height = Math.ceil(panelEl.getBoundingClientRect().height);
+  const scrolledAway = [...panelEl.querySelectorAll<HTMLElement>(".scroll")]
+    .filter((el) => el.getClientRects().length > 0)
+    .reduce((sum, el) => sum + el.scrollHeight - el.clientHeight, 0);
+  const height = Math.ceil(panelEl.scrollHeight + scrolledAway);
   if (height > 0 && height !== reportedHeight) {
     reportedHeight = height;
     invoke("panel_height", { height });
   }
 }
+window.addEventListener("resize", reportHeight);
 
-// A draggable overlay takes the mouse (the shell turns click-through off): in edit mode
-// inside the game, and always when detached. Otherwise it never sees a click. A button
-// keeps its click: a drag would swallow it.
+// The panel is dragged by its header, or collapsed by its icon (inside the game, or
+// detached), never by its buttons. A click anywhere leaves the keyboard with the game:
+// the overlay can't be activated, except while the search view is open. The shell is
+// told first: only the window moves that follow are the player's.
+async function startDrag() {
+  await invoke("panel_drag_started");
+  getCurrentWindow().startDragging();
+}
+
 document.addEventListener("mousedown", (e) => {
-  const onButton = e.target instanceof Element && e.target.closest("button");
-  if (draggable && e.button === 0 && !onButton) {
-    getCurrentWindow().startDragging();
-  }
+  const target = e.target instanceof Element ? e.target : null;
+  const onHeader = !!target?.closest(".drag-handle") && !target?.closest("button, input");
+  if (draggable && e.button === 0 && onHeader) startDrag();
 });
 
-resetSession.addEventListener("click", () => invoke("reset_session"));
+// The collapsed icon: a click expands the panel again (like the collapse hotkey), and
+// pressing on it and moving the mouse drags it, where the panel can be dragged.
+const DRAG_AFTER_PX = 4;
+let iconPress: { x: number; y: number } | null = null;
+icon.addEventListener("mousedown", (e) => {
+  if (e.button === 0) iconPress = { x: e.screenX, y: e.screenY };
+});
+icon.addEventListener("mousemove", (e) => {
+  if (!iconPress || !draggable) return;
+  if (Math.abs(e.screenX - iconPress.x) + Math.abs(e.screenY - iconPress.y) >= DRAG_AFTER_PX) {
+    iconPress = null;
+    startDrag();
+  }
+});
+icon.addEventListener("mouseup", (e) => {
+  if (iconPress && e.button === 0) invoke("panel_press", { control: "togglePanel" });
+  iconPress = null;
+});
+icon.addEventListener("mouseleave", () => {
+  iconPress = null;
+});
+
+// Each icon at the top of the panel does what its hotkey does.
+toolbar.addEventListener("click", (e) => {
+  const button = e.target instanceof Element ? e.target.closest<HTMLButtonElement>("button[data-control]") : null;
+  if (button) invoke("panel_press", { control: button.dataset.control });
+});
+searchBack.addEventListener("click", () => invoke("search_escape"));
+huntingReopen.addEventListener("click", () => invoke("hunting_reopen"));
+huntingClear.addEventListener("click", () => invoke("hunting_clear"));
+
+// A click on a suggested mob or a listed map picks it, like Enter on it.
+function pickOnClick(list: HTMLElement, item: string) {
+  list.addEventListener("click", (e) => {
+    const picked = e.target instanceof Element ? e.target.closest<HTMLElement>(item) : null;
+    if (picked?.dataset.id) invoke("search_pick", { id: picked.dataset.id });
+  });
+}
+pickOnClick(suggestions, "li[data-id]");
+pickOnClick(resultRows, "tr[data-id]");
+
+/** The search view's keys: the arrows move the highlight, Enter picks, Esc goes back. */
+function searchKey(e: KeyboardEvent): boolean {
+  switch (e.key) {
+    case "ArrowDown":
+    case "ArrowUp":
+      invoke("search_move", { down: e.key === "ArrowDown" });
+      break;
+    case "Enter":
+      invoke("search_enter");
+      break;
+    case "Escape":
+      invoke("search_escape");
+      break;
+    default:
+      return false;
+  }
+  e.preventDefault();
+  return true;
+}
+query.addEventListener("input", () => invoke("search_query", { query: query.value }));
+query.addEventListener("keydown", (e) => {
+  if (!e.isComposing && searchKey(e)) e.stopPropagation();
+});
+// The map list has no text box: its keys come from wherever the focus is in the view.
+document.addEventListener("keydown", (e) => {
+  if (step === null || e.isComposing) return;
+  // Buttons and checkboxes keep their own Enter.
+  if (e.key === "Enter" && e.target instanceof Element && e.target.closest("button, input")) return;
+  searchKey(e);
+});
+// After a click on a checkbox, the keys go back to the map list.
+taxis.addEventListener("change", () => {
+  invoke("search_toggle_taxis");
+  resultsBox.focus({ preventScroll: true });
+});
+teleportScrolls.addEventListener("change", () => {
+  invoke("search_toggle_teleport_scrolls");
+  resultsBox.focus({ preventScroll: true });
+});
+// Whenever the overlay comes in front with the search view open, the keys go to it.
+window.addEventListener("focus", () => {
+  if (step === "mobs") query.focus({ preventScroll: true });
+  else if (step === "maps") resultsBox.focus({ preventScroll: true });
+});
 
 listen<PanelState>("overlay-state", (e) => render(e.payload));
+

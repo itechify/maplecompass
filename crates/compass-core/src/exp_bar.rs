@@ -1,4 +1,4 @@
-//! The EXP bar (ADR 0004): the figures on the in-game EXP bar, "EXP. 160 [3.81%]",
+//! The EXP bar (ADR 0005): the figures on the in-game EXP bar, "EXP. 160 [3.81%]",
 //! read from the EXP Bar Region the player marks.
 //!
 //! 1. Find the brackets: the only yellow-green glyphs in the figures, a pair of narrow

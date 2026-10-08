@@ -1,4 +1,4 @@
-//! The Session (ADR 0004): EXP bar readings, with their capture times, turned into Time
+//! The Session (ADR 0005): EXP bar readings, with their capture times, turned into Time
 //! to Level and EXP rates. There is no clock here and no EXP table.
 //!
 //! - The level's total EXP comes from the bar itself: the game rounds the percentage to

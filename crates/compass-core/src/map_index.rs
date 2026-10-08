@@ -15,6 +15,17 @@ pub struct MapEntry {
     pub region: String,
 }
 
+/// MeowDB's display region for event maps.
+const EVENT_REGION: &str = "Event";
+
+impl MapEntry {
+    /// An Event map: the player can't normally enter it, so mob search neither lists
+    /// it nor routes through it.
+    pub(crate) fn is_event(&self) -> bool {
+        self.region == EVENT_REGION
+    }
+}
+
 /// Why map data could not be had.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SourceError {
@@ -58,7 +69,15 @@ pub trait MapDataSource {
     /// and again only if asking failed.
     fn map_index(&mut self) -> Poll<Result<Fetched<Vec<MapEntry>>, SourceError>>;
 
-    /// One map's data, by its 9-digit ID. The core asks once the panel is sure of the
-    /// map (or of the title it shares with other maps), never ahead of time.
+    /// One map's data, by its 9-digit ID, for the panel: the core asks once the panel
+    /// is sure of the map (or of the title it shares with other maps). A cached copy
+    /// may be used as it is for up to a day.
     fn map_data(&mut self, id: &str) -> Poll<Result<Fetched<MapData>, SourceError>>;
+
+    /// One map's data for the world crawl (ADR 0004), which asks for every map in the
+    /// index in turn, one at a time. A cached copy up to 7 days old may be used as it
+    /// is; answer at once when it is, so the crawl moves on without waiting out its
+    /// pace. Kept apart from [`MapDataSource::map_data`]: a crawl request must never
+    /// delay or replace the shown map's.
+    fn crawl_data(&mut self, id: &str) -> Poll<Result<Fetched<MapData>, SourceError>>;
 }

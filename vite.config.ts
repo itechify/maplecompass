@@ -10,7 +10,7 @@ export default defineConfig(() => ({
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
-  // The overlay, the setup window and the Title Region marking window.
+  // The overlay (with mob search), the setup window and the Title Region marking window.
   build: {
     rolldownOptions: {
       input: ["index.html", "setup.html", "region.html"],
