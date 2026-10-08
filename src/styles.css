@@ -707,8 +707,7 @@ td:first-child {
 }
 
 .scroll,
-.view > .step,
-.view > .hunting {
+.view > .step {
   flex: 0 1 auto;
   min-height: 0;
 }
@@ -718,14 +717,57 @@ td:first-child {
   scrollbar-color: var(--select-edge) transparent;
 }
 
+/* Squeezed by everything above it, the route still shows two and a half stops, the cut
+   third saying it scrolls; a route that short in full never shrinks. Should even that
+   not fit, the whole view scrolls rather than lose its end. */
+.route-stops:has(> li:nth-child(3)) {
+  min-height: 6.5em;
+}
+
+.route-stops:not(:has(> li:nth-child(3))) {
+  flex-shrink: 0;
+}
+
+.view {
+  overflow-y: auto;
+  scrollbar-color: var(--select-edge) transparent;
+}
+
+/* Scrolled, the window bar and the map's title stay put: the bar's 22px row, its 4px of
+   padding and its 1px rule, then the title just under it. */
+.view > .window-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.view > .titlebar {
+  position: sticky;
+  top: calc(22px + 4px + 1px);
+  z-index: 1;
+}
+
 /* The Hunting section: its own section at the bottom of the normal view, divided from
-   the current map's info by a rule, headed by the Hunting Target's mob and map. */
+   the current map's info by a rule, headed by the Hunting Target's mob and map. Its parts
+   sit in the view's own column, so its route gives way to everything else in the panel
+   (down to its floor) rather than the section shrinking past its parts. */
 .hunting {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: contents;
+}
+
+/* Over the parts' own margins (the figures', the route's). */
+.panel .hunting > * {
+  margin-inline: 11px;
+}
+
+.hunting > .section-head {
   padding-top: 8px;
   border-top: 1px solid var(--rule);
+}
+
+/* 6px apart within the section, not the view's 9px. */
+.panel .hunting > * + * {
+  margin-top: -3px;
 }
 
 .section-head,
