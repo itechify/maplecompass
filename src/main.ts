@@ -742,62 +742,76 @@ function hoverMob(id: string | null) {
 /** "—" for a figure the mob doesn't have. */
 const figure = (n: number | null) => (n === null ? "—" : number(n));
 
-/** "Weak: Fire · Strong: Ice", or "—" with no elemental affinity. */
-function elementsText({ weak, strong, immune }: MobDetails["elements"]): string {
-  const parts = [
-    weak.length ? `Weak: ${weak.join(", ")}` : "",
-    strong.length ? `Strong: ${strong.join(", ")}` : "",
-    immune.length ? `Immune: ${immune.join(", ")}` : "",
-  ].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "—";
+/** A tag per element: "Weak to Fire", "Resists Ice", "Immune to Poison". */
+function elementTags({ weak, strong, immune }: MobDetails["elements"]): HTMLElement {
+  const tags = document.createElement("span");
+  tags.className = "mob-card-elements";
+  const all = [
+    ...weak.map((e) => `Weak to ${e}`),
+    ...strong.map((e) => `Resists ${e}`),
+    ...immune.map((e) => `Immune to ${e}`),
+  ];
+  tags.append(...(all.length ? all.map((text) => span("tag", text)) : [span("none", "No element")]));
+  return tags;
 }
 
-/** The card's figures: Element, Touch and MP, ACC and AVOID, the defences, Moves, HP/EXP. */
+/** Touch and MP, ACC and AVOID, the defences in pairs, then HP per EXP and its rank. */
 function mobFigures(details: MobDetails): HTMLDListElement {
   const list = document.createElement("dl");
   list.className = "mob-card-figures";
-  const add = (label: string, value: string, wide = false) => {
+  const add = (label: string, ...value: (string | Node)[]) => {
+    const pair = document.createElement("div");
     const dt = document.createElement("dt");
     dt.textContent = label;
     const dd = document.createElement("dd");
-    dd.textContent = value;
-    if (wide) dd.className = "wide";
-    list.append(dt, dd);
+    dd.append(...value);
+    pair.append(dt, dd);
+    list.append(pair);
+    return pair;
   };
   const touch = details.touchDamage;
-  const hpPerExp = details.hpPerExp;
-  const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
-  add("Element", elementsText(details.elements), true);
   add("Touch", touch ? `${number(touch.min)}–${number(touch.max)}` : "—");
   add("MP", figure(details.mp));
   add("ACC", figure(details.accuracy));
   add("AVOID", figure(details.avoid));
   add("P.DEF", figure(details.physicalDefense));
   add("M.DEF", figure(details.magicDefense));
-  add("Moves", `${details.speed} · ${lower(details.movement)}`, true);
-  add("HP/EXP", hpPerExp ? `${(hpPerExp.hundredths / 100).toFixed(2)} (#${hpPerExp.rank}/${hpPerExp.ranked})` : "—", true);
+  const perExp = details.hpPerExp;
+  const hpPerExp = perExp
+    ? [(perExp.hundredths / 100).toFixed(2), span("rank", ` · #${perExp.rank} of ${perExp.ranked}`)]
+    : ["—"];
+  add("HP per EXP", ...hpPerExp).className = "wide";
   return list;
 }
 
-/** The Mob Card's content: image, name and level, then its figures or why there are none. */
+/** The Mob Card's content: the mob, then its figures or why there are none. */
 function mobCardContent(mob: Mob, card: MobCard): Node[] {
   const sprite = document.createElement("div");
   sprite.className = "mob-card-sprite";
   if (card.image) {
     const img = document.createElement("img");
-    img.src = card.image;
     img.alt = "";
+    // Shrunk to fit, a sprite is smoothed: pixel doubling only works upward.
+    img.addEventListener("load", () => img.classList.toggle("scaled", img.naturalWidth > 64 || img.naturalHeight > 64));
     // No saved image after all: the box stays empty.
     img.addEventListener("error", () => img.remove());
+    img.src = card.image;
     sprite.append(img);
   }
+  const ready = card.status === "ready" || card.status === "savedCopy" ? card : null;
+  const who = document.createElement("div");
+  who.className = "mob-card-who";
+  who.append(
+    span("mob-card-name", mob.name),
+    span("mob-card-gait", ready ? `Lv ${mob.level} · ${ready.speed} · ${ready.movement.toLowerCase()}` : `Lv ${mob.level}`),
+  );
+  if (ready) who.append(elementTags(ready.elements));
   const head = document.createElement("div");
   head.className = "mob-card-head";
-  head.append(sprite, span("mob-card-name", mob.name), span("mob-card-level", `Lv ${mob.level}`));
+  head.append(sprite, who);
   const note = (text: string, problem = false) => {
     const p = document.createElement("p");
-    p.className = "mob-card-note";
-    p.classList.toggle("problem", problem);
+    p.className = problem ? "note problem" : "note";
     p.textContent = text;
     return p;
   };
@@ -805,13 +819,13 @@ function mobCardContent(mob: Mob, card: MobCard): Node[] {
     case "loading":
       return [head, note("Loading from MeowDB…")];
     case "unavailable":
-      return [head, note("MeowDB can't be reached right now", true)];
+      return [head, note("Couldn't reach MeowDB. MapleCompass tries again in a few minutes.", true)];
     case "formatChanged":
-      return [head, note("MeowDB's page for this mob has changed", true)];
+      return [head, note("MeowDB's page for this mob has changed. Click its name to read it there.", true)];
     case "ready":
       return [head, mobFigures(card)];
     case "savedCopy":
-      return [head, mobFigures(card), note(`Saved copy from ${savedOn(card.savedAtUnixMs)}`, true)];
+      return [head, mobFigures(card), note(`MeowDB unreachable — saved copy from ${savedOn(card.savedAtUnixMs)}`, true)];
   }
 }
 
@@ -820,8 +834,9 @@ const MOB_CARD_GAP = 4;
 
 /**
  * The hovered mob's Mob Card, once the pointer has rested on its name: below its row if it
- * fits in the panel, otherwise above it. Only over the normal view of the expanded panel,
- * and gone once the mob isn't listed.
+ * fits in the panel, otherwise above it, never over the window bar. Where it fits on
+ * neither side, it takes the roomier one. Only over the normal view of the expanded
+ * panel, and gone once the mob isn't listed.
  */
 function renderMobCard() {
   const panel = shownPanel;
@@ -844,11 +859,19 @@ function renderMobCard() {
   mobCardEl.hidden = false;
   const frame = panelEl.getBoundingClientRect();
   const row = (button.closest("tr") ?? button).getBoundingClientRect();
+  const bar = normalView.querySelector(".window-bar")?.getBoundingClientRect();
   const height = mobCardEl.offsetHeight;
+  const highest = (bar ? bar.bottom - frame.top : 0) + MOB_CARD_GAP;
+  const lowest = panelEl.clientHeight - MOB_CARD_GAP - height;
   const below = row.bottom - frame.top + MOB_CARD_GAP;
   const above = row.top - frame.top - MOB_CARD_GAP - height;
-  const fitsBelow = below + height <= panelEl.clientHeight - MOB_CARD_GAP;
-  mobCardEl.style.top = `${fitsBelow ? below : Math.max(MOB_CARD_GAP, above)}px`;
+  const roomBelow = panelEl.clientHeight - MOB_CARD_GAP - below;
+  const roomAbove = row.top - frame.top - MOB_CARD_GAP - highest;
+  let top: number;
+  if (below <= lowest) top = below;
+  else if (above >= highest) top = above;
+  else top = roomBelow >= roomAbove ? below : above;
+  mobCardEl.style.top = `${Math.max(highest, Math.min(top, lowest))}px`;
 }
 
 // Resting on a listed mob's name shows its Mob Card; clicking it opens its MeowDB page.
