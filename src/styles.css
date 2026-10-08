@@ -597,7 +597,8 @@ footer {
   display: block;
 }
 
-/* Draggable (inside the game, or detached): the header moves the panel. */
+/* Draggable (inside the game, or detached): the header, or the collapsed icon, moves the panel. */
+.draggable .icon,
 .draggable .drag-handle,
 .draggable .drag-handle :not(button) {
   cursor: move;
