@@ -440,7 +440,8 @@ h2 {
 }
 
 .tracking .tag,
-.portals .tag {
+.portals .tag,
+.mob-card .tag {
   flex: none;
   padding: 0 5px;
   border: 1px solid var(--tag-edge);
@@ -693,29 +694,49 @@ td:first-child {
 }
 
 /* A mob's name opens its MeowDB page, and resting on it shows its Mob Card. Plain at rest,
-   so the table reads as before; underlined in the portal blue under the pointer. */
+   so the table reads as before; Portal Blue and underlined under the pointer, deeper
+   while pressed. */
 .mob-name {
   all: unset;
   cursor: pointer;
+  /* A button is one box, so it truncates itself, beside the mob dot. */
+  display: inline-block;
+  max-width: calc(100% - 14px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 
 .mob-name:hover,
 .mob-name.hovered {
   color: var(--portal);
   text-decoration: underline;
+  text-decoration-thickness: 1px;
   text-underline-offset: 2px;
 }
 
-/* The Mob Card: the hovered mob's image and the figures its row doesn't show. Opaque
-   (the panel's content goes on under it), floating beside the mob's row and never
-   outside the panel, which it never resizes. The pointer passes through it. */
+.mob-name:active {
+  color: var(--frame);
+}
+
+.mob-name:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* The Mob Card: the hovered mob's image and the figures its row doesn't show. One of the
+   game's windows, opaque (the panel's content goes on under it), floating beside the
+   mob's row and never outside the panel, which it never resizes. The pointer passes
+   through it. */
 .mob-card {
   position: absolute;
   left: 8px;
   right: 8px;
   z-index: 5;
   box-sizing: border-box;
-  padding: 6px 10px 7px;
+  padding: 6px 10px 8px 6px;
   border: 1px solid var(--window-edge);
   border-radius: 4px;
   background: var(--body-solid);
@@ -723,24 +744,26 @@ td:first-child {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
   pointer-events: none;
   font-size: 12px;
-  line-height: 16px;
+  line-height: 15px;
   color: var(--ink);
 }
 
+/* The mob standing in its 64px box, then its name, level and gait, then its elements. */
 .mob-card-head {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) auto;
+  grid-template-columns: 64px minmax(0, 1fr);
+  column-gap: 8px;
   align-items: center;
-  column-gap: 10px;
 }
 
-/* The same box with or without an image, so the card doesn't jump when one arrives.
-   The sprite at its own size, or scaled down to fit; never up. */
+/* The same box with or without an image, so the card doesn't jump when one arrives. The
+   sprite stands on the box's floor at its own size, or scaled down to fit (smoothly, as
+   pixel doubling can't shrink), never up. */
 .mob-card-sprite {
   width: 64px;
   height: 64px;
   display: grid;
-  place-items: center;
+  place-items: end center;
 }
 
 .mob-card-sprite img {
@@ -749,57 +772,96 @@ td:first-child {
   image-rendering: pixelated;
 }
 
-.mob-card-name {
+.mob-card-sprite img.scaled {
+  image-rendering: auto;
+}
+
+.mob-card-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mob-card-who > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.mob-card-name {
   font-size: 13px;
+  line-height: 17px;
   font-weight: 700;
 }
 
-.mob-card-level {
-  font-weight: 700;
+.mob-card-gait {
   color: var(--ink-2);
 }
 
+.mob-card-elements {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.mob-card-elements .none {
+  color: var(--ink-2);
+}
+
+/* Two columns of figures, each label at the left and its value right-aligned, so the
+   figures line up as in the game's stat window. HP per EXP takes the full width. */
 .mob-card-figures {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
-  column-gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 18px;
   row-gap: 1px;
-  margin: 6px 0 0;
-  padding-top: 5px;
+  margin: 7px 0 0 4px;
+  padding-top: 6px;
   border-top: 1px solid var(--rule);
 }
 
+.mob-card-figures > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mob-card-figures .wide {
+  grid-column: 1 / -1;
+}
+
 .mob-card-figures dt {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
   color: var(--ink-2);
 }
 
 .mob-card-figures dd {
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 17px;
   font-weight: 700;
+  text-align: right;
 }
 
-.mob-card-figures .wide {
-  grid-column: 2 / -1;
-}
-
-.panel .mob-card-note {
-  margin-top: 6px;
-  white-space: normal;
+.mob-card-figures dd .rank {
+  font-weight: 400;
   color: var(--ink-2);
 }
 
-.panel .mob-card-note.problem {
-  padding: 3px 7px 4px;
-  border: 1px solid var(--problem-edge);
-  border-radius: 4px;
-  background: var(--problem-bg);
-  color: var(--problem-ink);
+/* Loading, or why there are no figures: the panel's own notes. */
+.panel .mob-card .note {
+  margin: 7px 0 0 4px;
+  font-size: 12px;
+  line-height: 15px;
+}
+
+.panel .mob-card .note.problem::before {
+  top: 7px;
 }
 
 .panel .more {
