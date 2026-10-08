@@ -139,7 +139,7 @@ type PanelState = {
   expanded: boolean;
   gameFound: boolean;
   placementMode: PlacementMode;
-  layer: "aboveGame" | "free" | "hidden";
+  layer: "aboveGame" | "hidden";
   /** The player can drag the panel by its header (inside or detached). */
   draggable: boolean;
   setup: { needed: "firstRun" | "resolutionChanged" | "requested" | null };

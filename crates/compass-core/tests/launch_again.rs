@@ -51,19 +51,18 @@ fn launched_again_without_the_game_opens_setup() {
 }
 
 #[test]
-fn launched_again_detached_without_the_game_shows_the_panel_not_setup() {
+fn launched_again_detached_without_the_game_opens_setup_too() {
     let mut compass = set_up(false);
     compass.restore(Settings {
         placement_mode: PlacementMode::Detached,
-        expanded: false,
         title_region: compass.settings().title_region,
         ..Settings::default()
     });
 
     let state = compass.act(Action::LaunchedAgain);
 
-    assert!(state.expanded, "a detached panel shows without the game");
-    assert!(!state.setup.window_open);
+    // A detached panel shows only with the game, like the others.
+    assert!(state.setup.window_open);
 }
 
 #[test]
