@@ -14,6 +14,8 @@ type SetupReason = "firstRun" | "resolutionChanged" | "requested";
 type SetupView = {
   setup: { needed: SetupReason | null; testRead: TestRead | null; credit: string | null };
   unavailableHotkeys: string[];
+  /** Those of them that don't name a key combination; the rest another app has. */
+  invalidHotkeys: string[];
   recognition: { status: "starting" | "ready" | "savedCopy" | "unavailable" };
   game: { width: number; height: number } | null;
   gameTitle: string;
@@ -66,6 +68,8 @@ function render() {
   const notice = openedFor ? NOTICES[openedFor] : "";
   $("notice").hidden = !notice;
   $("notice").textContent = notice;
+  // A changed window size is a problem to fix; a requested re-setup is just information.
+  $("notice").classList.toggle("problem", openedFor === "resolutionChanged");
 
   $("window-status").textContent = game
     ? `Found the “${gameTitle}” window (${game.width}×${game.height}).`
@@ -78,37 +82,73 @@ function render() {
 
   const read = setup.testRead;
   const box = $("test-read");
-  box.className = `test-read ${read?.status ?? "reading"}`;
+  // Recognised, the map shows as the overlay's title bar will show it.
+  let kind: "reading" | "recognised" | "problem" = "reading";
   if (!read || read.status === "reading") {
     box.textContent = "Reading the title…";
   } else if (read.status === "recognised") {
-    box.innerHTML = "";
+    kind = "recognised";
+    const title = document.createElement("div");
+    title.className = "title";
     const street = document.createElement("p");
     street.className = "street";
     street.textContent = read.map.streetName;
     const map = document.createElement("p");
     map.className = "map";
-    map.textContent = `${read.map.mapName} ✓`;
-    box.append(street, map);
+    map.textContent = read.map.mapName;
+    title.append(street, map);
+    const tag = document.createElement("span");
+    tag.className = "tag";
+    tag.textContent = "Recognised";
+    box.replaceChildren(title, tag);
   } else if (recognition.status === "starting") {
     box.textContent = "Loading MeowDB's map list…";
   } else if (recognition.status === "unavailable") {
+    kind = "problem";
     box.textContent =
       "Couldn't load MeowDB's map list, so no map can be recognised yet. Check your connection; MapleCompass tries again every minute.";
   } else {
+    kind = "problem";
     box.textContent =
       "No map recognised in the marked box. Check that the minimap title is showing, then mark a box around both lines with a little of the blue panel around them.";
   }
+  box.className = `test-read ${kind}`;
   ($("finish") as HTMLButtonElement).disabled = read?.status !== "recognised";
   $("test-credit").textContent = setup.credit ? `Map names from ${setup.credit}` : "";
   $("resetup-hint").textContent =
     `To mark the title again later, press ${keyLabel(view.setupHotkey)} while you play.`;
-  const taken = view.unavailableHotkeys.map(keyLabel);
-  $("hotkey-problem").hidden = taken.length === 0;
-  $("hotkey-problem").textContent =
-    `${taken.join(", ")} ${taken.length === 1 ? "is" : "are"} taken by another app (or invalid), so ` +
-    `${taken.length === 1 ? "that hotkey does" : "those hotkeys do"} nothing. Close the app that uses ` +
-    `${taken.length === 1 ? "it" : "them"}, or change MapleCompass's hotkeys in settings.json, then restart MapleCompass.`;
+  $("hotkey-problem").textContent = hotkeyProblems(view);
+  $("hotkey-problem").hidden = $("hotkey-problem").textContent === "";
+}
+
+/** Each hotkey that does nothing, with its real cause, then how to fix it. */
+function hotkeyProblems(view: SetupView): string {
+  const invalid = view.invalidHotkeys;
+  const taken = view.unavailableHotkeys.filter((k) => !invalid.includes(k));
+  if (taken.length + invalid.length === 0) return "";
+  const list = (keys: string[]) => keys.map(keyLabel).join(", ");
+  const sentences = [];
+  if (taken.length > 0) {
+    sentences.push(
+      taken.length === 1
+        ? `${list(taken)} is taken by another app, so it does nothing.`
+        : `${list(taken)} are taken by another app, so they do nothing.`,
+    );
+  }
+  if (invalid.length > 0) {
+    sentences.push(
+      invalid.length === 1
+        ? `${list(invalid)} isn't a key combination.`
+        : `${list(invalid)} aren't key combinations.`,
+    );
+  }
+  // One way to recover, in one sentence.
+  sentences.push(
+    taken.length > 0
+      ? "Close the other app, or change the hotkeys in settings.json, then restart MapleCompass."
+      : "Change the hotkeys in settings.json, then restart MapleCompass.",
+  );
+  return sentences.join(" ");
 }
 
 function update(next: SetupView) {
