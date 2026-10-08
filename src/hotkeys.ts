@@ -1,11 +1,11 @@
 /** Display labels and availability for the bindings supplied by the core. */
 export type Hotkeys = {
   togglePanel: string;
-  editMode: string;
   cyclePlacement: string;
   openMeowdbPage: string;
   setup: string;
   chooseCandidate: string;
+  search: string;
 };
 
 export function keyLabel(accelerator: string): string {
