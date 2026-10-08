@@ -51,6 +51,11 @@ body {
   container-type: inline-size;
 }
 
+/* For a moment while the overlay measures the panel's full height. */
+.panel.measuring {
+  max-height: none;
+}
+
 .panel p {
   margin: 0;
   white-space: nowrap;
