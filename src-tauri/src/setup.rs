@@ -1,18 +1,21 @@
-//! First-run setup windows. The overlay can't take input (it is click-through and
-//! never takes focus), so setup has its own normal window, plus a "region" window laid
-//! over the game's client area where the player drags the Title Region or the EXP Bar
-//! Region. Both are declared hidden in `tauri.conf.json`: creating windows inside
-//! commands can deadlock on Windows. Every decision is the core's; this only shows
-//! windows and relays.
+//! First-run setup windows. The overlay never takes focus on a click and has no room
+//! for setup, so setup has its own normal window, plus a "region" window laid over the
+//! game's client area where the player marks the Title Region or the EXP Bar Region.
+//! Both are declared hidden in `tauri.conf.json`: creating windows inside commands can
+//! deadlock on Windows. Every decision is the core's; this only shows windows and
+//! relays.
 //!
 //! Unlike the overlay (ADR 0001), the region window is always-on-top: it is our own,
 //! shown only while the player marks a region, and the overlay's z-order keeper
 //! ignores our own windows.
 
 use crate::gamewin;
+use crate::view::{LastView, ViewSender};
 use crate::Command;
-use compass_core::{Action, PanelState, Recognition, Rect, ScreenRect, SetupState};
-use serde::{Deserialize, Serialize};
+use compass_core::{
+    Action, Hotkeys, MarkTarget, PanelState, Recognition, Rect, ScreenRect, SelectionDirection, SetupState,
+};
+use serde::Serialize;
 use std::sync::Mutex;
 use std::sync::mpsc::Sender;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewWindow, WindowEvent};
@@ -28,7 +31,7 @@ pub struct Bridge {
     /// The game's client area as last found, where the region window goes.
     pub game: Mutex<Option<ScreenRect>>,
     /// The last view sent to the setup window, for when it loads after it was sent.
-    pub view: Mutex<Option<serde_json::Value>>,
+    pub view: LastView,
 }
 
 /// What the setup window renders.
@@ -41,7 +44,8 @@ struct SetupView<'a> {
     game: Option<GameView>,
     /// The window title looked for.
     game_title: &'a str,
-    setup_hotkey: &'a str,
+    hotkeys: &'a Hotkeys,
+    settings_path: &'a str,
     /// Hotkeys another app has taken.
     unavailable_hotkeys: &'a [String],
 }
@@ -52,13 +56,22 @@ struct GameView {
     height: u32,
 }
 
+/// What the region window renders: the selection, and what it is being marked around.
+#[derive(Serialize)]
+struct SelectionView {
+    selection: Option<Rect>,
+    target: Option<MarkTarget>,
+}
+
 /// Shows and hides the setup window as the core says.
 pub struct SetupWindows {
     app: AppHandle,
     setup: WebviewWindow,
     shown: bool,
-    /// The last view sent to the setup window.
-    emitted: Option<serde_json::Value>,
+    region_client: Option<ScreenRect>,
+    settings_path: String,
+    /// Sends the setup window its view.
+    view: ViewSender,
 }
 
 impl SetupWindows {
@@ -75,7 +88,11 @@ impl SetupWindows {
                 let _ = handle.state::<Bridge>().commands.send(Command::Act(Action::CancelSetup));
             }
         });
-        Ok(Self { app: app.clone(), setup, shown: false, emitted: None })
+        Ok(Self {
+            app: app.clone(), setup, shown: false, region_client: None,
+            settings_path: crate::settings::path(app)?.display().to_string(),
+            view: ViewSender::new(SETUP, "setup-state"),
+        })
     }
 
     /// Follow the core's setup state, and send the setup window what it renders.
@@ -94,24 +111,46 @@ impl SetupWindows {
             _ => {}
         }
         self.shown = state.setup.window_open;
+        let mut client = game.filter(|_| state.setup.selection.is_some() && self.shown);
+        if let Some(region) = self.app.get_webview_window(REGION) {
+            if let Some(area) = client {
+                let shown = (|| -> tauri::Result<()> {
+                    if self.region_client != Some(area) {
+                        region.set_position(PhysicalPosition::new(area.x, area.y))?;
+                        region.set_size(PhysicalSize::new(area.width, area.height))?;
+                    }
+                    if self.region_client.is_none() {
+                        region.show()?;
+                        region.set_focus()?;
+                    }
+                    Ok(())
+                })();
+                if let Err(error) = shown {
+                    let _ = region.hide();
+                    focus_setup(&self.app);
+                    let _ = self.app.state::<Bridge>().commands.send(Command::Act(Action::CancelSelection));
+                    let _ = self.app.emit_to(SETUP, "marking-error", error.to_string());
+                    client = None;
+                }
+            } else if self.region_client.is_some() {
+                let _ = region.hide();
+                if self.shown { focus_setup(&self.app); }
+            }
+        }
+        self.region_client = client;
         let view = SetupView {
             setup: &state.setup,
             recognition: state.recognition,
             game: game.map(|c| GameView { width: c.width, height: c.height }),
             game_title: &state.game_window_title,
-            setup_hotkey: &state.hotkeys.setup,
+            hotkeys: &state.hotkeys,
+            settings_path: &self.settings_path,
             unavailable_hotkeys: &state.unavailable_hotkeys,
         };
-        // Only send changes: the loop wakes up 20 times a second.
-        let Ok(view) = serde_json::to_value(&view) else { return };
-        if self.emitted.as_ref() == Some(&view) {
-            return;
+        if self.view.send(&self.app, &view, &self.app.state::<Bridge>().view) {
+            let selection = SelectionView { selection: state.setup.selection, target: state.setup.selection_target };
+            let _ = self.app.emit_to(REGION, "selection-state", &selection);
         }
-        if let Err(e) = self.app.emit_to(SETUP, "setup-state", &view) {
-            eprintln!("emit failed: {e}");
-        }
-        *self.app.state::<Bridge>().view.lock().unwrap() = Some(view.clone());
-        self.emitted = Some(view);
     }
 }
 
@@ -130,7 +169,7 @@ fn focus_setup(app: &AppHandle) {
 /// What the setup window renders, as last sent (`None` before the first).
 #[tauri::command]
 pub async fn setup_view(bridge: State<'_, Bridge>) -> Result<Option<serde_json::Value>, String> {
-    Ok(bridge.view.lock().unwrap().clone())
+    Ok(bridge.view.get())
 }
 
 /// Take the window under the mouse pointer as the game window.
@@ -141,30 +180,27 @@ pub async fn pick_game_window(bridge: State<'_, Bridge>) -> Result<String, Strin
     Ok(title)
 }
 
-/// What the player marks on the region window.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Target {
-    /// The minimap title: the Title Region.
-    Title,
-    /// The figures on the EXP bar: the EXP Bar Region.
-    ExpBar,
+/// Begin marking the Title Region or the EXP Bar Region; sync lays the window over the
+/// game client area. Its CSS px times the device pixel ratio are then client px.
+#[tauri::command]
+pub async fn start_marking(bridge: State<'_, Bridge>, target: MarkTarget) -> Result<(), String> {
+    (*bridge.game.lock().unwrap()).ok_or("The game window isn't showing. Bring it back, then try again.")?;
+    bridge.commands.send(Command::Act(Action::BeginSelection(target))).map_err(|e| e.to_string())
 }
 
-/// Lay the region window over the game's client area so the player can drag the
-/// Title Region or the EXP Bar Region on it. Its CSS px times the device pixel ratio are
-/// then client px.
 #[tauri::command]
-pub async fn start_marking(app: AppHandle, bridge: State<'_, Bridge>, target: Target) -> Result<(), String> {
-    let client = (*bridge.game.lock().unwrap()).ok_or("The game window isn't showing.")?;
-    let region = app.get_webview_window(REGION).ok_or("no region window")?;
-    let fail = |e: tauri::Error| e.to_string();
-    region.set_position(PhysicalPosition::new(client.x, client.y)).map_err(fail)?;
-    region.set_size(PhysicalSize::new(client.width, client.height)).map_err(fail)?;
-    region.emit("start-marking", target).map_err(fail)?;
-    region.show().map_err(fail)?;
-    region.set_focus().map_err(fail)?;
-    Ok(())
+pub async fn adjust_selection(
+    bridge: State<'_, Bridge>, direction: SelectionDirection, resize: bool, coarse: bool,
+) -> Result<(), String> {
+    bridge.commands.send(Command::Act(Action::AdjustSelection { direction, resize, coarse }))
+        .map_err(|e| e.to_string())
+}
+
+/// Enter on the region window: test-read the selection, around `target`.
+#[tauri::command]
+pub async fn confirm_selection(app: AppHandle, bridge: State<'_, Bridge>, target: MarkTarget) -> Result<(), String> {
+    bridge.commands.send(Command::Act(Action::ConfirmSelection)).map_err(|e| e.to_string())?;
+    app.emit_to(SETUP, marked_event(target), ()).map_err(|e| e.to_string())
 }
 
 /// The player dragged the Title Region or the EXP Bar Region (physical px, relative to
@@ -173,7 +209,7 @@ pub async fn start_marking(app: AppHandle, bridge: State<'_, Bridge>, target: Ta
 pub async fn mark_region(
     app: AppHandle,
     bridge: State<'_, Bridge>,
-    target: Target,
+    target: MarkTarget,
     x: u32,
     y: u32,
     width: u32,
@@ -182,13 +218,21 @@ pub async fn mark_region(
     hide(&app, REGION);
     focus_setup(&app);
     let marked = Rect { x, y, width, height };
-    let (action, event) = match target {
-        Target::Title => (Action::MarkTitleRegion(marked), "title-marked"),
-        Target::ExpBar => (Action::MarkExpBarRegion(marked), "exp-bar-marked"),
+    let action = match target {
+        MarkTarget::Title => Action::MarkTitleRegion(marked),
+        MarkTarget::ExpBar => Action::MarkExpBarRegion(marked),
     };
     bridge.commands.send(Command::Act(action)).map_err(|e| e.to_string())?;
     // The setup window moves on to the test read.
-    app.emit_to(SETUP, event, ()).map_err(|e| e.to_string())
+    app.emit_to(SETUP, marked_event(target), ()).map_err(|e| e.to_string())
+}
+
+/// What tells the setup window a region was marked, and so its test read is on.
+fn marked_event(target: MarkTarget) -> &'static str {
+    match target {
+        MarkTarget::Title => "title-marked",
+        MarkTarget::ExpBar => "exp-bar-marked",
+    }
 }
 
 /// Drop the EXP Bar Region being marked (the player skips it, or keeps the one before).
@@ -205,10 +249,11 @@ pub async fn clear_exp_bar_region(bridge: State<'_, Bridge>) -> Result<(), Strin
 
 /// The player pressed Esc on the region window.
 #[tauri::command]
-pub async fn cancel_marking(app: AppHandle) -> Result<(), String> {
+pub async fn cancel_marking(app: AppHandle, bridge: State<'_, Bridge>) -> Result<(), String> {
+    bridge.commands.send(Command::Act(Action::CancelSelection)).map_err(|e| e.to_string())?;
     hide(&app, REGION);
     focus_setup(&app);
-    Ok(())
+    app.emit_to(SETUP, "marking-cancelled", ()).map_err(|e| e.to_string())
 }
 
 /// Finish setup (the core only does once the test reads of what was marked succeeded).

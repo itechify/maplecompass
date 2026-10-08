@@ -26,12 +26,19 @@
         background: rgba(16, 24, 36, 0.9);
         color: #f2f5f8;
         pointer-events: none;
-        white-space: nowrap;
+        width: max-content;
+        max-width: calc(100% - 64px);
+        box-sizing: border-box;
+        text-align: center;
+        outline: none;
       }
       .hint.top {
         top: 12%;
         bottom: auto;
       }
+      .hint h1 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+      .hint p { margin: 4px 0; }
+      .hint output { display: block; margin-top: 6px; color: #c3ccd6; font-size: 13px; font-variant-numeric: tabular-nums; }
       .box {
         position: fixed;
         border: 2px solid #f5c542;
@@ -43,7 +50,12 @@
     <script type="module" src="/src/region.ts" defer></script>
   </head>
   <body>
-    <div class="hint" id="hint"></div>
+    <main class="hint" id="marking-hint" tabindex="-1" aria-labelledby="marking-title">
+      <h1 id="marking-title">Mark both lines of the minimap title</h1>
+      <p>Drag a box, or use Arrow keys to move · Alt+Arrow to resize · Shift for larger steps</p>
+      <p>Enter to test · Esc to cancel</p>
+      <output id="selection-status" role="status" aria-atomic="true"></output>
+    </main>
     <div class="box" id="box" hidden></div>
   </body>
 </html>

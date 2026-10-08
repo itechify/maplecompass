@@ -1,14 +1,14 @@
-//! The Hidden Portal rule and position hints: which of a map's exits the player can't
-//! see, and roughly where each one is.
+//! The Hidden Portal rule and position hints: what kind of portal each of a map's
+//! exits is, which the player can't see, and roughly where each of those is.
 
-use crate::map_data::HiddenPortal;
+use crate::map_data::{HiddenPortal, Portal, PortalKind};
 use crate::portal_overrides::PortalOverride;
 
 /// The street name of a Hidden Street.
 const HIDDEN_STREET: &str = "Hidden Street";
 
 /// MeowDB's dead-end destination: a portal that goes nowhere.
-const DEAD_END: &str = "999999999";
+pub(crate) const DEAD_END: &str = "999999999";
 
 /// MeowDB portal types.
 const INVISIBLE: u64 = 1;
@@ -44,39 +44,49 @@ pub(crate) struct Minimap {
     pub center_y: f64,
 }
 
-/// The map's Hidden Portals, in MeowDB's order.
+/// The map's portals to other maps (not to itself or the dead end) with their kinds,
+/// and its Hidden Portals; both in MeowDB's order.
 ///
-/// An exit counts when it leads to another map (not the dead end) and its type is
-/// invisible (1), hidden (10) or script (11, a Quest Portal). Invisible exits on a Town
-/// are Doors: drawn into the scenery, so the player sees them. An entry in `overrides`
-/// for the map and portal settles it either way, except for the destination.
-pub(crate) fn hidden_portals(
+/// A portal is hidden when its type is invisible (1), hidden (10) or script (11, a
+/// Quest Portal), except that invisible portals on a Town are Doors: drawn into the
+/// scenery, so the player sees them. An entry in `overrides` for the map and portal
+/// settles whether it is hidden either way, except for the destination. A script
+/// portal is a Quest Portal whether hidden or not.
+pub(crate) fn portals(
     map: &MapFacts,
     exits: Vec<Exit>,
     overrides: &[PortalOverride],
-) -> Vec<HiddenPortal> {
-    exits
-        .into_iter()
-        .filter(|e| e.to_map_id != map.id && e.to_map_id != DEAD_END)
-        .filter(|e| {
-            let overridden = overrides.iter().find(|o| o.map_id == map.id && o.portal == e.name);
-            match (overridden, e.kind) {
-                (Some(o), _) => o.hidden,
-                (None, INVISIBLE) => !map.is_town,
-                (None, HIDDEN | SCRIPT) => true,
-                (None, _) => false,
-            }
-        })
-        .map(|e| HiddenPortal {
-            position: position_hint(map.minimap, e.x, e.y),
-            to_hidden_street: e.to_street_name == HIDDEN_STREET,
-            quest: e.kind == SCRIPT,
-            name: e.name,
-            to_map_id: e.to_map_id,
-            to_map_name: e.to_map_name,
-            to_street_name: e.to_street_name,
-        })
-        .collect()
+) -> (Vec<Portal>, Vec<HiddenPortal>) {
+    let mut portals = Vec::new();
+    let mut hidden_portals = Vec::new();
+    for e in exits.into_iter().filter(|e| e.to_map_id != map.id && e.to_map_id != DEAD_END) {
+        let overridden = overrides.iter().find(|o| o.map_id == map.id && o.portal == e.name);
+        let hidden = match (overridden, e.kind) {
+            (Some(o), _) => o.hidden,
+            (None, INVISIBLE) => !map.is_town,
+            (None, HIDDEN | SCRIPT) => true,
+            (None, _) => false,
+        };
+        let kind = match e.kind {
+            SCRIPT => PortalKind::Quest,
+            _ if hidden => PortalKind::Hidden,
+            INVISIBLE if map.is_town => PortalKind::Door,
+            _ => PortalKind::Visible,
+        };
+        portals.push(Portal { name: e.name.clone(), to_map_id: e.to_map_id.clone(), kind });
+        if hidden {
+            hidden_portals.push(HiddenPortal {
+                position: position_hint(map.minimap, e.x, e.y),
+                to_hidden_street: e.to_street_name == HIDDEN_STREET,
+                quest: e.kind == SCRIPT,
+                name: e.name,
+                to_map_id: e.to_map_id,
+                to_map_name: e.to_map_name,
+                to_street_name: e.to_street_name,
+            });
+        }
+    }
+    (portals, hidden_portals)
 }
 
 /// Roughly where (x, y) is on the map, in words: "far right, lower".

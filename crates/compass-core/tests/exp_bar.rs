@@ -1,4 +1,4 @@
-//! EXP tracking setup (ADR 0004): after the Title Region, the player may mark the EXP
+//! EXP tracking setup (ADR 0005): after the Title Region, the player may mark the EXP
 //! Bar Region around the figures on the in-game EXP bar ("EXP. 160 [3.81%]"). A test
 //! read only accepts a mark whose figures read whole; skipping leaves tracking off.
 //! Once kept, the panel state carries the region to capture and the latest reading.
@@ -12,7 +12,7 @@ mod common;
 
 use common::FakeSource;
 use compass_core::{
-    Action, Compass, ExpBar, ExpBarTestRead, Frame, GameWindow, Rect, ScreenRect, SetupReason,
+    Action, Compass, ExpBar, ExpBarTestRead, Frame, GameWindow, MarkTarget, Rect, ScreenRect, SetupReason,
 };
 
 const KERNING: &str = "victoria-road__kerning-city--window";
@@ -331,10 +331,34 @@ fn cancelling_setup_drops_an_exp_bar_mark_and_keeps_the_saved_one() {
     assert_eq!(state.exp_bar_region, saved);
 }
 
-/// Version 2 files (before EXP tracking) load with tracking off and keep the player's
-/// hotkeys.
+/// The marking window opens on the EXP bar with a keyboard-adjustable selection (where
+/// the figures usually are, until one has been marked), and Enter test-reads it.
 #[test]
-fn version_2_settings_load_with_tracking_off_and_their_hotkeys() {
+fn the_exp_bar_can_be_marked_with_the_keyboard_from_where_the_figures_usually_are() {
+    let mut compass = Compass::new(FakeSource::meowdb());
+    mark_title(&mut compass, KERNING);
+
+    let state = compass.act(Action::BeginSelection(MarkTarget::ExpBar)).clone();
+    assert_eq!(state.setup.selection_target, Some(MarkTarget::ExpBar));
+    // Kerning City's client is 1916x1197: (1916 * 1005 / 1920, 1197 - 56).
+    assert_eq!(state.setup.selection, Some(Rect { x: 1002, y: 1141, width: 240, height: 32 }));
+    assert_eq!(state.exp_bar_region, None, "nothing is read until it is confirmed");
+
+    let state = compass.act(Action::ConfirmSelection).clone();
+    assert_eq!(state.setup.selection, None);
+    assert_eq!(state.setup.exp_bar_test_read, Some(ExpBarTestRead::Reading));
+    let frame = exp_frame(&compass, KERNING, 0);
+    assert_eq!(compass.on_exp_bar_frame(frame).setup.exp_bar_test_read, read(160, 381));
+
+    // Opened again, it starts from the box just marked.
+    let state = compass.act(Action::BeginSelection(MarkTarget::ExpBar));
+    assert_eq!(state.setup.selection, Some(Rect { x: 1002, y: 1141, width: 240, height: 32 }));
+}
+
+/// Version 2 files (before EXP tracking) load with tracking off; their Win+Alt hotkeys
+/// give way to the Ctrl+Shift defaults (version 4).
+#[test]
+fn version_2_settings_load_with_tracking_off() {
     let mut compass = Compass::new(FakeSource::meowdb());
     compass.restore(
         serde_json::from_str(
@@ -353,7 +377,7 @@ fn version_2_settings_load_with_tracking_off_and_their_hotkeys() {
     let state = compass.on_game_window(window(game(KERNING)));
 
     assert_eq!(state.setup.needed, None);
-    assert_eq!(state.hotkeys.toggle_panel, "super+alt+j");
+    assert_eq!(state.hotkeys.toggle_panel, "ctrl+shift+c");
     assert_eq!(state.exp_bar_region, None);
-    assert_eq!(compass.settings().version, 3);
+    assert_eq!(compass.settings().version, 4);
 }
