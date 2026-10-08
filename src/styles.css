@@ -9,8 +9,8 @@ body {
 }
 
 /* As tall as its content: the overlay reports this height and the window fits it, up to
-   the space where the panel is placed. Then it is as tall as the window, and its long
-   part scrolls. */
+   600 px (MAX_EXPANDED_HEIGHT in the shell) or the space where the panel is placed,
+   whichever is less. Then it is as tall as the window, and its long part scrolls. */
 .panel {
   box-sizing: border-box;
   max-height: 100vh;
@@ -299,6 +299,18 @@ td:first-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.hunting h2 .hunting-mob,
+.hunting h2 .hunting-map {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hunting h2 .hunting-map {
+  font-weight: 400;
+  color: #9fb6cc;
 }
 
 .search-view h2 .level {
