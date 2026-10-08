@@ -1,6 +1,6 @@
 [package]
 name = "compass-core"
-version = "0.2.0"
+version = "0.2.1"
 description = "Headless MapleCompass core: Title Region frames in, panel state out. No OS or UI dependencies."
 edition.workspace = true
 rust-version.workspace = true
