@@ -65,21 +65,34 @@ pub enum Action {
     /// The player marked the Title Region (relative to the game client area) and wants
     /// a test read of it.
     MarkTitleRegion(crate::Rect),
-    /// Open the Title Region window with a keyboard-adjustable selection.
-    BeginTitleSelection,
+    /// The player marked the EXP Bar Region (relative to the game client area) and wants
+    /// a test read of it.
+    MarkExpBarRegion(crate::Rect),
+    /// Open the marking window on the Title Region or the EXP Bar Region, with a
+    /// keyboard-adjustable selection.
+    BeginSelection(crate::MarkTarget),
     /// Arrow keys move the selection; Alt resizes it, Shift uses ten-pixel steps.
-    AdjustTitleSelection { direction: crate::SelectionDirection, resize: bool, coarse: bool },
-    /// Test-read the keyboard selection.
-    ConfirmTitleSelection,
+    AdjustSelection { direction: crate::SelectionDirection, resize: bool, coarse: bool },
+    /// Test-read the keyboard selection, as a mark around what it was opened on.
+    ConfirmSelection,
     /// Close marking without changing the previous test read or saved region.
-    CancelTitleSelection,
-    /// Keep the marked Title Region, if its test read recognised a map.
+    CancelSelection,
+    /// Drop the EXP Bar Region being marked (its test read failed, or the player skips
+    /// it); the one kept, if any, stays.
+    DiscardExpBarMark,
+    /// Turn EXP tracking off: forget the EXP Bar Region, kept or being marked.
+    ClearExpBarRegion,
+    /// Finish setup: keep the marked Title Region if its test read recognised a map (or,
+    /// with none marked, the saved one if it still fits), and likewise the EXP Bar
+    /// Region if its figures read whole. Refused while either test read hasn't succeeded.
     FinishSetup,
     /// The player wants to redo setup (the re-setup hotkey).
     RequestSetup,
     /// The player closed setup without finishing it. On the first run that quits
     /// (`PanelState::quit`): there is nothing to read without a Title Region.
     CancelSetup,
+    /// Start measuring afresh: the Session goes back to waiting for an EXP change.
+    ResetSession,
     /// Open the search view on its mobs, with nothing typed yet (the search hotkey, or
     /// the 🔍 at the top of the panel). A collapsed panel expands to show it.
     OpenSearch,
@@ -179,9 +192,9 @@ pub(crate) struct Panel {
     pub mode: PlacementMode,
     /// The detached panel's top-left corner; `None` until it is first detached.
     pub detached_at: Option<ScreenPoint>,
-    /// Where the Title Region is captured on screen. A panel inside the game is kept off
-    /// it, or the capture would read the panel instead of the minimap title.
-    pub avoid: Option<ScreenRect>,
+    /// Where the Title Region and the EXP Bar Region are captured on screen. A panel
+    /// inside the game is kept off them, or the capture would read the panel instead.
+    pub avoid: Vec<ScreenRect>,
     /// The monitors' work areas, as last known with the game window: a detached panel
     /// stays within them after the game is gone.
     pub screens: Vec<ScreenRect>,
@@ -197,7 +210,7 @@ impl Default for Panel {
             inside_offset: None,
             mode: PlacementMode::Inside,
             detached_at: None,
-            avoid: None,
+            avoid: Vec::new(),
             screens: Vec::new(),
         }
     }
@@ -290,21 +303,17 @@ impl Panel {
         ScreenRect { x, y: game.client.y, width: size.width, height: size.height }
     }
 
-    /// Inside the game's client area, no taller than it, and clear of the Title Region:
-    /// beside it at full height if there is room, or else in the taller of the spaces
-    /// below and above it.
+    /// Inside the game's client area, no taller than it, and clear of the captured
+    /// regions: beside them at full height if there is room, or else in the tallest of
+    /// the spaces above, between and below them.
     fn inside(&self, game: ScreenRect) -> ScreenRect {
         let height = self.size().height.min(game.height);
-        let panel = self.inside_at(game, height);
-        let Some(title) = self.avoid else { return panel };
-        let clear = clear_of(panel, title, game);
-        if !overlaps(clear, title) {
-            return clear;
+        let panel = clear_of(self.inside_at(game, height), &self.avoid, game);
+        if clear(panel, &self.avoid) {
+            return panel;
         }
-        let below = bottom(game) - bottom(title);
-        let above = title.y as i64 - game.y as i64;
-        let height = height.min(below.max(above).max(0) as u32);
-        clear_of(self.inside_at(game, height), title, game)
+        let height = height.min(tallest_gap(&self.avoid, game));
+        clear_of(self.inside_at(game, height), &self.avoid, game)
     }
 
     /// The panel `height` px tall at its spot inside the game's client area: where the
@@ -344,25 +353,45 @@ fn holds(rect: ScreenRect, at: ScreenPoint) -> bool {
     (rect.x as i64) <= x && x < rect.x as i64 + rect.width as i64 && (rect.y as i64) <= y && y < bottom(rect)
 }
 
-/// `panel`, moved the shortest way (below, above, right or left of `title`) so it no
-/// longer overlaps `title` while staying inside `within`. Left where it is when it
-/// doesn't overlap, or when no such spot fits.
-fn clear_of(panel: ScreenRect, title: ScreenRect, within: ScreenRect) -> ScreenRect {
-    if !overlaps(panel, title) {
+/// The tallest stretch of `within`, top to bottom, that none of `avoid` reaches into:
+/// above the first, between two, or below the last.
+fn tallest_gap(avoid: &[ScreenRect], within: ScreenRect) -> u32 {
+    let mut spans: Vec<(i64, i64)> = avoid.iter().map(|r| (r.y as i64, bottom(*r))).collect();
+    spans.sort();
+    let (mut from, mut tallest) = (within.y as i64, 0);
+    for (top, end) in spans {
+        tallest = tallest.max(top - from);
+        from = from.max(end);
+    }
+    tallest.max(bottom(within) - from).max(0) as u32
+}
+
+/// `panel`, moved the shortest way (below, above, right or left of one of the `avoid`
+/// rectangles) so it overlaps none of them while staying inside `within`. Left where it
+/// is when it overlaps none, or when no such spot fits.
+fn clear_of(panel: ScreenRect, avoid: &[ScreenRect], within: ScreenRect) -> ScreenRect {
+    if clear(panel, avoid) {
         return panel;
     }
     let (w, h) = (panel.width as i32, panel.height as i32);
-    let spots = [
-        ScreenRect { y: title.y + title.height as i32, ..panel },
-        ScreenRect { y: title.y - h, ..panel },
-        ScreenRect { x: title.x + title.width as i32, ..panel },
-        ScreenRect { x: title.x - w, ..panel },
-    ];
-    spots
-        .into_iter()
-        .filter(|spot| contains(within, *spot))
+    avoid
+        .iter()
+        .flat_map(|r| {
+            [
+                ScreenRect { y: r.y + r.height as i32, ..panel },
+                ScreenRect { y: r.y - h, ..panel },
+                ScreenRect { x: r.x + r.width as i32, ..panel },
+                ScreenRect { x: r.x - w, ..panel },
+            ]
+        })
+        .filter(|spot| contains(within, *spot) && clear(*spot, avoid))
         .min_by_key(|spot| (spot.x - panel.x).abs() + (spot.y - panel.y).abs())
         .unwrap_or(panel)
+}
+
+/// Whether `panel` overlaps none of `avoid`.
+fn clear(panel: ScreenRect, avoid: &[ScreenRect]) -> bool {
+    avoid.iter().all(|r| !overlaps(panel, *r))
 }
 
 fn overlaps(a: ScreenRect, b: ScreenRect) -> bool {

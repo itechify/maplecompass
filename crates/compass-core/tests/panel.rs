@@ -13,8 +13,8 @@ mod common;
 use common::FakeSource;
 use common::world::SEARCH;
 use compass_core::{
-    Action, Compass, GameWindow, Layer, PanelSizes, PlacementMode, Rect, ScreenRect, Settings, Size,
-    TitleRegion,
+    Action, Compass, ExpBarRegion, GameWindow, Layer, PanelSizes, PlacementMode, Rect, ScreenRect,
+    Settings, Size, TitleRegion,
 };
 
 fn compass() -> Compass {
@@ -491,4 +491,51 @@ fn the_collapsed_icon_never_covers_the_minimap_title_either() {
 
     let placement = state.placement.unwrap();
     assert!(!overlaps(placement, state.title_region.unwrap()), "{placement:?}");
+}
+
+// ...nor the EXP Bar Region. Worked example: a 640x400 client at (812,110) with the title
+// marked as above (captured at client y 40..88) and the EXP figures marked at client
+// (100,150) 120x26 (captured 312 px wide: client x 100..412, y 150..176).
+
+const TALLER_SMALL_GAME: ScreenRect = ScreenRect { x: 812, y: 110, width: 640, height: 400 };
+
+#[test]
+fn a_panel_dragged_onto_the_minimap_title_is_moved_clear_of_the_exp_bar_too() {
+    let mut compass = compass();
+    let client = Size { width: 640, height: 400 };
+    compass.restore(Settings {
+        title_region: Some(TitleRegion { marked: Rect { x: 70, y: 40, width: 130, height: 48 }, client }),
+        exp_bar_region: Some(ExpBarRegion { marked: Rect { x: 100, y: 150, width: 120, height: 26 }, client }),
+        ..Settings::default()
+    });
+    compass.on_game_window(game(TALLER_SMALL_GAME));
+
+    let state = compass.act(Action::PanelMoved { x: 892, y: 140 }).clone();
+
+    // Just below the title (client y 88..160) would cover the EXP bar; below that instead.
+    let placement = state.placement.unwrap();
+    assert_eq!(placement, rect(892, 110 + 176, 340, 72));
+    assert!(!overlaps(placement, state.title_region.unwrap()));
+    assert!(!overlaps(placement, state.exp_bar_region.unwrap()));
+}
+
+#[test]
+fn a_panel_dragged_onto_the_exp_bar_is_moved_clear_of_it() {
+    let mut compass = compass();
+    let client = Size { width: 640, height: 400 };
+    compass.restore(Settings {
+        title_region: Some(TitleRegion { marked: Rect { x: 70, y: 40, width: 130, height: 48 }, client }),
+        exp_bar_region: Some(ExpBarRegion { marked: Rect { x: 100, y: 150, width: 120, height: 26 }, client }),
+        ..Settings::default()
+    });
+    compass.on_game_window(game(TALLER_SMALL_GAME));
+
+    // Client (150,140): over the EXP bar (client y 150..176) and clear of the title.
+    let state = compass.act(Action::PanelMoved { x: 962, y: 250 }).clone();
+
+    // Just below the EXP bar is the nearest clear spot.
+    let placement = state.placement.unwrap();
+    assert_eq!(placement, rect(962, 110 + 176, 340, 72));
+    assert!(!overlaps(placement, state.title_region.unwrap()));
+    assert!(!overlaps(placement, state.exp_bar_region.unwrap()));
 }

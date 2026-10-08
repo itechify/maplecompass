@@ -1,6 +1,6 @@
 # MapleCompass
 
-A helper overlay for MapleStory Classic World that recognises which map the player is on and tells them what is there: the mobs they can hunt and the hidden portals they would otherwise miss.
+A helper overlay for MapleStory Classic World that recognises which map the player is on and tells them what is there: the mobs they can hunt and the hidden portals they would otherwise miss. While they hunt, it also measures how fast they are levelling.
 
 ## Language
 
@@ -23,7 +23,7 @@ The specific name of a map (e.g. "Henesys Hunting Ground I"). Not guaranteed uni
 _Avoid_: title, map title
 
 **Minimap Title**:
-The street name and map name as rendered at the top of the in-game minimap; the only signal MapleCompass reads from the game.
+The street name and map name as rendered at the top of the in-game minimap; the signal MapleCompass recognises the map from.
 
 **Candidate**:
 One of several maps that share a Minimap Title, offered to the player when the map they came from doesn't settle which one they are on.
@@ -100,3 +100,29 @@ _Avoid_: return scroll, portal scroll
 
 **Map Summary**:
 The hunting figures for a map as a whole, such as the EXP-per-hour ceiling and mobs killed per hour by party size.
+
+### Tracking
+
+**Session**:
+The stretch of play MapleCompass measures rates over, from the first EXP gain until the player resets it or switches character. Idle stretches pause it rather than count against it.
+_Avoid_: run, grind
+
+**EXP Bar Region**:
+The rectangle the player marks around the EXP figures on the in-game EXP bar (e.g. "EXP 266 [6.33%]"), saved relative to the game window.
+_Avoid_: status bar region, EXP region
+
+**Rolling Rate**:
+A rate measured over the last few minutes of active play in a session, as opposed to the average over the whole session.
+_Avoid_: current rate, live rate
+
+**Time to Level**:
+How long the player would take to reach the next level at their net EXP rate.
+_Avoid_: ETA, time to next level
+
+**Pickup Log**:
+The fading lines in the bottom-right corner of the game screen that announce gained EXP, gained mesos and picked-up items.
+_Avoid_: chat, drop log, kill feed
+
+**Meso**:
+The in-game currency; the game itself says "mesos".
+_Avoid_: miso, gold, money

@@ -1,7 +1,7 @@
 //! MapleCompass shell: a thin adapter around `compass-core`. It finds the game window,
-//! captures the Title Region, feeds frames, hotkeys and drags to the core and renders
-//! the panel state in an overlay that sits just above the game (or, detached, in an
-//! ordinary window). All logic lives in the core.
+//! captures the Title Region and the EXP Bar Region, feeds frames, hotkeys and drags to
+//! the core and renders the panel state in an overlay that sits just above the game
+//! (or, detached, in an ordinary window). All logic lives in the core.
 
 pub mod capture;
 pub mod gamewin;
@@ -14,10 +14,8 @@ mod setup;
 mod view;
 
 use compass_core::{
-    Action, Compass, Frame, GameWindow, Layer, PanelControl, PanelSizes, PanelState, Request, ScreenRect, Size,
-    TitleReader,
-    TitleReading,
-    default_title_region,
+    Action, Compass, ExpBarReader, ExpBarReading, Frame, GameWindow, Layer, PanelControl, PanelSizes,
+    PanelState, Request, ScreenRect, Size, TitleReader, TitleReading, default_title_region,
 };
 use meowdb::MeowDbSource;
 use setup::{Bridge, SetupWindows};
@@ -31,6 +29,8 @@ use tauri_plugin_opener::OpenerExt;
 
 /// Capture and recognition rate: ~3 Hz keeps a map change within about a second.
 const TICK: Duration = Duration::from_millis(333);
+/// EXP bar capture rate: EXP tracking needs the figures about once a second.
+const EXP_BAR_TICK: Duration = Duration::from_millis(1000);
 /// Game window and z-order check rate: a docked panel follows a moving game window
 /// and the overlay is back above the game within ~50 ms of the game coming to front.
 const WINDOW_TICK: Duration = Duration::from_millis(50);
@@ -71,9 +71,12 @@ pub(crate) enum Command {
     /// during a drag; otherwise the shell's own, or the system's (a DPI or monitor
     /// change).
     Moved(PhysicalPosition<i32>),
-    /// The title reader is done with a capture of `region`: what it read, or `None`
-    /// if the capture failed.
+    /// The reader is done with a capture of the Title Region `region`: what it read, or
+    /// `None` if the capture failed.
     Read { region: ScreenRect, reading: Option<TitleReading> },
+    /// The reader is done with a capture of the EXP Bar Region `region`: what it read,
+    /// or `None` if the capture failed.
+    ReadExpBar { region: ScreenRect, reading: Option<ExpBarReading> },
 }
 
 /// The overlay reports how tall its expanded content is, so the window fits it.
@@ -152,7 +155,7 @@ pub fn run() {
             let handle = app.handle().clone();
             // Both off the UI thread. Spawned from setup, so the process is already
             // Per-Monitor-V2 DPI aware.
-            let reader = TitleReaderThread::spawn(app.state::<Sender<Command>>().inner().clone())?;
+            let reader = ReaderThread::spawn(app.state::<Sender<Command>>().inner().clone())?;
             let channels = Channels { commands: commands_rx, picks: picks_rx };
             let windows = Windows { overlay, setup: setup_windows, hotkeys };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
@@ -166,9 +169,11 @@ pub fn run() {
             setup::setup_view,
             setup::pick_game_window,
             setup::start_marking,
-            setup::adjust_title_selection,
-            setup::confirm_title_selection,
-            setup::mark_title_region,
+            setup::adjust_selection,
+            setup::confirm_selection,
+            setup::mark_region,
+            setup::discard_exp_bar_mark,
+            setup::clear_exp_bar_region,
             setup::cancel_marking,
             setup::finish_setup,
             search::panel_press,
@@ -195,54 +200,81 @@ struct Windows {
 }
 
 /// What the compass loop hears from hotkeys, the overlay, the setup window and the
-/// title reader.
+/// reader thread.
 struct Channels {
     commands: Receiver<Command>,
     /// Titles of game windows the player picked by hand.
     picks: Receiver<String>,
 }
 
-/// Captures and reads the Title Region on its own thread. Reading a title takes tens of
-/// ms (far more in a debug build), so the compass loop never waits for it: it keeps
-/// following the game window at its own pace and takes each reading when it arrives.
-struct TitleReaderThread {
-    regions: Sender<ScreenRect>,
-    /// The clock frames and ticks are timed by.
-    start: Instant,
-    /// A capture was asked for and its reading hasn't come back yet.
-    busy: bool,
+/// A region for the reader thread to capture and read.
+#[derive(Debug, Clone, Copy)]
+enum Capture {
+    Title(ScreenRect),
+    ExpBar(ScreenRect),
 }
 
-impl TitleReaderThread {
+/// Captures and reads the Title Region and the EXP Bar Region on its own thread. Reading
+/// takes tens of ms (far more in a debug build), so the compass loop never waits for it:
+/// it keeps following the game window at its own pace and takes each reading when it
+/// arrives.
+struct ReaderThread {
+    captures: Sender<Capture>,
+    /// The clock frames and ticks are timed by.
+    start: Instant,
+    /// A Title Region capture was asked for and its reading hasn't come back yet.
+    title_busy: bool,
+    /// Likewise for the EXP Bar Region.
+    exp_bar_busy: bool,
+}
+
+impl ReaderThread {
     fn spawn(commands: Sender<Command>) -> std::io::Result<Self> {
         let start = Instant::now();
-        let (regions, asked) = mpsc::channel::<ScreenRect>();
-        std::thread::Builder::new().name("title-reader".into()).spawn(move || {
-            let reader = TitleReader::bundled();
-            for region in asked {
-                let r = region;
-                let reading = match capture::capture_rgba(r.x, r.y, r.width as i32, r.height as i32) {
-                    Ok(rgba) => {
-                        let at_ms = start.elapsed().as_millis() as u64;
-                        Some(reader.read(&Frame { width: r.width, height: r.height, rgba, at_ms }))
+        let (captures, asked) = mpsc::channel::<Capture>();
+        std::thread::Builder::new().name("reader".into()).spawn(move || {
+            // The two readers share one recogniser.
+            let title_reader = TitleReader::bundled();
+            let exp_bar_reader = ExpBarReader::bundled();
+            let grab = |r: ScreenRect| match capture::capture_rgba(r.x, r.y, r.width as i32, r.height as i32) {
+                Ok(rgba) => {
+                    let at_ms = start.elapsed().as_millis() as u64;
+                    Some(Frame { width: r.width, height: r.height, rgba, at_ms })
+                }
+                Err(e) => {
+                    eprintln!("capture failed: {e}");
+                    None
+                }
+            };
+            for capture in asked {
+                let command = match capture {
+                    Capture::Title(region) => {
+                        Command::Read { region, reading: grab(region).map(|f| title_reader.read(&f)) }
                     }
-                    Err(e) => {
-                        eprintln!("capture failed: {e}");
-                        None
+                    Capture::ExpBar(region) => {
+                        Command::ReadExpBar { region, reading: grab(region).map(|f| exp_bar_reader.read(&f)) }
                     }
                 };
-                if commands.send(Command::Read { region, reading }).is_err() {
+                if commands.send(command).is_err() {
                     return;
                 }
             }
         })?;
-        Ok(Self { regions, start, busy: false })
+        Ok(Self { captures, start, title_busy: false, exp_bar_busy: false })
     }
 
-    /// Capture and read `region`, unless the last capture is still being read.
-    fn read(&mut self, region: ScreenRect) {
-        if !self.busy {
-            self.busy = self.regions.send(region).is_ok();
+    /// Capture and read the Title Region `region`, unless the last capture of it is
+    /// still being read.
+    fn read_title(&mut self, region: ScreenRect) {
+        if !self.title_busy {
+            self.title_busy = self.captures.send(Capture::Title(region)).is_ok();
+        }
+    }
+
+    /// Likewise for the EXP Bar Region.
+    fn read_exp_bar(&mut self, region: ScreenRect) {
+        if !self.exp_bar_busy {
+            self.exp_bar_busy = self.captures.send(Capture::ExpBar(region)).is_ok();
         }
     }
 
@@ -255,7 +287,7 @@ fn compass_loop(
     app: AppHandle,
     windows: Windows,
     mut compass: Compass,
-    mut reader: TitleReaderThread,
+    mut reader: ReaderThread,
     channels: Channels,
     settings_path: PathBuf,
 ) {
@@ -267,10 +299,11 @@ fn compass_loop(
     let mut game = None;
     let mut expanded = EXPANDED;
     let mut next_capture = Instant::now();
+    let mut next_exp_bar_capture = Instant::now();
     let mut next_window_check = Instant::now();
     loop {
         // Wait for the player until the next check is due, so hotkeys act at once.
-        let due = next_capture.min(next_window_check);
+        let due = next_capture.min(next_exp_bar_capture).min(next_window_check);
         match channels.commands.recv_timeout(due.saturating_duration_since(Instant::now())) {
             Ok(Command::Act(action)) => {
                 compass.act(action);
@@ -300,11 +333,17 @@ fn compass_loop(
                 }
             }
             Ok(Command::Read { region, reading }) => {
-                reader.busy = false;
+                reader.title_busy = false;
                 // A reading of a region no longer captured (setup marked a new one, or
                 // the game window moved) would judge the wrong spot.
                 if let (Some(reading), true) = (reading, compass.panel_state().title_region == Some(region)) {
                     compass.on_reading(reading);
+                }
+            }
+            Ok(Command::ReadExpBar { region, reading }) => {
+                reader.exp_bar_busy = false;
+                if let (Some(reading), true) = (reading, compass.panel_state().exp_bar_region == Some(region)) {
+                    compass.on_exp_bar_reading(reading);
                 }
             }
             Err(RecvTimeoutError::Timeout) => {}
@@ -332,7 +371,14 @@ fn compass_loop(
             // The region the player marked; none until setup is done, nor after the
             // game's resolution changes.
             if let Some(region) = compass.panel_state().title_region {
-                reader.read(region);
+                reader.read_title(region);
+            }
+        }
+        if Instant::now() >= next_exp_bar_capture {
+            next_exp_bar_capture = Instant::now() + EXP_BAR_TICK;
+            // None while EXP tracking is off.
+            if let Some(region) = compass.panel_state().exp_bar_region {
+                reader.read_exp_bar(region);
             }
         }
         let state = compass.panel_state();

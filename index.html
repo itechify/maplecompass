@@ -20,6 +20,7 @@
             <button type="button" class="icon-button" id="open-search" data-control="search" aria-label="Search a mob">🔍</button>
             <button type="button" class="icon-button" id="next-candidate" data-control="chooseCandidate" aria-label="Next map with this title" hidden>⇆</button>
             <button type="button" class="icon-button" id="open-meowdb" data-control="openMeowdbPage" aria-label="Open this map on MeowDB" hidden>↗</button>
+            <button type="button" class="icon-button" id="reset-session" data-control="resetSession" aria-label="Reset the Session: measure EXP afresh" hidden>↺</button>
             <button type="button" class="icon-button" id="cycle-placement" data-control="cyclePlacement" aria-label="Move the panel: inside, docked right, docked left or detached">⧉</button>
             <button type="button" class="icon-button" id="open-setup" data-control="setup" aria-label="Help &amp; setup">?</button>
             <button type="button" class="icon-button" id="collapse" data-control="togglePanel" aria-label="Collapse to an icon">–</button>
@@ -27,6 +28,27 @@
         </header>
         <p class="note" id="recovery" role="status" hidden></p>
         <p class="note problem" id="hotkey-problem" role="status" hidden></p>
+        <section class="tracking" id="tracking" aria-label="EXP tracking" hidden>
+          <p class="waiting" id="tracking-waiting">EXP tracking: waiting for EXP</p>
+          <div id="tracking-figures">
+            <p class="headline">
+              <span class="label">Time to Level</span>
+              <span class="time-to-level" id="time-to-level"></span>
+              <span class="tag" id="tracking-tag" hidden></span>
+            </p>
+            <table class="rates">
+              <thead>
+                <tr><th></th><th>Rolling 5 min</th><th>Session</th></tr>
+              </thead>
+              <!-- Meso and item rows come later, from the Pickup Log. -->
+              <tbody>
+                <tr><th>EXP/h</th><td id="rolling-exp"></td><td id="session-exp"></td></tr>
+                <tr><th>%/h</th><td id="rolling-percent"></td><td id="session-percent"></td></tr>
+              </tbody>
+            </table>
+            <p class="extra" id="tracking-extra" hidden></p>
+          </div>
+        </section>
         <section id="data" hidden>
           <section class="candidates" id="candidates" hidden>
             <p class="note" id="candidates-note"></p>
@@ -124,5 +146,6 @@
       </section>
     </main>
     <img class="icon" src="/assets/icon.svg" alt="MapleCompass" draggable="false" />
+    <span class="badge" id="badge" hidden></span>
   </body>
 </html>
