@@ -33,22 +33,26 @@ export type SearchResult = {
 /** Mirror of `compass_core::Travel`: taxi rides between towns, and Teleport Scrolls to towns. */
 export type Travel = { taxis: boolean; teleportScrolls: boolean };
 
+/** Mirror of `compass_core::SearchView`: the search view's open step. */
+export type SearchView = "mobs" | "maps";
+
+/** Mirror of `compass_core::HuntingTarget`: the mob and map picked, with the map's figures and route. */
+export type HuntingTarget = { mob: MobChoice; map: SearchResult };
+
 /** Mirror of `compass_core::SearchState`. */
 export type SearchState = {
-  /** The overlay is in search mode: query box, every result, the highlighted one's route. */
-  searchMode: boolean;
+  /** The search view's open step, which takes over the panel; null for the normal view. */
+  view: SearchView | null;
   query: string;
   suggestions: MobChoice[];
   highlighted: number | null;
+  /** The mob whose map list the search view shows. */
   picked: MobChoice | null;
-  /** Every result: search mode's list. */
+  /** The picked mob's ranked map list. */
   results: SearchResult[];
-  /** The first five results: the list outside search mode. */
-  topResults: SearchResult[];
-  /** How many results there are besides the panel's. */
-  moreResults: number;
   /** The picked mob spawns only on Event maps, which search leaves out. */
   onlyOnEventMaps: boolean;
+  /** The map Enter would make the Hunting Target. */
   highlightedResult: number | null;
   /** Which result is the nearest with a route. */
   nearest: number | null;
@@ -56,6 +60,8 @@ export type SearchState = {
   crawl: CrawlProgress;
   /** What Distances count besides portals and ships (the checkboxes). */
   travel: Travel;
+  /** The panel's Hunting section, until the player arrives or clears it. */
+  hunting: HuntingTarget | null;
 };
 
 export const TIER_NAMES: Record<DensityTier, string> = { high: "High", medium: "Medium", low: "Low" };
@@ -135,9 +141,21 @@ export function resultsHead(): HTMLTableSectionElement {
   return head;
 }
 
+/** A result's Distance as the map list and the Hunting section read it ("5 · ship"), with why. */
+export function distanceWithTravel(result: SearchResult): { text: string; title: string } {
+  const distance = distanceText(result.distance);
+  const travel = travelMarker(result);
+  const travelTitle = result.travel.map((step) => STEP_TITLES[step]).join(", ");
+  return travel
+    ? { text: `${distance.text} · ${travel}`, title: `${distance.title}, by ${travelTitle}` }
+    : distance;
+}
+
 /** One result as table cells: map (name over street), Density, Spawn Share, tier, Distance. */
 export function resultRow(result: SearchResult): HTMLTableRowElement {
   const row = document.createElement("tr");
+  row.id = `map-${result.mapId}`;
+  row.dataset.id = result.mapId;
   const where = document.createElement("td");
   const name = document.createElement("span");
   name.className = "result-map";
@@ -153,14 +171,9 @@ export function resultRow(result: SearchResult): HTMLTableRowElement {
     return td;
   };
   // "5 · ship": a route that isn't just portals says what else it takes.
-  const distance = distanceText(result.distance);
-  const travel = travelMarker(result);
-  const distanceCell = cell(
-    travel ? `${distance.text} · ${travel}` : distance.text,
-    typeof result.distance === "string" ? "distance none" : "distance",
-  );
-  const travelTitle = result.travel.map((step) => STEP_TITLES[step]).join(", ");
-  distanceCell.title = travel ? `${distance.title}, by ${travelTitle}` : distance.title;
+  const distance = distanceWithTravel(result);
+  const distanceCell = cell(distance.text, typeof result.distance === "string" ? "distance none" : "distance");
+  distanceCell.title = distance.title;
   row.append(
     where,
     cell(density(result.densityHundredths)),
