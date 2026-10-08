@@ -27,6 +27,8 @@ type SetupView = {
     expBarKept: boolean;
   };
   unavailableHotkeys: string[];
+  /** Those of them that don't name a key combination; the rest another app has. */
+  invalidHotkeys: string[];
   recognition: { status: "starting" | "ready" | "savedCopy" | "unavailable" };
   game: { width: number; height: number } | null;
   gameTitle: string;
@@ -86,6 +88,8 @@ function render() {
   const notice = openedFor ? NOTICES[openedFor] : "";
   $("notice").hidden = !notice;
   $("notice").textContent = notice;
+  // A changed window size is a problem to fix; a requested re-setup is just information.
+  $("notice").classList.toggle("problem", openedFor === "resolutionChanged");
 
   const windowStatus = game
     ? `Found the “${gameTitle}” window (${game.width}×${game.height}).`
@@ -104,27 +108,34 @@ function render() {
   const readKey = JSON.stringify([read, recognition.status]);
   if (readKey !== renderedRead) {
     renderedRead = readKey;
-    box.className = `test-read ${read?.status ?? "reading"}`;
+    // Recognised, the map shows as the overlay's title bar will show it.
+    let kind: "reading" | "recognised" | "problem" = "reading";
     if (!read || read.status === "reading") {
       box.textContent = "Reading the title…";
     } else if (read.status === "recognised") {
-      box.replaceChildren();
+      kind = "recognised";
+      const title = document.createElement("div");
+      title.className = "title";
       const street = document.createElement("p");
       street.className = "street";
       street.textContent = read.map.streetName;
       const map = document.createElement("p");
       map.className = "map";
-      map.textContent = `${read.map.mapName} ✓`;
-      box.append(street, map);
+      map.textContent = read.map.mapName;
+      title.append(street, map);
+      box.replaceChildren(title, tag("Recognised"));
     } else if (recognition.status === "starting") {
       box.textContent = "Loading MeowDB's map list…";
     } else if (recognition.status === "unavailable") {
+      kind = "problem";
       box.textContent =
         "Couldn't load MeowDB's map list, so no map can be recognised yet. Check your connection; MapleCompass tries again every minute.";
     } else {
+      kind = "problem";
       box.textContent =
         "No map recognised in the marked box. Check that the minimap title is showing, then mark a box around both lines with a little of the blue panel around them.";
     }
+    box.className = `test-read ${kind}`;
   }
   ($("title-next") as HTMLButtonElement).disabled = read?.status !== "recognised";
   $("test-credit").textContent = setup.credit ? `Map names from ${setup.credit}` : "";
@@ -140,15 +151,18 @@ function render() {
 
   const expRead = setup.expBarTestRead;
   const expBox = $("exp-test-read");
-  expBox.className = `test-read ${expRead?.status === "read" ? "recognised" : (expRead?.status ?? "reading")}`;
+  expBox.className = `test-read ${expRead?.status === "read" ? "recognised" : expRead?.status === "failed" ? "problem" : "reading"}`;
   if (!expRead || expRead.status === "reading") {
     expBox.textContent = "Reading the EXP bar…";
   } else if (expRead.status === "read") {
     const { exp, percentHundredths } = expRead.bar;
+    const title = document.createElement("div");
+    title.className = "title";
     const line = document.createElement("p");
-    line.className = "map";
-    line.textContent = `EXP ${exp.toLocaleString("en-US")} · ${(percentHundredths / 100).toFixed(2)}% ✓`;
-    expBox.replaceChildren(line);
+    line.className = "figures";
+    line.textContent = `EXP ${exp.toLocaleString("en-US")} [${(percentHundredths / 100).toFixed(2)}%]`;
+    title.append(line);
+    expBox.replaceChildren(title, tag("Read"));
   } else {
     expBox.textContent =
       "Couldn't read the EXP figures in the marked box. Check that the EXP bar is showing, then mark a box around the EXP number and the percentage in brackets.";
@@ -162,12 +176,44 @@ function render() {
   for (const label of document.querySelectorAll<HTMLElement>("[data-shortcut]")) {
     label.textContent = shortcut(label.dataset.shortcut as keyof Hotkeys);
   }
-  const taken = view.unavailableHotkeys.map(keyLabel);
-  $("hotkey-problem").hidden = taken.length === 0;
-  $("hotkey-problem").textContent =
-    `${taken.join(", ")} ${taken.length === 1 ? "is" : "are"} taken by another app (or invalid), so ` +
-    `${taken.length === 1 ? "that hotkey does" : "those hotkeys do"} nothing. Close the app that uses ` +
-    `${taken.length === 1 ? "it" : "them"}, or edit the hotkeys in ${view.settingsPath}, then restart MapleCompass.`;
+  $("hotkey-problem").textContent = hotkeyProblems(view);
+  $("hotkey-problem").hidden = $("hotkey-problem").textContent === "";
+}
+
+/** "Recognised" or "Read", in the overlay's tag vocabulary. */
+function tag(text: string): HTMLSpanElement {
+  const el = document.createElement("span");
+  el.className = "tag";
+  el.textContent = text;
+  return el;
+}
+
+/** Each hotkey that does nothing, with its real cause, then how to fix it. */
+function hotkeyProblems(view: SetupView): string {
+  const invalid = view.invalidHotkeys;
+  const taken = view.unavailableHotkeys.filter((k) => !invalid.includes(k));
+  if (taken.length + invalid.length === 0) return "";
+  const list = (keys: string[]) => keys.map(keyLabel).join(", ");
+  const sentences = [];
+  if (taken.length > 0) {
+    sentences.push(
+      taken.length === 1
+        ? `${list(taken)} is taken by another app, so it does nothing.`
+        : `${list(taken)} are taken by another app, so they do nothing.`,
+    );
+  }
+  if (invalid.length > 0) {
+    sentences.push(
+      invalid.length === 1 ? `${list(invalid)} isn't a key combination.` : `${list(invalid)} aren't key combinations.`,
+    );
+  }
+  // One way to recover, in one sentence.
+  sentences.push(
+    taken.length > 0
+      ? `Close the other app, or edit the hotkeys in ${view.settingsPath}, then restart MapleCompass.`
+      : `Edit the hotkeys in ${view.settingsPath}, then restart MapleCompass.`,
+  );
+  return sentences.join(" ");
 }
 
 function update(next: SetupView) {

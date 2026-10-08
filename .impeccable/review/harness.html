@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/results.css" />
+    <title>Overlay review harness</title>
+    <style>
+      html {
+        background: #222 url("/samples/minimap/victoria-road__kerning-city--window.png") no-repeat;
+        background-size: 1916px auto;
+        background-position: -1020px -40px;
+        overflow: visible !important;
+      }
+      body { width: 380px; margin: 150px 16px 0 auto; overflow: visible !important; }
+      body.collapsed { width: 44px; height: 44px; }
+      body.collapsed .icon { width: 44px; height: 44px; }
+      #h { position: fixed; left: 6px; bottom: 6px; font: 12px monospace; color: #fff; background: #000a; padding: 2px 5px; }
+    </style>
+    <script>
+      const cbs = {};
+      let next = 1;
+      window.__handlers = {};
+      window.__TAURI_INTERNALS__ = {
+        metadata: { currentWindow: { label: "main" }, currentWebview: { windowLabel: "main", label: "main" } },
+        transformCallback(cb) { const id = next++; cbs[id] = cb; return id; },
+        unregisterCallback(id) { delete cbs[id]; },
+        async invoke(cmd, args) {
+          if (cmd === "plugin:event|listen") { window.__handlers[args.event] = cbs[args.handler]; return 1; }
+          if (cmd === "panel_height") { document.getElementById("h").textContent = "panel " + args.height + "px"; }
+          return null;
+        },
+      };
+      window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
+    </script>
+  </head>
+  <body class="hidden">
+    <div id="h"></div>
+    <script type="module">
+      const page = new DOMParser().parseFromString(await (await fetch("/index.html")).text(), "text/html");
+      document.body.prepend(page.getElementById("panel"), page.getElementById("icon"), page.getElementById("badge"));
+      await import("/src/main.ts");
+      const mob = (name, level, hp, exp, share) => ({ name, level, hp, exp, spawnCount: 1, spawnSharePercent: share });
+      const construction = {
+        status: "ready",
+        summary: { mobsPerHour: { solo: 19285, fullParty: 25714 }, expPerHour: { solo: 297499, fullParty: 396667 } },
+        listedMobs: [mob("Red Snail", 4, 68, 8, 43), mob("Orange Mushroom", 8, 142, 15, 17), mob("Dark Stump", 11, 236, 21, 20), mob("Octopus", 12, 191, 23, 15), mob("Axe Stump", 17, 371, 32, 4)],
+        moreMobs: { count: 1, levels: { lowest: 19, highest: 19 } },
+        hiddenPortals: [
+          { name: "hiden00", toMapId: "010003081", toMapName: "Northern Top of Construction Site", toStreetName: "Hidden Street", toHiddenStreet: true, quest: false, position: "right, upper", spot: { column: 3, row: 0 } },
+          { name: "q00", toMapId: "103000100", toMapName: "Subway Ticketing Booth", toStreetName: "Kerning City", toHiddenStreet: false, quest: true, position: "far left, lower", spot: { column: 0, row: 2 } },
+        ],
+      };
+      construction.mobs = [...construction.listedMobs, mob("Blue Mushroom", 19, 342, 35, 2)];
+      const base = (over = {}) => ({
+        recognition: { status: "ready" },
+        map: { id: "010003080", streetName: "Victoria Road", mapName: "Construction Site North of Kerning City", url: "" },
+        confidence: 96, notSure: false, candidates: null, data: construction,
+        credit: "NiaMeowDB (meowdb.com)", expanded: true, editMode: false, gameFound: true,
+        placementMode: "inside", layer: "aboveGame", draggable: false, setup: { needed: null },
+        hotkeys: { togglePanel: "ctrl+shift+c", cyclePlacement: "ctrl+shift+p", openMeowdbPage: "ctrl+shift+m", setup: "ctrl+shift+s", chooseCandidate: "ctrl+shift+n", search: "ctrl+shift+f", resetSession: "ctrl+shift+r" },
+        hotkeysLive: true, expBarRegion: null, expBar: null,
+        expTracking: { state: "off", timeToLevelS: null, timeToLevelBadge: null, rolling: null, sessionAverage: null, ceilingShareHundredths: null, deaths: { count: 0, expLost: 0, percentLostHundredths: 0 } },
+        search: { view: null, query: "", suggestions: [], highlighted: null, picked: null, results: [], onlyOnEventMaps: false, highlightedResult: null, nearest: null, credit: null, crawl: { known: 0, total: 0, done: true }, travel: { taxis: false, teleportScrolls: false }, hunting: null },
+        unavailableHotkeys: [], invalidHotkeys: [], gameWindowTitle: "MapleStory", ...over,
+      });
+      const mushroomTown = {
+        status: "ready", summary: { mobsPerHour: { solo: 412, fullParty: 1860 }, expPerHour: { solo: 6180, fullParty: 27900 } },
+        listedMobs: [mob("Blue Snail", 2, 51, 4, 40), mob("Stump", 5, 133, 10, 35), mob("Orange Mushroom", 8, 142, 15, 25)], moreMobs: null,
+        hiddenPortals: [{ name: "h0", toMapId: "910000000", toMapName: "Snail Hunting Ground I", toStreetName: "Maple Road", toHiddenStreet: false, quest: false, position: "centre, middle", spot: { column: 2, row: 1 } }],
+      };
+      mushroomTown.mobs = mushroomTown.listedMobs;
+      const candidates = (chosen, shown) => ({
+        chosen, shown, maps: [
+          { id: "000000010", outline: { mobLevels: { lowest: 2, highest: 8 }, firstMobs: ["Blue Snail", "Stump", "Orange Mushroom"], hiddenPortals: 1 } },
+          { id: "000000020", outline: { mobLevels: null, firstMobs: [], hiddenPortals: 0 } },
+          { id: "000000030", outline: null },
+        ],
+      });
+      const manyMobs = Array.from({ length: 20 }, (_, i) => mob(["Master Chronos the Clockwork Guardian", "Jr. Wraith", "Wraith", "Stone Golem", "Dark Stone Golem", "Mixed Golem", "Ice Drake", "Dark Drake"][i % 8], 20 + i * 3, 4000 + i * 900, 120 + i * 11, 5));
+      const states = {
+        normal: base(),
+        ambiguous: base({ map: { id: "000000010", streetName: "Maple Road", mapName: "Mushroom Town", url: "" }, candidates: candidates(false, 0), data: mushroomTown }),
+        notsure: base({ map: { id: "101010101", streetName: "Victoria Road", mapName: "The Tree That Grew II", url: "" }, notSure: true }),
+        offline: base({ data: { ...construction, status: "savedCopy", savedAtUnixMs: 1790812800000 }, unavailableHotkeys: ["ctrl+shift+m", "ctrl+shift+banana"], invalidHotkeys: ["ctrl+shift+banana"] }),
+        reading: base({ map: null, data: { status: "noMap" } }),
+        edit: base({
+          editMode: true, draggable: true,
+          map: { id: "1", streetName: "Ludibrium Clocktower Lower Floor", mapName: "Forgotten Path of Time <Lost Time 4> Deep", url: "" },
+          data: { status: "ready", summary: { mobsPerHour: { solo: 9120, fullParty: 14200 }, expPerHour: { solo: 1820400, fullParty: 2711000 } }, mobs: manyMobs, listedMobs: manyMobs.slice(0, 5), moreMobs: { count: 15, levels: { lowest: 35, highest: 77 } }, hiddenPortals: [] },
+        }),
+        collapsed: base({ expanded: false, notSure: true }),
+        chosen: base({
+          map: { id: "000000010", streetName: "Maple Road", mapName: "Mushroom Town", url: "" }, candidates: candidates(true, 0),
+          data: { ...mushroomTown, hiddenPortals: [...mushroomTown.hiddenPortals, { name: "x", toMapId: "020000098", toMapName: "Orbis Tower <8th Floor>", toStreetName: "Orbis", toHiddenStreet: false, quest: false, position: "position unknown", spot: null }] },
+        }),
+        setup: base({ map: null, data: { status: "noMap" }, setup: { needed: "resolutionChanged" } }),
+        hunting: base({
+          expTracking: { state: "active", timeToLevelS: 2820, timeToLevelBadge: "47m", rolling: { expPerHour: 61200, percentPerHourHundredths: 1290 }, sessionAverage: { expPerHour: 58400, percentPerHourHundredths: 1230 }, ceilingShareHundredths: 2050, deaths: { count: 1, expLost: 120, percentLostHundredths: 210 } },
+          search: { view: null, query: "", suggestions: [], highlighted: null, picked: null, results: [], onlyOnEventMaps: false, highlightedResult: null, nearest: null, credit: "NiaMeowDB (meowdb.com)", crawl: { known: 312, total: 422, done: false }, travel: { taxis: true, teleportScrolls: false },
+            hunting: { mob: { id: "1210100", name: "Pig", level: 7 }, map: { mapId: "100030000", streetName: "Victoria Road", mapName: "Pig Beach", densityHundredths: 1450, spawnSharePercent: 62, tier: "high", distance: { mapChanges: 3 }, travel: ["taxi"],
+              route: [ { mapId: "a", streetName: "Victoria Road", mapName: "Construction Site North of Kerning City", by: null }, { mapId: "b", streetName: "Victoria Road", mapName: "Kerning City", by: "portal" }, { mapId: "c", streetName: "Victoria Road", mapName: "Lith Harbor", by: "taxi" }, { mapId: "d", streetName: "Victoria Road", mapName: "Pig Beach", by: "portal" } ] } } },
+        }),
+        search: base({
+          search: { view: "maps", query: "pig", suggestions: [], highlighted: null, picked: { id: "1210100", name: "Pig", level: 7 }, onlyOnEventMaps: false, highlightedResult: 1, nearest: 0, credit: "NiaMeowDB (meowdb.com)", crawl: { known: 422, total: 422, done: true }, travel: { taxis: true, teleportScrolls: false }, hunting: null,
+            results: [
+              { mapId: "1", streetName: "Victoria Road", mapName: "Henesys Hunting Ground I", densityHundredths: 900, spawnSharePercent: 40, tier: "medium", distance: { mapChanges: 2 }, travel: [], route: [] },
+              { mapId: "2", streetName: "Victoria Road", mapName: "Pig Beach", densityHundredths: 1450, spawnSharePercent: 62, tier: "high", distance: { mapChanges: 3 }, travel: ["taxi"], route: [] },
+              { mapId: "3", streetName: "Hidden Street", mapName: "Pig Park", densityHundredths: 500, spawnSharePercent: 20, tier: "low", distance: "questOnly", travel: [], route: [] },
+            ] } }),
+        searchmobs: base({
+          search: { view: "mobs", query: "sn", suggestions: [ { id: "100100", name: "Snail", level: 1 }, { id: "100101", name: "Blue Snail", level: 2 }, { id: "130101", name: "Red Snail", level: 4 } ], highlighted: 1, picked: null, onlyOnEventMaps: false, highlightedResult: null, nearest: null, credit: "NiaMeowDB (meowdb.com)", crawl: { known: 312, total: 422, done: false }, travel: { taxis: false, teleportScrolls: false }, hunting: null, results: [] } }),
+        town: base({ map: { id: "010003000", streetName: "Victoria Road", mapName: "Kerning City", url: "" }, data: { status: "ready", summary: null, mobs: [], listedMobs: [], moreMobs: null, hiddenPortals: [] } }),
+      };
+      const s = new URLSearchParams(location.search).get("s") ?? "normal";
+      // ?w=: the panel resized to this width (CSS px).
+      const w = new URLSearchParams(location.search).get("w");
+      if (w) document.body.style.width = `${w}px`;
+      window.__handlers["overlay-state"]({ event: "overlay-state", id: 1, payload: states[s] });
+    </script>
+  </body>
+</html>

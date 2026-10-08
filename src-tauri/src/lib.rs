@@ -14,7 +14,7 @@ mod setup;
 mod view;
 
 use compass_core::{
-    Action, Compass, ExpBarReader, ExpBarReading, Frame, GameWindow, Layer, PanelControl, PanelSizes,
+    Action, Compass, ExpBarReader, ExpBarReading, Frame, GameWindow, Layer, MIN_PANEL_WIDTH, PanelControl, PanelSizes,
     PanelState, Request, ScreenRect, Size, TitleReader, TitleReading, default_title_region,
 };
 use meowdb::MeowDbSource;
@@ -24,7 +24,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent};
+use tauri::{AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent};
 use tauri_plugin_opener::OpenerExt;
 
 /// Capture and recognition rate: ~3 Hz keeps a map change within about a second.
@@ -37,10 +37,11 @@ const WINDOW_TICK: Duration = Duration::from_millis(50);
 /// Settings are saved once they have stopped changing for this long (after a drag).
 const SAVE_DELAY: Duration = Duration::from_millis(500);
 /// The overlay's size in CSS px (logical); `src/styles.css` lays out to fit. The
-/// expanded panel's height follows its content, as the overlay reports it; the core
-/// keeps it within the space where the panel is placed. It is never taller than
+/// expanded panel is as wide as the core says (the player sets it by a bottom corner),
+/// and its height follows its content, as the overlay reports it; the core keeps it
+/// within the space where the panel is placed. It is never taller than
 /// [`MAX_EXPANDED_HEIGHT`]: past that the route or the map list scrolls.
-const EXPANDED: (f64, f64) = (380.0, 72.0);
+const EXPANDED_HEIGHT: f64 = 72.0;
 const MIN_EXPANDED_HEIGHT: f64 = 44.0;
 const MAX_EXPANDED_HEIGHT: f64 = 600.0;
 const COLLAPSED: (f64, f64) = (44.0, 44.0);
@@ -71,6 +72,12 @@ pub(crate) enum Command {
     /// during a drag; otherwise the shell's own, or the system's (a DPI or monitor
     /// change).
     Moved(PhysicalPosition<i32>),
+    /// The overlay is about to start resizing its window: the player pressed the mouse
+    /// on one of the expanded panel's bottom corners.
+    ResizeStarted,
+    /// The overlay window is now this size. The player's resize only during a resize;
+    /// otherwise the shell's own.
+    Resized(PhysicalSize<u32>),
     /// The reader is done with a capture of the Title Region `region`: what it read, or
     /// `None` if the capture failed.
     Read { region: ScreenRect, reading: Option<TitleReading> },
@@ -90,6 +97,13 @@ fn panel_height(height: f64, commands: tauri::State<'_, Sender<Command>>) {
 #[tauri::command]
 fn panel_drag_started(commands: tauri::State<'_, Sender<Command>>) {
     let _ = commands.send(Command::DragStarted);
+}
+
+/// The overlay is about to start resizing its window by a bottom corner, so the sizes
+/// that follow are the player's.
+#[tauri::command]
+fn panel_resize_started(commands: tauri::State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::ResizeStarted);
 }
 
 /// Capture the default Title Region of the game's client area (the probe's guess; the
@@ -143,6 +157,10 @@ pub fn run() {
                 WindowEvent::Moved(to) => {
                     let _ = commands.send(Command::Moved(*to));
                 }
+                // Only sizes during a resize the overlay started are the player's.
+                WindowEvent::Resized(size) => {
+                    let _ = commands.send(Command::Resized(*size));
+                }
                 // Leaving the overlay for another window (the game) with the search view
                 // open is Esc: it has the keyboard only while it's in front. Not when
                 // focus only moved within our windows, as into the overlay's own webview.
@@ -166,6 +184,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             panel_height,
             panel_drag_started,
+            panel_resize_started,
             setup::setup_view,
             setup::pick_game_window,
             setup::start_marking,
@@ -297,7 +316,7 @@ fn compass_loop(
     let mut pending = (saved.clone(), Instant::now());
     let mut emitted: Option<PanelState> = None;
     let mut game = None;
-    let mut expanded = EXPANDED;
+    let mut expanded_height = EXPANDED_HEIGHT;
     let mut next_capture = Instant::now();
     let mut next_exp_bar_capture = Instant::now();
     let mut next_window_check = Instant::now();
@@ -323,10 +342,12 @@ fn compass_loop(
                 compass.search_pick(&id);
             }
             Ok(Command::PanelHeight(height)) => {
-                expanded.1 = height.clamp(MIN_EXPANDED_HEIGHT, MAX_EXPANDED_HEIGHT);
-                set_panel_sizes(&mut compass, &window.overlay, expanded);
+                expanded_height = height.clamp(MIN_EXPANDED_HEIGHT, MAX_EXPANDED_HEIGHT);
+                set_panel_sizes(&mut compass, &window.overlay, expanded_height);
             }
             Ok(Command::DragStarted) => window.drag_started(),
+            Ok(Command::ResizeStarted) => window.resize_started(),
+            Ok(Command::Resized(size)) => window.player_resized(size),
             Ok(Command::Moved(to)) => {
                 if window.player_moved() {
                     compass.act(Action::PanelMoved { x: to.x, y: to.y });
@@ -357,11 +378,11 @@ fn compass_loop(
         // Checked after every wake-up, so a stream of drag moves can't starve them.
         if Instant::now() >= next_window_check {
             next_window_check = Instant::now() + WINDOW_TICK;
-            game = find_game(&mut compass, &window.overlay, expanded);
+            game = find_game(&mut compass, &window.overlay, expanded_height);
             // The hotkeys are live only while the game or one of our windows is in front.
             compass.on_foreground(gamewin::foreground(game.map(|g| g.handle)));
-            if let Some(unavailable) = hotkeys.sync(&app, compass.panel_state().hotkeys_live) {
-                compass.hotkeys_unavailable(unavailable);
+            if let Some((taken, invalid)) = hotkeys.sync(&app, compass.panel_state().hotkeys_live) {
+                compass.hotkeys_unavailable(taken, invalid);
             }
         }
         // Fetches in flight (map index, map pages) are checked on, never waited for.
@@ -379,6 +400,18 @@ fn compass_loop(
             // None while EXP tracking is off.
             if let Some(region) = compass.panel_state().exp_bar_region {
                 reader.read_exp_bar(region);
+            }
+        }
+        // Once the player's resize settles, its width is the panel's (the core keeps it
+        // over the minimum), and where the window ended up is where the panel is: a
+        // bottom-left corner moves its left edge.
+        if let Some(size) = window.resize_settled()
+            && let Ok(scale) = window.overlay.scale_factor()
+        {
+            compass.act(Action::PanelResized { width: (f64::from(size.width) / scale).round() as u32 });
+            set_panel_sizes(&mut compass, &window.overlay, expanded_height);
+            if let Ok(at) = window.overlay.outer_position() {
+                compass.act(Action::PanelMoved { x: at.x, y: at.y });
             }
         }
         let state = compass.panel_state();
@@ -410,8 +443,8 @@ fn compass_loop(
 }
 
 /// Find the game window and the monitors, and feed them to the core.
-fn find_game(compass: &mut Compass, overlay: &WebviewWindow, expanded: (f64, f64)) -> Option<gamewin::Game> {
-    set_panel_sizes(compass, overlay, expanded);
+fn find_game(compass: &mut Compass, overlay: &WebviewWindow, expanded_height: f64) -> Option<gamewin::Game> {
+    set_panel_sizes(compass, overlay, expanded_height);
     let game = gamewin::find_game();
     compass.on_game_window(game.map(|g| GameWindow {
         client: g.client,
@@ -421,11 +454,13 @@ fn find_game(compass: &mut Compass, overlay: &WebviewWindow, expanded: (f64, f64
     game
 }
 
-/// Tell the core the panel's sizes in physical px, for the overlay's current display.
-fn set_panel_sizes(compass: &mut Compass, overlay: &WebviewWindow, expanded: (f64, f64)) {
+/// Tell the core the panel's sizes in physical px, for the overlay's current display:
+/// expanded, as wide as the core says and as tall as its content.
+fn set_panel_sizes(compass: &mut Compass, overlay: &WebviewWindow, expanded_height: f64) {
     if let Ok(scale) = overlay.scale_factor() {
+        let width = f64::from(compass.panel_state().panel_width);
         compass.set_panel_sizes(PanelSizes {
-            expanded: physical(expanded, scale),
+            expanded: physical((width, expanded_height), scale),
             collapsed: physical(COLLAPSED, scale),
         });
     }
@@ -465,6 +500,13 @@ struct OverlayWindow {
     above_game: Arc<AtomicBool>,
     /// When the player's drag started or last moved the overlay; `None` before any drag.
     dragged_at: Option<Instant>,
+    /// When the player's resize started or last resized the overlay; `None` when no
+    /// resize is under way.
+    resized_at: Option<Instant>,
+    /// The size the player's resize last gave the overlay.
+    resized_to: Option<PhysicalSize<u32>>,
+    /// Whether the window's minimum size is the expanded panel's (or none, collapsed).
+    min_size_expanded: Option<bool>,
 }
 
 impl OverlayWindow {
@@ -488,7 +530,41 @@ impl OverlayWindow {
             search_open: false,
             above_game,
             dragged_at: None,
+            resized_at: None,
+            resized_to: None,
+            min_size_expanded: None,
         }
+    }
+
+    /// The overlay page is about to resize the window: the player pressed the mouse on
+    /// a bottom corner of the expanded panel.
+    fn resize_started(&mut self) {
+        self.resized_at = Some(Instant::now());
+        self.resized_to = None;
+    }
+
+    /// The player is resizing the overlay: a resize started, and it has changed size
+    /// within `DRAG_SETTLE` of that or of its last change.
+    fn resizing(&self) -> bool {
+        self.resized_at.is_some_and(|at| at.elapsed() < DRAG_SETTLE)
+    }
+
+    /// The overlay window is now `size`: the player's, while they resize it. Any other
+    /// size is the shell's own.
+    fn player_resized(&mut self, size: PhysicalSize<u32>) {
+        if self.resizing() {
+            self.resized_at = Some(Instant::now());
+            self.resized_to = Some(size);
+        }
+    }
+
+    /// The size the player's resize settled on, once (when it changed anything).
+    fn resize_settled(&mut self) -> Option<PhysicalSize<u32>> {
+        if self.resized_at.is_some() && !self.resizing() {
+            self.resized_at = None;
+            return self.resized_to.take();
+        }
+        None
     }
 
     /// The overlay page is about to drag the window: the player pressed the mouse on its
@@ -549,7 +625,17 @@ impl OverlayWindow {
             _ => {}
         }
         self.search_open = search_open;
-        if let Some(placement) = state.placement {
+        // Expanded, the player can't resize the panel narrower than the core allows;
+        // collapsed, the window is the icon's size.
+        if self.min_size_expanded != Some(state.expanded) {
+            self.min_size_expanded = Some(state.expanded);
+            let min = LogicalSize::new(f64::from(MIN_PANEL_WIDTH), MIN_EXPANDED_HEIGHT);
+            let _ = self.overlay.set_min_size(state.expanded.then_some(min));
+        }
+        // While the player resizes it the size (and position) is theirs too.
+        if let Some(placement) = state.placement
+            && !self.resizing()
+        {
             // While the player drags it the position is theirs; once the drag settles it
             // goes where the core says (clear of the Title Region, inside the game).
             place(&self.overlay, placement, self.dragging() && !layer_changed);

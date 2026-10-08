@@ -13,7 +13,8 @@ mod common;
 use common::FakeSource;
 use common::world::SEARCH;
 use compass_core::{
-    Action, Compass, ExpBarRegion, GameWindow, Layer, PanelSizes, PlacementMode, Rect, ScreenRect,
+    Action, Compass, DEFAULT_PANEL_WIDTH, ExpBarRegion, GameWindow, Layer, MIN_PANEL_WIDTH, PanelSizes,
+    PlacementMode, Rect, ScreenRect,
     Settings, Size, TitleRegion,
 };
 
@@ -42,12 +43,37 @@ fn game(client: ScreenRect) -> Option<GameWindow> {
 }
 
 #[test]
-fn the_panel_starts_expanded_on_the_right_edge_of_the_game_vertically_centred() {
+fn the_panel_starts_expanded_on_the_right_edge_of_the_game_a_third_of_the_way_down() {
     let mut compass = compass();
     let state = compass.on_game_window(game(GAME));
     assert!(state.expanded);
-    // 16 px in from the client's right edge (2732), centred on its height.
-    assert_eq!(state.placement, Some(rect(2376, 674, 340, 72)));
+    // 16 px in from the client's right edge (2732), its top 400 px (a third) down.
+    assert_eq!(state.placement, Some(rect(2376, 510, 340, 72)));
+}
+
+#[test]
+fn the_default_panel_grows_downward_so_its_top_stays_put() {
+    let mut compass = compass();
+    compass.on_game_window(game(GAME));
+
+    let state = compass.set_panel_sizes(PanelSizes {
+        expanded: Size { width: 340, height: 450 },
+        collapsed: Size { width: 44, height: 44 },
+    });
+    assert_eq!(state.placement, Some(rect(2376, 510, 340, 450)));
+}
+
+#[test]
+fn a_default_panel_too_tall_for_the_space_below_its_spot_moves_up_to_fit() {
+    let mut compass = compass();
+    compass.on_game_window(game(GAME));
+
+    let state = compass.set_panel_sizes(PanelSizes {
+        expanded: Size { width: 340, height: 900 },
+        collapsed: Size { width: 44, height: 44 },
+    });
+    // Its bottom flush with the client's, at 1310.
+    assert_eq!(state.placement, Some(rect(2376, 410, 340, 900)));
 }
 
 #[test]
@@ -57,12 +83,12 @@ fn the_collapse_hotkey_shrinks_the_panel_to_an_icon_and_expands_it_again() {
 
     let state = compass.act(Action::ToggleExpanded);
     assert!(!state.expanded);
-    // The icon also sits on the right edge, vertically centred.
-    assert_eq!(state.placement, Some(rect(2672, 688, 44, 44)));
+    // The icon also sits on the right edge, at the same height.
+    assert_eq!(state.placement, Some(rect(2672, 510, 44, 44)));
 
     let state = compass.act(Action::ToggleExpanded);
     assert!(state.expanded);
-    assert_eq!(state.placement, Some(rect(2376, 674, 340, 72)));
+    assert_eq!(state.placement, Some(rect(2376, 510, 340, 72)));
 }
 
 #[test]
@@ -137,7 +163,7 @@ fn an_empty_settings_file_gives_the_default_panel_and_hotkeys() {
     assert_eq!(state.hotkeys.cycle_placement, "ctrl+shift+p");
     assert!(state.expanded);
     assert_eq!(state.placement_mode, PlacementMode::Inside);
-    assert_eq!(state.placement, Some(rect(2376, 674, 340, 72)));
+    assert_eq!(state.placement, Some(rect(2376, 510, 340, 72)));
 }
 
 #[test]
@@ -182,8 +208,8 @@ fn a_docked_panel_without_room_on_screen_falls_back_inside_the_game_window() {
 
     let state = compass.on_game_window(game(near_the_edge));
     assert_eq!(state.placement_mode, PlacementMode::DockedRight);
-    // The default inside spot: 16 px in from the client's right edge (3420), centred.
-    assert_eq!(state.placement, Some(rect(3064, 674, 340, 72)));
+    // The default inside spot: 16 px in from the client's right edge (3420), a third down.
+    assert_eq!(state.placement, Some(rect(3064, 510, 340, 72)));
 }
 
 #[test]
@@ -235,7 +261,7 @@ fn the_placement_hotkey_cycles_through_every_placement_and_back_inside() {
         (0..4).map(|_| compass.act(Action::CyclePlacement).placement_mode).collect();
     use PlacementMode::*;
     assert_eq!(modes, [DockedRight, DockedLeft, Detached, Inside]);
-    assert_eq!(compass.panel_state().placement, Some(rect(2376, 674, 340, 72)));
+    assert_eq!(compass.panel_state().placement, Some(rect(2376, 510, 340, 72)));
 }
 
 /// Inside -> docked right -> docked left -> detached.
@@ -538,4 +564,46 @@ fn a_panel_dragged_onto_the_exp_bar_is_moved_clear_of_it() {
     assert_eq!(placement, rect(962, 110 + 176, 340, 72));
     assert!(!overlaps(placement, state.title_region.unwrap()));
     assert!(!overlaps(placement, state.exp_bar_region.unwrap()));
+}
+
+#[test]
+fn the_panel_starts_at_its_default_width() {
+    let compass = compass();
+
+    assert_eq!(compass.panel_state().panel_width, DEFAULT_PANEL_WIDTH);
+    assert_eq!(DEFAULT_PANEL_WIDTH, 380);
+}
+
+#[test]
+fn a_panel_widened_by_its_bottom_corner_keeps_that_width_across_restarts() {
+    let mut compass = compass();
+
+    let state = compass.act(Action::PanelResized { width: 460 });
+    assert_eq!(state.panel_width, 460);
+    assert_eq!(compass.settings().panel_width, Some(460));
+
+    let mut restarted = restored(compass.settings());
+    assert_eq!(restarted.panel_state().panel_width, 460);
+    // Narrowed again later, the new width holds.
+    assert_eq!(restarted.act(Action::PanelResized { width: 400 }).panel_width, 400);
+}
+
+#[test]
+fn the_panel_is_never_narrower_than_its_minimum_width() {
+    let mut compass = compass();
+
+    let state = compass.act(Action::PanelResized { width: 120 });
+    assert_eq!(state.panel_width, MIN_PANEL_WIDTH);
+    assert_eq!(MIN_PANEL_WIDTH, 320);
+
+    // Nor when a settings file says otherwise.
+    let narrow = Settings { panel_width: Some(90), ..Settings::default() };
+    assert_eq!(restored(narrow).panel_state().panel_width, MIN_PANEL_WIDTH);
+}
+
+/// A core restored from these settings.
+fn restored(settings: Settings) -> Compass {
+    let mut compass = compass();
+    compass.restore(settings);
+    compass
 }

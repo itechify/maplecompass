@@ -58,9 +58,10 @@ pub fn install(app: &tauri::App, hotkeys: &Hotkeys, commands: Sender<Command>) -
 
 impl GlobalHotkeys {
     /// Register the hotkeys when they go live and release them when they stop. On
-    /// registering, returns the ones that are unavailable (invalid, or taken by another
-    /// app), for the core to show the player; `None` when nothing was registered.
-    pub fn sync(&mut self, app: &AppHandle, live: bool) -> Option<Vec<String>> {
+    /// registering, returns the ones that are unavailable, for the core to show the
+    /// player: those taken by another app, then those that aren't valid; `None` when
+    /// nothing was registered.
+    pub fn sync(&mut self, app: &AppHandle, live: bool) -> Option<(Vec<String>, Vec<String>)> {
         if live == self.live {
             return None;
         }
@@ -74,16 +75,16 @@ impl GlobalHotkeys {
             }
             return None;
         }
-        let mut unavailable = self.invalid.clone();
+        let mut taken = Vec::new();
         for (shortcut, text) in &self.bindings {
             match shortcuts.register(*shortcut) {
                 Ok(()) => self.registered.push(*shortcut),
                 Err(e) => {
                     eprintln!("hotkey {text} unavailable: {e}");
-                    unavailable.push(text.clone());
+                    taken.push(text.clone());
                 }
             }
         }
-        Some(unavailable)
+        Some((taken, self.invalid.clone()))
     }
 }

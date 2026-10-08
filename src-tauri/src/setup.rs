@@ -46,8 +46,10 @@ struct SetupView<'a> {
     game_title: &'a str,
     hotkeys: &'a Hotkeys,
     settings_path: &'a str,
-    /// Hotkeys another app has taken.
+    /// Hotkeys that do nothing: another app has them, or they are invalid.
     unavailable_hotkeys: &'a [String],
+    /// Those of them that don't name a key combination.
+    invalid_hotkeys: &'a [String],
 }
 
 #[derive(Serialize)]
@@ -146,6 +148,7 @@ impl SetupWindows {
             hotkeys: &state.hotkeys,
             settings_path: &self.settings_path,
             unavailable_hotkeys: &state.unavailable_hotkeys,
+            invalid_hotkeys: &state.invalid_hotkeys,
         };
         if self.view.send(&self.app, &view, &self.app.state::<Bridge>().view) {
             let selection = SelectionView { selection: state.setup.selection, target: state.setup.selection_target };

@@ -1,81 +1,135 @@
+@import "./theme.css";
+
+/* The setup window, in the shared window language of theme.css: the game's lavender
+   window under its steel title bar. It is clicked and tabbed through, so its buttons
+   (the game's window buttons, from theme.css) have hover, focus, pressed and disabled
+   states. */
 :root {
-  color-scheme: dark;
-  --bg: #121a24;
-  --text: #f2f5f8;
-  --muted: #9fb6cc;
-  --accent: #f5c542;
-  --ok: #7fd18b;
-  --bad: #f08a7a;
+  color-scheme: light;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 html,
 body {
   margin: 0;
   height: 100%;
-  background: var(--bg);
-  color: var(--text);
-  font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+  background: var(--body-solid);
+  color: var(--ink);
+  font: 14px/20px var(--font);
   user-select: none;
   cursor: default;
 }
 
 body {
-  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  padding: 18px 24px 20px;
-  overflow-y: auto;
-  scrollbar-color: var(--muted) var(--bg);
 }
 
+/* The game's window bar, full width: the compass, the window's name, the step. */
 header {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  padding: 9px 20px 10px;
+  background: var(--window-bar);
+  border-bottom: 1px solid var(--window-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* The app icon, the pixel-art compass, small. */
+.mark-icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
 }
 
 h1 {
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0;
   flex: 1;
   min-width: 0;
   flex-basis: 170px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--window-bar-ink);
+}
+
+.progress {
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--window-bar-ink);
+}
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 22px 18px;
+  overflow-y: auto;
+  scrollbar-color: var(--select-edge) transparent;
 }
 
 h2 {
-  font-size: 19px;
-  font-weight: 600;
   margin: 18px 0 8px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 23px;
+  color: var(--ink);
 }
 
-.progress,
+p {
+  margin: 0 0 10px;
+}
+
 .muted {
-  color: var(--muted);
+  color: var(--ink-2);
 }
 
+strong {
+  font-weight: 700;
+}
+
+/* A notice above the step: why setup opened again, or a hotkey that does nothing. */
 .notice {
+  position: relative;
   margin: 14px 0 0;
-  padding: 8px 12px;
-  border-left: 3px solid var(--accent);
-  background: rgba(245, 197, 66, 0.08);
   overflow-wrap: anywhere;
   user-select: text;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 18px;
 }
 
-.notice.error { border-color: var(--bad); }
-[hidden] { display: none !important; }
-.guide-button { padding: 5px 8px; font-size: 12px; margin-left: auto; }
-.progress { white-space: nowrap; }
-h2:focus { outline: none; }
-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-button:not(:disabled):hover { filter: brightness(1.1); }
-.shortcuts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; margin: 0 0 12px; }
-.shortcuts dt { color: var(--muted); }
-.shortcuts dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
-.shortcuts.compact { gap: 2px 12px; }
-h3 { font-size: 14px; font-weight: 600; margin: 12px 0 6px; }
+/* A problem gets the overlay's problem note: cream, amber edge, orange dot. */
+.notice.problem {
+  padding: 7px 12px 8px 28px;
+  border: 1px solid var(--problem-edge);
+  border-radius: 4px;
+  background: var(--problem-bg);
+  color: var(--problem-ink);
+}
+
+.notice.problem::before,
+.test-read.problem::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--orange);
+  box-shadow: 0 0 0 1px var(--orange-deep);
+}
+
+.notice + .notice {
+  margin-top: 8px;
+}
 
 section {
   flex: 1;
@@ -89,6 +143,7 @@ section[hidden] {
 }
 
 ul {
+  margin: 0 0 10px;
   padding-left: 20px;
 }
 
@@ -96,8 +151,12 @@ li {
   margin: 4px 0;
 }
 
+li::marker {
+  color: var(--ink-3);
+}
+
 .checklist li {
-  margin: 10px 0;
+  margin: 12px 0;
 }
 
 .checklist strong {
@@ -108,38 +167,96 @@ footer {
   margin-top: auto;
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  padding-top: 12px;
   flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
 }
 
+/* The game's window buttons: deep steel for the step forward, light steel beside it. */
 button {
-  font: inherit;
-  padding: 7px 16px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  background: var(--accent);
-  color: #1b1405;
-  font-weight: 600;
+  font: 700 13px/18px var(--font);
+  padding: 6px 16px 7px;
+  border: 1px solid var(--button-edge);
+  border-radius: 4px;
+  background: var(--button);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  color: #fff;
+  text-shadow: 0 1px 0 var(--button-edge);
+}
+
+button:hover {
+  background: var(--button-hover);
+}
+
+button:active {
+  background: var(--button-hover);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.45);
 }
 
 button.secondary {
-  background: transparent;
-  border-color: #3a4a5c;
-  color: var(--text);
-  font-weight: 400;
+  border-color: var(--frame);
+  background: var(--button-light);
+  box-shadow: inset 0 1px 0 #fff;
+  color: var(--ink);
+  text-shadow: none;
 }
 
-button:disabled {
-  opacity: 0.45;
+button.secondary:hover {
+  background: var(--button-light-hover);
 }
 
+button.secondary:active {
+  background: var(--button-light);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 2px;
+}
+
+/* Greyed out, as the game greys a button it won't take. */
+button:disabled,
+button.secondary:disabled {
+  border-color: var(--disabled-edge);
+  background: var(--disabled-bg);
+  box-shadow: none;
+  color: var(--disabled-ink);
+  text-shadow: none;
+}
+
+/* The test read: a plain note while reading, the overlay's problem note when nothing
+   is recognised, and, recognised, the map as the overlay's title bar will show it. */
 .test-read {
-  padding: 14px 16px;
-  border-radius: 8px;
-  background: rgba(16, 24, 36, 0.9);
-  border: 1px solid #2a3846;
-  overflow-wrap: anywhere;
+  position: relative;
+  margin-bottom: 10px;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.test-read.problem {
+  padding: 9px 12px 10px 28px;
+  border: 1px solid var(--problem-edge);
+  border-radius: 4px;
+  background: var(--problem-bg);
+  color: var(--problem-ink);
+}
+
+.test-read.recognised {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 9px;
+  border: 1px solid var(--window-edge);
+  border-radius: 4px;
+  background: var(--title-panel);
+}
+
+.test-read .title {
+  flex: 1;
+  min-width: 0;
 }
 
 .test-read p {
@@ -147,23 +264,95 @@ button:disabled {
 }
 
 .test-read .street {
-  color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 18px;
+  color: var(--title-ink);
+  text-shadow: var(--title-lettering);
 }
 
 .test-read .map {
   font-size: 18px;
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 23px;
+  letter-spacing: 0.01em;
+  color: var(--title-ink);
+  text-shadow: var(--title-lettering);
 }
 
-.test-read.recognised .map {
-  color: var(--ok);
+/* "Recognised", in the overlay's tag vocabulary. */
+.test-read .tag {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--tag-edge);
+  border-radius: 3px;
+  background: var(--tag-bg);
+  color: var(--tag-ink);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
 }
 
-.test-read.failed {
-  border-color: var(--bad);
+/* Its padding sits 2px lower than a notice's, and so does its dot. */
+.test-read.problem::before {
+  top: 14px;
 }
 
-.test-read.reading {
-  color: var(--muted);
+.credit {
+  font-size: 12px;
+}
+
+/* The overlay guide's button, small, at the right end of the title bar. */
+.guide-button {
+  margin-left: auto;
+  padding: 3px 9px 4px;
+  font-size: 12px;
+}
+
+/* A step's heading takes the focus when the step opens, for screen readers; it shows
+   no ring for that. */
+h2:focus {
+  outline: none;
+}
+
+h3 {
+  margin: 12px 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* The overlay's shortcuts: what each does, and its keys. */
+.shortcuts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 16px;
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.shortcuts dt {
+  color: var(--ink-2);
+}
+
+.shortcuts dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.shortcuts.compact {
+  gap: 2px 12px;
+}
+
+/* The EXP figures read, as the EXP bar writes them. */
+.test-read .figures {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 22px;
+  color: var(--ink);
+}
+
+.test-read {
+  overflow-wrap: anywhere;
 }

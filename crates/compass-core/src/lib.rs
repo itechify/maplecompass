@@ -28,12 +28,14 @@ mod world;
 pub use crawl::CrawlProgress;
 pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use map_data::{
-    HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty, Portal, PortalKind,
+    HiddenPortal, LISTED_MOBS, MapData, MapDataStatus, MapSpot, MapSummary, Mob, MoreMobs, PerParty,
+    Portal, PortalKind,
 };
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 pub use panel::{
-    Action, Foreground, GameWindow, InsideOffset, Layer, PanelSizes, PlacementMode, ScreenPoint,
+    Action, DEFAULT_PANEL_WIDTH, Foreground, GameWindow, InsideOffset, Layer, MIN_PANEL_WIDTH, PanelSizes,
+    PlacementMode, ScreenPoint,
     ScreenRect, Size,
 };
 pub use search::{DensityTier, HuntingTarget, MobChoice, RouteStop, SearchResult, SearchState, SearchView};
@@ -155,6 +157,9 @@ pub struct PanelState {
     pub game_found: bool,
     /// Where the player wants the panel: inside, docked or detached.
     pub placement_mode: PlacementMode,
+    /// The expanded panel's width (CSS px, logical), as the player set it by dragging
+    /// a bottom corner: never under [`MIN_PANEL_WIDTH`]. The shell sizes the window to it.
+    pub panel_width: u32,
     /// Where the overlay goes on screen; `None` while there is no game window, unless
     /// the panel is detached. Inside the game it never covers `title_region` or
     /// `exp_bar_region`: the overlay shows in screen captures, ours included.
@@ -182,8 +187,10 @@ pub struct PanelState {
     pub game_window_title: String,
     /// The global hotkeys to register, as the overlay names them.
     pub hotkeys: Hotkeys,
-    /// Hotkeys the shell couldn't register (another app has them), to tell the player.
+    /// Hotkeys the shell couldn't register, so they do nothing, to tell the player.
     pub unavailable_hotkeys: Vec<String>,
+    /// Those of them that don't name a key combination; the rest another app has.
+    pub invalid_hotkeys: Vec<String>,
     /// The shell keeps the hotkeys registered only while this is set: while the game or
     /// one of our windows is in front. Other apps keep their own Ctrl+Shift shortcuts.
     pub hotkeys_live: bool,
@@ -409,6 +416,7 @@ impl Compass {
                 }
             }
             Action::PanelMoved { x, y } => self.panel.moved_to(x, y),
+            Action::PanelResized { width } => self.panel.resized_to(width),
             Action::CyclePlacement => self.panel.cycle_placement(),
             Action::ChooseCandidate => {
                 self.shown_map.choose_next(&mut *self.source);
@@ -557,9 +565,11 @@ impl Compass {
         self.sync_panel()
     }
 
-    /// These hotkeys couldn't be registered (another app has them).
-    pub fn hotkeys_unavailable(&mut self, hotkeys: Vec<String>) -> &PanelState {
-        self.state.unavailable_hotkeys = hotkeys;
+    /// These hotkeys couldn't be registered: `taken` because another app has them,
+    /// `invalid` because they don't name a key combination.
+    pub fn hotkeys_unavailable(&mut self, taken: Vec<String>, invalid: Vec<String>) -> &PanelState {
+        self.state.unavailable_hotkeys = taken.into_iter().chain(invalid.iter().cloned()).collect();
+        self.state.invalid_hotkeys = invalid;
         self.sync_panel()
     }
 
@@ -577,6 +587,7 @@ impl Compass {
         self.panel.inside_offset = settings.inside_offset;
         self.panel.mode = settings.placement_mode;
         self.panel.detached_at = settings.detached_at;
+        self.panel.resized_to(settings.panel_width.unwrap_or(DEFAULT_PANEL_WIDTH));
         self.setup.saved = settings.title_region;
         self.setup.saved_exp_bar = settings.exp_bar_region;
         self.settings = settings;
@@ -599,6 +610,7 @@ impl Compass {
             inside_offset: self.panel.inside_offset,
             placement_mode: self.panel.mode,
             detached_at: self.panel.detached_at,
+            panel_width: (self.panel.width != DEFAULT_PANEL_WIDTH).then_some(self.panel.width),
             title_region: self.setup.saved,
             exp_bar_region: self.setup.saved_exp_bar,
             ..self.settings.clone()
@@ -670,6 +682,7 @@ impl Compass {
         self.state.expanded = self.panel.expanded;
         self.state.game_found = self.panel.game.is_some();
         self.state.placement_mode = self.panel.mode;
+        self.state.panel_width = self.panel.width;
         self.state.placement = self.panel.placement();
         self.state.layer = self.panel.layer();
         self.state.draggable = self.panel.draggable();

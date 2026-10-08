@@ -1,453 +1,1056 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-07T18:51:16.655Z",
+  "generatedAt": "2026-10-08T11:53:37.793Z",
   "title": "Design System: MapleCompass",
   "extensions": {
     "colorMeta": {
-      "accent": {
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(27.8% 0.065 268.5)",
+        "tonalRamp": [
+          "oklch(15% 0.065 268.5)",
+          "oklch(25% 0.065 268.5)",
+          "oklch(36% 0.065 268.5)",
+          "oklch(47% 0.065 268.5)",
+          "oklch(58% 0.065 268.5)",
+          "oklch(70% 0.065 268.5)",
+          "oklch(82% 0.065 268.5)",
+          "oklch(95% 0.026 268.5)"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Ink Steel",
+        "canonical": "oklch(44.5% 0.068 268.8)",
+        "tonalRamp": [
+          "oklch(15% 0.068 268.8)",
+          "oklch(25% 0.068 268.8)",
+          "oklch(36% 0.068 268.8)",
+          "oklch(47% 0.068 268.8)",
+          "oklch(58% 0.068 268.8)",
+          "oklch(70% 0.068 268.8)",
+          "oklch(82% 0.068 268.8)",
+          "oklch(95% 0.027 268.8)"
+        ]
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Ink Slate",
+        "canonical": "oklch(47.8% 0.056 268.8)",
+        "tonalRamp": [
+          "oklch(15% 0.056 268.8)",
+          "oklch(25% 0.056 268.8)",
+          "oklch(36% 0.056 268.8)",
+          "oklch(47% 0.056 268.8)",
+          "oklch(58% 0.056 268.8)",
+          "oklch(70% 0.056 268.8)",
+          "oklch(82% 0.056 268.8)",
+          "oklch(95% 0.022 268.8)"
+        ]
+      },
+      "body": {
+        "role": "neutral",
+        "displayName": "Window Lavender",
+        "canonical": "rgba(234, 232, 245, 0.95)",
+        "tonalRamp": [
+          "oklch(15% 0.018 293.1)",
+          "oklch(25% 0.018 293.1)",
+          "oklch(36% 0.018 293.1)",
+          "oklch(47% 0.018 293.1)",
+          "oklch(58% 0.018 293.1)",
+          "oklch(70% 0.018 293.1)",
+          "oklch(82% 0.018 293.1)",
+          "oklch(95% 0.007 293.1)"
+        ],
+        "note": "Translucent at 95% opacity; ramp derived from the opaque #eae8f5."
+      },
+      "body-solid": {
+        "role": "neutral",
+        "displayName": "Window Lavender, Opaque",
+        "canonical": "oklch(93.6% 0.018 293.1)",
+        "tonalRamp": [
+          "oklch(15% 0.018 293.1)",
+          "oklch(25% 0.018 293.1)",
+          "oklch(36% 0.018 293.1)",
+          "oklch(47% 0.018 293.1)",
+          "oklch(58% 0.018 293.1)",
+          "oklch(70% 0.018 293.1)",
+          "oklch(82% 0.018 293.1)",
+          "oklch(95% 0.007 293.1)"
+        ],
+        "note": "The body lavender with no translucency, for windows on the desktop (setup)."
+      },
+      "frame": {
+        "role": "neutral",
+        "displayName": "Frame Navy",
+        "canonical": "oklch(44.1% 0.074 264.2)",
+        "tonalRamp": [
+          "oklch(15% 0.074 264.2)",
+          "oklch(25% 0.074 264.2)",
+          "oklch(36% 0.074 264.2)",
+          "oklch(47% 0.074 264.2)",
+          "oklch(58% 0.074 264.2)",
+          "oklch(70% 0.074 264.2)",
+          "oklch(82% 0.074 264.2)",
+          "oklch(95% 0.030 264.2)"
+        ]
+      },
+      "bar-hairline": {
+        "role": "neutral",
+        "displayName": "Bar Hairline",
+        "canonical": "oklch(38.4% 0.084 266.0)",
+        "tonalRamp": [
+          "oklch(15% 0.084 266.0)",
+          "oklch(25% 0.084 266.0)",
+          "oklch(36% 0.084 266.0)",
+          "oklch(47% 0.084 266.0)",
+          "oklch(58% 0.084 266.0)",
+          "oklch(70% 0.084 266.0)",
+          "oklch(82% 0.084 266.0)",
+          "oklch(95% 0.034 266.0)"
+        ]
+      },
+      "street": {
+        "role": "neutral",
+        "displayName": "Street Navy",
+        "canonical": "oklch(29.9% 0.073 267.1)",
+        "tonalRamp": [
+          "oklch(15% 0.073 267.1)",
+          "oklch(25% 0.073 267.1)",
+          "oklch(36% 0.073 267.1)",
+          "oklch(47% 0.073 267.1)",
+          "oklch(58% 0.073 267.1)",
+          "oklch(70% 0.073 267.1)",
+          "oklch(82% 0.073 267.1)",
+          "oklch(95% 0.029 267.1)"
+        ]
+      },
+      "outline": {
+        "role": "neutral",
+        "displayName": "Lettering Outline",
+        "canonical": "oklch(32.5% 0.074 266.0)",
+        "tonalRamp": [
+          "oklch(15% 0.074 266.0)",
+          "oklch(25% 0.074 266.0)",
+          "oklch(36% 0.074 266.0)",
+          "oklch(47% 0.074 266.0)",
+          "oklch(58% 0.074 266.0)",
+          "oklch(70% 0.074 266.0)",
+          "oklch(82% 0.074 266.0)",
+          "oklch(95% 0.030 266.0)"
+        ]
+      },
+      "bar-top": {
+        "role": "neutral",
+        "displayName": "Title Bar Steel (top)",
+        "canonical": "oklch(92.9% 0.023 260.7)",
+        "tonalRamp": [
+          "oklch(15% 0.023 260.7)",
+          "oklch(25% 0.023 260.7)",
+          "oklch(36% 0.023 260.7)",
+          "oklch(47% 0.023 260.7)",
+          "oklch(58% 0.023 260.7)",
+          "oklch(70% 0.023 260.7)",
+          "oklch(82% 0.023 260.7)",
+          "oklch(95% 0.009 260.7)"
+        ]
+      },
+      "bar-mid": {
+        "role": "neutral",
+        "displayName": "Title Bar Steel (mid)",
+        "canonical": "oklch(82.3% 0.049 262.0)",
+        "tonalRamp": [
+          "oklch(15% 0.049 262.0)",
+          "oklch(25% 0.049 262.0)",
+          "oklch(36% 0.049 262.0)",
+          "oklch(47% 0.049 262.0)",
+          "oklch(58% 0.049 262.0)",
+          "oklch(70% 0.049 262.0)",
+          "oklch(82% 0.049 262.0)",
+          "oklch(95% 0.020 262.0)"
+        ]
+      },
+      "bar-base": {
+        "role": "neutral",
+        "displayName": "Title Bar Steel (base)",
+        "canonical": "oklch(73.9% 0.068 262.8)",
+        "tonalRamp": [
+          "oklch(15% 0.068 262.8)",
+          "oklch(25% 0.068 262.8)",
+          "oklch(36% 0.068 262.8)",
+          "oklch(47% 0.068 262.8)",
+          "oklch(58% 0.068 262.8)",
+          "oklch(70% 0.068 262.8)",
+          "oklch(82% 0.068 262.8)",
+          "oklch(95% 0.027 262.8)"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Window Rule",
+        "canonical": "rgba(62, 82, 124, 0.2)",
+        "tonalRamp": [
+          "oklch(15% 0.074 264.2)",
+          "oklch(25% 0.074 264.2)",
+          "oklch(36% 0.074 264.2)",
+          "oklch(47% 0.074 264.2)",
+          "oklch(58% 0.074 264.2)",
+          "oklch(70% 0.074 264.2)",
+          "oklch(82% 0.074 264.2)",
+          "oklch(95% 0.030 264.2)"
+        ],
+        "note": "Frame Navy at 20%: the hairline between parts of a window. Ramp from the opaque #3e527c."
+      },
+      "inset-bg": {
+        "role": "neutral",
+        "displayName": "Inset Ground",
+        "canonical": "rgba(255, 255, 255, 0.55)",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(36% 0 0)",
+          "oklch(47% 0 0)",
+          "oklch(58% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(82% 0 0)",
+          "oklch(95% 0 0)"
+        ],
+        "note": "White at 55% over the lavender body: the route box and the suggestions."
+      },
+      "inset-edge": {
+        "role": "neutral",
+        "displayName": "Inset Edge",
+        "canonical": "rgba(62, 82, 124, 0.3)",
+        "tonalRamp": [
+          "oklch(15% 0.074 264.2)",
+          "oklch(25% 0.074 264.2)",
+          "oklch(36% 0.074 264.2)",
+          "oklch(47% 0.074 264.2)",
+          "oklch(58% 0.074 264.2)",
+          "oklch(70% 0.074 264.2)",
+          "oklch(82% 0.074 264.2)",
+          "oklch(95% 0.030 264.2)"
+        ],
+        "note": "Frame Navy at 30%, edging an inset box. Ramp from the opaque #3e527c."
+      },
+      "portal": {
         "role": "primary",
-        "displayName": "Compass Gold",
+        "displayName": "Portal Ring Blue",
+        "canonical": "oklch(52.8% 0.190 260.5)",
         "tonalRamp": [
-          "oklch(15% 0.1513 87.87)",
-          "oklch(25% 0.1513 87.87)",
-          "oklch(35% 0.1513 87.87)",
-          "oklch(45% 0.1513 87.87)",
-          "oklch(60% 0.1513 87.87)",
-          "oklch(72% 0.1513 87.87)",
-          "oklch(84% 0.1513 87.87)",
-          "oklch(95% 0.1513 87.87)"
+          "oklch(15% 0.190 260.5)",
+          "oklch(25% 0.190 260.5)",
+          "oklch(36% 0.190 260.5)",
+          "oklch(47% 0.190 260.5)",
+          "oklch(58% 0.190 260.5)",
+          "oklch(70% 0.190 260.5)",
+          "oklch(82% 0.190 260.5)",
+          "oklch(95% 0.076 260.5)"
         ]
       },
-      "bg": {
-        "role": "neutral",
-        "displayName": "Midnight Slate",
-        "tonalRamp": [
-          "oklch(15% 0.0231 254.31)",
-          "oklch(25% 0.0231 254.31)",
-          "oklch(35% 0.0231 254.31)",
-          "oklch(45% 0.0231 254.31)",
-          "oklch(60% 0.0231 254.31)",
-          "oklch(72% 0.0231 254.31)",
-          "oklch(84% 0.0231 254.31)",
-          "oklch(95% 0.0231 254.31)"
-        ]
-      },
-      "text": {
-        "role": "neutral",
-        "displayName": "Clear Frost",
-        "tonalRamp": [
-          "oklch(15% 0.0051 247.88)",
-          "oklch(25% 0.0051 247.88)",
-          "oklch(35% 0.0051 247.88)",
-          "oklch(45% 0.0051 247.88)",
-          "oklch(60% 0.0051 247.88)",
-          "oklch(72% 0.0051 247.88)",
-          "oklch(84% 0.0051 247.88)",
-          "oklch(95% 0.0051 247.88)"
-        ]
-      },
-      "muted": {
-        "role": "neutral",
-        "displayName": "Blue Grey",
-        "tonalRamp": [
-          "oklch(15% 0.0405 247.17)",
-          "oklch(25% 0.0405 247.17)",
-          "oklch(35% 0.0405 247.17)",
-          "oklch(45% 0.0405 247.17)",
-          "oklch(60% 0.0405 247.17)",
-          "oklch(72% 0.0405 247.17)",
-          "oklch(84% 0.0405 247.17)",
-          "oklch(95% 0.0405 247.17)"
-        ]
-      },
-      "ok": {
-        "role": "secondary",
-        "displayName": "Recognition Green",
-        "tonalRamp": [
-          "oklch(15% 0.1274 147.75)",
-          "oklch(25% 0.1274 147.75)",
-          "oklch(35% 0.1274 147.75)",
-          "oklch(45% 0.1274 147.75)",
-          "oklch(60% 0.1274 147.75)",
-          "oklch(72% 0.1274 147.75)",
-          "oklch(84% 0.1274 147.75)",
-          "oklch(95% 0.1274 147.75)"
-        ]
-      },
-      "bad": {
-        "role": "secondary",
-        "displayName": "Retry Coral",
-        "tonalRamp": [
-          "oklch(15% 0.1274 29.87)",
-          "oklch(25% 0.1274 29.87)",
-          "oklch(35% 0.1274 29.87)",
-          "oklch(45% 0.1274 29.87)",
-          "oklch(60% 0.1274 29.87)",
-          "oklch(72% 0.1274 29.87)",
-          "oklch(84% 0.1274 29.87)",
-          "oklch(95% 0.1274 29.87)"
-        ]
-      },
-      "panel": {
-        "role": "neutral",
-        "displayName": "Midnight Slate Panel",
-        "tonalRamp": [
-          "oklch(15% 0.0269 258.30)",
-          "oklch(25% 0.0269 258.30)",
-          "oklch(35% 0.0269 258.30)",
-          "oklch(45% 0.0269 258.30)",
-          "oklch(60% 0.0269 258.30)",
-          "oklch(72% 0.0269 258.30)",
-          "oklch(84% 0.0269 258.30)",
-          "oklch(95% 0.0269 258.30)"
-        ]
-      },
-      "inset": {
-        "role": "neutral",
-        "displayName": "Midnight Slate Inset",
-        "tonalRamp": [
-          "oklch(15% 0.0269 258.30)",
-          "oklch(25% 0.0269 258.30)",
-          "oklch(35% 0.0269 258.30)",
-          "oklch(45% 0.0269 258.30)",
-          "oklch(60% 0.0269 258.30)",
-          "oklch(72% 0.0269 258.30)",
-          "oklch(84% 0.0269 258.30)",
-          "oklch(95% 0.0269 258.30)"
-        ]
-      },
-      "secondary-text": {
-        "role": "neutral",
-        "displayName": "Soft Frost",
-        "tonalRamp": [
-          "oklch(15% 0.0171 250.87)",
-          "oklch(25% 0.0171 250.87)",
-          "oklch(35% 0.0171 250.87)",
-          "oklch(45% 0.0171 250.87)",
-          "oklch(60% 0.0171 250.87)",
-          "oklch(72% 0.0171 250.87)",
-          "oklch(84% 0.0171 250.87)",
-          "oklch(95% 0.0171 250.87)"
-        ]
-      },
-      "warning": {
-        "role": "secondary",
-        "displayName": "Saved-copy Amber",
-        "tonalRamp": [
-          "oklch(15% 0.1115 82.94)",
-          "oklch(25% 0.1115 82.94)",
-          "oklch(35% 0.1115 82.94)",
-          "oklch(45% 0.1115 82.94)",
-          "oklch(60% 0.1115 82.94)",
-          "oklch(72% 0.1115 82.94)",
-          "oklch(84% 0.1115 82.94)",
-          "oklch(95% 0.1115 82.94)"
-        ]
-      },
-      "tag-text": {
-        "role": "neutral",
-        "displayName": "Cool Tag Text",
-        "tonalRamp": [
-          "oklch(15% 0.0289 246.51)",
-          "oklch(25% 0.0289 246.51)",
-          "oklch(35% 0.0289 246.51)",
-          "oklch(45% 0.0289 246.51)",
-          "oklch(60% 0.0289 246.51)",
-          "oklch(72% 0.0289 246.51)",
-          "oklch(84% 0.0289 246.51)",
-          "oklch(95% 0.0289 246.51)"
-        ]
-      },
-      "tag-fill": {
-        "role": "neutral",
-        "displayName": "Cool Tag Wash",
-        "tonalRamp": [
-          "oklch(15% 0.0405 247.17)",
-          "oklch(25% 0.0405 247.17)",
-          "oklch(35% 0.0405 247.17)",
-          "oklch(45% 0.0405 247.17)",
-          "oklch(60% 0.0405 247.17)",
-          "oklch(72% 0.0405 247.17)",
-          "oklch(84% 0.0405 247.17)",
-          "oklch(95% 0.0405 247.17)"
-        ]
-      },
-      "quest-fill": {
-        "role": "secondary",
-        "displayName": "Quest Amber Wash",
-        "tonalRamp": [
-          "oklch(15% 0.1115 82.94)",
-          "oklch(25% 0.1115 82.94)",
-          "oklch(35% 0.1115 82.94)",
-          "oklch(45% 0.1115 82.94)",
-          "oklch(60% 0.1115 82.94)",
-          "oklch(72% 0.1115 82.94)",
-          "oklch(84% 0.1115 82.94)",
-          "oklch(95% 0.1115 82.94)"
-        ]
-      },
-      "notice-fill": {
+      "portal-fill": {
         "role": "primary",
-        "displayName": "Compass Gold Notice Wash",
+        "displayName": "Portal Ring Fill",
+        "canonical": "oklch(96.8% 0.015 257.2)",
         "tonalRamp": [
-          "oklch(15% 0.1513 87.87)",
-          "oklch(25% 0.1513 87.87)",
-          "oklch(35% 0.1513 87.87)",
-          "oklch(45% 0.1513 87.87)",
-          "oklch(60% 0.1513 87.87)",
-          "oklch(72% 0.1513 87.87)",
-          "oklch(84% 0.1513 87.87)",
-          "oklch(95% 0.1513 87.87)"
+          "oklch(15% 0.015 257.2)",
+          "oklch(25% 0.015 257.2)",
+          "oklch(36% 0.015 257.2)",
+          "oklch(47% 0.015 257.2)",
+          "oklch(58% 0.015 257.2)",
+          "oklch(70% 0.015 257.2)",
+          "oklch(82% 0.015 257.2)",
+          "oklch(95% 0.006 257.2)"
         ]
       },
-      "selection-fill": {
+      "portal-inner": {
         "role": "primary",
-        "displayName": "Compass Gold Selection Wash",
+        "displayName": "Portal Inner Ring",
+        "canonical": "oklch(76.1% 0.095 259.0)",
         "tonalRamp": [
-          "oklch(15% 0.1513 87.87)",
-          "oklch(25% 0.1513 87.87)",
-          "oklch(35% 0.1513 87.87)",
-          "oklch(45% 0.1513 87.87)",
-          "oklch(60% 0.1513 87.87)",
-          "oklch(72% 0.1513 87.87)",
-          "oklch(84% 0.1513 87.87)",
-          "oklch(95% 0.1513 87.87)"
+          "oklch(15% 0.095 259.0)",
+          "oklch(25% 0.095 259.0)",
+          "oklch(36% 0.095 259.0)",
+          "oklch(47% 0.095 259.0)",
+          "oklch(58% 0.095 259.0)",
+          "oklch(70% 0.095 259.0)",
+          "oklch(82% 0.095 259.0)",
+          "oklch(95% 0.038 259.0)"
         ]
       },
-      "scrim": {
+      "mob": {
+        "role": "tertiary",
+        "displayName": "Mob Dot Red",
+        "canonical": "oklch(58.0% 0.202 28.6)",
+        "tonalRamp": [
+          "oklch(15% 0.200 28.6)",
+          "oklch(25% 0.200 28.6)",
+          "oklch(36% 0.200 28.6)",
+          "oklch(47% 0.200 28.6)",
+          "oklch(58% 0.200 28.6)",
+          "oklch(70% 0.200 28.6)",
+          "oklch(82% 0.200 28.6)",
+          "oklch(95% 0.080 28.6)"
+        ]
+      },
+      "mob-edge": {
+        "role": "tertiary",
+        "displayName": "Mob Dot Edge",
+        "canonical": "oklch(42.3% 0.150 28.9)",
+        "tonalRamp": [
+          "oklch(15% 0.150 28.9)",
+          "oklch(25% 0.150 28.9)",
+          "oklch(36% 0.150 28.9)",
+          "oklch(47% 0.150 28.9)",
+          "oklch(58% 0.150 28.9)",
+          "oklch(70% 0.150 28.9)",
+          "oklch(82% 0.150 28.9)",
+          "oklch(95% 0.060 28.9)"
+        ]
+      },
+      "select": {
         "role": "neutral",
-        "displayName": "Marking Scrim",
+        "displayName": "Selection Periwinkle",
+        "canonical": "oklch(89.9% 0.031 263.5)",
         "tonalRamp": [
-          "oklch(15% 0.0196 255.33)",
-          "oklch(25% 0.0196 255.33)",
-          "oklch(35% 0.0196 255.33)",
-          "oklch(45% 0.0196 255.33)",
-          "oklch(60% 0.0196 255.33)",
-          "oklch(72% 0.0196 255.33)",
-          "oklch(84% 0.0196 255.33)",
-          "oklch(95% 0.0196 255.33)"
+          "oklch(15% 0.031 263.5)",
+          "oklch(25% 0.031 263.5)",
+          "oklch(36% 0.031 263.5)",
+          "oklch(47% 0.031 263.5)",
+          "oklch(58% 0.031 263.5)",
+          "oklch(70% 0.031 263.5)",
+          "oklch(82% 0.031 263.5)",
+          "oklch(95% 0.012 263.5)"
         ]
       },
-      "secondary-border": {
+      "select-edge": {
         "role": "neutral",
-        "displayName": "Secondary Slate Border",
+        "displayName": "Selection Edge",
+        "canonical": "oklch(75.2% 0.067 262.8)",
         "tonalRamp": [
-          "oklch(15% 0.0367 251.70)",
-          "oklch(25% 0.0367 251.70)",
-          "oklch(35% 0.0367 251.70)",
-          "oklch(45% 0.0367 251.70)",
-          "oklch(60% 0.0367 251.70)",
-          "oklch(72% 0.0367 251.70)",
-          "oklch(84% 0.0367 251.70)",
-          "oklch(95% 0.0367 251.70)"
+          "oklch(15% 0.067 262.8)",
+          "oklch(25% 0.067 262.8)",
+          "oklch(36% 0.067 262.8)",
+          "oklch(47% 0.067 262.8)",
+          "oklch(58% 0.067 262.8)",
+          "oklch(70% 0.067 262.8)",
+          "oklch(82% 0.067 262.8)",
+          "oklch(95% 0.027 262.8)"
         ]
       },
-      "inset-border": {
+      "orange": {
+        "role": "secondary",
+        "displayName": "Game Orange",
+        "canonical": "oklch(72.8% 0.164 59.8)",
+        "tonalRamp": [
+          "oklch(15% 0.164 59.8)",
+          "oklch(25% 0.164 59.8)",
+          "oklch(36% 0.164 59.8)",
+          "oklch(47% 0.164 59.8)",
+          "oklch(58% 0.164 59.8)",
+          "oklch(70% 0.164 59.8)",
+          "oklch(82% 0.164 59.8)",
+          "oklch(95% 0.066 59.8)"
+        ]
+      },
+      "orange-deep": {
+        "role": "secondary",
+        "displayName": "Game Orange Deep",
+        "canonical": "oklch(57.8% 0.143 55.0)",
+        "tonalRamp": [
+          "oklch(15% 0.143 55.0)",
+          "oklch(25% 0.143 55.0)",
+          "oklch(36% 0.143 55.0)",
+          "oklch(47% 0.143 55.0)",
+          "oklch(58% 0.143 55.0)",
+          "oklch(70% 0.143 55.0)",
+          "oklch(82% 0.143 55.0)",
+          "oklch(95% 0.057 55.0)"
+        ]
+      },
+      "problem-bg": {
+        "role": "secondary",
+        "displayName": "Problem Cream",
+        "canonical": "oklch(96.4% 0.032 78.2)",
+        "tonalRamp": [
+          "oklch(15% 0.032 78.2)",
+          "oklch(25% 0.032 78.2)",
+          "oklch(36% 0.032 78.2)",
+          "oklch(47% 0.032 78.2)",
+          "oklch(58% 0.032 78.2)",
+          "oklch(70% 0.032 78.2)",
+          "oklch(82% 0.032 78.2)",
+          "oklch(95% 0.013 78.2)"
+        ]
+      },
+      "problem-edge": {
+        "role": "secondary",
+        "displayName": "Problem Amber",
+        "canonical": "oklch(75.8% 0.127 68.1)",
+        "tonalRamp": [
+          "oklch(15% 0.127 68.1)",
+          "oklch(25% 0.127 68.1)",
+          "oklch(36% 0.127 68.1)",
+          "oklch(47% 0.127 68.1)",
+          "oklch(58% 0.127 68.1)",
+          "oklch(70% 0.127 68.1)",
+          "oklch(82% 0.127 68.1)",
+          "oklch(95% 0.051 68.1)"
+        ]
+      },
+      "problem-ink": {
+        "role": "secondary",
+        "displayName": "Problem Brown",
+        "canonical": "oklch(39.2% 0.096 56.0)",
+        "tonalRamp": [
+          "oklch(15% 0.096 56.0)",
+          "oklch(25% 0.096 56.0)",
+          "oklch(36% 0.096 56.0)",
+          "oklch(47% 0.096 56.0)",
+          "oklch(58% 0.096 56.0)",
+          "oklch(70% 0.096 56.0)",
+          "oklch(82% 0.096 56.0)",
+          "oklch(95% 0.038 56.0)"
+        ]
+      },
+      "edit": {
         "role": "neutral",
-        "displayName": "Inset Slate Border",
+        "displayName": "Edit Blue",
+        "canonical": "oklch(52.2% 0.167 261.9)",
         "tonalRamp": [
-          "oklch(15% 0.0310 248.78)",
-          "oklch(25% 0.0310 248.78)",
-          "oklch(35% 0.0310 248.78)",
-          "oklch(45% 0.0310 248.78)",
-          "oklch(60% 0.0310 248.78)",
-          "oklch(72% 0.0310 248.78)",
-          "oklch(84% 0.0310 248.78)",
-          "oklch(95% 0.0310 248.78)"
+          "oklch(15% 0.167 261.9)",
+          "oklch(25% 0.167 261.9)",
+          "oklch(36% 0.167 261.9)",
+          "oklch(47% 0.167 261.9)",
+          "oklch(58% 0.167 261.9)",
+          "oklch(70% 0.167 261.9)",
+          "oklch(82% 0.167 261.9)",
+          "oklch(95% 0.067 261.9)"
+        ],
+        "note": "Focus ring in every window, the dashed drag box, checkbox accent, and at 8% the row hover tint."
+      },
+      "tag-bg": {
+        "role": "neutral",
+        "displayName": "Tag Periwinkle",
+        "canonical": "oklch(91.4% 0.024 262.1)",
+        "tonalRamp": [
+          "oklch(15% 0.024 262.1)",
+          "oklch(25% 0.024 262.1)",
+          "oklch(36% 0.024 262.1)",
+          "oklch(47% 0.024 262.1)",
+          "oklch(58% 0.024 262.1)",
+          "oklch(70% 0.024 262.1)",
+          "oklch(82% 0.024 262.1)",
+          "oklch(95% 0.010 262.1)"
         ]
       },
-      "accent-ink": {
-        "role": "primary",
-        "displayName": "Gold Ink",
+      "tag-edge": {
+        "role": "neutral",
+        "displayName": "Tag Periwinkle Edge",
+        "canonical": "oklch(77.3% 0.053 262.1)",
         "tonalRamp": [
-          "oklch(15% 0.0296 85.80)",
-          "oklch(25% 0.0296 85.80)",
-          "oklch(35% 0.0296 85.80)",
-          "oklch(45% 0.0296 85.80)",
-          "oklch(60% 0.0296 85.80)",
-          "oklch(72% 0.0296 85.80)",
-          "oklch(84% 0.0296 85.80)",
-          "oklch(95% 0.0296 85.80)"
+          "oklch(15% 0.053 262.1)",
+          "oklch(25% 0.053 262.1)",
+          "oklch(36% 0.053 262.1)",
+          "oklch(47% 0.053 262.1)",
+          "oklch(58% 0.053 262.1)",
+          "oklch(70% 0.053 262.1)",
+          "oklch(82% 0.053 262.1)",
+          "oklch(95% 0.021 262.1)"
         ]
+      },
+      "tag-ink": {
+        "role": "neutral",
+        "displayName": "Tag Periwinkle Ink",
+        "canonical": "oklch(41.6% 0.108 260.9)",
+        "tonalRamp": [
+          "oklch(15% 0.108 260.9)",
+          "oklch(25% 0.108 260.9)",
+          "oklch(36% 0.108 260.9)",
+          "oklch(47% 0.108 260.9)",
+          "oklch(58% 0.108 260.9)",
+          "oklch(70% 0.108 260.9)",
+          "oklch(82% 0.108 260.9)",
+          "oklch(95% 0.043 260.9)"
+        ]
+      },
+      "quest-bg": {
+        "role": "neutral",
+        "displayName": "NPC Green",
+        "canonical": "oklch(93.6% 0.037 136.4)",
+        "tonalRamp": [
+          "oklch(15% 0.037 136.4)",
+          "oklch(25% 0.037 136.4)",
+          "oklch(36% 0.037 136.4)",
+          "oklch(47% 0.037 136.4)",
+          "oklch(58% 0.037 136.4)",
+          "oklch(70% 0.037 136.4)",
+          "oklch(82% 0.037 136.4)",
+          "oklch(95% 0.015 136.4)"
+        ]
+      },
+      "quest-edge": {
+        "role": "neutral",
+        "displayName": "NPC Green Edge",
+        "canonical": "oklch(77.6% 0.095 138.4)",
+        "tonalRamp": [
+          "oklch(15% 0.095 138.4)",
+          "oklch(25% 0.095 138.4)",
+          "oklch(36% 0.095 138.4)",
+          "oklch(47% 0.095 138.4)",
+          "oklch(58% 0.095 138.4)",
+          "oklch(70% 0.095 138.4)",
+          "oklch(82% 0.095 138.4)",
+          "oklch(95% 0.038 138.4)"
+        ]
+      },
+      "quest-ink": {
+        "role": "neutral",
+        "displayName": "NPC Green Ink",
+        "canonical": "oklch(46.6% 0.125 140.9)",
+        "tonalRamp": [
+          "oklch(15% 0.125 140.9)",
+          "oklch(25% 0.125 140.9)",
+          "oklch(36% 0.125 140.9)",
+          "oklch(47% 0.125 140.9)",
+          "oklch(58% 0.125 140.9)",
+          "oklch(70% 0.125 140.9)",
+          "oklch(82% 0.125 140.9)",
+          "oklch(95% 0.050 140.9)"
+        ]
+      },
+      "minimap-paper": {
+        "role": "neutral",
+        "displayName": "Minimap Paper",
+        "canonical": "oklch(96.3% 0.012 259.8)",
+        "tonalRamp": [
+          "oklch(15% 0.012 259.8)",
+          "oklch(25% 0.012 259.8)",
+          "oklch(36% 0.012 259.8)",
+          "oklch(47% 0.012 259.8)",
+          "oklch(58% 0.012 259.8)",
+          "oklch(70% 0.012 259.8)",
+          "oklch(82% 0.012 259.8)",
+          "oklch(95% 0.005 259.8)"
+        ]
+      },
+      "minimap-frame": {
+        "role": "neutral",
+        "displayName": "Minimap Frame",
+        "canonical": "oklch(50.4% 0.069 263.7)",
+        "tonalRamp": [
+          "oklch(15% 0.069 263.7)",
+          "oklch(25% 0.069 263.7)",
+          "oklch(36% 0.069 263.7)",
+          "oklch(47% 0.069 263.7)",
+          "oklch(58% 0.069 263.7)",
+          "oklch(70% 0.069 263.7)",
+          "oklch(82% 0.069 263.7)",
+          "oklch(95% 0.027 263.7)"
+        ]
+      },
+      "minimap-grid": {
+        "role": "neutral",
+        "displayName": "Minimap Grid",
+        "canonical": "oklch(82.7% 0.040 261.5)",
+        "tonalRamp": [
+          "oklch(15% 0.040 261.5)",
+          "oklch(25% 0.040 261.5)",
+          "oklch(36% 0.040 261.5)",
+          "oklch(47% 0.040 261.5)",
+          "oklch(58% 0.040 261.5)",
+          "oklch(70% 0.040 261.5)",
+          "oklch(82% 0.040 261.5)",
+          "oklch(95% 0.016 261.5)"
+        ]
+      },
+      "minimap-cell": {
+        "role": "neutral",
+        "displayName": "Minimap Lit Cell",
+        "canonical": "oklch(81.2% 0.065 259.4)",
+        "tonalRamp": [
+          "oklch(15% 0.065 259.4)",
+          "oklch(25% 0.065 259.4)",
+          "oklch(36% 0.065 259.4)",
+          "oklch(47% 0.065 259.4)",
+          "oklch(58% 0.065 259.4)",
+          "oklch(70% 0.065 259.4)",
+          "oklch(82% 0.065 259.4)",
+          "oklch(95% 0.026 259.4)"
+        ]
+      },
+      "button-top": {
+        "role": "neutral",
+        "displayName": "Button Steel (top)",
+        "canonical": "oklch(56.4% 0.138 261.6)",
+        "tonalRamp": [
+          "oklch(15% 0.138 261.6)",
+          "oklch(25% 0.138 261.6)",
+          "oklch(36% 0.138 261.6)",
+          "oklch(47% 0.138 261.6)",
+          "oklch(58% 0.138 261.6)",
+          "oklch(70% 0.138 261.6)",
+          "oklch(82% 0.138 261.6)",
+          "oklch(95% 0.055 261.6)"
+        ]
+      },
+      "button-base": {
+        "role": "neutral",
+        "displayName": "Button Steel (base)",
+        "canonical": "oklch(45.8% 0.143 262.9)",
+        "tonalRamp": [
+          "oklch(15% 0.143 262.9)",
+          "oklch(25% 0.143 262.9)",
+          "oklch(36% 0.143 262.9)",
+          "oklch(47% 0.143 262.9)",
+          "oklch(58% 0.143 262.9)",
+          "oklch(70% 0.143 262.9)",
+          "oklch(82% 0.143 262.9)",
+          "oklch(95% 0.057 262.9)"
+        ]
+      },
+      "button-edge": {
+        "role": "neutral",
+        "displayName": "Button Steel Edge",
+        "canonical": "oklch(34.9% 0.109 264.0)",
+        "tonalRamp": [
+          "oklch(15% 0.109 264.0)",
+          "oklch(25% 0.109 264.0)",
+          "oklch(36% 0.109 264.0)",
+          "oklch(47% 0.109 264.0)",
+          "oklch(58% 0.109 264.0)",
+          "oklch(70% 0.109 264.0)",
+          "oklch(82% 0.109 264.0)",
+          "oklch(95% 0.043 264.0)"
+        ]
+      },
+      "button-light-top": {
+        "role": "neutral",
+        "displayName": "Light Steel (top)",
+        "canonical": "oklch(98.5% 0.006 264.5)",
+        "tonalRamp": [
+          "oklch(15% 0.006 264.5)",
+          "oklch(25% 0.006 264.5)",
+          "oklch(36% 0.006 264.5)",
+          "oklch(47% 0.006 264.5)",
+          "oklch(58% 0.006 264.5)",
+          "oklch(70% 0.006 264.5)",
+          "oklch(82% 0.006 264.5)",
+          "oklch(95% 0.002 264.5)"
+        ]
+      },
+      "button-light-base": {
+        "role": "neutral",
+        "displayName": "Light Steel (base)",
+        "canonical": "oklch(90.1% 0.026 261.1)",
+        "tonalRamp": [
+          "oklch(15% 0.026 261.1)",
+          "oklch(25% 0.026 261.1)",
+          "oklch(36% 0.026 261.1)",
+          "oklch(47% 0.026 261.1)",
+          "oklch(58% 0.026 261.1)",
+          "oklch(70% 0.026 261.1)",
+          "oklch(82% 0.026 261.1)",
+          "oklch(95% 0.010 261.1)"
+        ]
+      },
+      "disabled-bg": {
+        "role": "neutral",
+        "displayName": "Greyed",
+        "canonical": "oklch(88.4% 0.018 264.5)",
+        "tonalRamp": [
+          "oklch(15% 0.018 264.5)",
+          "oklch(25% 0.018 264.5)",
+          "oklch(36% 0.018 264.5)",
+          "oklch(47% 0.018 264.5)",
+          "oklch(58% 0.018 264.5)",
+          "oklch(70% 0.018 264.5)",
+          "oklch(82% 0.018 264.5)",
+          "oklch(95% 0.007 264.5)"
+        ]
+      },
+      "disabled-edge": {
+        "role": "neutral",
+        "displayName": "Greyed Edge",
+        "canonical": "oklch(78.1% 0.031 264.4)",
+        "tonalRamp": [
+          "oklch(15% 0.031 264.4)",
+          "oklch(25% 0.031 264.4)",
+          "oklch(36% 0.031 264.4)",
+          "oklch(47% 0.031 264.4)",
+          "oklch(58% 0.031 264.4)",
+          "oklch(70% 0.031 264.4)",
+          "oklch(82% 0.031 264.4)",
+          "oklch(95% 0.012 264.4)"
+        ]
+      },
+      "disabled-ink": {
+        "role": "neutral",
+        "displayName": "Greyed Ink",
+        "canonical": "oklch(56.4% 0.045 269.5)",
+        "tonalRamp": [
+          "oklch(15% 0.045 269.5)",
+          "oklch(25% 0.045 269.5)",
+          "oklch(36% 0.045 269.5)",
+          "oklch(47% 0.045 269.5)",
+          "oklch(58% 0.045 269.5)",
+          "oklch(70% 0.045 269.5)",
+          "oklch(82% 0.045 269.5)",
+          "oklch(95% 0.018 269.5)"
+        ]
+      },
+      "veil": {
+        "role": "neutral",
+        "displayName": "Navy Veil",
+        "canonical": "rgba(18, 28, 56, 0.3)",
+        "tonalRamp": [
+          "oklch(15% 0.056 267.2)",
+          "oklch(25% 0.056 267.2)",
+          "oklch(36% 0.056 267.2)",
+          "oklch(47% 0.056 267.2)",
+          "oklch(58% 0.056 267.2)",
+          "oklch(70% 0.056 267.2)",
+          "oklch(82% 0.056 267.2)",
+          "oklch(95% 0.022 267.2)"
+        ],
+        "note": "30% navy over the whole title-marking window; non-zero so every pixel takes the mouse. Ramp from the opaque #121c38."
       }
     },
+    "gradients": [
+      {
+        "name": "bar",
+        "value": "linear-gradient(180deg, #dfe8f7 0%, #b4c6e6 48%, #94abd6 100%)",
+        "purpose": "The --bar custom property: every title bar (overlay, search view and setup), the collapsed icon, setup's mark icon and the read test reads."
+      },
+      {
+        "name": "doubt",
+        "value": "linear-gradient(180deg, #ffc469 0%, var(--orange) 100%)",
+        "purpose": "The doubt chip only."
+      },
+      {
+        "name": "button",
+        "value": "linear-gradient(180deg, #4673c6 0%, #2a52a6 100%)",
+        "purpose": "--button: setup's primary button and the overlay's deep-steel icon buttons at rest."
+      },
+      {
+        "name": "button-hover",
+        "value": "linear-gradient(180deg, #3d69bb 0%, #234897 100%)",
+        "purpose": "--button-hover: a deep-steel button hovered or pressed."
+      },
+      {
+        "name": "button-light",
+        "value": "linear-gradient(180deg, #f8fafe 0%, #d5dff0 100%)",
+        "purpose": "--button-light: secondary and light icon buttons at rest and pressed."
+      },
+      {
+        "name": "button-light-hover",
+        "value": "linear-gradient(180deg, #ffffff 0%, #dfe7f6 100%)",
+        "purpose": "--button-light-hover: a light-steel button hovered."
+      }
+    ],
     "typographyMeta": {
       "headline": {
-        "displayName": "Headline",
-        "purpose": "Instructional setup heading."
+        "displayName": "Map Name",
+        "purpose": "The Map Name in white with a navy outline, in the overlay and setup's recognised test read; wraps to two lines. An unread status takes the slot at 15px in plain ink. Time to Level and setup step headings use 18px bold in plain ink."
       },
-      "window-title": {
-        "displayName": "Window Title",
-        "purpose": "Setup heading beside the app icon."
+      "street": {
+        "displayName": "Street Name",
+        "purpose": "Above the Map Name, the minimap's own idiom; also setup's step count."
       },
-      "map-title": {
-        "displayName": "Map Title",
-        "purpose": "Current Map Name in the overlay."
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section headings (Hidden Portals, Mobs, the Hunting Target's mob), destinations, summary, rate and target values. 14px in Street Navy for the search view's title and setup's window name."
       },
-      "test-map-title": {
-        "displayName": "Test Map Title",
-        "purpose": "Recognised Map Name in the test read."
+      "body-reading": {
+        "displayName": "Body Reading",
+        "purpose": "Setup prose, the search field, and the title-marking hint's heading (bold there): read at rest, one step larger than the overlay."
       },
       "body": {
         "displayName": "Body",
-        "purpose": "Setup instructions and secondary-button text."
+        "purpose": "Notes, the mob and rates tables, the suggestions; tabular figures throughout."
+      },
+      "body-small": {
+        "displayName": "Body Small",
+        "purpose": "Positions, labels, units, table headers, the route, candidate rows, key hints, the crawl note, footer."
       },
       "button": {
         "displayName": "Button",
-        "purpose": "Primary setup-button labels."
+        "purpose": "Setup button labels, sentence case (12px on the Overlay guide button)."
       },
-      "marking-hint": {
-        "displayName": "Marking Hint",
-        "purpose": "Instruction above the game during Title Region marking."
-      },
-      "note": {
-        "displayName": "Note",
-        "purpose": "Overlay status explanations and test-read Street Name size."
-      },
-      "data": {
-        "displayName": "Data",
-        "purpose": "Tables, Candidates, portal lists, and small section labels."
-      },
-      "street": {
-        "displayName": "Street",
-        "purpose": "Overlay Street Name with slight tracking."
-      },
-      "footer": {
-        "displayName": "Footer",
-        "purpose": "Attribution, source-page hotkey, and help/setup hint."
-      },
-      "tag": {
-        "displayName": "Tag",
-        "purpose": "Hidden Street and Quest labels."
+      "label": {
+        "displayName": "Label",
+        "purpose": "Tags and the doubt chip (uppercase only on the chip). The 9px Time to Level badge is an exception below this step."
       }
     },
-    "shadows": [],
-    "motion": [],
-    "breakpoints": []
+    "shadows": [
+      {
+        "name": "window-inner-highlight",
+        "value": "inset 0 0 0 1px rgba(255, 255, 255, 0.65)",
+        "purpose": "Inside the panel frame and the title-marking hint; 0.7 on the collapsed icon and setup's mark icon."
+      },
+      {
+        "name": "bar-top-highlight",
+        "value": "inset 0 1px 0 rgba(255, 255, 255, 0.9)",
+        "purpose": "Top edge of every title bar and the recognised test read; 0.55 on the doubt chip, 0.3 on deep-steel buttons (primary and icon), solid #fff on light steel."
+      },
+      {
+        "name": "pressed",
+        "value": "inset 0 1px 3px rgba(10, 20, 50, 0.45)",
+        "purpose": "A held deep-steel button; 0.25 on light steel. Buttons sink, never lift."
+      },
+      {
+        "name": "field-inset",
+        "value": "inset 0 1px 2px rgba(20, 30, 60, 0.15)",
+        "purpose": "The search field, the one surface set into the body."
+      },
+      {
+        "name": "glyph-ring",
+        "value": "0 0 0 1px var(--mob-edge)",
+        "purpose": "Dark edge on mob dots (mob-edge) and orange dots (orange-deep); the alert dot adds 0 0 0 2px #fff."
+      },
+      {
+        "name": "lettering-outline",
+        "value": "-1px -1px 0 var(--outline, #22325a), 0 -1px 0 var(--outline, #22325a), 1px -1px 0 var(--outline, #22325a), -1px 0 0 var(--outline, #22325a), 1px 0 0 var(--outline, #22325a), -1px 1px 0 var(--outline, #22325a), 0 1px 0 var(--outline, #22325a), 1px 1px 0 var(--outline, #22325a), 0 2px 2px rgba(20, 30, 60, 0.35)",
+        "purpose": "The shared --lettering text-shadow: eight 1px offsets in outline plus 0 2px 2px rgba(20, 30, 60, 0.35). Map Names only."
+      },
+      {
+        "name": "focus-ring",
+        "value": "outline: 2px solid var(--edit); outline-offset: 2px",
+        "purpose": "Keyboard focus (:focus-visible) on every button and the search field, in the overlay and setup. Not a shadow; recorded here because the component schema cannot hold it."
+      }
+    ],
+    "tints": [
+      {
+        "name": "row-hover",
+        "value": "rgba(47, 99, 200, 0.08)",
+        "purpose": "Edit Blue at 8%: suggestion and result rows under the pointer. A literal in styles.css, not a custom property."
+      }
+    ]
   },
   "components": [
+    {
+      "name": "Title Bar",
+      "kind": "nav",
+      "refersTo": "panel",
+      "description": "The minimap title bar and the panel's drag handle: Street Name and the deep-steel toolbar on the top row, the outlined Map Name under them, the doubt chip at its right when unconfirmed.",
+      "html": "<header class=\"ds-titlebar\"><div class=\"ds-row\"><p class=\"ds-street\">Victoria Road</p><div class=\"ds-toolbar\" role=\"toolbar\"><button type=\"button\" class=\"ds-ib\" aria-label=\"Search a mob\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><circle cx=\"7\" cy=\"7\" r=\"4.25\"/><path d=\"M10.2 10.2 13.5 13.5\"/></svg></button><button type=\"button\" class=\"ds-ib\" aria-label=\"Open this map on MeowDB\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M9 2.5h4.5V7M13.5 2.5 7.5 8.5M11.5 9.5v4h-9v-9h4\"/></svg></button><button type=\"button\" class=\"ds-ib\" aria-label=\"Reset the Session\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M3.3 6.2A5 5 0 1 1 3 9.5M2.8 2.8v3.6h3.6\"/></svg></button><button type=\"button\" class=\"ds-ib\" aria-label=\"Move the panel\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M2.5 5.5h8v8h-8zM5.5 2.5h8v8\"/></svg></button><button type=\"button\" class=\"ds-ib\" aria-label=\"Help &amp; setup\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M5.8 6a2.2 2.2 0 1 1 3.3 1.9c-.7.4-1.1.9-1.1 1.7v.6\"/><circle class=\"ds-dot\" cx=\"8\" cy=\"12.6\" r=\".9\"/></svg></button><button type=\"button\" class=\"ds-ib\" aria-label=\"Collapse to an icon\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M3.5 8.5h9\"/></svg></button></div></div><div class=\"ds-mapline\"><p class=\"ds-map\">Construction Site North of Kerning City</p></div></header>",
+      "css": ".ds-titlebar { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; gap: 1px; width: 378px; padding: 5px 8px 7px 11px; box-sizing: border-box; background: var(--bar, linear-gradient(180deg, #dfe8f7 0%, #b4c6e6 48%, #94abd6 100%)); border: 1px solid var(--frame, #3e527c); border-bottom-color: var(--bar-hairline, #2e4170); border-radius: 6px 6px 0 0; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9); cursor: move; } .ds-row { display: flex; align-items: center; gap: 8px; min-height: 22px; } .ds-toolbar { flex: none; display: flex; gap: 3px; } .ds-mapline { display: flex; align-items: center; gap: 8px; padding-right: 3px; } .ds-street { flex: 1; min-width: 0; margin: 0; font-size: 12px; font-weight: 700; line-height: 15px; color: var(--street, #1d2b52); } .ds-map { flex: 1; min-width: 0; margin: 0; font-size: 18px; font-weight: 700; line-height: 23px; letter-spacing: 0.01em; color: #fff; text-shadow: var(--lettering, -1px -1px 0 var(--outline, #22325a), 0 -1px 0 var(--outline, #22325a), 1px -1px 0 var(--outline, #22325a), -1px 0 0 var(--outline, #22325a), 1px 0 0 var(--outline, #22325a), -1px 1px 0 var(--outline, #22325a), 0 1px 0 var(--outline, #22325a), 1px 1px 0 var(--outline, #22325a), 0 2px 2px rgba(20, 30, 60, 0.35)); } .ds-ib { flex: none; display: grid; place-items: center; box-sizing: border-box; width: 22px; height: 22px; padding: 0; border: 1px solid var(--button-edge, #1c3672); border-radius: 3px; background: var(--button, linear-gradient(180deg, #4673c6 0%, #2a52a6 100%)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3); color: #fff; cursor: pointer; } .ds-ib svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; } .ds-ib svg .ds-dot { fill: currentColor; stroke: none; } .ds-ib:hover { background: var(--button-hover, linear-gradient(180deg, #3d69bb 0%, #234897 100%)); } .ds-ib:active { background: var(--button-hover, linear-gradient(180deg, #3d69bb 0%, #234897 100%)); box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.45); } .ds-ib:focus-visible { outline: 2px solid var(--edit, #2f63c8); outline-offset: 2px; } .ds-ib.ds-light { border-color: var(--frame, #3e527c); background: var(--button-light, linear-gradient(180deg, #f8fafe 0%, #d5dff0 100%)); box-shadow: inset 0 1px 0 #fff; color: var(--ink, #1b2648); } .ds-ib.ds-light:hover { background: var(--button-light-hover, linear-gradient(180deg, #ffffff 0%, #dfe7f6 100%)); } .ds-ib.ds-light:active { background: var(--button-light, linear-gradient(180deg, #f8fafe 0%, #d5dff0 100%)); box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25); }"
+    },
+    {
+      "name": "Icon Buttons",
+      "kind": "button",
+      "refersTo": "icon-button",
+      "description": "The game's small window buttons: deep steel in a title bar, light steel in the body. 22px, 3px radius, a 1.8-stroke line icon; hover, pressed and keyboard focus.",
+      "html": "<div class=\"ds-wrap\"><div class=\"ds-bar\"><button type=\"button\" class=\"ds-ib\" aria-label=\"Back\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M13 8H3.5M7.5 4 3.5 8l4 4\"/></svg></button><button type=\"button\" class=\"ds-ib\" aria-label=\"Search a mob\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><circle cx=\"7\" cy=\"7\" r=\"4.25\"/><path d=\"M10.2 10.2 13.5 13.5\"/></svg></button><button type=\"button\" class=\"ds-ib\" aria-label=\"Collapse\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M3.5 8.5h9\"/></svg></button></div><div class=\"ds-body\"><button type=\"button\" class=\"ds-ib ds-light\" aria-label=\"Pick another map\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><circle cx=\"7\" cy=\"7\" r=\"4.25\"/><path d=\"M10.2 10.2 13.5 13.5\"/></svg></button><button type=\"button\" class=\"ds-ib ds-light\" aria-label=\"Clear the Hunting Target\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M4 4l8 8M12 4l-8 8\"/></svg></button></div></div>",
+      "css": ".ds-wrap { display: flex; flex-direction: column; width: 200px; border: 1px solid var(--frame, #3e527c); border-radius: 6px; overflow: hidden; } .ds-bar { display: flex; gap: 3px; padding: 6px 11px 7px; background: var(--bar, linear-gradient(180deg, #dfe8f7 0%, #b4c6e6 48%, #94abd6 100%)); border-bottom: 1px solid var(--bar-hairline, #2e4170); } .ds-body { display: flex; gap: 6px; padding: 8px 11px; background: var(--body, rgba(234, 232, 245, 0.95)); } .ds-ib { flex: none; display: grid; place-items: center; box-sizing: border-box; width: 22px; height: 22px; padding: 0; border: 1px solid var(--button-edge, #1c3672); border-radius: 3px; background: var(--button, linear-gradient(180deg, #4673c6 0%, #2a52a6 100%)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3); color: #fff; cursor: pointer; } .ds-ib svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; } .ds-ib svg .ds-dot { fill: currentColor; stroke: none; } .ds-ib:hover { background: var(--button-hover, linear-gradient(180deg, #3d69bb 0%, #234897 100%)); } .ds-ib:active { background: var(--button-hover, linear-gradient(180deg, #3d69bb 0%, #234897 100%)); box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.45); } .ds-ib:focus-visible { outline: 2px solid var(--edit, #2f63c8); outline-offset: 2px; } .ds-ib.ds-light { border-color: var(--frame, #3e527c); background: var(--button-light, linear-gradient(180deg, #f8fafe 0%, #d5dff0 100%)); box-shadow: inset 0 1px 0 #fff; color: var(--ink, #1b2648); } .ds-ib.ds-light:hover { background: var(--button-light-hover, linear-gradient(180deg, #ffffff 0%, #dfe7f6 100%)); } .ds-ib.ds-light:active { background: var(--button-light, linear-gradient(180deg, #f8fafe 0%, #d5dff0 100%)); box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25); }"
+    },
+    {
+      "name": "Doubt Chip",
+      "kind": "chip",
+      "refersTo": "doubt-chip",
+      "description": "The game small orange button, used once: the map shown is not confirmed, or several maps share its title and none is chosen. Static, never clickable.",
+      "html": "<p class=\"ds-doubt\">Not sure</p>",
+      "css": ".ds-doubt { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; font-variant-numeric: tabular-nums; display: inline-block; margin: 0; padding: 2px 7px 3px; border: 1px solid var(--orange-deep, #b85e00); border-radius: 3px; background: linear-gradient(180deg, #ffc469 0%, var(--orange, #f08a1c) 100%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; text-shadow: 0 1px 0 var(--orange-deep, #b85e00), 0 -1px 0 var(--orange-deep, #b85e00), 1px 0 0 var(--orange-deep, #b85e00), -1px 0 0 var(--orange-deep, #b85e00); }"
+    },
+    {
+      "name": "Section Heading with Legend Mark",
+      "kind": "custom",
+      "description": "13px bold heading led by a minimap glyph: portal ring for Hidden Portals, mob dot for Mobs.",
+      "html": "<div class=\"ds-wrap\"><h2 class=\"ds-h2 ds-portals\">Hidden Portals</h2><h2 class=\"ds-h2 ds-mobs\">Mobs</h2></div>",
+      "css": ".ds-wrap { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; font-variant-numeric: tabular-nums; padding: 8px 11px; background: var(--body, rgba(234, 232, 245, 0.95)); } .ds-h2 { display: flex; align-items: center; gap: 6px; margin: 0 0 5px; font-size: 13px; font-weight: 700; color: var(--ink, #1b2648); } .ds-h2::before { content: \"\"; flex: none; box-sizing: border-box; width: 10px; height: 10px; border-radius: 50%; } .ds-portals::before { border: 2.5px solid var(--portal, #1f63d6); background: var(--portal-fill, #eef5ff); } .ds-mobs::before { width: 8px; height: 8px; margin: 0 1px; background: var(--mob, #d8342a); box-shadow: 0 0 0 1px var(--mob-edge, #8e1c15); }"
+    },
+    {
+      "name": "Portal Row",
+      "kind": "custom",
+      "refersTo": "mini-minimap",
+      "description": "Signature: each Hidden Portal on a 47x29 miniature minimap (field, lit cell, grid, frame, then the hollow ring and core), then destination, tags and position in words. Dashed frame and no lit cell when the spot is unknown.",
+      "html": "<ul class=\"ds-portal-list\"><li class=\"ds-portal\"><svg class=\"ds-minimap\" viewBox=\"-1 -1 47 29\" aria-hidden=\"true\"><rect class=\"ds-field\" x=\"0\" y=\"0\" width=\"45\" height=\"27\" rx=\"1.5\"/><rect class=\"ds-cell\" x=\"36\" y=\"0\" width=\"9\" height=\"9\"/><line class=\"ds-grid\" x1=\"9\" y1=\"0\" x2=\"9\" y2=\"27\"/><line class=\"ds-grid\" x1=\"18\" y1=\"0\" x2=\"18\" y2=\"27\"/><line class=\"ds-grid\" x1=\"27\" y1=\"0\" x2=\"27\" y2=\"27\"/><line class=\"ds-grid\" x1=\"36\" y1=\"0\" x2=\"36\" y2=\"27\"/><line class=\"ds-grid\" x1=\"0\" y1=\"9\" x2=\"45\" y2=\"9\"/><line class=\"ds-grid\" x1=\"0\" y1=\"18\" x2=\"45\" y2=\"18\"/><rect class=\"ds-frame\" x=\"0\" y=\"0\" width=\"45\" height=\"27\" rx=\"1.5\"/><circle class=\"ds-ring\" cx=\"40.5\" cy=\"4.5\" r=\"3.3\"/><circle class=\"ds-core\" cx=\"40.5\" cy=\"4.5\" r=\"1.5\"/></svg><div class=\"ds-text\"><div class=\"ds-dest\"><span class=\"ds-to\">Northern Top of Construction Site</span><span class=\"ds-tag\">Hidden Street</span></div><span class=\"ds-where\">Right, upper</span></div></li><li class=\"ds-portal\"><svg class=\"ds-minimap ds-unknown\" viewBox=\"-1 -1 47 29\" aria-hidden=\"true\"><rect class=\"ds-field\" x=\"0\" y=\"0\" width=\"45\" height=\"27\" rx=\"1.5\"/><line class=\"ds-grid\" x1=\"9\" y1=\"0\" x2=\"9\" y2=\"27\"/><line class=\"ds-grid\" x1=\"18\" y1=\"0\" x2=\"18\" y2=\"27\"/><line class=\"ds-grid\" x1=\"27\" y1=\"0\" x2=\"27\" y2=\"27\"/><line class=\"ds-grid\" x1=\"36\" y1=\"0\" x2=\"36\" y2=\"27\"/><line class=\"ds-grid\" x1=\"0\" y1=\"9\" x2=\"45\" y2=\"9\"/><line class=\"ds-grid\" x1=\"0\" y1=\"18\" x2=\"45\" y2=\"18\"/><rect class=\"ds-frame\" x=\"0\" y=\"0\" width=\"45\" height=\"27\" rx=\"1.5\"/></svg><div class=\"ds-text\"><div class=\"ds-dest\"><span class=\"ds-to\">Subway Ticketing Booth</span><span class=\"ds-tag ds-quest\">Quest</span></div><span class=\"ds-where\">Far left, lower</span></div></li></ul>",
+      "css": ".ds-portal-list { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; font-variant-numeric: tabular-nums; margin: 0; padding: 8px 11px; width: 378px; box-sizing: border-box; list-style: none; display: flex; flex-direction: column; gap: 6px; background: var(--body, rgba(234, 232, 245, 0.95)); color: var(--ink, #1b2648); } .ds-portal { display: grid; grid-template-columns: 47px minmax(0, 1fr); align-items: center; column-gap: 9px; } .ds-text { min-width: 0; } .ds-dest { display: flex; align-items: baseline; gap: 6px; min-width: 0; } .ds-to { font-size: 13px; font-weight: 700; line-height: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-where { display: block; font-size: 12px; line-height: 15px; color: var(--ink-2, #44527a); } .ds-tag { flex: none; display: inline-block; padding: 0 5px; border: 1px solid #a3b6d8; border-radius: 3px; background: #dae3f3; color: #284a86; font-size: 11px; font-weight: 700; line-height: 15px; } .ds-tag.ds-quest { border-color: #98c58a; background: #dff0d8; color: #2b6a20; } .ds-minimap { display: block; width: 47px; height: 29px; } .ds-field { fill: #eef3fb; } .ds-cell { fill: #a9c3ec; } .ds-grid { stroke: #b8c7e1; stroke-width: 0.6; } .ds-frame { fill: none; stroke: #50648c; stroke-width: 1; } .ds-unknown .ds-frame { stroke-dasharray: 2 1.5; } .ds-ring { fill: none; stroke: var(--portal, #1f63d6); stroke-width: 1.7; } .ds-core { fill: var(--portal, #1f63d6); }"
+    },
+    {
+      "name": "Tags",
+      "kind": "chip",
+      "refersTo": "tag",
+      "description": "\"Hidden Street\" and \"warming up\" in Tag Periwinkle, \"Quest\" in the minimap NPC Green, \"paused\" in the problem palette.",
+      "html": "<span class=\"ds-tag\">Hidden Street</span> <span class=\"ds-tag ds-quest\">Quest</span> <span class=\"ds-tag\">warming up</span> <span class=\"ds-tag ds-paused\">paused</span>",
+      "css": ".ds-tag { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; font-variant-numeric: tabular-nums; } .ds-tag { flex: none; display: inline-block; padding: 0 5px; border: 1px solid #a3b6d8; border-radius: 3px; background: #dae3f3; color: #284a86; font-size: 11px; font-weight: 700; line-height: 15px; } .ds-tag.ds-quest { border-color: #98c58a; background: #dff0d8; color: #2b6a20; } .ds-tag.ds-paused { border-color: var(--problem-edge, #e5a04f); background: var(--problem-bg, #fff1dc); color: var(--problem-ink, #6b3500); }"
+    },
+    {
+      "name": "Candidate Rows",
+      "kind": "custom",
+      "refersTo": "candidate-row-current",
+      "description": "Maps sharing a title, each led by what sets it apart; the shown one selected.",
+      "html": "<ol class=\"ds-candidates\"><li class=\"ds-current\">1 hidden portal · Lv 2–8 · Blue Snail, Stump<span class=\"ds-id\">000000010</span></li><li>0 hidden portals · no mobs<span class=\"ds-id\">000000020</span></li><li>No MeowDB data yet<span class=\"ds-id\">000000030</span></li></ol>",
+      "css": ".ds-candidates { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; font-variant-numeric: tabular-nums; margin: 0; padding: 8px 11px; width: 378px; box-sizing: border-box; list-style: none; display: flex; flex-direction: column; gap: 2px; font-size: 12px; line-height: 16px; color: var(--ink-2, #44527a); background: var(--body, rgba(234, 232, 245, 0.95)); } .ds-candidates li { padding: 3px 7px; border-radius: 3px; } .ds-candidates li.ds-current { background: var(--select, #d3def3); box-shadow: inset 0 0 0 1px var(--select-edge, #98afda); color: var(--ink, #1b2648); font-weight: 700; } .ds-id { margin-left: 6px; font-size: 11px; font-weight: 400; color: var(--ink-3, #505c7d); }"
+    },
+    {
+      "name": "Problem Note",
+      "kind": "card",
+      "refersTo": "note-problem",
+      "description": "Doubt or a problem: cream box, amber edge, orange dot and words, so the state never rests on colour alone.",
+      "html": "<p class=\"ds-note-problem\">MeowDB unreachable — showing a saved copy from 7 Oct 2026</p>",
+      "css": ".ds-note-problem { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; font-variant-numeric: tabular-nums; position: relative; margin: 0; width: 356px; box-sizing: border-box; padding: 4px 8px 5px 24px; border: 1px solid var(--problem-edge, #e5a04f); border-radius: 4px; background: var(--problem-bg, #fff1dc); color: var(--problem-ink, #6b3500); font-size: 13px; line-height: 17px; } .ds-note-problem::before { content: \"\"; position: absolute; left: 8px; top: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--orange, #f08a1c); box-shadow: 0 0 0 1px var(--orange-deep, #b85e00); }"
+    },
+    {
+      "name": "EXP Tracking",
+      "kind": "custom",
+      "description": "Time to Level in 18px bold ink with its tag, over the Rolling 5 min and Session rates; figures fall to Ink Steel while warming up or paused.",
+      "html": "<section class=\"ds-track\"><p class=\"ds-head\"><span class=\"ds-label\">Time to Level</span><span class=\"ds-ttl\">47m</span></p><table class=\"ds-rates\"><thead><tr><th></th><th>Rolling 5 min</th><th>Session</th></tr></thead><tbody><tr><th>EXP/h</th><td>61.2k</td><td>58.4k</td></tr><tr><th>%/h</th><td>12.9%</td><td>12.3%</td></tr></tbody></table><p class=\"ds-extra\">21% of the map's solo ceiling · deaths: 1 (−2.1%)</p></section>",
+      "css": ".ds-track { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; gap: 4px; width: 356px; padding: 8px 11px; background: var(--body, rgba(234, 232, 245, 0.95)); color: var(--ink, #1b2648); } .ds-track p { margin: 0; } .ds-head { display: flex; align-items: baseline; gap: 8px; } .ds-label, .ds-extra { font-size: 12px; color: var(--ink-2, #44527a); } .ds-ttl { font-size: 18px; font-weight: 700; } .ds-rates { border-collapse: collapse; font-size: 13px; line-height: 17px; } .ds-rates th { font-size: 12px; font-weight: 400; color: var(--ink-2, #44527a); text-align: right; } .ds-rates td { text-align: right; font-weight: 700; min-width: 72px; } .ds-rates th, .ds-rates td { padding: 1px 0 1px 10px; white-space: nowrap; } .ds-rates th:first-child { padding-left: 0; text-align: left; }"
+    },
+    {
+      "name": "Mob Table",
+      "kind": "custom",
+      "description": "The top five mobs: red mob dot, bold truncating name, fixed column shares, right-aligned tabular figures.",
+      "html": "<table class=\"ds-mobs\"><thead><tr><th>Mob</th><th>Lv</th><th>HP</th><th>EXP</th><th>Share</th></tr></thead><tbody><tr><td class=\"ds-mob\">Red Snail</td><td>4</td><td>68</td><td>8</td><td>43%</td></tr><tr><td class=\"ds-mob\">Orange Mushroom</td><td>8</td><td>142</td><td>15</td><td>17%</td></tr></tbody></table>",
+      "css": ".ds-mobs { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; font-variant-numeric: tabular-nums; border-collapse: collapse; table-layout: fixed; width: 356px; font-size: 13px; line-height: 17px; color: var(--ink, #1b2648); } .ds-mobs th { font-size: 12px; font-weight: 400; color: var(--ink-2, #44527a); text-align: right; } .ds-mobs td { text-align: right; } .ds-mobs th, .ds-mobs td { padding: 1px 0 1px 6px; white-space: nowrap; } .ds-mobs th:first-child, .ds-mobs td:first-child { padding-left: 0; text-align: left; } .ds-mobs th:first-child { width: 40%; } .ds-mob { overflow: hidden; text-overflow: ellipsis; font-weight: 700; } .ds-mob::before { content: \"\"; display: inline-block; width: 6px; height: 6px; margin: 0 7px 1px 1px; border-radius: 50%; background: var(--mob, #d8342a); box-shadow: 0 0 0 1px var(--mob-edge, #8e1c15); vertical-align: middle; }"
+    },
+    {
+      "name": "Hunting Target Route",
+      "kind": "card",
+      "refersTo": "inset-box",
+      "description": "The way to the Hunting Target in an inset box: each stop a right-aligned step beside the map and its street; non-portal steps in bold ink.",
+      "html": "<div class=\"ds-body\"><p class=\"ds-rt\">Route from Construction Site North of Kerning City</p><ol class=\"ds-route\"><li><span class=\"ds-step\">you're here</span><span class=\"ds-map\">Construction Site North of Kerning City</span><span class=\"ds-street\">Victoria Road</span></li><li><span class=\"ds-step ds-strong\">taxi</span><span class=\"ds-map\">Henesys</span><span class=\"ds-street\">Victoria Road</span></li><li><span class=\"ds-step\">portal</span><span class=\"ds-map\">Pig Beach</span><span class=\"ds-street\">Victoria Road</span></li></ol></div>",
+      "css": ".ds-body { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; font-variant-numeric: tabular-nums; width: 356px; padding: 8px 11px; background: var(--body, rgba(234, 232, 245, 0.95)); color: var(--ink, #1b2648); } .ds-rt { margin: 0 0 6px; font-size: 12px; font-weight: 700; } .ds-route { margin: 0; padding: 4px 10px; list-style: none; font-size: 12px; border: 1px solid var(--inset-edge, rgba(62, 82, 124, 0.3)); border-radius: 4px; background: var(--inset-bg, rgba(255, 255, 255, 0.55)); } .ds-route li { display: grid; grid-template-columns: 6.5em 1fr; column-gap: 8px; padding: 1px 0; } .ds-step { color: var(--ink-2, #44527a); text-align: right; } .ds-step.ds-strong { color: var(--ink, #1b2648); font-weight: 700; } .ds-map, .ds-street { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-street { grid-column: 2; color: var(--ink-2, #44527a); }"
+    },
+    {
+      "name": "Search Field and Suggestions",
+      "kind": "input",
+      "refersTo": "search-input",
+      "description": "The app's one text field (white, Frame Navy border, soft inset, Edit Blue focus ring) over an inset list of suggestions; the row Enter picks is selected, rows tint under the pointer.",
+      "html": "<div class=\"ds-step\"><label class=\"ds-field\"><span class=\"ds-label\">Mob name</span><input type=\"text\" placeholder=\"Type part of a mob's name\" value=\"pig\"></label><ul class=\"ds-sugg\"><li class=\"ds-current\"><span>Pig</span><span class=\"ds-lv\">Lv 7</span></li><li><span>Ribbon Pig</span><span class=\"ds-lv\">Lv 10</span></li><li><span>Iron Hog</span><span class=\"ds-lv\">Lv 21</span></li></ul><p class=\"ds-keys\">↑ ↓ choose a mob · Enter or a click lists its maps · Esc goes back</p></div>",
+      "css": ".ds-step { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; gap: 6px; width: 356px; padding: 8px 11px; background: var(--body, rgba(234, 232, 245, 0.95)); color: var(--ink, #1b2648); } .ds-field { display: flex; flex-direction: column; gap: 4px; } .ds-label { font-size: 12px; color: var(--ink-2, #44527a); } .ds-field input { box-sizing: border-box; width: 100%; padding: 6px 10px; border: 1px solid var(--frame, #3e527c); border-radius: 4px; background: #fff; box-shadow: inset 0 1px 2px rgba(20, 30, 60, 0.15); color: var(--ink, #1b2648); font: 14px Arial, \"Segoe UI\", system-ui, sans-serif; } .ds-field input::placeholder { color: var(--ink-3, #505c7d); } .ds-field input:focus-visible { outline: 2px solid var(--edit, #2f63c8); outline-offset: 2px; } .ds-sugg { margin: 0; padding: 3px; list-style: none; border: 1px solid var(--inset-edge, rgba(62, 82, 124, 0.3)); border-radius: 4px; background: var(--inset-bg, rgba(255, 255, 255, 0.55)); font-size: 13px; } .ds-sugg li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 8px; border-radius: 3px; color: var(--ink-2, #44527a); } .ds-sugg li:hover { background: rgba(47, 99, 200, 0.08); } .ds-sugg li.ds-current { background: var(--select, #d3def3); box-shadow: inset 0 0 0 1px var(--select-edge, #98afda); color: var(--ink, #1b2648); font-weight: 700; } .ds-lv { font-weight: 400; } .ds-keys { margin: 0; font-size: 12px; color: var(--ink-3, #505c7d); }"
+    },
+    {
+      "name": "Collapsed Icon",
+      "kind": "custom",
+      "refersTo": "collapsed-icon",
+      "description": "44px window square: portal ring, the Hidden Portal count, an orange alert dot when something needs a look, and with EXP tracked the Time to Level badge along its bottom edge (ring and count shrink to make room).",
+      "html": "<div class=\"ds-pair\"><div class=\"ds-icon\"><svg class=\"ds-ring2\" viewBox=\"0 0 28 28\" aria-hidden=\"true\"><circle cx=\"14\" cy=\"14\" r=\"11.5\"/><circle class=\"ds-inner\" cx=\"14\" cy=\"14\" r=\"7.5\"/></svg><span class=\"ds-count\">2</span><span class=\"ds-alert\"></span></div><div class=\"ds-icon ds-with-badge\"><svg class=\"ds-ring2\" viewBox=\"0 0 28 28\" aria-hidden=\"true\"><circle cx=\"14\" cy=\"14\" r=\"11.5\"/><circle class=\"ds-inner\" cx=\"14\" cy=\"14\" r=\"7.5\"/></svg><span class=\"ds-count\">2</span><span class=\"ds-badge\">47m</span></div></div>",
+      "css": ".ds-pair { display: flex; gap: 12px; } .ds-icon { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; font-variant-numeric: tabular-nums; position: relative; display: grid; place-items: center; box-sizing: border-box; width: 44px; height: 44px; border: 1px solid var(--frame, #3e527c); border-radius: 6px; background: var(--bar, linear-gradient(180deg, #dfe8f7 0%, #b4c6e6 48%, #94abd6 100%)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7); } .ds-icon > * { grid-area: 1 / 1; } .ds-ring2 { width: 30px; height: 30px; } .ds-ring2 circle { fill: var(--portal-fill, #eef5ff); stroke: var(--portal, #1f63d6); stroke-width: 2.5; } .ds-ring2 .ds-inner { fill: none; stroke: var(--portal-inner, #8db3ee); stroke-width: 1.5; } .ds-count { font-size: 14px; font-weight: 700; color: var(--ink, #1b2648); } .ds-alert { position: absolute; top: 3px; right: 3px; width: 9px; height: 9px; border-radius: 50%; background: var(--orange, #f08a1c); box-shadow: 0 0 0 1px var(--orange-deep, #b85e00), 0 0 0 2px #fff; } .ds-with-badge { place-items: start center; padding-top: 3px; } .ds-with-badge .ds-ring2 { width: 24px; height: 24px; } .ds-with-badge .ds-count { margin-top: 4px; font-size: 12px; } .ds-badge { position: absolute; left: 2px; right: 2px; bottom: 2px; padding: 0 2px; border-radius: 3px; background: var(--ink, #1b2648); color: #fff; font: 700 9px/12px Arial, \"Segoe UI\", system-ui, sans-serif; text-align: center; white-space: nowrap; overflow: hidden; pointer-events: none; }"
+    },
     {
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Filled setup action with visible keyboard focus and disabled opacity.",
-      "html": "<div class=\"ds-context\"><button class=\"ds-button\" type=\"button\">Mark the title</button></div>",
-      "css": ".ds-context { font: 14px/1.5 \"Segoe UI\", system-ui, sans-serif; color: var(--text, #f2f5f8); color-scheme: dark; } .ds-button { font: 14px/1.5 \"Segoe UI\", system-ui, sans-serif; padding: 7px 16px; border-radius: 6px; border: 1px solid transparent; background: var(--accent, #f5c542); color: #1b1405; font-weight: 600; } .ds-button-secondary { background: transparent; border-color: #3a4a5c; color: var(--text, #f2f5f8); font-weight: 400; } .ds-button:disabled { opacity: 0.45; } .ds-button:focus-visible { outline: 2px solid var(--accent, #f5c542); outline-offset: 3px; } .ds-button:not(:disabled):hover { filter: brightness(1.1); }"
+      "description": "Setup's one step forward per step, always rightmost: deep steel, white label; disabled until it can be taken.",
+      "html": "<div class=\"ds-row\"><button class=\"ds-btn\">Next</button><button class=\"ds-btn\" disabled>Finish</button></div>",
+      "css": ".ds-row { display: flex; gap: 10px; padding: 14px; background: var(--body-solid, #eae8f5); } button.ds-btn { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; font-size: 13px; font-weight: 700; line-height: 18px; padding: 6px 16px 7px; border: 1px solid var(--button-edge, #1c3672); border-radius: 4px; background: var(--button, linear-gradient(180deg, #4673c6 0%, #2a52a6 100%)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3); color: #fff; text-shadow: 0 1px 0 var(--button-edge, #1c3672); cursor: default; } button.ds-btn:hover { background: var(--button-hover, linear-gradient(180deg, #3d69bb 0%, #234897 100%)); } button.ds-btn:active { background: var(--button-hover, linear-gradient(180deg, #3d69bb 0%, #234897 100%)); box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.45); } button.ds-btn:focus-visible { outline: 2px solid var(--edit, #2f63c8); outline-offset: 2px; } button.ds-btn:disabled { border-color: #aeb8cc; background: #d3d9e5; box-shadow: none; color: #6b7591; text-shadow: none; }"
     },
     {
       "name": "Secondary Button",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "Outlined secondary setup action with regular text.",
-      "html": "<div class=\"ds-context\"><button class=\"ds-button ds-button-secondary\" type=\"button\">Back</button></div>",
-      "css": ".ds-context { font: 14px/1.5 \"Segoe UI\", system-ui, sans-serif; color: var(--text, #f2f5f8); color-scheme: dark; } .ds-button { font: 14px/1.5 \"Segoe UI\", system-ui, sans-serif; padding: 7px 16px; border-radius: 6px; border: 1px solid transparent; background: var(--accent, #f5c542); color: #1b1405; font-weight: 600; } .ds-button-secondary { background: transparent; border-color: #3a4a5c; color: var(--text, #f2f5f8); font-weight: 400; } .ds-button:disabled { opacity: 0.45; } .ds-button:focus-visible { outline: 2px solid var(--accent, #f5c542); outline-offset: 3px; } .ds-button:not(:disabled):hover { filter: brightness(1.1); }"
+      "description": "Back, Quit, Skip, Pick by hand, Mark again: light steel beside the primary.",
+      "html": "<div class=\"ds-row\"><button class=\"ds-btn ds-secondary\">Back</button><button class=\"ds-btn\">Next</button></div>",
+      "css": ".ds-row { display: flex; justify-content: flex-end; gap: 10px; padding: 14px; background: var(--body-solid, #eae8f5); } button.ds-btn { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; font-size: 13px; font-weight: 700; line-height: 18px; padding: 6px 16px 7px; border: 1px solid var(--button-edge, #1c3672); border-radius: 4px; background: var(--button, linear-gradient(180deg, #4673c6 0%, #2a52a6 100%)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3); color: #fff; text-shadow: 0 1px 0 var(--button-edge, #1c3672); cursor: default; } button.ds-btn:hover { background: var(--button-hover, linear-gradient(180deg, #3d69bb 0%, #234897 100%)); } button.ds-btn:active { background: var(--button-hover, linear-gradient(180deg, #3d69bb 0%, #234897 100%)); box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.45); } button.ds-btn.ds-secondary { border-color: var(--frame, #3e527c); background: var(--button-light, linear-gradient(180deg, #f8fafe 0%, #d5dff0 100%)); box-shadow: inset 0 1px 0 #fff; color: var(--ink, #1b2648); text-shadow: none; } button.ds-btn.ds-secondary:hover { background: var(--button-light-hover, linear-gradient(180deg, #ffffff 0%, #dfe7f6 100%)); } button.ds-btn.ds-secondary:active { background: var(--button-light, linear-gradient(180deg, #f8fafe 0%, #d5dff0 100%)); box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25); } button.ds-btn:focus-visible { outline: 2px solid var(--edit, #2f63c8); outline-offset: 2px; } button.ds-btn:disabled { border-color: #aeb8cc; background: #d3d9e5; box-shadow: none; color: #6b7591; text-shadow: none; }"
     },
     {
-      "name": "Overlay Panel",
+      "name": "Setup Title Bar",
+      "kind": "nav",
+      "refersTo": "mark-icon",
+      "description": "Setup's full-width game title bar: the small ring mark icon, the window name, the step count, and the Overlay guide button at the right.",
+      "html": "<header class=\"ds-setup-bar\"><span class=\"ds-mark\"><svg viewBox=\"0 0 28 28\" aria-hidden=\"true\"><circle cx=\"14\" cy=\"14\" r=\"11.5\"/><circle class=\"ds-inner\" cx=\"14\" cy=\"14\" r=\"7.5\"/></svg></span><h1 class=\"ds-h1\">MapleCompass setup</h1><span class=\"ds-step\">Step 2 of 7</span><button class=\"ds-guide\">Overlay guide</button></header>",
+      "css": ".ds-setup-bar { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; width: 520px; box-sizing: border-box; padding: 9px 20px 10px; background: var(--bar, linear-gradient(180deg, #dfe8f7 0%, #b4c6e6 48%, #94abd6 100%)); border-bottom: 1px solid var(--bar-hairline, #2e4170); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9); } .ds-mark { display: grid; place-items: center; box-sizing: border-box; width: 28px; height: 28px; border: 1px solid var(--frame, #3e527c); border-radius: 6px; background: var(--bar, linear-gradient(180deg, #dfe8f7 0%, #b4c6e6 48%, #94abd6 100%)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7); } .ds-mark svg { width: 20px; height: 20px; } .ds-mark circle { fill: var(--portal-fill, #eef5ff); stroke: var(--portal, #1f63d6); stroke-width: 2.8; } .ds-mark .ds-inner { fill: none; stroke: var(--portal-inner, #8db3ee); stroke-width: 1.6; } .ds-h1 { flex: 1; margin: 0; font-size: 14px; font-weight: 700; color: var(--street, #1d2b52); } .ds-step { font-size: 12px; font-weight: 700; color: var(--street, #1d2b52); } .ds-guide { margin-left: auto; padding: 3px 9px 4px; border: 1px solid var(--frame, #3e527c); border-radius: 4px; background: var(--button-light, linear-gradient(180deg, #f8fafe 0%, #d5dff0 100%)); box-shadow: inset 0 1px 0 #fff; color: var(--ink, #1b2648); font: 700 12px/18px Arial, \"Segoe UI\", system-ui, sans-serif; } .ds-guide:hover { background: var(--button-light-hover, linear-gradient(180deg, #ffffff 0%, #dfe7f6 100%)); } .ds-guide:active { background: var(--button-light, linear-gradient(180deg, #f8fafe 0%, #d5dff0 100%)); box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25); } .ds-guide:focus-visible { outline: 2px solid var(--edit, #2f63c8); outline-offset: 2px; }"
+    },
+    {
+      "name": "Test Read (read)",
       "kind": "card",
-      "refersTo": "overlay-panel",
-      "description": "A translucent Map heading specimen without the game backdrop.",
-      "html": "<section class=\"ds-overlay\"><header><p class=\"ds-street\">Victoria Road</p><div class=\"ds-map-line\"><p class=\"ds-map\">Henesys Hunting Ground I</p></div></header></section>",
-      "css": ".ds-overlay { box-sizing: border-box; padding: 10px 14px; border-radius: 10px; background: rgba(16, 24, 36, 0.82); color: #f2f5f8; font-family: \"Segoe UI\", system-ui, sans-serif; display: flex; flex-direction: column; gap: 8px; } .ds-overlay { width: 380px; } .ds-overlay p { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-street { font-size: 12px; color: #9fb6cc; letter-spacing: 0.02em; } .ds-map { font-size: 17px; font-weight: 600; } .ds-overlay.ds-editing { outline: 2px dashed #f5c542; outline-offset: -2px; } .ds-overlay.ds-uncertain .ds-map { color: #c3ccd6; } .ds-map-line { display: flex; align-items: baseline; gap: 6px; } .ds-map-line .ds-map { min-width: 0; } .ds-uncertainty { flex: none; color: #f0c674; font-size: 17px; } .ds-overlay.ds-draggable, .ds-overlay.ds-draggable * { cursor: move; }"
+      "description": "Setup's test read once it succeeds: the map exactly as the overlay's title bar will show it, tagged Recognised; or the EXP figures as the bar writes them, tagged Read.",
+      "html": "<div class=\"ds-stack\"><div class=\"ds-read\"><div class=\"ds-title\"><p class=\"ds-street\">Victoria Road</p><p class=\"ds-map\">Kerning City</p></div><span class=\"ds-tag\">Recognised</span></div><div class=\"ds-read\"><div class=\"ds-title\"><p class=\"ds-figs\">EXP 160 [3.81%]</p></div><span class=\"ds-tag\">Read</span></div></div>",
+      "css": ".ds-stack { display: flex; flex-direction: column; gap: 10px; } .ds-read { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; display: flex; align-items: center; gap: 10px; width: 476px; box-sizing: border-box; padding: 8px 12px 9px; border: 1px solid var(--frame, #3e527c); border-radius: 6px; background: var(--bar, linear-gradient(180deg, #dfe8f7 0%, #b4c6e6 48%, #94abd6 100%)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9); } .ds-title { flex: 1; min-width: 0; } .ds-read p { margin: 0; } .ds-street { font-size: 12px; font-weight: 700; line-height: 15px; color: var(--street, #1d2b52); } .ds-map { font-size: 18px; font-weight: 700; line-height: 23px; letter-spacing: 0.01em; color: #fff; text-shadow: var(--lettering, -1px -1px 0 var(--outline, #22325a), 0 -1px 0 var(--outline, #22325a), 1px -1px 0 var(--outline, #22325a), -1px 0 0 var(--outline, #22325a), 1px 0 0 var(--outline, #22325a), -1px 1px 0 var(--outline, #22325a), 0 1px 0 var(--outline, #22325a), 1px 1px 0 var(--outline, #22325a), 0 2px 2px rgba(20, 30, 60, 0.35)); } .ds-tag { flex: none; padding: 0 6px; border: 1px solid var(--tag-edge, #a3b6d8); border-radius: 3px; background: var(--tag-bg, #dae3f3); color: var(--tag-ink, #284a86); font-size: 11px; font-weight: 700; line-height: 16px; } .ds-figs { font-size: 16px; font-weight: 700; line-height: 22px; color: var(--ink, #1b2648); }"
     },
     {
-      "name": "Test Read",
-      "kind": "card",
-      "refersTo": "test-read",
-      "description": "A recognised setup result, with reading and failed source states.",
-      "html": "<div class=\"ds-test-read ds-test-recognised\"><p class=\"ds-test-street\">Victoria Road</p><p class=\"ds-test-map\">Henesys Hunting Ground I ✓</p></div>",
-      "css": ".ds-test-read { padding: 14px 16px; border-radius: 8px; background: rgba(16, 24, 36, 0.9); border: 1px solid #2a3846; } .ds-test-read { font: 14px/1.5 \"Segoe UI\", system-ui, sans-serif; color: var(--text, #f2f5f8); } .ds-test-read p { margin: 0; } .ds-test-street { color: var(--muted, #9fb6cc); font-size: 13px; } .ds-test-map { font-size: 18px; font-weight: 600; } .ds-test-recognised .ds-test-map { color: var(--ok, #7fd18b); } .ds-test-failed { border-color: var(--bad, #f08a7a); } .ds-test-reading { color: var(--muted, #9fb6cc); }"
-    },
-    {
-      "name": "Setup Notice",
+      "name": "Shortcuts List",
       "kind": "custom",
-      "refersTo": "notice",
-      "description": "Tinted body text with a Compass Gold left rule.",
-      "html": "<p class=\"ds-notice\">The game window changed size since setup, so the minimap title has probably moved. Mark it again.</p>",
-      "css": ".ds-notice { margin: 14px 0 0; padding: 8px 12px; border-left: 3px solid var(--accent, #f5c542); background: rgba(245, 197, 66, 0.08); } .ds-notice { font: 14px/1.5 \"Segoe UI\", system-ui, sans-serif; color: var(--text, #f2f5f8); }"
+      "description": "Setup's overlay guide: each action in Ink Steel, its keys right-aligned in bold ink, two columns.",
+      "html": "<dl class=\"ds-sc\"><dt>Collapse / expand</dt><dd>Ctrl+Shift+C</dd><dt>Move</dt><dd>Drag the panel's header</dd><dt>Search a mob</dt><dd>Ctrl+Shift+F</dd><dt>Help &amp; setup</dt><dd>Ctrl+Shift+S</dd></dl>",
+      "css": ".ds-sc { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; width: 476px; margin: 0; padding: 14px 22px; box-sizing: border-box; background: var(--body-solid, #eae8f5); color: var(--ink, #1b2648); font-size: 13px; line-height: 18px; } .ds-sc dt { color: var(--ink-2, #44527a); } .ds-sc dd { margin: 0; text-align: right; font-weight: 700; }"
     },
     {
-      "name": "Hidden Street Tag",
-      "kind": "chip",
-      "refersTo": "tag-hidden-street",
-      "description": "A noninteractive destination label.",
-      "html": "<span class=\"ds-tag\">Hidden Street</span>",
-      "css": ".ds-tag { flex: none; padding: 0 5px; border-radius: 3px; font: 11px \"Segoe UI\", system-ui, sans-serif; background: rgba(159, 182, 204, 0.2); color: #c3d4e4; } .ds-tag-quest { background: rgba(240, 198, 116, 0.2); color: #f0c674; }"
-    },
-    {
-      "name": "Quest Tag",
-      "kind": "chip",
-      "refersTo": "tag-quest",
-      "description": "A noninteractive amber Quest Portal label.",
-      "html": "<span class=\"ds-tag ds-tag-quest\">Quest</span>",
-      "css": ".ds-tag { flex: none; padding: 0 5px; border-radius: 3px; font: 11px \"Segoe UI\", system-ui, sans-serif; background: rgba(159, 182, 204, 0.2); color: #c3d4e4; } .ds-tag-quest { background: rgba(240, 198, 116, 0.2); color: #f0c674; }"
-    },
-    {
-      "name": "Mob Table",
+      "name": "Title-Marking Hint",
       "kind": "custom",
-      "refersTo": "map-table",
-      "description": "Numeric columns are aligned. Dashes are specimen placeholders, not statistics.",
-      "html": "<table class=\"ds-table\"><thead><tr><th>Mob</th><th>Lv</th><th>HP</th><th>EXP</th><th>Count</th><th>Share</th></tr></thead><tbody><tr><td>Orange Mushroom</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr></tbody></table>",
-      "css": ".ds-table { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; } .ds-table { width: 100%; font-family: \"Segoe UI\", system-ui, sans-serif; color: #f2f5f8; } .ds-table th { font-weight: 400; color: #9fb6cc; text-align: right; } .ds-table td { text-align: right; } .ds-table th, .ds-table td { padding: 1px 0 1px 6px; white-space: nowrap; } .ds-table th:first-child, .ds-table td:first-child { padding-left: 0; text-align: left; } .ds-table td:first-child { max-width: 140px; overflow: hidden; text-overflow: ellipsis; } .ds-table { table-layout: fixed; } .ds-table th, .ds-table td { box-sizing: border-box; } .ds-table th:nth-child(1) { width: 32%; } .ds-table th:nth-child(2) { width: 8%; } .ds-table th:nth-child(3), .ds-table th:nth-child(4) { width: 17%; } .ds-table th:nth-child(5) { width: 11%; } .ds-table th:nth-child(6) { width: 15%; } .ds-table td:not(:first-child) { white-space: normal; overflow-wrap: anywhere; }"
+      "refersTo": "region-hint",
+      "description": "A small translucent game window over the navy veil: what to mark, the keyboard instructions, and a status line, centred. Ignores the pointer; moves to the top while marking the EXP bar.",
+      "html": "<div class=\"ds-veil\"><div class=\"ds-hint\"><p class=\"ds-h\">Mark both lines of the minimap title</p><p class=\"ds-p\">Drag a box, or use Arrow keys to move · Alt+Arrow to resize · Shift for larger steps</p><p class=\"ds-p\">Enter to test · Esc to cancel</p><p class=\"ds-out\">Box: left 12, top 40, width 182, height 44 pixels.</p></div></div>",
+      "css": ".ds-veil { font-family: Arial, \"Segoe UI\", system-ui, sans-serif; padding: 24px; background: linear-gradient(rgba(18, 28, 56, 0.3), rgba(18, 28, 56, 0.3)), #8a7f9a; } .ds-hint { width: max-content; max-width: 100%; box-sizing: border-box; margin: 0 auto; padding: 9px 14px 10px; border: 1px solid var(--frame, #3e527c); border-radius: 6px; background: var(--body, rgba(234, 232, 245, 0.95)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65); color: var(--ink, #1b2648); font-size: 14px; line-height: 20px; text-align: center; } .ds-hint p { margin: 2px 0; } .ds-h { margin: 0 0 4px !important; font-weight: 700; } .ds-p { font-size: 13px; color: var(--ink-2, #44527a); } .ds-out { margin-top: 6px !important; font-size: 12px; color: var(--ink-3, #505c7d); }"
     },
     {
-      "name": "Candidate List",
+      "name": "Drag Box",
       "kind": "custom",
-      "refersTo": "candidate-list",
-      "description": "Mob clues lead; facts and the secondary Map ID wrap beneath. Rows are not controls.",
-      "html": "<ol class=\"ds-candidates\"><li class=\"ds-current\" aria-current=\"true\"><span class=\"ds-candidate-mobs\">Comparison data unavailable</span><div class=\"ds-candidate-facts\"><span class=\"ds-candidate-id\">Map 000000010</span></div></li><li><span class=\"ds-candidate-mobs\">Comparison data unavailable</span><div class=\"ds-candidate-facts\"><span class=\"ds-candidate-id\">Map 000000020</span></div></li></ol>",
-      "css": ".ds-candidates { margin: 4px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font: 12px/1.4 \"Segoe UI\", system-ui, sans-serif; color: #9fb6cc; } .ds-candidates li { position: relative; padding-left: 14px; overflow-wrap: anywhere; } .ds-candidates .ds-current { color: #f2f5f8; font-weight: 600; } .ds-candidates .ds-current::before { content: \"▶ \"; position: absolute; left: 0; top: 0; } .ds-candidate-mobs { display: block; } .ds-candidate-facts { display: flex; flex-wrap: wrap; gap: 2px 8px; } .ds-candidate-id { margin-left: auto; color: #9fb6cc; font-weight: 400; }"
-    },
-    {
-      "name": "Marking Hint",
-      "kind": "custom",
-      "refersTo": "marking-hint",
-      "description": "Wrapping pointer and keyboard instructions; specimen omits viewport anchoring.",
-      "html": "<div class=\"ds-marking-hint\"><strong>Mark both lines of the minimap title</strong><p>Drag a box, or use Arrow keys to move · Alt+Arrow to resize · Shift for larger steps</p><p>Enter to test · Esc to cancel</p></div>",
-      "css": ".ds-marking-hint { display: inline-block; padding: 10px 16px; border-radius: 8px; background: rgba(16, 24, 36, 0.9); color: #f2f5f8; font: 15px/1.4 \"Segoe UI\", system-ui, sans-serif; pointer-events: none; text-align: center; } .ds-marking-hint p { margin: 4px 0; }"
+      "description": "The box being dragged around the minimap title: dashed Edit Blue over a solid white band, clear inside, legible on the minimap's light blue and on dark scenery.",
+      "html": "<div class=\"ds-scene\"><div class=\"ds-box\"></div></div>",
+      "css": ".ds-scene { position: relative; width: 240px; height: 80px; background: linear-gradient(90deg, #9fb6da 0 50%, #3a3550 50% 100%); } .ds-box { position: absolute; left: 30px; top: 18px; width: 180px; height: 44px; box-sizing: border-box; border: 2px solid rgba(255, 255, 255, 0.95); outline: 2px dashed var(--edit, #2f63c8); outline-offset: -2px; background: none; }"
     }
   ],
   "narrative": {
-    "northStar": "The Scout’s Notes",
-    "overview": "MapleCompass is quiet, practical, and compact. Its interface reads like a small set of useful notes beside the game: a clear Map Name, tightly grouped facts, and brief signals when something needs attention. The game keeps the player's attention; the companion stays easy to consult.\n\nFamiliar, straightforward controls sit on Midnight Slate surfaces. Compass Gold identifies setup actions and marking feedback, while cool supporting text gives the Map Name and selected information room to lead. Rounded containers and translucent fills keep the system approachable without introducing ornamental depth.",
+    "northStar": "The Window the Game Forgot to Ship",
+    "overview": "The overlay sits beside the game's own windows (the Quest Helper, the minimap) and is made from their materials: a translucent lavender-grey body, a steel-periwinkle title bar with a white top highlight and a dark-navy hairline, the map name in white bold lettering outlined in navy the way the minimap draws it, the minimap's legend of blue portal rings and red mob dots, and the game's small steel window buttons. The game supplies the materials and one signature move. Organisation, hierarchy and density come from a working tool: EXP pace first when it is tracked, then hidden exits, then the mobs, then the way to the Hunting Target, then the credit. It is not a screenshot of a game window. The setup window and the title-marking window are built from the same materials, so every MapleCompass window reads as one more game window.\n\nIt is light because the game's windows are light, and dense because it is read in glances between attacks. Every state is drawn in the same window. Doubt and problems get the game's orange, and nothing else does. The confirmed rejection is the generic dark dev-tools card with a stats table on top, which this world replaced.\n\nEvery window takes the pointer. The overlay is always clickable, but a click never takes the keyboard from the game except in the search view, where the query field needs it. The panel is dragged by its title bar when it sits inside the game or is detached. Its buttons (deep steel in the title bar, light steel in the body) and setup's buttons carry the game's hover, pressed and keyboard-focus states; list rows in the search view take a faint hover tint. Its height follows its content. Nothing in any window moves: there is no transition or animation anywhere.",
     "keyCharacteristics": [
-      "Compact facts with a clear Map Name and aligned numeric columns.",
-      "Midnight Slate surfaces, cool supporting text, and purposeful Compass Gold.",
-      "Familiar, straightforward buttons, containers, and small descriptive tags.",
-      "Flat tonal layers, subtle borders, and immediate state changes."
+      "Light window body in the game's lavender (translucent over the game, opaque on the desktop), under a gradient steel-blue title bar.",
+      "Map name in outlined white lettering, with the Street Name above it as on the minimap.",
+      "Two icon vocabularies only: minimap glyphs (portal ring, mob dot, mini-minimap) in CSS and SVG, and drawn line icons on the game's small steel buttons.",
+      "Game orange appears only for doubt and problems.",
+      "One plain bold sans (Arial) throughout; tabular figures in the overlay.",
+      "Buttons in every window have the game's hover, pressed and focus states. No motion anywhere."
     ],
     "rules": [
       {
-        "name": "The Accent Has a Job Rule",
-        "body": "Use Compass Gold for the existing action and marking roles. Keep recognition, uncertainty, and Quest signals in their own established status tones.",
+        "name": "The Orange Means Doubt Rule",
+        "body": "Game orange marks only uncertainty and problems: the \"Not sure\" chip, problem notes, the collapsed alert dot. A confirmed state never uses it, so orange can't become decoration. Search tiers are told apart by weight and ink, never by orange.",
         "section": "colors"
       },
       {
-        "name": "The Facts Stay Aligned Rule",
-        "body": "Use tabular numerals in the tables, right-align numeric columns, and left-align the first descriptive column. Table headers remain regular; summary values are semibold.",
+        "name": "The Minimap Legend Rule",
+        "body": "Portal blue and mob red come from the minimap's legend and keep that meaning. Blue is for portals and red is for mobs, with no other uses.",
+        "section": "colors"
+      },
+      {
+        "name": "The Over the Game, Translucent Rule",
+        "body": "A window laid over the game uses the translucent Window Lavender (body); a window on the desktop uses the opaque one (body-solid). Same colour, different footing.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Figures Rule",
+        "body": "In the overlay all figures are tabular (`font-variant-numeric: tabular-nums` on the body), and numeric columns are right-aligned so EXP, HP, rates and share line up from one glance to the next.",
         "section": "typography"
       },
       {
-        "name": "The Flat Layers Rule",
-        "body": "Preserve the current hierarchy with fill opacity, text emphasis, and restrained borders. Window stacking is a platform behavior, not a decorative elevation token.",
+        "name": "The Outlined Lettering Rule",
+        "body": "Only a Map Name uses white lettering with a navy outline (the shared `--lettering` text-shadow: a 1px stroke in eight directions plus one soft 0 2px 2px drop). It appears in the overlay title bar and in setup's recognised test read, nowhere else. Everything else, Time to Level included, is ink on the lavender body.",
+        "section": "typography"
+      },
+      {
+        "name": "The Notes Wrap, Names Truncate Rule",
+        "body": "Notes and the Map Name wrap so they can be read in full. Single-line facts (destinations, mob names, route stops, suggestion names, result maps) truncate with an ellipsis instead of growing the panel.",
+        "section": "typography"
+      },
+      {
+        "name": "The Chrome, Not Lift Rule",
+        "body": "Depth is drawn the way the game draws it, with highlights and hairlines. Nothing floats on a blurred drop shadow.",
         "section": "elevation"
       }
     ],
     "dos": [
-      "Do keep the Map Name prominent and supporting facts compact.",
-      "Do preserve the distinct opaque setup, translucent panel, and inset surface roles.",
-      "Do use the established status tones together with explanatory text, the uncertainty mark, or the recognised-result check mark.",
-      "Do keep numeric columns aligned and status explanations able to wrap.",
-      "Do retain familiar button variants, visible keyboard focus, and the visible disabled state.",
-      "Do keep attribution and source-page hints legible within the low-emphasis footer."
+      "**Do** build new states and windows from the game's window materials: the Window Lavender body, the Title Bar Steel gradient with its white highlight and hairline, and navy ink.",
+      "**Do** use the translucent body for windows over the game and the opaque body for windows on the desktop.",
+      "**Do** reserve game orange for doubt and problems, and pair it with words and a shape (chip, dot, bordered note) so the state never relies on colour alone.",
+      "**Do** draw icons as minimap glyphs (portal ring, mob dot, mini-minimap) in CSS or inline SVG, or as 1.8-stroke line icons on the game's small steel buttons.",
+      "**Do** keep overlay figures tabular and numeric columns right-aligned.",
+      "**Do** let notes and the Map Name wrap, and truncate single-line facts with an ellipsis.",
+      "**Do** keep the Street Name above the Map Name wherever a map is shown as the overlay shows it.",
+      "**Do** give every button, in every window, hover, pressed and a 2px Edit Blue `:focus-visible` ring offset 2px, deep steel where it acts from a title bar or moves setup forward and light steel beside it or in a body.",
+      "**Do** mark a selected row with Selection Periwinkle and its inset edge, and set a list into the body as an inset box."
     ],
     "donts": [
-      "Don't sample interface colors from the app icon artwork.",
-      "Don't turn descriptive portal tags or Candidate rows into controls without an explicit interaction change.",
-      "Don't ellipsize status explanations using the name-row clipping treatment.",
-      "Don't describe shadows, blur, hover animation, mobile breakpoints as established parts of this system.",
-      "Don't treat the overlay's starting height as a fixed content height.",
-      "Don't turn preview-only tonal ramps or specimen data into product colors or factual map data."
+      "**Don't** return to the dark dev-tools card with a stats table on top.",
+      "**Don't** use orange, or the outlined white lettering, for anything other than their single roles.",
+      "**Don't** add small labels or kickers above content beyond the Street Name in the title bar; a label belongs only to the field or figure it names.",
+      "**Don't** let a click on the overlay take the keyboard from the game outside the search view.",
+      "**Don't** add motion (transitions or animations) to any window.",
+      "**Don't** float any window on a blurred drop shadow; depth is inset highlights and hairlines.",
+      "**Don't** introduce a second typeface or icon fonts."
     ]
   }
 }

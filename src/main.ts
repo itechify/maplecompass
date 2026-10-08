@@ -42,13 +42,23 @@ type HiddenPortal = {
   toHiddenStreet: boolean;
   quest: boolean;
   position: string;
+  spot: MapSpot | null;
 };
+
+/** Mirror of `compass_core::MapSpot`: a cell of the minimap's 5x3 grid. */
+type MapSpot = { column: number; row: number };
+
+/** Mirror of `compass_core::LevelRange`. */
+type LevelRange = { lowest: number; highest: number };
 
 /** Mirror of `compass_core::MapData`. */
 type MapData = {
   summary: { mobsPerHour: PerParty; expPerHour: PerParty } | null;
   mobs: Mob[];
   hiddenPortals: HiddenPortal[];
+  /** The mobs the panel lists: the five with the largest Spawn Share, by level. */
+  listedMobs: Mob[];
+  moreMobs: { count: number; levels: LevelRange } | null;
 };
 
 /** Mirror of `compass_core::MapDataStatus`. */
@@ -111,6 +121,8 @@ type PanelState = {
   setup: { needed: "firstRun" | "resolutionChanged" | "requested" | null };
   hotkeys: Hotkeys;
   unavailableHotkeys: string[];
+  /** Those of them that don't name a key combination; the rest another app has. */
+  invalidHotkeys: string[];
   /** The shell has the hotkeys registered: the game or one of our windows is in front. */
   hotkeysLive: boolean;
   gameWindowTitle: string;
@@ -150,6 +162,11 @@ const sessionPercent = byId("session-percent");
 const trackingExtra = byId("tracking-extra");
 const resetSession = byId("reset-session");
 const badge = byId("badge");
+const mapMobs = byId("map-mobs");
+const noMobs = byId("no-mobs");
+const moreMobs = byId("more-mobs");
+const iconCount = byId("icon-count");
+const iconAlert = byId("icon-alert");
 const recovery = byId("recovery");
 const uncertainty = byId("uncertainty");
 const crawlProgress = byId("crawl-progress");
@@ -188,14 +205,34 @@ let draggable = false;
 /** The search view's open step, as last rendered. */
 let step: SearchState["view"] = null;
 
-/** "Ctrl+Shift+N is taken by another app, so it does nothing here" */
-function takenHotkeys(hotkeys: string[]): string {
-  if (hotkeys.length === 0) return "";
-  const one = hotkeys.length === 1;
-  return `${hotkeys.map(keyLabel).join(", ")} ${one ? "is" : "are"} taken by another app (or invalid), so ${one ? "it does" : "they do"} nothing here`;
+/**
+ * "Ctrl+Shift+N is taken by another app, so it does nothing here." and "Ctrl+Shift+Banana
+ * isn't a key combination.": each hotkey that does nothing, with its real cause.
+ */
+function hotkeyCauses(panel: PanelState): string {
+  const invalid = panel.invalidHotkeys;
+  const taken = panel.unavailableHotkeys.filter((k) => !invalid.includes(k));
+  const list = (keys: string[]) => keys.map(keyLabel).join(", ");
+  const sentences = [];
+  if (taken.length > 0) {
+    sentences.push(
+      taken.length === 1
+        ? `${list(taken)} is taken by another app, so it does nothing here.`
+        : `${list(taken)} are taken by another app, so they do nothing here.`,
+    );
+  }
+  if (invalid.length > 0) {
+    sentences.push(
+      invalid.length === 1 ? `${list(invalid)} isn't a key combination.` : `${list(invalid)} aren't key combinations.`,
+    );
+  }
+  return sentences.join(" ");
 }
 
 const number = (n: number) => n.toLocaleString("en-US");
+
+const levels = ({ lowest, highest }: LevelRange) =>
+  lowest === highest ? `Lv ${lowest}` : `Lv ${lowest}–${highest}`;
 
 function cell(text: string): HTMLTableCellElement {
   const td = document.createElement("td");
@@ -210,14 +247,59 @@ function span(className: string, text: string): HTMLSpanElement {
   return el;
 }
 
-/** "Northern Top of Construction Site [Hidden Street]" over "right, upper". */
+const SVG = "http://www.w3.org/2000/svg";
+
+function svg<K extends keyof SVGElementTagNameMap>(
+  tag: K,
+  attributes: Record<string, string | number>,
+): SVGElementTagNameMap[K] {
+  const el = document.createElementNS(SVG, tag);
+  for (const [name, value] of Object.entries(attributes)) el.setAttribute(name, String(value));
+  return el;
+}
+
+/** The minimap's 5x3 grid in miniature, with the game's portal ring in the portal's cell. */
+const CELL = 9;
+function miniMap(spot: MapSpot | null): SVGSVGElement {
+  const [width, height] = [5 * CELL, 3 * CELL];
+  const el = svg("svg", { class: "minimap", viewBox: `-1 -1 ${width + 2} ${height + 2}` });
+  el.setAttribute("aria-hidden", "true");
+  el.classList.toggle("unknown", !spot);
+  // Field, lit cell, grid, then the frame over them, so no edge cell covers its border.
+  el.append(svg("rect", { class: "field", x: 0, y: 0, width, height, rx: 1.5 }));
+  if (spot) {
+    el.append(
+      svg("rect", { class: "cell", x: spot.column * CELL, y: spot.row * CELL, width: CELL, height: CELL }),
+    );
+  }
+  for (let c = 1; c < 5; c++) {
+    el.append(svg("line", { class: "grid", x1: c * CELL, y1: 0, x2: c * CELL, y2: height }));
+  }
+  for (let r = 1; r < 3; r++) {
+    el.append(svg("line", { class: "grid", x1: 0, y1: r * CELL, x2: width, y2: r * CELL }));
+  }
+  el.append(svg("rect", { class: "frame", x: 0, y: 0, width, height, rx: 1.5 }));
+  if (spot) {
+    const [cx, cy] = [(spot.column + 0.5) * CELL, (spot.row + 0.5) * CELL];
+    el.append(
+      svg("circle", { class: "ring", cx, cy, r: 3.3 }),
+      svg("circle", { class: "core", cx, cy, r: 1.5 }),
+    );
+  }
+  return el;
+}
+
+/** A tiny minimap, then "Northern Top of Construction Site [Hidden Street]" over "Right, upper". */
 function portalRow(portal: HiddenPortal): HTMLLIElement {
   const row = document.createElement("li");
+  const text = document.createElement("div");
   const to = document.createElement("div");
+  to.className = "dest";
   to.append(span("to", portal.toMapName));
   if (portal.toHiddenStreet) to.append(span("tag", "Hidden Street"));
   if (portal.quest) to.append(span("tag quest", "Quest"));
-  row.append(to, span("where", portal.position));
+  text.append(to, span("where", portal.position));
+  row.append(miniMap(portal.spot), text);
   return row;
 }
 
@@ -249,11 +331,11 @@ function candidateRow(id: string, outline: Outline | null): HTMLLIElement {
 
 /** "7 Oct 2026", in the player's time zone. */
 const savedOn = (unixMs: number) =>
-  new Date(unixMs).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  new Date(unixMs).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 /** The note shown in place of (or above) the map's data. */
 function dataNote(data: MapDataStatus, recognition: Recognition, sourceHint: string): string {
-  const noMobs = (data: MapData) => (data.mobs.length === 0 ? " · No mobs here" : "");
+  // A map without mobs says so in its Mobs section, not here.
   switch (data.status) {
     case "loading":
       return "Loading MeowDB data…";
@@ -262,12 +344,12 @@ function dataNote(data: MapDataStatus, recognition: Recognition, sourceHint: str
     case "formatChanged":
       return `MeowDB's page format has changed. MapleCompass needs an update to read it.${sourceHint}`;
     case "savedCopy":
-      return `MeowDB unreachable — showing a saved copy from ${savedOn(data.savedAtUnixMs)}${noMobs(data)}`;
+      return `MeowDB unreachable — showing a saved copy from ${savedOn(data.savedAtUnixMs)}`;
     case "ready":
       if (recognition.status === "savedCopy") {
-        return `MeowDB unreachable — map list from a saved copy from ${savedOn(recognition.savedAtUnixMs)}${noMobs(data)}`;
+        return `MeowDB unreachable — map list from a saved copy from ${savedOn(recognition.savedAtUnixMs)}`;
       }
-      return data.mobs.length === 0 ? "No mobs here" : "";
+      return "";
     case "noMap":
       return "";
   }
@@ -308,6 +390,14 @@ function renderData(panel: PanelState) {
   note.classList.toggle("problem", problem || panel.recognition.status === "savedCopy");
 
   const ready = data.status === "ready" || data.status === "savedCopy" ? data : null;
+
+  // Hidden Portals first: what the game won't show the player.
+  portals.hidden = !ready;
+  noPortals.hidden = !ready || ready.hiddenPortals.length > 0;
+  portalRows.replaceChildren(...(ready?.hiddenPortals ?? []).map(portalRow));
+
+  mapMobs.hidden = !ready;
+  noMobs.hidden = !ready || ready.listedMobs.length > 0;
   summary.hidden = !ready?.summary;
   if (ready?.summary) {
     const { mobsPerHour, expPerHour } = ready.summary;
@@ -316,28 +406,28 @@ function renderData(panel: PanelState) {
     byId("exp-solo").textContent = number(expPerHour.solo);
     byId("exp-party").textContent = number(expPerHour.fullParty);
   }
-  mobsTable.hidden = !ready || ready.mobs.length === 0;
+  mobsTable.hidden = !ready || ready.listedMobs.length === 0;
   mobRows.replaceChildren(
-    ...(ready?.mobs ?? []).map((mob) => {
+    ...(ready?.listedMobs ?? []).map((mob) => {
       const row = document.createElement("tr");
+      const name = cell(mob.name);
+      name.className = "mob";
       row.append(
-        cell(mob.name),
+        name,
         cell(String(mob.level)),
         cell(number(mob.hp)),
         cell(number(mob.exp)),
-        cell(String(mob.spawnCount)),
         cell(`${mob.spawnSharePercent}%`),
       );
-      ["Mob", "Lv", "HP", "EXP", "Count", "Share"].forEach((label, i) => {
+      ["Mob", "Lv", "HP", "EXP", "Share"].forEach((label, i) => {
         row.cells[i].dataset.label = label;
       });
       return row;
     }),
   );
-
-  portals.hidden = !ready;
-  noPortals.hidden = !ready || ready.hiddenPortals.length > 0;
-  portalRows.replaceChildren(...(ready?.hiddenPortals ?? []).map(portalRow));
+  const more = ready?.moreMobs;
+  moreMobs.hidden = !more;
+  if (more) moreMobs.textContent = `+${more.count} more · ${levels(more.levels)} · all on MeowDB`;
 
   credit.textContent = panel.credit ?? "";
 }
@@ -579,6 +669,19 @@ function renderBadge(panel: PanelState) {
   badge.textContent = text ?? "";
 }
 
+/** The collapsed icon: the shown map's Hidden Portal count, and a dot when something needs a look. */
+function renderIcon(panel: PanelState) {
+  const data = panel.data.status === "ready" || panel.data.status === "savedCopy" ? panel.data : null;
+  iconCount.textContent = panel.map && data ? String(data.hiddenPortals.length) : "";
+  iconAlert.hidden = !(
+    panel.notSure ||
+    (panel.candidates && !panel.candidates.chosen) ||
+    ["unavailable", "formatChanged", "savedCopy"].includes(panel.data.status) ||
+    panel.setup.needed === "firstRun" ||
+    panel.setup.needed === "resolutionChanged"
+  );
+}
+
 function render(panel: PanelState) {
   const { hotkeys } = panel;
   const { recognition, map: current, notSure } = panel;
@@ -588,25 +691,30 @@ function render(panel: PanelState) {
   document.body.classList.toggle("collapsed", !panel.expanded);
   document.body.classList.toggle("draggable", panel.draggable);
   document.body.classList.toggle("unreadable", !current);
-  document.body.classList.toggle("not-sure", !!current && notSure);
-  uncertainty.hidden = !current || !notSure;
+  // Not sure of the map, or of which map sharing its title: the facts shown are a guess.
+  const doubtful = !!current && (notSure || (!!panel.candidates && !panel.candidates.chosen));
+  document.body.classList.toggle("not-sure", doubtful);
+  uncertainty.hidden = !doubtful;
   const setupHint = hotkeyAvailable(hotkeys.setup, panel.unavailableHotkeys)
     ? `Re-mark with ${keyLabel(hotkeys.setup)}.`
-    : "Setup shortcut unavailable. Close the app using it, or change hotkeys in %APPDATA%\\com.itechify.maplecompass\\settings.json, then restart MapleCompass.";
+    : "Setup shortcut unavailable. Close the app using it, or change hotkeys in %APPDATA%\com.itechify.maplecompass\settings.json, then restart MapleCompass.";
+  // Without a map, the title bar holds the status and the note under it what to do; the
+  // Street Name slot stays the Street Name's.
   recovery.textContent = "";
+  let problem = false;
+  street.textContent = "";
   if (!panel.gameFound) {
-    street.textContent = "";
     map.textContent = `Looking for ${panel.gameWindowTitle}…`;
   } else if (panel.setup.needed === "firstRun" || panel.setup.needed === "resolutionChanged") {
     // Nothing is read until the Title Region is marked (again).
-    street.textContent =
+    map.textContent =
       panel.setup.needed === "firstRun" ? "Finish setup to start" : "The game window changed size";
-    map.textContent = "Mark the minimap title";
-    recovery.textContent = setupHint;
+    recovery.textContent = `Mark the minimap title. ${setupHint}`;
+    problem = panel.setup.needed === "resolutionChanged";
   } else if (recognition.status === "unavailable") {
-    street.textContent = "Couldn't load the map list from MeowDB";
     map.textContent = "Map recognition unavailable";
-    recovery.textContent = "Check your connection. The Map list retries every minute.";
+    recovery.textContent = "Couldn't load the map list from MeowDB. Check your connection. The Map list retries every minute.";
+    problem = true;
   } else if (current) {
     street.textContent = current.streetName;
     map.textContent = current.mapName;
@@ -614,20 +722,21 @@ function render(panel: PanelState) {
       recovery.textContent = `Title not confirmed. Keep both minimap title lines visible. ${setupHint}`;
     }
   } else {
-    street.textContent = "";
     map.textContent = "Reading the minimap title…";
     recovery.textContent = recognition.status === "starting"
       ? "Loading MeowDB's Map list…"
       : `Keep the minimap open with both title lines visible. If this persists, ${setupHint.charAt(0).toLowerCase() + setupHint.slice(1)}`;
   }
   recovery.hidden = recovery.textContent === "";
+  recovery.classList.toggle("problem", problem);
   renderToolbar(panel);
-  hotkeyProblem.textContent = takenHotkeys(panel.unavailableHotkeys);
-  if (hotkeyProblem.textContent) {
-    hotkeyProblem.textContent += hotkeyAvailable(hotkeys.setup, panel.unavailableHotkeys)
-      ? `. ${keyLabel(hotkeys.setup)} opens setup; select Overlay guide for shortcut help.`
-      : ". Close the app using these shortcuts, or edit %APPDATA%\\com.itechify.maplecompass\\settings.json, then restart MapleCompass.";
-  }
+  // Each hotkey that does nothing, its real cause, then one way to fix it.
+  const causes = hotkeyCauses(panel);
+  hotkeyProblem.textContent = causes && `${causes} ${
+    hotkeyAvailable(hotkeys.setup, panel.unavailableHotkeys)
+      ? `${keyLabel(hotkeys.setup)} opens setup; select Overlay guide for shortcut help.`
+      : "Close the other app, or edit %APPDATA%\com.itechify.maplecompass\settings.json, then restart MapleCompass."
+  }`;
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
   renderTracking(panel);
   // The world crawl, while it runs, with or without a search: "Mapping the world: 312
@@ -639,6 +748,7 @@ function render(panel: PanelState) {
   renderHunting(panel);
   renderSearchView(panel);
   renderBadge(panel);
+  renderIcon(panel);
   expanded = panel.expanded;
   reportHeight();
 }
@@ -677,6 +787,17 @@ document.addEventListener("mousedown", (e) => {
   const onHeader = !!target?.closest(".drag-handle") && !target?.closest("button, input");
   if (draggable && e.button === 0 && onHeader) startDrag();
 });
+
+// The expanded panel's bottom corners resize it, whatever its placement. The shell is
+// told first, so the sizes that follow are the player's; once the resize settles the
+// core keeps the width (never under its minimum) and the height follows the content.
+for (const grip of document.querySelectorAll<HTMLElement>(".grip")) {
+  grip.addEventListener("mousedown", async (e) => {
+    if (e.button !== 0) return;
+    await invoke("panel_resize_started");
+    getCurrentWindow().startResizeDragging(grip.dataset.resize === "SouthWest" ? "SouthWest" : "SouthEast");
+  });
+}
 
 // The collapsed icon: a click expands the panel again (like the collapse hotkey), and
 // pressing on it and moving the mouse drags it, where the panel can be dragged.
