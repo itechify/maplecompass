@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted, superseded in part by ADR-0004 (map pages are now crawled ahead of time)
 ---
 
 # Fetch map data live from MeowDB; get permission before public release

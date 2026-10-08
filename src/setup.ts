@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { hotkeyAvailable, keyLabel, type Hotkeys } from "./hotkeys";
 
 /** Mirror of `compass_core::TestRead`. */
 type TestRead =
@@ -8,22 +9,35 @@ type TestRead =
   | { status: "recognised"; map: { id: string; streetName: string; mapName: string } }
   | { status: "failed" };
 
+/** Mirror of `compass_core::ExpBarTestRead`. */
+type ExpBarTestRead =
+  | { status: "reading" }
+  | { status: "read"; bar: { exp: number; percentHundredths: number } }
+  | { status: "failed" };
+
 type SetupReason = "firstRun" | "resolutionChanged" | "requested";
 
 /** Mirror of the shell's `SetupView`. */
 type SetupView = {
-  setup: { needed: SetupReason | null; testRead: TestRead | null; credit: string | null };
+  setup: {
+    needed: SetupReason | null;
+    testRead: TestRead | null;
+    credit: string | null;
+    expBarTestRead: ExpBarTestRead | null;
+    expBarKept: boolean;
+  };
   unavailableHotkeys: string[];
   /** Those of them that don't name a key combination; the rest another app has. */
   invalidHotkeys: string[];
   recognition: { status: "starting" | "ready" | "savedCopy" | "unavailable" };
   game: { width: number; height: number } | null;
   gameTitle: string;
-  setupHotkey: string;
+  hotkeys: Hotkeys;
+  settingsPath: string;
 };
 
-const STEPS = ["warning", "window", "requirements", "mark", "test"] as const;
-type Step = (typeof STEPS)[number];
+const STEPS = ["warning", "window", "requirements", "mark", "test", "exp", "expTest"] as const;
+type Step = (typeof STEPS)[number] | "guide";
 
 const $ = (id: string) => document.getElementById(id)!;
 let step: Step = "warning";
@@ -31,35 +45,41 @@ let view: SetupView | null = null;
 /** Why setup was last opened; a new reason restarts the walk-through. */
 let openedFor: SetupReason | null = null;
 let picking = false;
+let returnStep: Step = "window";
+let renderedRead = "";
 
 function show(next: Step) {
+  if (next === "guide" && step !== "guide") returnStep = step;
   step = next;
-  for (const section of document.querySelectorAll<HTMLElement>("section")) {
+  for (const section of document.querySelectorAll<HTMLElement>("[data-step]")) {
     section.hidden = section.dataset.step !== step;
   }
   // A re-setup skips the warning, so it has one step fewer.
   const steps = openedFor === "firstRun" ? STEPS : STEPS.slice(1);
-  $("progress").textContent = `Step ${steps.indexOf(step) + 1} of ${steps.length}`;
+  $("progress").textContent = step === "guide" ? "Guide" : `Step ${steps.indexOf(step) + 1} of ${steps.length}`;
   render();
+  document.querySelector<HTMLElement>(`[data-step="${step}"] h2`)?.focus();
 }
 
 function move(by: number) {
+  if (step === "guide") return;
+  // Back from EXP tracking after keeping the title goes to the title, not its test read.
+  if (step === "exp" && by < 0 && !view?.setup.testRead) return show("mark");
   show(STEPS[Math.min(Math.max(STEPS.indexOf(step) + by, 0), STEPS.length - 1)]);
 }
 
-/** "super+alt+s" -> "Win+Alt+S" */
-function keyLabel(accelerator: string): string {
-  return accelerator
-    .split("+")
-    .map((k) => (k.toLowerCase() === "super" ? "Win" : k.charAt(0).toUpperCase() + k.slice(1)))
-    .join("+");
+function shortcut(name: keyof Hotkeys): string {
+  if (!view) return "";
+  const binding = view.hotkeys[name];
+  return keyLabel(binding) + (hotkeyAvailable(binding, view.unavailableHotkeys) ? "" : " (unavailable)");
 }
 
 const NOTICES: Record<SetupReason, string> = {
   firstRun: "",
   resolutionChanged:
-    "The game window changed size since setup, so the minimap title has probably moved. Mark it again.",
-  requested: "Mark the minimap title again. Until you finish, MapleCompass keeps reading the old spot.",
+    "The game window changed size since setup, so the minimap title and the EXP bar have probably moved. Mark them again.",
+  requested:
+    "Mark the minimap title again, or keep it and change EXP tracking. Until you finish, MapleCompass keeps reading the old spots.",
 };
 
 function render() {
@@ -71,54 +91,101 @@ function render() {
   // A changed window size is a problem to fix; a requested re-setup is just information.
   $("notice").classList.toggle("problem", openedFor === "resolutionChanged");
 
-  $("window-status").textContent = game
+  const windowStatus = game
     ? `Found the “${gameTitle}” window (${game.width}×${game.height}).`
     : `Can't find a window titled “${gameTitle}”. Start MapleStory, or pick its window by hand.`;
+  if ($("window-status").textContent !== windowStatus) $("window-status").textContent = windowStatus;
   ($("window-next") as HTMLButtonElement).disabled = !game;
   ($("pick") as HTMLButtonElement).disabled = picking;
-  for (const button of document.querySelectorAll<HTMLButtonElement>(".mark")) {
+  for (const button of document.querySelectorAll<HTMLButtonElement>(".mark, .mark-exp")) {
     button.disabled = !game;
   }
+  // On a requested setup the saved title still fits, and can be kept as it is.
+  $("keep-title").hidden = openedFor !== "requested" || setup.testRead !== null;
 
   const read = setup.testRead;
   const box = $("test-read");
-  // Recognised, the map shows as the overlay's title bar will show it.
-  let kind: "reading" | "recognised" | "problem" = "reading";
-  if (!read || read.status === "reading") {
-    box.textContent = "Reading the title…";
-  } else if (read.status === "recognised") {
-    kind = "recognised";
+  const readKey = JSON.stringify([read, recognition.status]);
+  if (readKey !== renderedRead) {
+    renderedRead = readKey;
+    // Recognised, the map shows as the overlay's title bar will show it.
+    let kind: "reading" | "recognised" | "problem" = "reading";
+    if (!read || read.status === "reading") {
+      box.textContent = "Reading the title…";
+    } else if (read.status === "recognised") {
+      kind = "recognised";
+      const title = document.createElement("div");
+      title.className = "title";
+      const street = document.createElement("p");
+      street.className = "street";
+      street.textContent = read.map.streetName;
+      const map = document.createElement("p");
+      map.className = "map";
+      map.textContent = read.map.mapName;
+      title.append(street, map);
+      box.replaceChildren(title, tag("Recognised"));
+    } else if (recognition.status === "starting") {
+      box.textContent = "Loading MeowDB's map list…";
+    } else if (recognition.status === "unavailable") {
+      kind = "problem";
+      box.textContent =
+        "Couldn't load MeowDB's map list, so no map can be recognised yet. Check your connection; MapleCompass tries again every minute.";
+    } else {
+      kind = "problem";
+      box.textContent =
+        "No map recognised in the marked box. Check that the minimap title is showing, then mark a box around both lines with a little of the blue panel around them.";
+    }
+    box.className = `test-read ${kind}`;
+  }
+  ($("title-next") as HTMLButtonElement).disabled = read?.status !== "recognised";
+  $("test-credit").textContent = setup.credit ? `Map names from ${setup.credit}` : "";
+
+  // EXP tracking: kept from before, it can be marked again, kept as it is or turned off.
+  const kept = setup.expBarKept;
+  $("exp-status").textContent = kept
+    ? "EXP tracking is on. Mark the EXP bar again, keep it as it is, or turn tracking off."
+    : "You can skip this and turn it on later.";
+  $("exp-off").hidden = !kept;
+  $("exp-skip").textContent = kept ? "Keep and finish" : "Skip";
+  $("exp-test-skip").textContent = kept ? "Keep the one before" : "Skip";
+
+  const expRead = setup.expBarTestRead;
+  const expBox = $("exp-test-read");
+  expBox.className = `test-read ${expRead?.status === "read" ? "recognised" : expRead?.status === "failed" ? "problem" : "reading"}`;
+  if (!expRead || expRead.status === "reading") {
+    expBox.textContent = "Reading the EXP bar…";
+  } else if (expRead.status === "read") {
+    const { exp, percentHundredths } = expRead.bar;
     const title = document.createElement("div");
     title.className = "title";
-    const street = document.createElement("p");
-    street.className = "street";
-    street.textContent = read.map.streetName;
-    const map = document.createElement("p");
-    map.className = "map";
-    map.textContent = read.map.mapName;
-    title.append(street, map);
-    const tag = document.createElement("span");
-    tag.className = "tag";
-    tag.textContent = "Recognised";
-    box.replaceChildren(title, tag);
-  } else if (recognition.status === "starting") {
-    box.textContent = "Loading MeowDB's map list…";
-  } else if (recognition.status === "unavailable") {
-    kind = "problem";
-    box.textContent =
-      "Couldn't load MeowDB's map list, so no map can be recognised yet. Check your connection; MapleCompass tries again every minute.";
+    const line = document.createElement("p");
+    line.className = "figures";
+    line.textContent = `EXP ${exp.toLocaleString("en-US")} [${(percentHundredths / 100).toFixed(2)}%]`;
+    title.append(line);
+    expBox.replaceChildren(title, tag("Read"));
   } else {
-    kind = "problem";
-    box.textContent =
-      "No map recognised in the marked box. Check that the minimap title is showing, then mark a box around both lines with a little of the blue panel around them.";
+    expBox.textContent =
+      "Couldn't read the EXP figures in the marked box. Check that the EXP bar is showing, then mark a box around the EXP number and the percentage in brackets.";
   }
-  box.className = `test-read ${kind}`;
-  ($("finish") as HTMLButtonElement).disabled = read?.status !== "recognised";
-  $("test-credit").textContent = setup.credit ? `Map names from ${setup.credit}` : "";
-  $("resetup-hint").textContent =
-    `To mark the title again later, press ${keyLabel(view.setupHotkey)} while you play.`;
+  ($("finish") as HTMLButtonElement).disabled = expRead?.status !== "read";
+
+  $("handoff").hidden = read?.status !== "recognised";
+  $("resetup-hint").textContent = hotkeyAvailable(view.hotkeys.setup, view.unavailableHotkeys)
+    ? `${shortcut("setup")} reopens setup and this guide while you play.`
+    : "The setup shortcut is unavailable. Resolve the shortcut warning before closing this window.";
+  for (const label of document.querySelectorAll<HTMLElement>("[data-shortcut]")) {
+    label.textContent = shortcut(label.dataset.shortcut as keyof Hotkeys);
+  }
   $("hotkey-problem").textContent = hotkeyProblems(view);
   $("hotkey-problem").hidden = $("hotkey-problem").textContent === "";
+}
+
+/** "Recognised" or "Read", in the overlay's tag vocabulary. */
+function tag(text: string): HTMLSpanElement {
+  const el = document.createElement("span");
+  el.className = "tag";
+  el.textContent = text;
+  return el;
 }
 
 /** Each hotkey that does nothing, with its real cause, then how to fix it. */
@@ -137,16 +204,14 @@ function hotkeyProblems(view: SetupView): string {
   }
   if (invalid.length > 0) {
     sentences.push(
-      invalid.length === 1
-        ? `${list(invalid)} isn't a key combination.`
-        : `${list(invalid)} aren't key combinations.`,
+      invalid.length === 1 ? `${list(invalid)} isn't a key combination.` : `${list(invalid)} aren't key combinations.`,
     );
   }
   // One way to recover, in one sentence.
   sentences.push(
     taken.length > 0
-      ? "Close the other app, or change the hotkeys in settings.json, then restart MapleCompass."
-      : "Change the hotkeys in settings.json, then restart MapleCompass.",
+      ? `Close the other app, or edit the hotkeys in ${view.settingsPath}, then restart MapleCompass.`
+      : `Edit the hotkeys in ${view.settingsPath}, then restart MapleCompass.`,
   );
   return sentences.join(" ");
 }
@@ -170,6 +235,16 @@ invoke<SetupView | null>("setup_view").then((v) => {
 });
 
 listen("title-marked", () => show("test"));
+listen("exp-bar-marked", () => show("expTest"));
+listen("marking-cancelled", () => document.querySelector<HTMLElement>(`[data-step="${step}"] .mark, [data-step="${step}"] .mark-exp`)?.focus());
+listen<string>("marking-error", (e) => actionError(e.payload));
+$("guide-open").addEventListener("click", () => show("guide"));
+$("guide-back").addEventListener("click", () => show(returnStep));
+
+function actionError(error: unknown) {
+  $("action-error").textContent = `Couldn't complete that action: ${String(error)}`;
+  $("action-error").hidden = false;
+}
 
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-action]")) {
   button.addEventListener("click", () => {
@@ -182,11 +257,38 @@ for (const button of document.querySelectorAll<HTMLButtonElement>("[data-action]
 
 for (const button of document.querySelectorAll<HTMLButtonElement>(".mark")) {
   button.addEventListener("click", () => {
-    invoke("start_marking").catch((e) => alert(e));
+    $("action-error").hidden = true;
+    invoke("start_marking", { target: "title" }).catch(actionError);
   });
 }
 
-$("finish").addEventListener("click", () => invoke("finish_setup"));
+for (const button of document.querySelectorAll<HTMLButtonElement>(".mark-exp")) {
+  button.addEventListener("click", () => {
+    $("action-error").hidden = true;
+    invoke("start_marking", { target: "expBar" }).catch(actionError);
+  });
+}
+
+$("keep-title").addEventListener("click", () => show("exp"));
+$("title-next").addEventListener("click", () => show("exp"));
+
+/** Finish without a new EXP Bar Region: the one kept before (if any) stays. */
+async function finishWithoutExpMark() {
+  await invoke("discard_exp_bar_mark");
+  await invoke("finish_setup");
+}
+
+$("exp-skip").addEventListener("click", () => finishWithoutExpMark().catch(actionError));
+$("exp-test-skip").addEventListener("click", () => finishWithoutExpMark().catch(actionError));
+$("exp-off").addEventListener("click", async () => {
+  try {
+    await invoke("clear_exp_bar_region");
+    await invoke("finish_setup");
+  } catch (error) {
+    actionError(error);
+  }
+});
+$("finish").addEventListener("click", () => invoke("finish_setup").catch(actionError));
 
 // Picking by hand: the player has a few seconds to put the mouse over the game window.
 // Nothing is clicked or sent to the game; only the window under the pointer is read.

@@ -23,14 +23,20 @@ body {
   display: none !important;
 }
 
-/* As tall as its content: the overlay reports this height and the window fits it. */
+/* As tall as its content: the overlay reports this height and the window fits it, up to
+   600 px (MAX_EXPANDED_HEIGHT in the shell) or the space where the panel is placed,
+   whichever is less. Then it is as tall as the window, and its long part scrolls. */
 .panel {
   box-sizing: border-box;
+  max-height: 100vh;
+  overflow: hidden;
   border: 1px solid var(--frame);
   border-radius: 6px;
-  overflow: hidden;
   background: var(--body);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+  display: flex;
+  flex-direction: column;
+  container-type: inline-size;
 }
 
 .panel p {
@@ -40,38 +46,64 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Title bar: the minimap's, with the street over the map name. */
+/* A view: the title bar full width, everything under it inset from the frame. */
+.view {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding-bottom: 8px;
+}
+
+.view > :not(.titlebar) {
+  margin-inline: 11px;
+}
+
+/* Title bar: the minimap's. Its top row holds the Street Name and, at the right, the
+   panel's buttons, as the minimap holds its own; the Map Name runs under them. The
+   player drags the panel by it (inside or detached), never by a button. */
 .titlebar {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 11px 7px;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 8px 7px 11px;
   background: var(--bar);
   border-bottom: 1px solid var(--bar-hairline);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
-.title {
-  flex: 1;
-  min-width: 0;
+.bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
 }
 
 .street {
+  flex: 1;
+  min-width: 0;
   font-size: 12px;
   font-weight: 700;
   color: var(--street);
   line-height: 15px;
 }
 
+.map-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 3px;
+}
+
 /* A long map name wraps to a second line rather than losing its end. */
 .panel .map {
+  flex: 1;
+  min-width: 0;
   white-space: normal;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-}
-
-.map {
   font-size: 18px;
   font-weight: 700;
   line-height: 23px;
@@ -81,7 +113,7 @@ body {
 }
 
 /* No map yet: the status reads as plain text, not as a map name. */
-.unreadable .map {
+.unreadable .panel .map {
   font-size: 15px;
   color: var(--ink);
   text-shadow: none;
@@ -107,16 +139,73 @@ body {
     -1px 0 0 var(--orange-deep);
 }
 
-.body {
+/* The panel's buttons, one per hotkey action: the game's small window buttons. */
+.toolbar {
+  flex: none;
   display: flex;
-  flex-direction: column;
-  gap: 9px;
-  padding: 8px 11px 8px;
+  gap: 3px;
 }
 
-/* Nothing under the title bar (still reading, say): no empty strip either. */
-.body:not(:has(> :not([hidden]))) {
-  display: none;
+.icon-button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--button-edge);
+  border-radius: 3px;
+  background: var(--button);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  color: #fff;
+  cursor: default;
+}
+
+.icon-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-button svg .dot {
+  fill: currentColor;
+  stroke: none;
+}
+
+.icon-button:hover {
+  background: var(--button-hover);
+}
+
+.icon-button:active {
+  background: var(--button-hover);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.45);
+}
+
+/* Light steel, for a button inside the window's body rather than its title bar. */
+.icon-button.light {
+  border-color: var(--frame);
+  background: var(--button-light);
+  box-shadow: inset 0 1px 0 #fff;
+  color: var(--ink);
+}
+
+.icon-button.light:hover {
+  background: var(--button-light-hover);
+}
+
+.icon-button.light:active {
+  background: var(--button-light);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
+}
+
+.panel :focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 2px;
 }
 
 #data,
@@ -160,48 +249,142 @@ body {
   box-shadow: 0 0 0 1px var(--orange-deep);
 }
 
-/* Edit mode: how to move the panel, and where it goes. */
-.panel .mode {
-  padding: 4px 8px 5px;
-  border: 1px dashed var(--edit);
-  border-radius: 4px;
-  background: #dfe8f8;
-  color: #1f3f80;
-  font-size: 13px;
-  font-weight: 700;
+/* Background progress: present, but quieter than a status note. */
+.panel .note.crawl {
+  font-size: 12px;
+  color: var(--ink-3);
 }
 
 h2 {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 0 5px;
+  margin: 0;
   font-size: 13px;
   font-weight: 700;
   color: var(--ink);
 }
 
-/* Section marks from the minimap's legend: a portal ring, a mob dot. */
-h2::before {
+/* The current map's sections, marked with the minimap's legend: a portal ring for
+   Hidden Portals, a mob dot for Mobs. */
+.portals h2,
+.map-mobs h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+
+.portals h2::before,
+.map-mobs h2::before {
   content: "";
   flex: none;
   box-sizing: border-box;
-  width: 10px;
-  height: 10px;
   border-radius: 50%;
 }
 
 .portals h2::before {
+  width: 10px;
+  height: 10px;
   border: 2.5px solid var(--portal);
   background: var(--portal-fill);
 }
 
-.hunting h2::before {
+.map-mobs h2::before {
   width: 8px;
   height: 8px;
   margin: 0 1px;
   background: var(--mob);
   box-shadow: 0 0 0 1px var(--mob-edge);
+}
+
+/* Nothing to list: the heading and "None on this map" on one line. */
+.portals:has(> .none:not([hidden])),
+.map-mobs:has(> .none:not([hidden])):not(:has(> .summary:not([hidden]))) {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.portals:has(> .none:not([hidden])) h2,
+.map-mobs:has(> .none:not([hidden])):not(:has(> .summary:not([hidden]))) h2 {
+  margin: 0;
+}
+
+.portals .none,
+.map-mobs .none {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+/* EXP tracking: Time to Level over the rates, one line per figure, so the panel's
+   height only changes when a line comes or goes. */
+.tracking {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#tracking-figures {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tracking .waiting {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.tracking .headline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.tracking .label {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.tracking .time-to-level {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.tracking .tag,
+.portals .tag {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--tag-edge);
+  border-radius: 3px;
+  background: var(--tag-bg);
+  color: var(--tag-ink);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 15px;
+}
+
+/* Paused, the figures are held: a state to notice, in the problem palette. */
+.tracking .tag.paused {
+  border-color: var(--problem-edge);
+  background: var(--problem-bg);
+  color: var(--problem-ink);
+}
+
+/* Rates still settling, or held while paused: the figures show, quieter. */
+.tracking:has(.tag.warmingUp) .time-to-level,
+.tracking:has(.tag.warmingUp) .rates td,
+.tracking:has(.tag.paused) .time-to-level,
+.tracking:has(.tag.paused) .rates td {
+  color: var(--ink-2);
+}
+
+.rates td {
+  font-weight: 700;
+  min-width: 72px;
+}
+
+.tracking .extra {
+  font-size: 12px;
+  color: var(--ink-2);
 }
 
 /* The maps sharing the title, each led by what sets it apart; the shown one selected. */
@@ -220,6 +403,7 @@ h2::before {
 .candidates li {
   padding: 3px 7px;
   border-radius: 3px;
+  overflow-wrap: anywhere;
 }
 
 .candidates li.current {
@@ -229,11 +413,38 @@ h2::before {
   font-weight: 700;
 }
 
-.candidates .id {
-  margin-left: 6px;
-  font-size: 11px;
+.candidate-mobs { display: block; }
+.candidate-facts { display: flex; flex-wrap: wrap; gap: 2px 8px; }
+.candidate-id { margin-left: auto; color: var(--ink-3); font-weight: 400; font-size: 11px; }
+.candidate-levels, .candidate-portals { white-space: nowrap; }
+
+table {
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 17px;
+}
+
+th {
+  font-size: 12px;
   font-weight: 400;
-  color: var(--ink-3);
+  color: var(--ink-2);
+  text-align: right;
+}
+
+td {
+  text-align: right;
+}
+
+th,
+td {
+  padding: 1px 0 1px 10px;
+  white-space: nowrap;
+}
+
+th:first-child,
+td:first-child {
+  padding-left: 0;
+  text-align: left;
 }
 
 .portals ul {
@@ -272,18 +483,6 @@ h2::before {
   white-space: nowrap;
 }
 
-.portals .tag {
-  flex: none;
-  padding: 0 5px;
-  border: 1px solid var(--tag-edge);
-  border-radius: 3px;
-  background: var(--tag-bg);
-  color: var(--tag-ink);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 15px;
-}
-
 /* Quest Portals come from NPCs: the minimap's NPC green. */
 .portals .tag.quest {
   border-color: #98c58a;
@@ -300,25 +499,6 @@ h2::before {
 
 .portals .where::first-letter {
   text-transform: uppercase;
-}
-
-/* Nothing to list: the heading and "None on this map" on one line. */
-.portals:has(> .none:not([hidden])),
-.hunting:has(> .none:not([hidden])):not(:has(> .summary:not([hidden]))) {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.portals:has(> .none:not([hidden])) h2,
-.hunting:has(> .none:not([hidden])):not(:has(> .summary:not([hidden]))) h2 {
-  margin: 0;
-}
-
-.portals .none,
-.hunting .none {
-  font-size: 13px;
-  color: var(--ink-2);
 }
 
 /* The minimap in miniature: its 5x3 grid, the portal's cell lit, the game's ring in it. */
@@ -390,38 +570,20 @@ h2::before {
   padding: 0 14px 0 4px;
 }
 
-table {
-  border-collapse: collapse;
+.mobs {
   width: 100%;
-  font-size: 13px;
-  line-height: 17px;
+  table-layout: fixed;
 }
 
-th {
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--ink-2);
-  text-align: right;
-}
-
-td {
-  text-align: right;
-}
-
-th,
-td {
-  padding: 1px 0 1px 12px;
-  white-space: nowrap;
-}
-
-th:first-child,
-td:first-child {
-  padding-left: 0;
-  text-align: left;
-}
+.mobs th:nth-child(1) { width: 40%; }
+.mobs th:nth-child(2) { width: 10%; }
+.mobs th:nth-child(3), .mobs th:nth-child(4) { width: 17%; }
+.mobs th:nth-child(5) { width: 16%; }
+.mobs th, .mobs td { box-sizing: border-box; padding-left: 6px; }
+.mobs th:first-child, .mobs td:first-child { padding-left: 0; }
+.mobs td:not(:first-child) { white-space: normal; overflow-wrap: anywhere; }
 
 .mobs td:first-child {
-  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   font-weight: 700;
@@ -446,15 +608,320 @@ td:first-child {
   color: var(--ink-2);
 }
 
-footer {
+/* The long parts (the route, the suggestions, the map list) scroll once the panel is as
+   tall as the space where it is placed; the rest keeps its height. */
+.view > *,
+.step > *,
+.hunting > * {
+  flex-shrink: 0;
+}
+
+.scroll,
+.view > .step,
+.view > .hunting {
+  flex: 0 1 auto;
+  min-height: 0;
+}
+
+.scroll {
+  overflow-y: auto;
+  scrollbar-color: var(--select-edge) transparent;
+}
+
+/* The Hunting section: its own section at the bottom of the normal view, divided from
+   the current map's info by a rule, headed by the Hunting Target's mob and map. */
+.hunting {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--rule);
+}
+
+.section-head,
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hunting h2,
+.search-view h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hunting h2 .hunting-mob,
+.hunting h2 .hunting-map {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hunting h2 .hunting-map {
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+/* The search view's title sits in its title bar, beside the back button. */
+.search-view .titlebar {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 11px 7px 8px;
+}
+
+.search-view h2 {
+  font-size: 14px;
+  color: var(--street);
+}
+
+.search-view h2 .level {
+  margin-left: 6px;
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+/* Tier, Density, Share and Distance side by side, labels above figures. */
+.figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.figures dt {
+  color: var(--ink-2);
+}
+
+.figures dd {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.figures dd:not(.tier) {
+  font-weight: 700;
+}
+
+.route-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The route there: each map in turn, with how it's reached, in an inset box. */
+.route-stops {
+  margin: 0;
+  padding: 4px 10px;
+  list-style: none;
+  font-size: 12px;
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--inset-bg);
+}
+
+.route-stops li {
+  display: grid;
+  grid-template-columns: 6.5em 1fr;
+  column-gap: 8px;
+  padding: 1px 0;
+}
+
+.route-stops .step {
+  color: var(--ink-2);
+  text-align: right;
+}
+
+/* Anything but a portal is worth noticing on the way: by text emphasis alone. */
+.route-stops .step.ship,
+.route-stops .step.taxi,
+.route-stops .step.teleportScroll {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.route-stops .route-map,
+.route-stops .route-street {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-stops .route-street {
+  grid-column: 2;
+  color: var(--ink-2);
+}
+
+.search-credit {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* The search view takes over the whole panel: the query box and its suggestions, then
+   the picked mob's map list. */
+.search-view .step {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* The query box: the app's one text field. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field .label {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.field input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--frame);
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: inset 0 1px 2px rgba(20, 30, 60, 0.15);
+  color: var(--ink);
+  font: 14px var(--font);
+  user-select: text;
+}
+
+.field input::placeholder {
+  color: var(--ink-3);
+}
+
+/* The suggestions, in the panel's flow below the query box. */
+.suggestions {
+  margin: 0;
+  padding: 3px;
+  list-style: none;
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--inset-bg);
+  font-size: 13px;
+}
+
+.suggestions li {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(62, 82, 124, 0.2);
+  padding: 2px 8px;
+  border-radius: 3px;
+  color: var(--ink-2);
+}
+
+.suggestions li:hover,
+.results tbody tr:hover td {
+  background: rgba(47, 99, 200, 0.08);
+}
+
+/* The one Enter picks. */
+.suggestions li.current {
+  background: var(--select);
+  box-shadow: inset 0 0 0 1px var(--select-edge);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.suggestions .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggestions .level {
+  flex: none;
+  font-weight: 400;
+}
+
+.panel .keys {
+  white-space: normal;
   font-size: 12px;
   color: var(--ink-3);
-  white-space: nowrap;
+}
+
+/* The travel toggles: what else Distance counts besides portals and ships. */
+.travel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 12px;
+}
+
+.travel legend {
+  float: left;
+  padding: 0;
+  color: var(--ink-2);
+}
+
+.travel label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.travel input {
+  margin: 0;
+  accent-color: var(--edit);
+}
+
+/* The map list (the table itself is in results.css). It takes the keys, but its
+   highlight shows where they act, not a focus ring. */
+.results-box:focus {
+  outline: none;
+}
+
+.results thead th {
+  position: sticky;
+  top: 0;
+  background: var(--body-solid);
+}
+
+/* The map Enter makes the Hunting Target. */
+.results tr.current td {
+  background: var(--select);
+}
+
+.results tr.current .result-map {
+  font-weight: 700;
+}
+
+/* The nearest map with the mob, whatever its tier. */
+.search-view .nearest {
+  margin: 0;
+  font-size: 12px;
+}
+
+footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px 8px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+  border-top: 1px solid var(--rule);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
 }
 
 /* Collapsed: a small window holding the portal ring and the map's Hidden Portal count,
@@ -512,6 +979,22 @@ footer {
     0 0 0 2px #fff;
 }
 
+/* With Time to Level along the bottom, the ring moves up out of its way. */
+body:has(#badge:not([hidden])) .icon {
+  place-items: start center;
+  padding-top: 3px;
+}
+
+body:has(#badge:not([hidden])) .icon .ring {
+  width: 24px;
+  height: 24px;
+}
+
+body:has(#badge:not([hidden])) .icon .count {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
 .collapsed .panel {
   display: none;
 }
@@ -520,21 +1003,58 @@ footer {
   display: grid;
 }
 
-/* Draggable (edit mode inside the game, or detached): the overlay takes the mouse and
-   can be dragged anywhere on it. */
-.draggable,
-.draggable * {
+/* Time to Level on the collapsed icon ("47m", "3h 10m"), along its bottom edge. Clicks
+   and drags go through it to the icon. */
+.badge {
+  display: none;
+  position: fixed;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+  padding: 0 2px;
+  border-radius: 3px;
+  background: var(--ink);
+  color: #fff;
+  font: 700 9px/12px var(--font);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.collapsed .badge {
+  display: block;
+}
+
+/* Draggable (inside the game, or detached): the title bar, or the collapsed icon, moves
+   the panel. */
+.draggable .icon,
+.draggable .drag-handle,
+.draggable .drag-handle :not(button):not(button *) {
   cursor: move;
+}
+
+.draggable button {
+  cursor: pointer;
 }
 
 /* No game window (minimised or closed): the overlay window stays but draws nothing. */
 .hidden .panel,
-.hidden .icon {
+.hidden .icon,
+.hidden .badge {
   display: none;
 }
 
-.editing .panel,
-.editing .icon {
-  outline: 2px dashed var(--edit);
-  outline-offset: -2px;
+/* Increased text scale can leave less inline space in the fixed-width window. */
+@container (max-width: 300px) {
+  .summary { grid-template-columns: auto auto auto; }
+  .summary .unit { padding-right: 8px; }
+  .mobs, .mobs tbody { display: block; width: 100%; }
+  .mobs thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .mobs tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 8px; margin-bottom: 8px; }
+  .mobs td { display: block; text-align: left; padding: 0; white-space: normal; overflow-wrap: anywhere; }
+  .mobs td:first-child { grid-column: 1 / -1; font-weight: 700; }
+  .mobs td:not(:first-child)::before { content: attr(data-label); display: block; color: var(--ink-2); }
+  .portals .dest { flex-wrap: wrap; }
+  .portals .to { flex-basis: 100%; white-space: normal; }
 }
