@@ -21,6 +21,7 @@ use compass_core::{
 };
 use meowdb::MeowDbSource;
 use setup::{Bridge, SetupWindows};
+use sizemove::Gesture;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -47,7 +48,7 @@ const EXPANDED_HEIGHT: f64 = 72.0;
 const MIN_EXPANDED_HEIGHT: f64 = 44.0;
 const MAX_EXPANDED_HEIGHT: f64 = 600.0;
 const COLLAPSED: (f64, f64) = (44.0, 44.0);
-/// A drag or resize the page started whose move or size loop hasn't started within this
+/// A drag or resize the player started whose move or size loop hasn't started within this
 /// long never will (the mouse was let go first): the shell places the panel again.
 const LOOP_START_GRACE: Duration = Duration::from_secs(1);
 
@@ -66,16 +67,14 @@ pub(crate) enum Command {
     SearchPick(String),
     /// The expanded panel's content is this tall (CSS px).
     PanelHeight(f64),
-    /// The overlay is about to start a drag of its window: the player pressed the mouse
-    /// on its header or its collapsed icon.
-    DragStarted,
     /// The overlay window moved here (its outer top-left corner). The player's move only
     /// during a drag; otherwise the shell's own, or the system's (a DPI or monitor
     /// change).
     Moved(PhysicalPosition<i32>),
-    /// The overlay is about to start resizing its window: the player pressed the mouse
-    /// on one of the expanded panel's bottom corners.
-    ResizeStarted,
+    /// The player pressed the mouse to drag the overlay (by its header or collapsed icon)
+    /// or to resize it (by a corner grip or an edge), so the moves or sizes that follow
+    /// are theirs.
+    GestureStarted(Gesture),
     /// The overlay window is now this size. The player's resize only during a resize;
     /// otherwise the shell's own.
     Resized(PhysicalSize<u32>),
@@ -99,20 +98,6 @@ pub(crate) enum Command {
 #[tauri::command]
 fn panel_height(height: f64, commands: tauri::State<'_, Sender<Command>>) {
     let _ = commands.send(Command::PanelHeight(height));
-}
-
-/// The overlay is about to start dragging its window, so the moves that follow are the
-/// player's.
-#[tauri::command]
-fn panel_drag_started(commands: tauri::State<'_, Sender<Command>>) {
-    let _ = commands.send(Command::DragStarted);
-}
-
-/// The overlay is about to start resizing its window by a bottom corner, so the sizes
-/// that follow are the player's.
-#[tauri::command]
-fn panel_resize_started(commands: tauri::State<'_, Sender<Command>>) {
-    let _ = commands.send(Command::ResizeStarted);
 }
 
 /// Capture the default Title Region of the game's client area (the probe's guess; the
@@ -205,8 +190,6 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             panel_height,
-            panel_drag_started,
-            panel_resize_started,
             setup::setup_view,
             setup::pick_game_window,
             setup::start_marking,
@@ -367,7 +350,6 @@ fn compass_loop(
                 expanded_height = height.clamp(MIN_EXPANDED_HEIGHT, MAX_EXPANDED_HEIGHT);
                 set_panel_sizes(&mut compass, &window.overlay, expanded_height);
             }
-            Ok(Command::DragStarted) => window.drag_started(),
             Ok(Command::LaunchedAgain) => {
                 compass.act(Action::LaunchedAgain);
                 setup_windows.bring_to_front();
@@ -383,7 +365,7 @@ fn compass_loop(
                 app.exit(0);
                 return;
             }
-            Ok(Command::ResizeStarted) => window.resize_started(),
+            Ok(Command::GestureStarted(gesture)) => window.gesture_started(gesture),
             Ok(Command::Resized(size)) => window.player_resized(size),
             Ok(Command::SizeMoveStarted) => window.size_move_started(),
             Ok(Command::SizeMoveEnded) => {
@@ -530,18 +512,12 @@ fn physical((width, height): (f64, f64), scale: f64) -> Size {
     Size { width: (width * scale).ceil() as u32, height: (height * scale).ceil() as u32 }
 }
 
-/// A drag or resize of the overlay by the player. The page starts it from the header or a
-/// corner grip, and it runs in Windows' move or size loop until the mouse is let go.
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum Gesture {
-    Drag,
-    Resize,
-}
-
+/// The player's drag or resize: it runs in Windows' move or size loop until the mouse is
+/// let go.
 #[derive(Debug, Clone, Copy)]
 struct PlayerGesture {
     gesture: Gesture,
-    /// When the page started it, until Windows' loop has started too.
+    /// When the player pressed the mouse to start it, until Windows' loop has started too.
     starting_since: Option<Instant>,
 }
 
@@ -555,8 +531,8 @@ struct OverlayWindow {
     search_open: bool,
     /// Tells the z-order keeper to hold the overlay just above the game.
     above_game: Arc<AtomicBool>,
-    /// The player's drag or resize, from the page starting it until Windows' move or
-    /// size loop ends.
+    /// The player's drag or resize, from the mouse press that starts it until Windows'
+    /// move or size loop ends.
     gesture: Option<PlayerGesture>,
     /// The size the player's resize last gave the overlay.
     resized_to: Option<PhysicalSize<u32>>,
@@ -590,26 +566,15 @@ impl OverlayWindow {
         }
     }
 
-    /// The overlay page is about to resize the window: the player pressed the mouse on
-    /// a bottom corner of the expanded panel.
-    fn resize_started(&mut self) {
-        self.started(Gesture::Resize);
-    }
-
-    /// The overlay page is about to drag the window: the player pressed the mouse on its
-    /// header or collapsed icon.
-    fn drag_started(&mut self) {
-        self.started(Gesture::Drag);
-    }
-
-    fn started(&mut self, gesture: Gesture) {
-        eprintln!("[gesture] {gesture:?} started by the page"); // TEMP: resize diagnosis
+    /// The player pressed the mouse to drag or resize the overlay.
+    fn gesture_started(&mut self, gesture: Gesture) {
+        eprintln!("[gesture] {gesture:?} started"); // TEMP: resize diagnosis
         self.gesture = Some(PlayerGesture { gesture, starting_since: Some(Instant::now()) });
         self.resized_to = None;
     }
 
-    /// Windows' move or size loop started: the drag or resize the page started is
-    /// running. A loop the page didn't start isn't the player's.
+    /// Windows' move or size loop started: the drag or resize the player started is
+    /// running. Any other loop isn't the player's.
     fn size_move_started(&mut self) {
         self.under_way();
         eprintln!("[gesture] move/size loop started, gesture {:?}", self.gesture); // TEMP: resize diagnosis
@@ -626,7 +591,7 @@ impl OverlayWindow {
         if ended.gesture == Gesture::Resize { self.resized_to.take() } else { None }
     }
 
-    /// The player's drag or resize, from the page starting it until they let go. One
+    /// The player's drag or resize, from the mouse press until they let go. One
     /// whose loop hasn't started within `LOOP_START_GRACE` never will.
     fn under_way(&mut self) -> Option<Gesture> {
         let starting_since = self.gesture.and_then(|player| player.starting_since);
@@ -693,7 +658,8 @@ impl OverlayWindow {
         }
         self.search_open = search_open;
         // Expanded, the player can't resize the panel narrower than the core allows;
-        // collapsed, the window is the icon's size.
+        // collapsed, the window is the icon's size, and they can't resize it.
+        sizemove::set_resizable(state.expanded);
         if self.min_size_expanded != Some(state.expanded) {
             self.min_size_expanded = Some(state.expanded);
             let min = LogicalSize::new(f64::from(MIN_PANEL_WIDTH), MIN_EXPANDED_HEIGHT);
