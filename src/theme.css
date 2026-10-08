@@ -51,4 +51,23 @@
   --disabled-bg: #d3d9e5;
   --disabled-edge: #aeb8cc;
   --disabled-ink: #6b7591;
+  /* The game's windows laid over the screen (the Mini Map, the Quest Helper), as the
+     overlay panel is: colours sampled from them. */
+  --window-edge: #6f95ba;
+  --window-bar: linear-gradient(180deg, #ececec 0%, #dfdfdf 55%, #d6d6d6 100%);
+  --window-bar-ink: #3d4048;
+  --title-panel: #a4c8da;
+  --title-ink: #eef3f7;
+  --title-outline: #4f7499;
+  /* The Mini Map's title lettering: light, outlined in blue. */
+  --title-lettering:
+    -1px -1px 0 var(--title-outline), 0 -1px 0 var(--title-outline), 1px -1px 0 var(--title-outline),
+    -1px 0 0 var(--title-outline), 1px 0 0 var(--title-outline), -1px 1px 0 var(--title-outline),
+    0 1px 0 var(--title-outline), 1px 1px 0 var(--title-outline), 0 2px 1px rgba(30, 60, 100, 0.3);
+  /* The Quest Helper's see-through periwinkle. */
+  --glass: rgba(178, 194, 232, 0.62);
+  --game-button: linear-gradient(180deg, #27b5fe 0%, #44c4ff 55%, #66d4ff 100%);
+  --game-button-hover: linear-gradient(180deg, #45c2ff 0%, #66d0ff 55%, #8ae0ff 100%);
+  --game-button-pressed: linear-gradient(180deg, #1c9be0 0%, #2eb1f2 100%);
+  --game-button-edge: #2f7595;
 }
