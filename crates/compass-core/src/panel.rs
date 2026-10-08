@@ -57,6 +57,9 @@ pub enum Action {
     /// physical screen px. It moves an inside or detached panel, and a docked panel
     /// never.
     PanelMoved { x: i32, y: i32 },
+    /// The player dragged a bottom corner of the expanded panel so it is `width` CSS px
+    /// (logical) wide. Its height follows its content all the same.
+    PanelResized { width: u32 },
     /// Switch to the next placement: inside, docked right, docked left, detached.
     CyclePlacement,
     /// Show the next of the maps sharing the shown map's title, when the core couldn't
@@ -185,9 +188,18 @@ const DEFAULT_TOP_FRACTION: i32 = 3;
 /// primary monitor, which always has its origin at (0, 0).
 const DEFAULT_DETACHED_AT: ScreenPoint = ScreenPoint { x: 100, y: 100 };
 
+/// The expanded panel's width until the player resizes it (CSS px, logical).
+pub const DEFAULT_PANEL_WIDTH: u32 = 380;
+/// The narrowest the player can make the panel (CSS px, logical): its header's buttons
+/// and the Map Summary's figures still fit side by side.
+pub const MIN_PANEL_WIDTH: u32 = 320;
+
 #[derive(Debug, Clone)]
 pub(crate) struct Panel {
     pub sizes: PanelSizes,
+    /// The expanded panel's width as the player set it (CSS px, logical); the shell
+    /// turns it into [`PanelSizes::expanded`] for the display.
+    pub width: u32,
     pub game: Option<GameWindow>,
     pub expanded: bool,
     /// `None` until the player drags the panel: then it uses the default position.
@@ -208,6 +220,7 @@ impl Default for Panel {
         let zero = Size { width: 0, height: 0 };
         Self {
             sizes: PanelSizes { expanded: zero, collapsed: zero },
+            width: DEFAULT_PANEL_WIDTH,
             game: None,
             expanded: true,
             inside_offset: None,
@@ -233,6 +246,12 @@ impl Panel {
             // Docked panels stay docked.
             _ => {}
         }
+    }
+
+    /// The player resized the panel to `width` (see [`Action::PanelResized`]): never
+    /// narrower than [`MIN_PANEL_WIDTH`].
+    pub fn resized_to(&mut self, width: u32) {
+        self.width = width.max(MIN_PANEL_WIDTH);
     }
 
     pub fn cycle_placement(&mut self) {
