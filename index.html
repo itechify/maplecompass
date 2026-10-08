@@ -9,42 +9,62 @@
   </head>
   <body class="hidden">
     <main class="panel" id="panel">
-      <header>
-        <p class="street" id="street"></p>
-        <p class="map" id="map">Starting…</p>
+      <header class="titlebar">
+        <div class="title">
+          <p class="street" id="street"></p>
+          <p class="map" id="map">Starting…</p>
+        </div>
+        <p class="doubt" id="doubt" hidden>Not sure</p>
       </header>
-      <p class="note problem" id="hotkey-problem" hidden></p>
-      <section id="data" hidden>
-        <section class="candidates" id="candidates" hidden>
-          <p class="note" id="candidates-note"></p>
-          <ol id="candidate-rows"></ol>
+      <div class="body">
+        <p class="note" id="status-note" hidden></p>
+        <p class="mode" id="mode" hidden></p>
+        <p class="note problem" id="hotkey-problem" hidden></p>
+        <section id="data" hidden>
+          <section class="candidates" id="candidates" hidden>
+            <p class="note" id="candidates-note"></p>
+            <ol id="candidate-rows"></ol>
+          </section>
+          <p class="note" id="note"></p>
+          <div class="facts" id="facts">
+            <section class="portals" id="portals">
+              <h2>Hidden Portals</h2>
+              <p class="none" id="no-portals">None on this map</p>
+              <ul id="portal-rows"></ul>
+            </section>
+            <section class="hunting" id="hunting">
+              <h2>Hunting</h2>
+              <p class="none" id="no-mobs">No mobs on this map</p>
+              <div class="summary" id="summary">
+                <span class="label">EXP/h</span>
+                <span class="value" id="exp-solo"></span><span class="unit">solo</span>
+                <span class="value" id="exp-party"></span><span class="unit">6+ party</span>
+                <span class="label">Mobs/h</span>
+                <span class="value" id="mobs-solo"></span><span class="unit">solo</span>
+                <span class="value" id="mobs-party"></span><span class="unit">6+ party</span>
+              </div>
+              <table class="mobs" id="mobs">
+                <thead>
+                  <tr><th>Mob</th><th>Lv</th><th>HP</th><th>EXP</th><th>Share</th></tr>
+                </thead>
+                <tbody id="mob-rows"></tbody>
+              </table>
+              <p class="more" id="more-mobs" hidden></p>
+            </section>
+          </div>
         </section>
-        <p class="note" id="note"></p>
-        <table class="summary" id="summary">
-          <thead>
-            <tr><th></th><th>Solo</th><th>6+</th></tr>
-          </thead>
-          <tbody>
-            <tr><th>Mobs/h</th><td id="mobs-solo"></td><td id="mobs-party"></td></tr>
-            <tr><th>EXP/h</th><td id="exp-solo"></td><td id="exp-party"></td></tr>
-          </tbody>
-        </table>
-        <table class="mobs" id="mobs">
-          <thead>
-            <tr><th>Mob</th><th>Lv</th><th>HP</th><th>EXP</th><th>Count</th><th>Share</th></tr>
-          </thead>
-          <tbody id="mob-rows"></tbody>
-        </table>
-        <section class="portals" id="portals">
-          <h2>Hidden portals</h2>
-          <p class="none" id="no-portals">None on this map</p>
-          <ul id="portal-rows"></ul>
-        </section>
-      </section>
-      <footer id="footer" hidden>
-        <span id="credit"></span><span class="hint" id="open-hint"></span>
-      </footer>
+        <footer id="footer" hidden>
+          <span id="credit"></span><span class="hint" id="open-hint"></span>
+        </footer>
+      </div>
     </main>
-    <img class="icon" src="/assets/icon.svg" alt="MapleCompass" draggable="false" />
+    <div class="icon" id="icon" aria-label="MapleCompass">
+      <svg class="ring" viewBox="0 0 28 28" aria-hidden="true">
+        <circle cx="14" cy="14" r="11.5" />
+        <circle class="inner" cx="14" cy="14" r="7.5" />
+      </svg>
+      <span class="count" id="icon-count"></span>
+      <span class="alert" id="icon-alert" hidden></span>
+    </div>
   </body>
 </html>
