@@ -6,16 +6,23 @@
 mod common;
 
 use compass_core::{
-    Compass, ExpBar, ExpBarReading, ExpBarRegion, GameWindow, PanelState, PersonalBestLine, Rect, ScreenRect,
-    Settings, Size, TitleRegion,
+    Compass, ExpBar, ExpBarReading, ExpBarRegion, GameWindow, MapData, PanelState, PersonalBestLine, Rect,
+    ScreenRect, Settings, Size, SourceError, TitleRegion, TrackingState, meowdb,
 };
-use common::FakeSource;
+use common::{FakeSource, index_with_title, saved_page};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::task::Poll;
 
 const S: u64 = 1000;
 const MIN: u64 = 60 * S;
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
 const CONSTRUCTION_SITE: &str = "victoria-road__construction-site-north-of-kerning-city--window";
+const KERNING: &str = "victoria-road__kerning-city--window";
+const ROCKY_ROAD: &str = "victoria-road__rocky-road-i--title-region";
+const SUNSET_SKY_ID: &str = "010003070";
+const CONSTRUCTION_SITE_ID: &str = "010003080";
 
 /// A core with EXP tracking on: both regions kept, on a 1920x1200 game window.
 fn tracking() -> Compass {
@@ -79,6 +86,23 @@ impl Player {
             state = self.read();
         }
         state
+    }
+
+    /// The bar doesn't read whole for `ms` more, a frame every 10 s: the panel state at
+    /// the last.
+    fn unread(&mut self, ms: u64) -> PanelState {
+        let mut state = self.compass.panel_state().clone();
+        for _ in 0..ms / (10 * S) {
+            self.at += 10 * S;
+            state = self.compass.on_exp_bar_reading(ExpBarReading { bar: None, at_ms: self.at }).clone();
+        }
+        state
+    }
+
+    /// Choose the next of the Candidates with the hotkey.
+    fn choose_next(&mut self) -> PanelState {
+        self.compass.on_hotkey("ctrl+shift+n");
+        self.compass.panel_state().clone()
     }
 }
 
@@ -188,4 +212,125 @@ fn the_best_compared_with_is_fixed_on_arrival_and_a_new_one_counts_from_the_next
     assert_eq!(next.exp_tracking.personal_best, best(10_800, None, false));
     let five = player.hunt(5 * MIN, 25);
     assert_eq!(five.exp_tracking.personal_best, best(10_800, Some(8333), false));
+}
+
+/// Map `id`'s saved MeowDB page, read; unreachable without one.
+fn saved_map_page(id: &str) -> Result<MapData, SourceError> {
+    match saved_page(id) {
+        Some(html) => meowdb::read_map_page(&html, id),
+        None => Err(SourceError::Unreachable(format!("no saved page for {id}"))),
+    }
+}
+
+/// MeowDB's saved index and pages, but Sunset Sky's page is held back until `page_in`
+/// lets it through.
+fn sunset_sky_held_back(page_in: &Arc<AtomicBool>) -> FakeSource {
+    let page_in = page_in.clone();
+    FakeSource::meowdb().with_pages(move |id| {
+        if id == SUNSET_SKY_ID && !page_in.load(Ordering::SeqCst) { Poll::Pending } else { Poll::Ready(saved_map_page(id)) }
+    })
+}
+
+#[test]
+fn nothing_is_recorded_on_a_map_without_a_map_summary() {
+    let page_in = Arc::new(AtomicBool::new(false));
+    let mut player = Player::new(tracking_with(sunset_sky_held_back(&page_in)));
+
+    // A town has none: no line there, however long the play.
+    player.arrive(KERNING);
+    assert_eq!(player.hunt(6 * MIN, 30).exp_tracking.personal_best, None);
+
+    // Nor is there one while the map's page hasn't come.
+    let sunset = player.arrive(SUNSET);
+    assert_eq!(sunset.data.solo_exp_ceiling(), None);
+    assert_eq!(player.hunt(6 * MIN, 30).exp_tracking.personal_best, None);
+
+    // Back with its page in, nothing came of the Visit before: a first Visit's line,
+    // once there have been 5 minutes there.
+    player.arrive(CONSTRUCTION_SITE);
+    page_in.store(true, Ordering::SeqCst);
+    player.hunt(MIN, 10);
+    let back = player.arrive(SUNSET);
+    assert_eq!(back.data.solo_exp_ceiling(), Some(223_928));
+    assert_eq!(back.exp_tracking.personal_best, None);
+    assert_eq!(player.hunt(5 * MIN, 10).exp_tracking.personal_best, first_best(3600));
+}
+
+/// The Construction Site and Sunset Sky sharing the Kerning City sample's title: the
+/// Construction Site, first in the map index, shows first.
+fn sharing_a_title() -> FakeSource {
+    FakeSource::with_index(index_with_title("Victoria Road", "Kerning City", &[CONSTRUCTION_SITE_ID, SUNSET_SKY_ID]))
+}
+
+fn shown_map(state: &PanelState) -> Option<&str> {
+    state.map.as_ref().map(|m| m.id.as_str())
+}
+
+#[test]
+fn nothing_is_recorded_while_candidates_wait_for_a_choice() {
+    let mut player = Player::new(tracking_with(sharing_a_title()));
+    let arrived = player.arrive(KERNING);
+    assert_eq!(shown_map(&arrived), Some(CONSTRUCTION_SITE_ID));
+    assert_eq!(arrived.candidates.map(|c| c.chosen), Some(false));
+
+    // 10,800 EXP/h, then 3,600, with nothing chosen: no line.
+    assert_eq!(player.hunt(6 * MIN, 30).exp_tracking.personal_best, None);
+    assert_eq!(player.hunt(5 * MIN, 10).exp_tracking.personal_best, None);
+
+    // The player chooses the Construction Site: the hotkey shows Sunset Sky, then it.
+    player.choose_next();
+    let chosen = player.choose_next();
+    assert_eq!(shown_map(&chosen), Some(CONSTRUCTION_SITE_ID));
+    // Its first best is Last 5 min as it shows now: the 10,800 shown before the choice
+    // never counted.
+    assert_eq!(chosen.exp_tracking.personal_best, first_best(3600));
+}
+
+#[test]
+fn choosing_a_candidate_past_another_keeps_this_visits_best_for_the_one_chosen() {
+    let mut player = Player::new(tracking_with(sharing_a_title()));
+    player.arrive(KERNING);
+    player.hunt(6 * MIN, 10);
+
+    // Choosing the Construction Site goes past Sunset Sky.
+    player.choose_next();
+    assert_eq!(player.choose_next().exp_tracking.personal_best, first_best(3600));
+
+    // On Rocky Road I, whose page doesn't settle which map the title is on the way back.
+    player.arrive(ROCKY_ROAD);
+    player.hunt(MIN, 10);
+    let back = player.arrive(KERNING);
+    assert_eq!(back.candidates.map(|c| c.chosen), Some(false));
+
+    // Sunset Sky has no best from the moment it showed on the way past...
+    let sunset = player.choose_next();
+    assert_eq!(shown_map(&sunset), Some(SUNSET_SKY_ID));
+    assert_eq!(sunset.exp_tracking.personal_best, None);
+    // ...and the Construction Site has the Visit's.
+    let site = player.choose_next();
+    assert_eq!(shown_map(&site), Some(CONSTRUCTION_SITE_ID));
+    assert_eq!(site.exp_tracking.personal_best, best(3600, None, false));
+}
+
+#[test]
+fn nothing_is_recorded_while_the_exp_bar_cannot_be_read() {
+    let page_in = Arc::new(AtomicBool::new(false));
+    let mut player = Player::new(tracking_with(sunset_sky_held_back(&page_in)));
+    player.arrive(SUNSET);
+    player.hunt(6 * MIN, 30);
+
+    // The bar goes unread, and Sunset Sky's page comes meanwhile: the figures are measured
+    // afresh for its Map Summary, but nothing is known of the EXP.
+    let unreadable = player.unread(30 * S);
+    assert_eq!(unreadable.exp_tracking.state, TrackingState::Unreadable);
+    page_in.store(true, Ordering::SeqCst);
+    let paged = player.compass.tick(player.at).clone();
+    assert_eq!(paged.data.solo_exp_ceiling(), Some(223_928));
+
+    // Off to the Construction Site before it reads again, then back: nothing came of the
+    // Visit.
+    player.arrive(CONSTRUCTION_SITE);
+    player.hunt(MIN, 10);
+    let back = player.arrive(SUNSET);
+    assert_eq!(back.exp_tracking.personal_best, None);
 }
