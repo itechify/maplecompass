@@ -14,6 +14,11 @@
 //!   hover to say when it was set. The UI words the date, in the player's local time.
 //! - Bests are per map (MeowDB map ID), for every character: nothing about the Session
 //!   touches them.
+//! - Each map keeps its 10 best Visits; one that doesn't make them is dropped.
+//! - They outlive the launch, as the saved world does: the core hands them to the shell
+//!   as [`SavedBests`], with a revision so it saves them only when they change, and takes
+//!   them back at startup. What it hands out includes the Visit under way's best, as if
+//!   it had ended: closing MapleCompass ends it.
 
 use serde::{Deserialize, Serialize};
 
@@ -95,6 +100,8 @@ pub(crate) struct Bests {
     /// The map the Visit under way was last certain on: the one its best is for. The
     /// hotkey goes past the other Candidates on the way to the one the player chooses.
     on: Option<String>,
+    /// Changes whenever what [`Bests::saved`] hands out does.
+    revision: u64,
 }
 
 impl Bests {
@@ -104,15 +111,23 @@ impl Bests {
     /// EXP bar read. A best is set when it is first shown: the same rate again keeps it.
     pub fn shown(&mut self, map: &str, rate: Option<u64>, now_unix_ms: Option<u64>) {
         if self.on.as_deref() != Some(map) {
+            // The best handed out moves with it, if either map has one this Visit.
+            if self.this_visit().is_some() {
+                self.revision += 1;
+            }
             self.on = Some(map.to_string());
+            if self.this_visit().is_some() {
+                self.revision += 1;
+            }
         }
         let Some(rate) = rate else { return };
         let shown = VisitBest { exp_per_hour: rate, set_at_unix_ms: now_unix_ms };
         match self.visit.iter_mut().find(|(id, _)| id == map) {
-            Some((_, best)) if best.exp_per_hour >= rate => {}
+            Some((_, best)) if best.exp_per_hour >= rate => return,
             Some((_, best)) => *best = shown,
             None => self.visit.push((map.to_string(), shown)),
         }
+        self.revision += 1;
     }
 
     /// The Visit under way ended: its best joins its map's.
@@ -166,7 +181,15 @@ impl Bests {
     pub fn restore(&mut self, saved: SavedBests) {
         if saved.version == BESTS_VERSION {
             self.earlier = saved;
+            self.revision += 1;
         }
+    }
+
+    /// Changes whenever what [`Bests::saved`] hands out does: the Visit under way's best
+    /// set, raised, or moved to the Candidate chosen, or bests restored. A Visit ending
+    /// changes nothing handed out.
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 }
 

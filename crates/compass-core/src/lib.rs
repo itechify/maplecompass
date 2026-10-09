@@ -858,9 +858,15 @@ impl Compass {
         self.sync_panel()
     }
 
-    /// Every map's Personal Bests, for the shell to save.
+    /// Every map's Personal Bests, for the shell to save: the Visit under way's included,
+    /// since closing MapleCompass ends it.
     pub fn bests(&self) -> SavedBests {
         self.session.bests().saved()
+    }
+
+    /// Changes whenever what [`Compass::bests`] holds does, so the shell saves them only then.
+    pub fn bests_revision(&self) -> u64 {
+        self.session.bests().revision()
     }
 
     /// Time passed: check on fetches in flight, move the world crawl on, and let the
