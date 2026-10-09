@@ -730,6 +730,30 @@ fn choosing_among_candidates_with_the_hotkey_counts_play_since_arriving_for_the_
 }
 
 #[test]
+fn undoing_a_reset_made_on_another_map_counts_the_share_from_arriving_on_this_one() {
+    let mut compass = tracking();
+    arrive(&mut compass, SUNSET, 0);
+    read(&mut compass, 0, 160, 381);
+    read(&mut compass, 10 * S, 266, 633);
+    read(&mut compass, 70 * S, 335, 798);
+    compass.tick(75 * S);
+    compass.press(PanelControl::ResetSession);
+
+    // On to the Construction Site at 80 s, then the reset undone at 90 s: Sunset Sky's
+    // minute comes back, but not into the share here.
+    compass.tick(80 * S);
+    arrive(&mut compass, CONSTRUCTION_SITE, 80 * S);
+    compass.tick(90 * S);
+    let undone = press(&mut compass, PanelControl::UndoReset);
+    assert_eq!(exp_per_hour(&undone).1, Some(3105), "69 EXP in the Session's 80 s");
+    assert_eq!(undone.exp_tracking.ceiling_share_hundredths, None);
+
+    // A minute from arriving, 25 EXP: 1,500 EXP/h of the Construction Site's 297,499.
+    let there = read(&mut compass, 140 * S, 360, 857);
+    assert_eq!(there.exp_tracking.ceiling_share_hundredths, Some(50));
+}
+
+#[test]
 fn there_is_no_share_of_the_ceiling_at_a_zero_or_negative_rate_on_the_map() {
     let mut compass = tracking();
     arrive(&mut compass, SUNSET, 0);
