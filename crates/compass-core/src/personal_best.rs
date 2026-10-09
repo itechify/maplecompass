@@ -151,4 +151,14 @@ impl Bests {
             }),
         }
     }
+
+    /// Every map's Visit bests, for the shell to save.
+    pub fn saved(&self) -> SavedBests {
+        self.earlier.clone()
+    }
+
+    /// Take back the bests an earlier launch saved, in place of any there are.
+    pub fn restore(&mut self, saved: SavedBests) {
+        self.earlier = saved;
+    }
 }
