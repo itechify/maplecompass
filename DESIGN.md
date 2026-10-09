@@ -67,59 +67,59 @@ colors:
   veil: "rgba(18, 28, 56, 0.3)"
 typography:
   headline:
-    fontFamily: "Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
     fontSize: "18px"
     fontWeight: 700
     lineHeight: "23px"
     letterSpacing: "0.01em"
   street:
-    fontFamily: "Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
     fontSize: "14px"
     fontWeight: 700
     lineHeight: "18px"
   section-heading:
-    fontFamily: "Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
     fontSize: "14px"
     fontWeight: 700
     lineHeight: "18px"
   status:
-    fontFamily: "Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
     fontSize: "15px"
     fontWeight: 700
     lineHeight: "23px"
   window-name:
-    fontFamily: "Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
     fontSize: "12px"
     fontWeight: 700
     lineHeight: "16px"
   title:
-    fontFamily: "Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
     fontSize: "13px"
     fontWeight: 700
     lineHeight: "17px"
   body-reading:
-    fontFamily: "Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
     fontSize: "14px"
     fontWeight: 400
     lineHeight: "20px"
   body:
-    fontFamily: "Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
     fontSize: "13px"
     fontWeight: 400
     lineHeight: "17px"
     fontFeature: "\"tnum\" 1"
   body-small:
-    fontFamily: "Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
     fontSize: "12px"
     fontWeight: 400
     lineHeight: "15px"
   button:
-    fontFamily: "Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
     fontSize: "13px"
     fontWeight: 700
     lineHeight: "18px"
   label:
-    fontFamily: "Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
     fontSize: "11px"
     fontWeight: 700
     lineHeight: "15px"
@@ -315,7 +315,7 @@ Every window takes the pointer. The overlay is always clickable, but a click nev
 - Three icon vocabularies only: minimap glyphs (portal ring, mob dot, you dot, mini-minimap) in CSS and SVG, drawn line icons on the game's small blue buttons, and the pixel-art compass as the window's mark.
 - Near-black ink with a faint light edge on the see-through body; navy ink on setup's opaque lavender.
 - Game orange appears only for doubt and problems.
-- One plain bold sans (Arial) throughout; tabular figures in the overlay.
+- NEXON's Maplestory typeface throughout, Light and Bold; numeric columns right-aligned.
 - Buttons in every window have the game's hover, pressed and focus states. No motion anywhere.
 
 ## Colors
@@ -363,11 +363,11 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 
 ## Typography
 
-**Display Font:** Arial (with "Segoe UI", system-ui, sans-serif), as the shared `--font`
+**Display Font:** Maplestory (NEXON's typeface, bundled in `assets/fonts`; see its NOTICE), falling back to Arial, "Segoe UI", system-ui, sans-serif, as the shared `--font`
 **Body Font:** the same family
-**Label/Mono Font:** none distinct; overlay figures use tabular numerals
+**Label/Mono Font:** none distinct; Maplestory's figures are proportional (it has no tabular figures)
 
-**Character:** The game sets its windows in a plain bold sans, so every window uses one face everywhere. Arial is a pinned exception to the usual system-face caution, because it is the game's own idiom. Weight (700 against 400) and colour carry the hierarchy, not a second family. The game draws its window text heavier than Arial renders in the overlay (the Quest Helper's regular lines are near-bold), and Arial has no 500 or 600, so the panel gives all its text a 0.4px stroke in the text's own colour (`-webkit-text-stroke-width: var(--text-weight-stroke)`). The outlined title lettering and the doubt chip, whose outlines are their weight, take none.
+**Character:** Every window is set in Maplestory, NEXON's own rounded sans for the game (chosen by the user in October 2026), so the text reads as the game's. It comes in two weights, declared as one family in `theme.css`: Light answers weights up to 500, so regular text (400) is Light, and Bold answers 600 and up. Weight (Bold against Light) and colour carry the hierarchy, not a second family. It loads with `font-display: block`, bundled with the app, so text never draws in Arial first and changes width; the overlay measures its height again once it has loaded. It lacks the en dash, em dash and minus sign, which come from Arial. Light is thinner than the game draws its window text over a busy scene, so the panel gives all its text a 0.3px stroke in the text's own colour (`-webkit-text-stroke-width: var(--text-weight-stroke)`); more clogs the Bold figures. The outlined title lettering and the doubt chip, whose outlines are their weight, take none. Maplestory sets wider than Arial: a long Map Name takes its second line sooner, and long single-line facts truncate sooner.
 
 ### Hierarchy
 - **Headline** (700, 18px/23px, 0.01em): the Map Name, in Title Lettering on the title panel, in the overlay and in setup's recognised test read. Wraps to at most two lines rather than losing its end. It wraps in balanced lines (`text-wrap: balance`), so a second line is never a stranded word. When no map is read, the status takes this slot at 15px/23px bold (Status) in plain Panel Ink with no outline, so it doesn't read as a map name. The Time to Level figure and setup's step headings use 18px bold in plain ink, without the outline. Setup's EXP test read sets its figures at 16px/22px bold.
@@ -384,7 +384,7 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 The collapsed icon carries the system's two sizes below the Label step, held there because they share a 44px square with the compass: the Hidden Portal count at 10px/13px bold and the Time to Level badge at 9px/12px bold, both white on Ink. They are exceptions, not scale steps.
 
 ### Named Rules
-**The Tabular Figures Rule.** In the overlay all figures are tabular (`font-variant-numeric: tabular-nums` on the body), and numeric columns are right-aligned so EXP, HP, rates and share line up from one glance to the next.
+**The Right-Aligned Figures Rule.** Numeric columns are right-aligned so EXP, HP, rates and share line up at their ends from one glance to the next. Maplestory's figures are proportional and it has no tabular ones; the body still asks for `tabular-nums`, which the Arial fallback honours.
 
 **The Outlined Lettering Rule.** Only a map's title, the Street Name and the Map Name, uses the Mini Map's light lettering outlined in blue (the shared `--title-lettering` text-shadow: a 1px title-outline stroke in eight directions plus one soft 0 2px 1px drop). It appears on the overlay's title panel and in setup's recognised test read, nowhere else. Everything else, Time to Level included, is ink.
 
@@ -535,7 +535,7 @@ A transparent window over the game client, its whole surface the Navy Veil with 
 - **Do** use a see-through body for windows over the game and an opaque one for windows on the desktop.
 - **Do** reserve game orange for doubt and problems, and pair it with words and a shape (chip, dot, bordered note) so the state never relies on colour alone.
 - **Do** draw icons as minimap glyphs (portal ring, mob dot, you dot, mini-minimap) in CSS or inline SVG, or as 2-stroke line icons on the game's small buttons; the pixel-art compass is the only raster and marks the window.
-- **Do** keep overlay figures tabular and numeric columns right-aligned.
+- **Do** keep numeric columns right-aligned.
 - **Do** let notes and the Map Name wrap, and truncate single-line facts with an ellipsis.
 - **Do** keep the Street Name above the Map Name wherever a map is shown as the overlay shows it.
 - **Do** give every button, in every window, hover, pressed and a 2px Edit Blue `:focus-visible` ring offset 2px: game blue on the overlay's window bars, light steel in its body, deep steel for setup's step forward and light steel beside it.
