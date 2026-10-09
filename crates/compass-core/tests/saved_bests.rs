@@ -267,7 +267,9 @@ fn a_forget_and_its_undo_change_the_bests_the_shell_saves() {
     // A first Visit's only best, forgotten: Sunset Sky has none to save. Undo brings it
     // back.
     player.arrive(SUNSET);
-    player.hunt(6 * MIN, 20);
+    player.hunt(5 * MIN, 20);
+    let set = player.wall_clock();
+    player.hunt(MIN, 20);
     assert_eq!(sunset_rates(&player), [7200]);
     assert_eq!(saving(&mut player, PanelControl::ForgetBest), [] as [u64; 0]);
     assert_eq!(saving(&mut player, PanelControl::UndoForget), [7200]);
@@ -294,9 +296,9 @@ fn a_forget_and_its_undo_change_the_bests_the_shell_saves() {
     assert_eq!(saving(&mut player, PanelControl::ForgetBest), [7200]);
     assert_eq!(saving(&mut player, PanelControl::UndoForget), [10_800, 7200]);
 
-    // Forgotten when MapleCompass closes, it stays forgotten.
+    // Forgotten when MapleCompass closes, it stays forgotten: the 7,200 is the best, set
+    // when it was.
     player.press(PanelControl::ForgetBest);
-    let set = player.compass.bests().maps[0].visits[0].set_at_unix_ms.unwrap();
     let mut next = relaunch(handed_out(&player.compass), WALL_AT_START + DAY);
-    assert_eq!(line(&next.arrive(SUNSET)), earlier(7200, Some(set), None));
+    assert_eq!(line(&next.arrive(SUNSET)), earlier(7200, set, None));
 }
