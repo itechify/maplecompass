@@ -4,7 +4,9 @@
 //! - A Visit's best on a map is the highest Last 5 min EXP/h the Grind Tracker showed at
 //!   a refresh whose window was a full 5 minutes of active play, all on the map, with the
 //!   EXP bar read: the Session decides what counts. Only while the map is certain and has
-//!   a Map Summary: the core says which map that is.
+//!   a Map Summary: the core says which map that is. Maps that share a title but would
+//!   show the same count as certain, as the first of them, which the panel shows: their
+//!   bests are kept under its ID.
 //! - A map's Personal Best is the best of its Visits'. During a Visit the rate is
 //!   compared with the earlier Visits' best, which can't change until the Visit ends:
 //!   this Visit's best joins them then. No rate is capped or rejected.
