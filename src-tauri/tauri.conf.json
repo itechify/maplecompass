@@ -45,6 +45,22 @@
         "contentProtected": false
       },
       {
+        "label": "item-lookup",
+        "title": "Item Lookup",
+        "url": "item-lookup.html",
+        "width": 440,
+        "height": 40,
+        "transparent": true,
+        "decorations": false,
+        "shadow": false,
+        "alwaysOnTop": false,
+        "skipTaskbar": true,
+        "resizable": false,
+        "focus": false,
+        "focusable": false,
+        "contentProtected": false
+      },
+      {
         "label": "setup",
         "title": "MapleCompass Setup",
         "url": "setup.html",

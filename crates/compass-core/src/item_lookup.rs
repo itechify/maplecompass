@@ -5,15 +5,18 @@
 //! A search result counts only if its name is the name read, but for the letters the
 //! recogniser confuses (I, l and 1; O and 0), case, spacing and punctuation, or if it is
 //! clearly closer to the name read than any other result. Otherwise no page opens: the
-//! panel says no MeowDB item has that name, rather than open a guess. Several results
+//! alert says no MeowDB item has that name, rather than open a guess. Several results
 //! with the name are listed for the player to pick from.
+//!
+//! What a lookup comes to shows in an alert of its own at the top centre of the game
+//! window, where the player is looking, for a few seconds; the panel is left as it is.
 
 use crate::item_tooltip::{ItemTooltip, ItemTooltipReading};
 use crate::map_index::{Fetched, MapDataSource, SourceError};
 use crate::matcher::{key, levenshtein};
 use crate::meowdb;
 use crate::pace::Pace;
-use crate::panel::ScreenRect;
+use crate::panel::{GameWindow, ScreenRect, Size};
 use serde::Serialize;
 use std::task::Poll;
 
@@ -28,7 +31,7 @@ pub struct ItemHit {
     pub category: Option<String>,
 }
 
-/// What the panel says about the latest Item Lookup.
+/// What the alert says about the latest Item Lookup.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum ItemLookup {
@@ -71,9 +74,11 @@ pub struct ItemChoice {
 pub enum OurWindow {
     Panel,
     GrindTracker,
+    /// The last Item Lookup's alert, still showing.
+    Alert,
 }
 
-/// The panel's Item Lookup line.
+/// The latest Item Lookup's alert.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemLookupLine {
@@ -84,8 +89,8 @@ pub struct ItemLookupLine {
     pub outcome: ItemLookup,
 }
 
-/// How long a line stays, from when it was set (capture time). The overlay fades it out
-/// over its last second (`ITEM_LOOKUP_LINE_MS` and `ITEM_CHOICES_MS` in `src/main.ts`).
+/// How long an alert stays, from when it was set (capture time). Its window fades it out
+/// over its last second (`LINE_MS` and `CHOICES_MS` in `src/item-lookup.ts`).
 const LINE_MS: u64 = 6_000;
 /// How long the list of items sharing a name stays: long enough to read and pick.
 const CHOICES_MS: u64 = 30_000;
@@ -209,14 +214,6 @@ impl ItemLookups {
         self.line.clone()
     }
 
-    /// Whether the line is one the player should see even with the panel collapsed: a
-    /// failure, or items to pick from. An opened page shows for itself.
-    pub fn needs_panel(&self) -> bool {
-        self.line.as_ref().is_some_and(|line| {
-            !matches!(line.outcome, ItemLookup::LookingUp { .. } | ItemLookup::Opened { .. })
-        })
-    }
-
     fn show(&mut self, outcome: ItemLookup) {
         self.line_until = match outcome {
             ItemLookup::LookingUp { .. } => None,
@@ -225,6 +222,30 @@ impl ItemLookups {
         };
         self.line = Some(ItemLookupLine { lookup: self.lookups, outcome });
     }
+}
+
+/// The alert's top edge sits this share of the game's client area down from its top.
+const ALERT_TOP_SHARE: f32 = 0.05;
+/// Gap kept between the alert and a captured region it moves clear of (physical px).
+const ALERT_GAP: i32 = 8;
+
+/// Where the alert of `size` goes: centred at the top of the game's client area, and
+/// below any of `avoid` (the captured regions) it would cover, since our windows show in
+/// our captures. Never wider than the client area.
+pub(crate) fn alert_placement(game: &GameWindow, size: Size, avoid: &[ScreenRect]) -> ScreenRect {
+    let client = game.client;
+    let width = size.width.min(client.width);
+    let x = client.x + (client.width - width) as i32 / 2;
+    let mut alert = ScreenRect { x, y: client.y + (client.height as f32 * ALERT_TOP_SHARE) as i32, width, height: size.height };
+    // Each move only goes down, so going over the regions twice settles it.
+    for _ in 0..2 {
+        for region in avoid {
+            if overlaps(alert, *region) {
+                alert.y = region.y + region.height as i32 + ALERT_GAP;
+            }
+        }
+    }
+    alert
 }
 
 fn overlaps(a: ScreenRect, b: ScreenRect) -> bool {
