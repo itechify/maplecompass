@@ -57,7 +57,7 @@
         switchedWarmingUp: tracking({ state: "warmingUp", timeToLevelS: null, timeToLevelBadge: null, ceilingShareHundredths: null, deaths: none, characterSwitched: true }),
       };
       const s = new URLSearchParams(location.search).get("s") ?? "active";
-      window.__handlers["grind-tracker-state"]({ event: "grind-tracker-state", id: 1, payload: states[s] });
+      window.__handlers["grind-tracker-state"]({ event: "grind-tracker-state", id: 1, payload: { shown: true, tracking: states[s] } });
     </script>
   </body>
 </html>

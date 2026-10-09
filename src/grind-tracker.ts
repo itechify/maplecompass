@@ -3,6 +3,9 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ExpRate, ExpTracking } from "./exp-tracking";
 
+/** What the shell sends: the figures, and whether the window shows at all. */
+type TrackerView = { shown: boolean; tracking: ExpTracking };
+
 const byId = (id: string) => document.getElementById(id)!;
 const panelEl = byId("panel");
 const toolbar = byId("toolbar");
@@ -43,7 +46,9 @@ const TRACKING_TAGS: Partial<Record<ExpTracking["state"], string>> = {
 /** The Grind Tracker: a quiet line until the Session starts, then Time to Level, the
  *  rates, and the ceiling and deaths when the state carries them. "—" for any figure not
  *  there yet. Above them, when the Session started afresh by itself, why. */
-function render(tracking: ExpTracking) {
+function render({ shown, tracking }: TrackerView) {
+  // Not showing, the window draws nothing (the shell lets clicks through it).
+  document.body.classList.toggle("hidden", !shown);
   const waiting = tracking.state === "waiting" || tracking.state === "off";
   trackingWaiting.hidden = !waiting;
   trackingFigures.hidden = waiting;
@@ -110,9 +115,9 @@ toolbar.addEventListener("click", (e) => {
   if (button) invoke("panel_press", { control: button.dataset.control });
 });
 
-listen<ExpTracking>("grind-tracker-state", (e) => render(e.payload));
+listen<TrackerView>("grind-tracker-state", (e) => render(e.payload));
 // The figures may have been sent before the page was listening.
-invoke<ExpTracking | null>("grind_tracker_view").then((view) => {
+invoke<TrackerView | null>("grind_tracker_view").then((view) => {
   if (view) render(view);
 });
 reportHeight();
