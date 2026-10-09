@@ -47,7 +47,7 @@
 //!   as Visits do.
 
 use crate::ExpBar;
-use crate::personal_best::{Bests, PersonalBestLine};
+use crate::personal_best::{Bests, PersonalBestLine, Whose};
 use serde::Serialize;
 
 /// What EXP tracking shows: everything the panel's tracking section and the collapsed
@@ -598,7 +598,7 @@ impl Session {
     /// that start from now count, here and in the Session a reset set aside: the one
     /// forgotten may still be in Last 5 min.
     pub fn forget_best(&mut self, map: &str) {
-        if self.bests.forget(map) {
+        if self.bests.forget(map) == Some(Whose::ThisVisit) {
             let now = self.now;
             let set_aside = self.undo.as_mut().map(|undo| &mut undo.figures);
             for figures in [self.figures.as_mut(), set_aside].into_iter().flatten() {
@@ -611,7 +611,7 @@ impl Session {
     /// Bring back the best the player last forgot, if they haven't left the map since: as
     /// though they never forgot it, unless a higher best was set since.
     pub fn undo_forget_best(&mut self) {
-        if self.bests.undo_forget() {
+        if self.bests.undo_forget() == Some(Whose::ThisVisit) {
             let set_aside = self.undo.as_mut().map(|undo| &mut undo.figures);
             for figures in [self.figures.as_mut(), set_aside].into_iter().flatten() {
                 figures.best_from = figures.visit_from;
