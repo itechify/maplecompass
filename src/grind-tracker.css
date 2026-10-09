@@ -1,0 +1,22 @@
+/* The Grind Tracker's window: the panel's window, sized to the tracker alone. The shell
+   makes it 280 CSS px wide (WIDTH in src-tauri/src/grind_tracker.rs) and as tall as the
+   page reports it. It has no corner grips, so no room is kept beside the last line. */
+.view {
+  padding-bottom: 10px;
+}
+
+/* Why the figures started afresh by themselves: quieter than the figures, as background
+   progress is in the panel. */
+.panel .tracking .switched {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-3);
+}
+
+/* The window is as narrow as the panel gets with a larger text scale: the ceiling share
+   and deaths wrap rather than lose the deaths. */
+.panel .tracking .extra {
+  white-space: normal;
+  text-wrap: pretty;
+  line-height: 16px;
+}

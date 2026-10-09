@@ -75,11 +75,13 @@ pub trait MapDataSource {
     /// may be used as it is for up to a day.
     fn map_data(&mut self, id: &str) -> Poll<Result<Fetched<MapData>, SourceError>>;
 
-    /// One map's data for the world crawl (ADR 0004), which asks for every map in the
-    /// index in turn, one at a time. A cached copy up to 7 days old may be used as it
-    /// is; answer at once when it is, so the crawl moves on without waiting out its
-    /// pace. Kept apart from [`MapDataSource::map_data`]: a crawl request must never
-    /// delay or replace the shown map's.
+    /// One map's data for the world crawl (ADR 0004), which asks for each map it doesn't
+    /// know, and for each it knows once its data is a week old, one at a time. The core
+    /// keeps what the crawl learns and decides when to ask, so fetch it from MeowDB
+    /// (falling back on a saved copy when MeowDB can't be reached); an answer given at
+    /// once doesn't wait out the crawl's pace. Kept apart from
+    /// [`MapDataSource::map_data`]: a crawl request must never delay or replace the
+    /// shown map's.
     fn crawl_data(&mut self, id: &str) -> Poll<Result<Fetched<MapData>, SourceError>>;
 
     /// One mob's figures from its MeowDB page, by MeowDB's mob ID (ADR 0006): the core

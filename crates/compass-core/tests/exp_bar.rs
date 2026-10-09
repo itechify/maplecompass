@@ -12,7 +12,7 @@ mod common;
 
 use common::FakeSource;
 use compass_core::{
-    Action, Compass, ExpBar, ExpBarTestRead, Frame, GameWindow, MarkTarget, Rect, ScreenRect, SetupReason,
+    Action, Compass, ExpBar, ExpBarTestRead, Frame, GameWindow, MarkTarget, PanelControl, Rect, ScreenRect, SetupReason,
 };
 
 const KERNING: &str = "victoria-road__kerning-city--window";
@@ -380,4 +380,21 @@ fn version_2_settings_load_with_tracking_off() {
     assert_eq!(state.hotkeys.toggle_panel, "ctrl+shift+c");
     assert_eq!(state.exp_bar_region, None);
     assert_eq!(compass.settings().version, 4);
+}
+
+#[test]
+fn marking_the_exp_bar_anew_at_setup_opens_a_closed_grind_tracker_window() {
+    let mut compass = set_up_with_exp();
+    compass.press(PanelControl::CloseGrindTracker);
+
+    // Setup again, keeping the EXP bar as it was: the window stays closed.
+    compass.press(PanelControl::Setup);
+    compass.act(Action::FinishSetup);
+    assert!(!compass.panel_state().grind_tracker.open);
+
+    // Setup again, marking the EXP bar anew: the player wants to see it.
+    compass.press(PanelControl::Setup);
+    mark_and_test_read_exp(&mut compass, KERNING);
+    compass.act(Action::FinishSetup);
+    assert!(compass.panel_state().grind_tracker.open);
 }
