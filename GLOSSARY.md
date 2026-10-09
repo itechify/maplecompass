@@ -134,3 +134,16 @@ _Avoid_: chat, drop log, kill feed
 **Meso**:
 The in-game currency; the game itself says "mesos".
 _Avoid_: miso, gold, money
+
+### Items
+
+**Item**:
+Something the player can hold in the inventory: equipment, potions, scrolls, chairs, ores, Cash items. Each has its own MeowDB page.
+_Avoid_: drop, loot (when meaning the item itself)
+
+**Item Tooltip**:
+The box the game draws by the mouse pointer when the player hovers an item: the item's name on the line with the blue bullet (a crafted item's maker sits above it), then its picture and figures. It is the game's, not ours: the Mob Card is MapleCompass's own.
+
+**Item Lookup**:
+The hotkey (Ctrl+Shift+I) that reads the Item Tooltip nearest the pointer and opens the item's MeowDB page. When several items share the name, the panel lists them for the player to pick.
+_Avoid_: item search (mob search is the search view's)
