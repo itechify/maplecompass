@@ -253,9 +253,11 @@ pub enum PanelControl {
     Search,
     /// Open the Grind Tracker's window, or close it.
     ToggleGrindTracker,
-    /// The Grind Tracker window's reset icon: start the Session afresh, back to waiting
+    /// The Grind Tracker window's reset button: start the Session afresh, back to waiting
     /// for an EXP change.
     ResetSession,
+    /// The Grind Tracker window's Undo, after a reset: bring the old Session back.
+    UndoReset,
     /// The Grind Tracker window's ×: close it.
     CloseGrindTracker,
 }
@@ -407,11 +409,13 @@ impl Compass {
 
     /// Take what an EXP Bar Region frame read as (read by an [`ExpBarReader`], possibly
     /// on another thread) and update the panel state. A frame whose figures don't read
-    /// whole keeps the last reading; time still passes for the Session.
+    /// whole keeps the last reading; time still passes for the Session, which says so
+    /// once the bar has gone unread for a while.
     pub fn on_exp_bar_reading(&mut self, reading: ExpBarReading) -> &PanelState {
         self.setup.on_exp_bar_read(reading.bar);
         match reading.bar {
             Some(bar) if self.tracking_on() => self.session.on_bar(bar, reading.at_ms),
+            None if self.tracking_on() => self.session.on_unread(reading.at_ms),
             _ => self.session.tick(reading.at_ms),
         }
         if reading.bar.is_some() {
@@ -524,12 +528,13 @@ impl Compass {
                 self.state.quit |= self.setup.state().needed == Some(SetupReason::FirstRun);
                 self.setup.cancel();
             }
-            Action::ResetSession => self.session.reset(),
+            Action::ResetSession => self.session.reset_by_player(),
+            Action::UndoReset => self.session.undo_reset(),
             Action::ToggleGrindTracker => self.grind_tracker.open = !self.grind_tracker.open,
             Action::CloseGrindTracker => self.grind_tracker.open = false,
             Action::GrindTrackerMoved { x, y } => {
-                if let Some(game) = &self.panel.game {
-                    self.grind_tracker.moved_to(x, y, game);
+                if let (Some(game), Some(panel)) = (&self.panel.game, self.panel.placement()) {
+                    self.grind_tracker.moved_to(x, y, game, panel, self.panel.mode, &self.panel.avoid);
                 }
             }
             Action::OpenSearch => {
@@ -635,6 +640,7 @@ impl Compass {
             PanelControl::ChooseCandidate => Action::ChooseCandidate,
             PanelControl::ToggleGrindTracker => Action::ToggleGrindTracker,
             PanelControl::ResetSession => Action::ResetSession,
+            PanelControl::UndoReset => Action::UndoReset,
             PanelControl::CloseGrindTracker => Action::CloseGrindTracker,
             // An open search view stays as it is; the shell brings the overlay in front on
             // opening it.
@@ -861,8 +867,10 @@ impl Compass {
     /// to track, but not while setup is open (it may be marking the EXP bar).
     fn sync_grind_tracker(&mut self) {
         let shows = self.grind_tracker.open && self.tracking_on() && !self.state.setup.window_open;
-        let placement = match (&self.panel.game, self.panel.expanded_placement()) {
-            (Some(game), Some(panel)) if shows => Some(self.grind_tracker.placement(game, panel, &self.panel.avoid)),
+        let placement = match (&self.panel.game, self.panel.placement()) {
+            (Some(game), Some(panel)) if shows => {
+                Some(self.grind_tracker.placement(game, panel, self.panel.mode, &self.panel.avoid))
+            }
             _ => None,
         };
         self.state.grind_tracker = GrindTrackerWindow { open: self.grind_tracker.open, placement };

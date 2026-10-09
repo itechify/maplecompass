@@ -65,6 +65,11 @@ colors:
   disabled-edge: "#aeb8cc"
   disabled-ink: "#6b7591"
   veil: "rgba(18, 28, 56, 0.3)"
+  exp-top: "#effb76"
+  exp-mid: "#e5f916"
+  exp-base: "#cfe400"
+  exp-track: "#cfcfcf"
+  exp-frame: "#676d70"
 typography:
   headline:
     fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
@@ -250,6 +255,31 @@ components:
     rounded: "{rounded.chip}"
     padding: "0 2px"
     height: "12px"
+  level-badge-held:
+    backgroundColor: "{colors.ink-2}"
+    textColor: "#ffffff"
+    rounded: "{rounded.chip}"
+    padding: "0 2px"
+    height: "12px"
+  text-button:
+    backgroundColor: "{colors.button-light-base}"
+    textColor: "{colors.panel-ink}"
+    rounded: "{rounded.game-button}"
+    padding: "0 7px"
+    height: "19px"
+  tracker-figures:
+    backgroundColor: "{colors.body}"
+    textColor: "{colors.panel-ink}"
+    typography: "{typography.body-small}"
+    rounded: "{rounded.window}"
+    padding: "4px 8px 6px 9px"
+  exp-gauge:
+    backgroundColor: "{colors.exp-track}"
+    textColor: "{colors.panel-ink}"
+    rounded: "{rounded.game-button}"
+    height: "10px"
+  exp-gauge-fill:
+    backgroundColor: "{colors.exp-mid}"
   setup-window:
     backgroundColor: "{colors.body-solid}"
     textColor: "{colors.ink}"
@@ -307,7 +337,7 @@ The overlay is one more of the game's windows laid over the screen, built from t
 
 It is light because the game's windows are light, see-through because the game's windows over the screen are, and dense because it is read in glances between attacks. Every state is drawn in the same window. Doubt and problems get the game's orange, and nothing else does. The confirmed rejection is the generic dark dev-tools card with a stats table on top, which this world replaced. Setup is a window on the desktop rather than over the game: it keeps an opaque lavender body, navy ink and steel buttons under the same grey window bar, and shows a recognised map exactly as the overlay's title panel will. The title-marking window's hint is a small translucent lavender window.
 
-Every window takes the pointer. The overlay is always clickable, but a click never takes the keyboard from the game except in the search view, where the query field needs it. The panel is dragged by its window bar or title panel when it sits inside the game or is detached, and resized by its sides or bottom corners, width only. Its buttons and setup's buttons carry the game's hover, pressed and keyboard-focus states; list rows in the search view take a faint hover tint. Its height follows its content. Nothing in any window moves but the world crawl's gauge: its fill eases to each new count, and a sheen runs along it while the crawl goes on. There is no other transition or animation anywhere.
+Every window takes the pointer. The overlay is always clickable, but a click never takes the keyboard from the game except in the search view, where the query field needs it. The panel is dragged by its window bar or title panel when it sits inside the game or is detached, and resized by its sides or bottom corners, width only. Its buttons and setup's buttons carry the game's hover, pressed and keyboard-focus states; list rows in the search view take a faint hover tint. Its height follows its content. Nothing in any window moves but the world crawl's gauge: its fill eases to each new count, and a sheen runs along it while the crawl goes on. There is no other transition or animation anywhere: the Grind Tracker's EXP gauge changes with each reading, as the game's own does, without easing.
 
 **Key Characteristics:**
 - The Mini Map's light grey window bar and sky-blue title panel over the Quest Helper's see-through periwinkle body, in a 4px-cornered frame.
@@ -320,17 +350,18 @@ Every window takes the pointer. The overlay is always clickable, but a click nev
 
 ## Colors
 
-Cool periwinkles, sky blue and light grey from the game's own windows, near-black and navy inks, three minimap accents (portal blue, mob red, you yellow), a reserved game orange, the game's bright blue for overlay buttons and a deep steel for setup's.
+Cool periwinkles, sky blue and light grey from the game's own windows, near-black and navy inks, three minimap accents (portal blue, mob red, you yellow), a reserved game orange, the game's bright blue for overlay buttons, a deep steel for setup's, and the game's EXP lime for its EXP gauge alone.
 
 ### Primary
 - **Portal Ring Blue** (portal): the minimap's portal ring. The section mark for Hidden Portals (over Portal Ring Fill, portal-fill) and the ring and core in each mini-minimap.
 
 ### Secondary
-- **Game Orange** (orange, with orange-deep for edges and text outlines): the game's small orange button. The dot in problem notes (overlay and setup) and the collapsed icon's alert dot. The "Not sure" chip is the game's orange button itself, a gradient from Doubt Gold (doubt-top) to Doubt Amber (doubt-base). Problem notes sit on Problem Cream (problem-bg), edged in Problem Amber (problem-edge), with Problem Brown text (problem-ink). The "paused" tag in the Grind Tracker borrows that cream, amber and brown, without the orange, because held figures are a state to notice.
+- **Game Orange** (orange, with orange-deep for edges and text outlines): the game's small orange button. The dot in problem notes (overlay, setup and the Grind Tracker's "Can't read the EXP bar") and the collapsed icon's alert dot. The "Not sure" chip is the game's orange button itself, a gradient from Doubt Gold (doubt-top) to Doubt Amber (doubt-base). Problem notes sit on Problem Cream (problem-bg), edged in Problem Amber (problem-edge), with Problem Brown text (problem-ink). The "paused" tag in the Grind Tracker borrows that cream, amber and brown, without the orange, because held figures are a state to notice.
 
 ### Tertiary
 - **Mob Dot Red** (mob, edged by mob-edge): the minimap's mob dot. The section mark for Mobs and the bullet on each mob row.
 - **You Yellow** (you, lit by you-light, edged by you-edge): the minimap's dot for the player's own character. It marks only the Hunting Target's arrival, "You're here", as a 10px dot with a you-light highlight up and to the left. Kept clear of Game Orange: a pale yellow with a dark gold edge, never a chip or a note.
+- **EXP Lime** (exp-top, exp-mid, exp-base), on **EXP Track** grey (exp-track) under an **EXP Frame** (exp-frame): the game's own EXP gauge, sampled from its status bar (a lime fill on a light grey track, a dark grey frame with a white line beneath it). The Grind Tracker's EXP gauge, and nothing else. A yellow-green, kept apart from You Yellow's gold.
 
 ### Neutral
 - **Quest Helper Glass** (glass): the overlay's see-through periwinkle body, at 62% so the game shows through as it does through the Quest Helper.
@@ -340,15 +371,15 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 - **Game Button Blue** (game-button-top, game-button-mid, game-button-base, edged by game-button-edge): the game's bright blue window buttons, the overlay's and the Grind Tracker's toolbars and the search view's back button. Hover and pressed gradients are one step lighter and one step deeper.
 - **Panel Ink** (panel-ink), **Panel Ink Steel** (panel-ink-2) and **Panel Ink Slate** (panel-ink-3): the Quest Helper's near-black text on the glass, for primary text and values; secondary text such as notes, positions, units, labels and table headers; and tertiary text such as the footer, candidate map IDs, key hints, the crawl note and placeholders.
 - **Panel Rule** (panel-rule): the hairline between parts of the panel, above the Hunting Target and the footer.
-- **Inset** (inset-bg, inset-edge): white at 50% edged in navy at 30%, for a list or box set into the panel's body: the Hunting Target's route and arrival, and the search suggestions.
+- **Inset** (inset-bg, inset-edge): white at 50% edged in navy at 30%, for a list or box set into the panel's body: the Hunting Target's route and arrival, and the search suggestions. The Grind Tracker's figures and the search results sit on near-opaque Window Lavender instead, edged the same.
 - **Results Header** (results-head): the opaque tone of the glass behind the search results' sticky header, so rows scrolled under it don't show through.
-- **Ink** (ink), **Ink Steel** (ink-2) and **Ink Slate** (ink-3): navy text on lavender, in setup and the title-marking hint; Ink is also the ground of the collapsed icon's count chip and Time to Level badge.
-- **Window Lavender** (body) and **Window Lavender, Opaque** (body-solid): the title-marking hint's translucent body and setup's opaque one. **Frame Navy** (frame): the hint's border, setup's secondary buttons and the search field. **Window Rule** (rule): the hairline above setup's button row.
+- **Ink** (ink), **Ink Steel** (ink-2) and **Ink Slate** (ink-3): navy text on lavender, in setup and the title-marking hint; Ink is also the ground of the collapsed icon's count chip and Time to Level badge; Ink Steel is the badge's ground while its figure is held.
+- **Window Lavender** (body) and **Window Lavender, Opaque** (body-solid): the title-marking hint's translucent body and setup's opaque one; at 95%, the ground of the Grind Tracker's figures. **Frame Navy** (frame): the hint's border, setup's secondary buttons and the search field. **Window Rule** (rule): the hairline above setup's button row.
 - **Selection Periwinkle** (select, edged by select-edge): the selected row wherever there is one: the shown candidate, the suggestion Enter picks, the result Enter makes the Hunting Target. select-edge also colours every scrollbar thumb.
 - **Tag Periwinkle** (tag-bg, tag-edge, tag-ink): the "Hidden Street" and "warming up" tags, and setup's "Recognised" and "Read" tags. **NPC Green** (quest-bg, quest-edge, quest-ink): the "Quest" tag, taken from the minimap's NPC green.
 - **Edit Blue** (edit): the 2px keyboard-focus ring in every window, the dashed drag box when marking, the checked travel checkboxes (`accent-color`), and, at 8%, the hover tint on suggestion and result rows.
 - **Minimap Paper** (minimap-paper, minimap-frame, minimap-grid, minimap-cell): the mini-minimap's ground, frame, 5x3 grid lines and lit cell.
-- **Button Steel** (button-top, button-base, edged by button-edge): the deep-steel gradient of setup's primary button, deep enough that white holds 4.5:1 even at its light top. **Light Steel** (button-light-top, button-light-base): setup's secondary buttons and the overlay's light icon buttons in the body. Hover gradients sit one step darker (deep) or lighter (light).
+- **Button Steel** (button-top, button-base, edged by button-edge): the deep-steel gradient of setup's primary button, deep enough that white holds 4.5:1 even at its light top. **Light Steel** (button-light-top, button-light-base): setup's secondary buttons and the overlay's light icon and text buttons in the body. Hover gradients sit one step darker (deep) or lighter (light).
 - **Greyed** (disabled-bg, disabled-edge, disabled-ink): a button the window won't take, flat with no highlight.
 - **Navy Veil** (veil): the title-marking window's whole surface, so the game reads as paused behind it. It is non-zero on purpose: a fully transparent pixel would not take the mouse.
 
@@ -356,6 +387,8 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 **The Orange Means Doubt Rule.** Game orange marks only uncertainty and problems: the "Not sure" chip, problem notes, the collapsed alert dot. A confirmed state never uses it, so orange can't become decoration. Search tiers are told apart by weight and ink, never by orange.
 
 **The Minimap Legend Rule.** Portal blue, mob red and you yellow come from the minimap's legend and keep that meaning. Blue is for portals, red is for mobs and yellow is for where the player is, with no other uses.
+
+**The EXP Lime Rule.** The lime of the game's EXP gauge draws the EXP bar's reading in the Grind Tracker and nothing else: not progress in general (the crawl gauge is Game Button Blue), and never a highlight.
 
 **The Over the Game, See-Through Rule.** A window laid over the game is see-through: the overlay on the Quest Helper's glass, the title-marking hint on translucent Window Lavender. A window on the desktop (setup) is opaque. Same family, different footing.
 
@@ -370,7 +403,7 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 **Character:** Every window is set in Maplestory, NEXON's own rounded sans for the game (chosen by the user in October 2026), so the text reads as the game's. It comes in two weights, declared as one family in `theme.css`: Light answers weights up to 500, so regular text (400) is Light, and Bold answers 600 and up. Weight (Bold against Light) and colour carry the hierarchy, not a second family. It loads with `font-display: block`, bundled with the app, so text never draws in Arial first and changes width; the overlay measures its height again once it has loaded. It lacks the en dash, em dash and minus sign, which come from Arial. Light is thinner than the game draws its window text over a busy scene, so the panel gives all its text a 0.3px stroke in the text's own colour (`-webkit-text-stroke-width: var(--text-weight-stroke)`); more clogs the Bold figures. The outlined title lettering and the doubt chip, whose outlines are their weight, take none. Maplestory sets wider than Arial: a long Map Name takes its second line sooner, and long single-line facts truncate sooner.
 
 ### Hierarchy
-- **Headline** (700, 18px/23px, 0.01em): the Map Name, in Title Lettering on the title panel, in the overlay and in setup's recognised test read. Wraps to at most two lines rather than losing its end. It wraps in balanced lines (`text-wrap: balance`), so a second line is never a stranded word. When no map is read, the status takes this slot at 15px/23px bold (Status) in plain Panel Ink with no outline, so it doesn't read as a map name. The Time to Level figure and setup's step headings use 18px bold in plain ink, without the outline. Setup's EXP test read sets its figures at 16px/22px bold.
+- **Headline** (700, 18px/23px, 0.01em): the Map Name, in Title Lettering on the title panel, in the overlay and in setup's recognised test read. Wraps to at most two lines rather than losing its end. It wraps in balanced lines (`text-wrap: balance`), so a second line is never a stranded word. When no map is read, the status takes this slot at 15px/23px bold (Status) in plain Panel Ink with no outline, so it doesn't read as a map name. The Time to Level figure and setup's step headings use 18px bold in plain ink, without the outline. Held (warming up, paused, or with the EXP bar unread), the Time to Level figure and the rates drop to Light: a step back in weight, never a fainter colour or opacity, so held figures stay as legible over the game. With no figure to give, the slot says why in 13px Light Panel Ink Steel ("not yet", "no gain yet", "losing EXP"), never a bare dash. Setup's EXP test read sets its figures at 16px/22px bold.
 - **Street** (700, 14px/18px): the Street Name above the Map Name, in the same Title Lettering, the Mini Map's own idiom.
 - **Section Heading** (700, 14px/18px): the overlay's section headings (Hidden Portals, Mobs, the Hunting Target's mob), in Panel Ink. The Street's size, one step above the 13px bold rows they head, so a heading never reads as one more row.
 - **Window Name** (700, 12px/16px): the window's name on the window bar ("MapleCompass", "Grind Tracker") in Window Bar Ink, and the search view's title there, the mob's level beside it in regular weight. Setup's step count is the same size and weight; setup's window name is 14px.
@@ -381,7 +414,7 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 - **Button** (700, 13px/18px): setup's button labels, sentence case. The Overlay guide button in setup's window bar is 12px.
 - **Label** (700, 11px/15px): tags, in sentence case and untracked, so a tag never takes room from the destination beside it. The "Not sure" chip alone is uppercase, tracked 0.04em, at a 13px line. Candidate map IDs are 11px regular.
 
-The collapsed icon carries the system's two sizes below the Label step, held there because they share a 44px square with the compass: the Hidden Portal count at 10px/13px bold and the Time to Level badge at 9px/12px bold, both white on Ink. They are exceptions, not scale steps.
+The collapsed icon carries the system's two sizes below the Label step, held there because they share a 44px square with the compass: the Hidden Portal count at 10px/13px bold and the Time to Level badge at 9px/12px bold, both white on Ink (the badge in Light on Ink Steel while its figure is held). They are exceptions, not scale steps.
 
 ### Named Rules
 **The Right-Aligned Figures Rule.** Numeric columns are right-aligned so EXP, HP, rates and share line up at their ends from one glance to the next. Maplestory's figures are proportional and it has no tabular ones; the body still asks for `tabular-nums`, which the Arial fallback honours.
@@ -398,7 +431,7 @@ The window bar runs full width (at least 22px tall, padding 2px 3px 2px 5px, 5px
 
 Order is fixed: window bar, title panel, then any recovery or hotkey notes, then candidates when several maps share a title, then the status note, then Hidden Portals, then Mobs (a two-row summary grid of EXP/h and Mobs/h, solo and 6+ party, then the top five mobs in a fixed-layout table and a "+N more" line), then the Hunting Target below a Panel Rule, then the crawl note over its gauge, then a footer with the credit below a Panel Rule. A portal row is a two-column grid: the 47px mini-minimap, then the destination with its tags over the position in words. When a section has nothing to list, its heading and its "None on this map" line share one line. Empty containers collapse rather than leave strips.
 
-The Grind Tracker has a window of its own, built like the panel without a title panel or corner grips: 280px wide, as tall as its content. Its window bar holds its own icon (the pixel-art gold tally board in `assets/grind-tracker.png`, supplied by the owner, in place of the compass), "Grind Tracker", and at the right the reset button (while there is a Session) and a × that closes it. Its body, inset 11px with 10px at the bottom, stacks 4px apart: a Body Small note in Panel Ink Slate when the Session started afresh on a character switch, then "Waiting for EXP" or Time to Level, a rates table of Rolling 5 min and Session, and an extra line for the ceiling share and deaths, which wraps. Until the player drags it, it sits 8px below the expanded panel, right edges in line (above the panel when there is no room below); the panel's toolbar has a button that shows and hides it, pressed while it shows.
+The Grind Tracker has a window of its own, built like the panel without a title panel or corner grips: 280px wide, as tall as its content. Its window bar holds its own icon (the pixel-art gold tally board in `assets/grind-tracker.png`, supplied by the owner, in place of the compass), "Grind Tracker", and at the right only the × that closes it. Its body, inset 11px with 10px at the bottom, stacks 8px apart: the notes (6px apart), then the figures set into the body, then the EXP gauge at the foot, where the game keeps its own. Inside the figures (padding 4px 8px 6px 9px, 3px apart): the Time to Level row, with the reset button at its far end; the rates, a row for the last 5 minutes and, once the Session has run longer than that, a row for the Session with its length; then a line for the ceiling share and one for deaths, each wrapping. Until the player drags it, it sits beside the panel (or the collapsed icon) 8px away with the tops level, so it never moves as the panel grows and shrinks with each map: towards the middle of the game when the panel is inside it or detached, away from the game when the panel is docked, and on the other side when that one would leave the monitor. Let go within an eighth of its width of that spot, it follows the panel again. The panel's toolbar has a button that shows and hides it, pressed while it shows.
 
 The search view replaces the whole panel: its own window bar (7px gaps, the back button then the title), then a 6px-gapped step: the query field, suggestions and the key hint; or, once a mob is picked, the nearest map, the results table, the travel checkboxes and the key hint; then the crawl note and credit.
 
@@ -440,11 +473,12 @@ The Mini Map's light grey strip: `--window-bar`, a Window Edge rule beneath, no 
 The Mini Map's sky blue (title-panel) under the window bar, edged beneath in Window Edge: the Street Name over the Map Name, both in Title Lettering, with the doubt chip at the Map Name's right end when the map isn't confirmed. Each line keeps 1px of room at its sides so the outline isn't cut where a long name ends in an ellipsis. While a map is shown the title is its MeowDB page's link (the open-page hotkey's action, so the toolbar has no button for it): a pointer cursor, both lines underlined 1px in Title Ink (3px offset) under the pointer, and a tooltip naming the hotkey. A press drags the panel once the mouse moves 4px, and opens the page if let go first, as the collapsed icon does.
 
 ### Toolbar and Icon Buttons
-The game's small window buttons, one per hotkey action, at the right of the window bar: search, next candidate, Grind Tracker (pressed while its window shows), placement, help and setup, collapse. The Grind Tracker's window has its own two, reset Session and close, which have no hotkeys. Buttons whose action isn't available are hidden, not greyed.
+The game's small window buttons, one per hotkey action, at the right of the window bar: search, next candidate, Grind Tracker (pressed while its window shows), placement, help and setup, collapse. The Grind Tracker's window has only its close button on its bar, with no hotkey; its reset is a light button in its body, away from the ×. Buttons whose action isn't available are hidden, not greyed.
 - **Shape:** 19px square, 2px radius, 1px border, no padding.
 - **Icon:** a 13px inline SVG on a 16-unit grid, stroked in `currentColor` at 2 with round caps and joins, no fill (a single filled dot where a glyph needs one).
 - **Game blue** (window bars): the Game Button Blue gradient, game-button-edge border, white icon with its drop, and the game button bevel. The search view's back button is the same.
-- **Light steel** (body): the Light Steel gradient, Window Edge border, Panel Ink icon with no drop, solid white top highlight. The Hunting Target's reopen-search and clear buttons.
+- **Light steel** (body): the Light Steel gradient, Window Edge border, Panel Ink icon with no drop, solid white top highlight. The Hunting Target's reopen-search and clear buttons, and the Grind Tracker's reset.
+- **Text button** (body): the light steel button with a word where an icon couldn't say it, 19px tall, padding 0 7px, 12px/17px bold Panel Ink, no text shadow. The Grind Tracker's Undo, the one so far.
 - **States:** hover shifts the gradient one step lighter; pressed one step deeper with the Pressed shadow; keyboard focus draws the 2px Edit Blue ring offset 2px. The cursor is a pointer while the panel is draggable.
 
 ### Corner Grips
@@ -487,7 +521,10 @@ When several maps share a title, each row leads with what sets the map apart ("1
 While the world crawl maps maps never seen, the crawl note ("Mapping the world: 312 of 422 maps known") sits 4px above a gauge drawn like the game's HP, MP and EXP gauges: a full-width 8px bar framed in game-button-edge with a 2px radius, its track sunk dark (navy at 42% with an inner shadow and a 1px light lip below), and its fill the Game Button Blue gradient with the button bevel. Game Button Blue, not Portal Blue: the minimap's legend colours keep their meaning. The fill eases to each new count over 700ms (`cubic-bezier(0.16, 1, 0.3, 1)`, through the registered `--known` property). A soft white sheen, kept to the filled part, sweeps along it every 2.6s. With reduced motion the fill jumps and there is no sheen. It is a `progressbar` with the count as its value text.
 
 ### Grind Tracker
-In its own window. A quiet "Waiting for EXP" note until a Session starts, and above everything a 12px Panel Ink Slate "New Session: switched character" when the Session started afresh by itself, until it warms up. Then a headline row: "Time to Level" (12px Panel Ink Steel), the figure (18px bold) and an optional tag; a rates table with bold values at least 72px wide under Rolling 5 min and Session; and a 12px Panel Ink Steel line for the ceiling share and deaths. While warming up or paused, the figures fall to Panel Ink Steel. "—" stands for any figure not there yet.
+In its own window, read at a glance between attacks.
+- **Notes,** on the glass in 13px Panel Ink, wrapping: "Waiting for EXP: the Session starts at your next gain." until it does; "You switched character, so this is a new Session." when the Session started afresh by itself, until it warms up; "Session reset." with the Undo text button, until the next EXP gain, when the reset can no longer be undone; and the problem note "Can't read the EXP bar. Move whatever covers it, or mark it again from Help & setup." once the bar has gone 10 seconds without reading whole.
+- **Figures:** a box set into the body on Window Lavender at 95%, edged in Inset Edge with a 4px radius, so the densest reading holds over any scene. A headline row: "Time to Level" (12px Panel Ink Steel), the figure (18px bold) and an optional tag ("warming up" in Tag Periwinkle, "paused" in the problem palette), with the light reset button at the far end. Then the rates, the panel's summary in miniature: a five-column grid at 12px Panel Ink Steel of period, value, "EXP/h", value, "/h" (the "/h" set against its percentage so "12.9%/h" reads as one), values 13px bold Panel Ink and right-aligned. "Last 5 min" always; "Session" with its length in Panel Ink Slate ("1h 12m") only once the Session is longer than the rolling window. EXP rates are written out at three significant figures as the panel writes its rates ("61,200"). Then "21% of this map's solo EXP/h (297,499)", counting only the play on the shown map once there is a minute of it, and "1 death (−2.1% of the level)", 12px Panel Ink Steel lines that wrap. Held, the figures drop to Light (see Typography).
+- **EXP gauge,** the window's signature: the game's status-bar EXP gauge in miniature. "EXP" in 12px bold and the reading as the bar writes it ("8,435 [41.72%]") in 12px Panel Ink, over a 10px gauge framed in EXP Frame with a 2px radius and a white top line: an EXP Lime fill on the EXP Track grey. It shows from the first reading, while waiting too, so the player sees the bar being read, and changes with every reading rather than holding with the figures. No easing, no sheen. It is a `progressbar` whose value text is the reading.
 
 ### Summary and Mob Table
 The summary is a five-column grid at 12px: label, value, unit, value, unit. Values are 13px bold Panel Ink, right-aligned with a 52px minimum width. The mob table runs full width with fixed column shares at 13px/17px, right-aligned numeric columns, 6px between columns and 12px Panel Ink Steel headers. Each mob name is bold, carries a 6px red mob dot, and truncates. Plain at rest, the name turns Portal Blue and underlined (1px, 2px offset) under the pointer, with a pointer cursor, and Frame Navy while pressed; keyboard focus takes the Edit Blue ring: it opens the mob's MeowDB page, and resting on it shows its Mob Card. "+N more" follows in 12px Panel Ink Steel.
@@ -516,7 +553,7 @@ Its own section at the bottom of the normal view, 8px below a Panel Rule. A head
 The credit, "NiaMeowDB (meowdb.com)", in 12px Panel Ink Slate, 6px below a Panel Rule. While the panel lists mobs, whose Mob Cards show maplestory.io's images, it reads "NiaMeowDB (meowdb.com) · images: maplestory.io".
 
 ### Collapsed Icon
-The app icon itself: the pixel-art gold compass filling the 44px square, with no frame. The Hidden Portal count sits on a chip at its bottom-right (an Ink pill with a 1px white border, at least 14px wide, 10px/13px bold white, hidden when there is no count), and a 9px orange alert dot with a white ring at its top-right when something needs a look. With EXP tracked, the Time to Level badge runs along its bottom edge (2px in from each side, 3px radius, Ink ground, white 9px/12px bold, "47m") and the count chip rises above it. Clicks and drags pass through the badge to the icon.
+The app icon itself: the pixel-art gold compass filling the 44px square, with no frame. The Hidden Portal count sits on a chip at its bottom-right (an Ink pill with a 1px white border, at least 14px wide, 10px/13px bold white, hidden when there is no count), and a 9px orange alert dot with a white ring at its top-right when something needs a look. With EXP tracked, the Time to Level badge runs along its bottom edge (2px in from each side, 3px radius, Ink ground, white 9px/12px bold, "47m"; in Light on Ink Steel while the figure is held) and the count chip rises above it. The alert dot shows too while the EXP bar can't be read. Clicks and drags pass through the badge to the icon.
 
 ### Unconfirmed State
 While the map shown isn't confirmed, or several maps share its title and none is chosen, the facts (portals and mobs) recede to 70% behind the doubt chip and the candidate list, so the panel states its doubt before anything else.
@@ -543,6 +580,7 @@ A transparent window over the game client, its whole surface the Navy Veil with 
 - **Do** keep numeric columns right-aligned.
 - **Do** let notes and the Map Name wrap, and truncate single-line facts with an ellipsis.
 - **Do** keep the Street Name above the Map Name wherever a map is shown as the overlay shows it.
+- **Do** draw the EXP bar's reading as the game's own EXP gauge, in EXP Lime, and nothing else in that lime.
 - **Do** give every button, in every window, hover, pressed and a 2px Edit Blue `:focus-visible` ring offset 2px: game blue on the overlay's window bars, light steel in its body, deep steel for setup's step forward and light steel beside it.
 - **Do** mark a selected row with Selection Periwinkle and its inset edge, and set a list into the body as an inset box.
 
