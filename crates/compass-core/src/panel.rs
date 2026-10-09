@@ -92,8 +92,9 @@ pub enum Action {
     /// The player wants to redo setup (the re-setup hotkey).
     RequestSetup,
     /// The player started MapleCompass again while it runs; only one runs at a time, so
-    /// this one shows itself: the panel, expanded, wherever it can show; setup
-    /// otherwise. An open setup window stays as it is (the shell brings it in front).
+    /// this one shows itself: the panel, expanded, while there is a game window to show
+    /// it on (once the game is back in front, if another app is now); setup otherwise.
+    /// An open setup window stays as it is (the shell brings it in front).
     LaunchedAgain,
     /// The player closed setup without finishing it. On the first run that quits
     /// (`PanelState::quit`): there is nothing to read without a Title Region.
@@ -182,16 +183,25 @@ pub enum PlacementMode {
     Detached,
 }
 
-/// Where the overlay window sits in the z-order, and whether it shows at all. Wherever
-/// the panel is placed (inside, docked or detached), it belongs to the game window.
+/// Whether the overlay window shows, on top of everything, or not at all. Wherever the
+/// panel is placed (inside, docked or detached), it belongs to the game window: it shows
+/// only while there is a game window and the game or one of MapleCompass's own windows
+/// is in front ([`Foreground`]). The Grind Tracker's window and the Item Lookup alert
+/// show only while the overlay can (their placements are `None` otherwise).
+///
+/// Until the shell first reports what is in front, the overlay counts as shown with the
+/// game: no hidden flash at launch. (The hotkeys are the other way round, not live until
+/// then: a combination registered by mistake would be lost to another app, while an
+/// overlay shown by mistake goes as soon as the shell reports, within a tick.)
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Layer {
-    /// Directly above the game window, never above an app in front of it: such an app
-    /// covers the overlay too, and bringing the game back brings the overlay with it.
+    /// Above every other window on screen (always on top), while the game or one of
+    /// ours is in front. When another app comes in front the overlay hides, and bringing
+    /// the game back brings the overlay with it.
     AboveGame,
-    /// Nothing to show: the game is minimised or gone. The overlay draws nothing and
-    /// lets every click through.
+    /// Nothing to show: the game is minimised or gone, or another app is in front. The
+    /// overlay draws nothing and lets every click through.
     #[default]
     Hidden,
 }
@@ -258,6 +268,9 @@ pub(crate) struct Panel {
     /// The monitors' work areas, as last known with the game window: a detached panel
     /// stays within them after the game is gone.
     pub screens: Vec<ScreenRect>,
+    /// Which window is in front, as the shell last reported it; `None` until it first
+    /// does (see [`Layer`]).
+    pub foreground: Option<Foreground>,
 }
 
 impl Default for Panel {
@@ -273,6 +286,7 @@ impl Default for Panel {
             detached_at: None,
             avoid: Vec::new(),
             screens: Vec::new(),
+            foreground: None,
         }
     }
 }
@@ -309,7 +323,8 @@ impl Panel {
     }
 
     pub fn layer(&self) -> Layer {
-        if self.game.is_some() { Layer::AboveGame } else { Layer::Hidden }
+        let in_front = self.foreground != Some(Foreground::OtherApp);
+        if self.game.is_some() && in_front { Layer::AboveGame } else { Layer::Hidden }
     }
 
     /// The player can drag the panel by its header: inside or detached, at any time; a
