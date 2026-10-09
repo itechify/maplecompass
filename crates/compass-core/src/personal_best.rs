@@ -75,27 +75,46 @@ pub struct VisitBest {
     pub set_at_unix_ms: Option<u64>,
 }
 
-/// The Grind Tracker's line on how Last 5 min compares with the Personal Best on the map
-/// the player is on.
+/// The Grind Tracker's line on how the Rolling Rate compares with the Personal Best on the
+/// map the player is on, and what its hover holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersonalBestLine {
-    /// The best the line names, in EXP/h: the map's Personal Best from earlier Visits,
-    /// fixed on arrival; on a first Visit, this Visit's best so far.
-    pub exp_per_hour: u64,
-    /// When that best was set, by the wall clock (ms since the Unix epoch), for the
-    /// line's hover to say ("set today"); `None` if the shell hadn't told the wall clock.
-    pub set_at_unix_ms: Option<u64>,
-    /// No earlier Visit had a best here: "Your first best EXP/h here".
-    pub first: bool,
-    /// Last 5 min's EXP/h as a share of the earlier Visits' best, in hundredths of a
-    /// percent: 9200 for "92%". `None` on a first Visit, until Last 5 min is a full 5
-    /// minutes of active play here, or while its rate is zero or negative.
-    pub share_hundredths: Option<i64>,
-    /// This Visit's best, once it has beaten the earlier Visits': the "new best" tag, for
-    /// the rest of the Visit, whatever the rate does after, and the line's hover shows it.
-    /// `None` on a first Visit, whose best the line names.
-    pub new_best: Option<VisitBest>,
+    /// The best the line names, and how the Rolling Rate compares with it.
+    #[serde(flatten)]
+    pub named: BestNamed,
+    /// Whose best the hover's Forget takes: the higher of the two the hover shows.
+    pub forgets: Whose,
+}
+
+/// The best the Personal Best line names: the earlier Visits', or on a first Visit, this
+/// one's. Each best is dated for the line's hover to say when it was set ("set today").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum BestNamed {
+    /// No earlier Visit had a best here: "Your first best EXP/h here: …", this Visit's
+    /// best so far.
+    FirstVisit { best: VisitBest },
+    /// The map's Personal Best from earlier Visits, fixed on arrival: "Your best EXP/h
+    /// here: …", or "N% of your best EXP/h here (…)".
+    EarlierVisits {
+        best: VisitBest,
+        /// The Rolling Rate's EXP/h as a share of `best`, in hundredths of a percent: 9200
+        /// for "92%". `None` until the Rolling Rate is over a full 5 minutes of active
+        /// play here, or while its rate is zero or negative.
+        share_hundredths: Option<i64>,
+        /// This Visit's best, once it has beaten `best`: the "new best" tag, for the rest
+        /// of the Visit, whatever the rate does after, and the line's hover shows it.
+        new_best: Option<VisitBest>,
+    },
+}
+
+/// Whose best on a map: this Visit's, or the earlier Visits'.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Whose {
+    ThisVisit,
+    EarlierVisits,
 }
 
 /// Every map's Visit bests, and the Visit under way's.
@@ -122,8 +141,7 @@ struct Forgotten {
     /// The map it was on.
     map: String,
     best: VisitBest,
-    /// It was the Visit under way's best, not an earlier Visit's.
-    this_visit: bool,
+    whose: Whose,
 }
 
 impl Bests {
@@ -174,61 +192,79 @@ impl Bests {
         changed
     }
 
+    /// This Visit's best on `map`, if it has one there.
+    fn this_visit_on(&self, map: &str) -> Option<VisitBest> {
+        self.visit.iter().find(|(id, _)| id == map).map(|&(_, best)| best)
+    }
+
+    /// `map`'s Personal Best from earlier Visits, if it has one.
+    fn earlier_on(&self, map: &str) -> Option<VisitBest> {
+        self.earlier.maps.iter().find(|m| m.id == map).and_then(|m| m.visits.first()).copied()
+    }
+
+    /// Whose is the higher of `map`'s Personal Best from earlier Visits and this Visit's
+    /// best there: this Visit's once it has beaten the other, or with no other.
+    fn higher(&self, map: &str) -> Option<Whose> {
+        match (self.this_visit_on(map), self.earlier_on(map)) {
+            (Some(this), Some(earlier)) if this.exp_per_hour > earlier.exp_per_hour => Some(Whose::ThisVisit),
+            (_, Some(_)) => Some(Whose::EarlierVisits),
+            (Some(_), None) => Some(Whose::ThisVisit),
+            (None, None) => None,
+        }
+    }
+
     /// Forget the higher of `map`'s Personal Best and this Visit's best there, as the line
-    /// shows them: this Visit's once it has beaten the other (or there is no other), the
-    /// other otherwise. The next-best Visit's takes over. It can be undone until the Visit
-    /// ends, or the next Forget. Whether it was this Visit's.
-    pub fn forget(&mut self, map: &str) -> bool {
+    /// says. The next-best Visit's takes over. It can be undone until the Visit ends, or
+    /// the next Forget. Whose it was, if there was one.
+    pub fn forget(&mut self, map: &str) -> Option<Whose> {
         self.changing(|bests| bests.forget_higher(map))
     }
 
     /// As [`Bests::forget`], leaving the revision to it.
-    fn forget_higher(&mut self, map: &str) -> bool {
-        let this = self.visit.iter().position(|(id, _)| id == map);
-        let earlier = self.earlier.maps.iter().position(|m| m.id == map);
-        let top = earlier.and_then(|at| self.earlier.maps[at].visits.first()).map(|best| best.exp_per_hour);
-        let forgotten = match (this, earlier) {
-            (Some(at), _) if top.is_none_or(|top| self.visit[at].1.exp_per_hour > top) => {
-                let (map, best) = self.visit.remove(at);
-                Forgotten { map, best, this_visit: true }
+    fn forget_higher(&mut self, map: &str) -> Option<Whose> {
+        let whose = self.higher(map)?;
+        let best = match whose {
+            Whose::ThisVisit => {
+                let at = self.visit.iter().position(|(id, _)| id == map)?;
+                self.visit.remove(at).1
             }
-            (_, Some(at)) if top.is_some() => {
+            Whose::EarlierVisits => {
+                let at = self.earlier.maps.iter().position(|m| m.id == map)?;
                 let best = self.earlier.maps[at].visits.remove(0);
                 if self.earlier.maps[at].visits.is_empty() {
                     self.earlier.maps.remove(at);
                 }
-                Forgotten { map: map.to_string(), best, this_visit: false }
+                best
             }
-            _ => return false,
         };
-        let this_visit = forgotten.this_visit;
-        self.forgotten = Some(forgotten);
-        this_visit
+        self.forgotten = Some(Forgotten { map: map.to_string(), best, whose });
+        Some(whose)
     }
 
     /// Bring back the best the player last forgot, unless the Visit has ended since: an
     /// earlier Visit's in front again, this Visit's unless a higher one was set since.
-    /// Whether it was this Visit's.
-    pub fn undo_forget(&mut self) -> bool {
+    /// Whose it was, if there was one.
+    pub fn undo_forget(&mut self) -> Option<Whose> {
         self.changing(Self::bring_back)
     }
 
     /// As [`Bests::undo_forget`], leaving the revision to it.
-    fn bring_back(&mut self) -> bool {
-        let Some(Forgotten { map, best, this_visit }) = self.forgotten.take() else { return false };
-        if this_visit {
-            match self.visit.iter_mut().find(|(id, _)| *id == map) {
+    fn bring_back(&mut self) -> Option<Whose> {
+        let Forgotten { map, best, whose } = self.forgotten.take()?;
+        match whose {
+            Whose::ThisVisit => match self.visit.iter_mut().find(|(id, _)| *id == map) {
                 Some((_, since)) if since.exp_per_hour > best.exp_per_hour => {}
                 Some((_, since)) => *since = best,
                 None => self.visit.push((map, best)),
+            },
+            Whose::EarlierVisits => {
+                let visits = visits_of(&mut self.earlier, map);
+                // It was the highest: in front of any equal to it too, as before.
+                let at = visits.iter().position(|v| v.exp_per_hour <= best.exp_per_hour).unwrap_or(visits.len());
+                visits.insert(at, best);
             }
-        } else {
-            let visits = visits_of(&mut self.earlier, map);
-            // It was the highest: in front of any equal to it too, as before.
-            let at = visits.iter().position(|v| v.exp_per_hour <= best.exp_per_hour).unwrap_or(visits.len());
-            visits.insert(at, best);
         }
-        this_visit
+        Some(whose)
     }
 
     /// Whether there is a Forget to undo.
@@ -236,27 +272,20 @@ impl Bests {
         self.forgotten.is_some()
     }
 
-    /// The line for `map`, where `share` gives Last 5 min's share of a best, if it is
-    /// over a full 5 minutes there; `None` while there is nothing to compare with.
+    /// The line for `map`, where `share` gives the Rolling Rate's share of a best, if it
+    /// is over a full 5 minutes there; `None` while there is nothing to compare with.
     pub fn line(&self, map: &str, share: impl FnOnce(u64) -> Option<i64>) -> Option<PersonalBestLine> {
-        let this = self.visit.iter().find(|(id, _)| id == map).map(|&(_, best)| best);
-        let earlier = self.earlier.maps.iter().find(|m| m.id == map).and_then(|m| m.visits.first());
-        match earlier {
-            Some(best) => Some(PersonalBestLine {
-                exp_per_hour: best.exp_per_hour,
-                set_at_unix_ms: best.set_at_unix_ms,
-                first: false,
+        let forgets = self.higher(map)?;
+        let this = self.this_visit_on(map);
+        let named = match self.earlier_on(map) {
+            Some(best) => BestNamed::EarlierVisits {
+                best,
                 share_hundredths: share(best.exp_per_hour),
-                new_best: this.filter(|this| this.exp_per_hour > best.exp_per_hour),
-            }),
-            None => this.map(|this| PersonalBestLine {
-                exp_per_hour: this.exp_per_hour,
-                set_at_unix_ms: this.set_at_unix_ms,
-                first: true,
-                share_hundredths: None,
-                new_best: None,
-            }),
-        }
+                new_best: this.filter(|_| forgets == Whose::ThisVisit),
+            },
+            None => BestNamed::FirstVisit { best: this? },
+        };
+        Some(PersonalBestLine { named, forgets })
     }
 
     /// Every map's Visit bests, for the shell to save: the Visit under way's as if it
