@@ -74,13 +74,14 @@ const TAGS: Partial<Record<ExpTracking["state"], string>> = {
 };
 
 /** The Personal Best line: the best named as the Rolling Rate's row shows its rates, so
- *  it reads as the figure the player saw there. */
+ *  it reads as the figure the player saw there. A no-break space keeps the figure with the
+ *  words before it where the line wraps. */
 function personalBest(line: PersonalBestLine) {
   const named = rate(line.best.expPerHour);
-  if (line.kind === "firstVisit") return `Your first best EXP/h here: ${named}`;
+  if (line.kind === "firstVisit") return `Your first best EXP/h here: ${named}`;
   const of = line.shareHundredths;
-  if (of === null) return `Your best EXP/h here: ${named}`;
-  return `${sharePercent(of)} of your best EXP/h here (${named})`;
+  if (of === null) return `Your best EXP/h here: ${named}`;
+  return `${sharePercent(of)} of your best EXP/h here (${named})`;
 }
 
 /** Whether two moments fall on the same day in the player's local time. */
@@ -112,17 +113,18 @@ let bestLine: PersonalBestLine | null = null;
 
 /** The Personal Best line opened in place while the pointer is on it: the best it names
  *  and when it was set, and this Visit's best once it has beaten it; on a first Visit,
- *  this Visit's. Dated afresh each time, as days pass. Under them, Forget, named for the
- *  best the core says it takes: the higher of the two. */
+ *  this Visit's. Dated afresh each time, as days pass. Under them, Forget, labelled with
+ *  the row it takes, as the core says: the higher of the two. */
 function renderBestOpen() {
   const line = bestLine;
   bestOpen.hidden = !bestHovered || !line;
+  best.classList.toggle("open", !bestOpen.hidden);
   if (!line || bestOpen.hidden) return;
   const [earlier, thisVisit] = line.kind === "earlierVisits" ? [line.best, line.newBest] : [null, line.best];
   showBest(bestEarlier, bestEarlierExp, bestEarlierWhen, earlier);
   showBest(bestVisit, bestVisitExp, bestVisitWhen, thisVisit);
   const forgetsThisVisit = line.forgets === "thisVisit";
-  bestForget.setAttribute("aria-label", forgetsThisVisit ? "Forget this Visit's best" : "Forget your best here");
+  bestForget.textContent = forgetsThisVisit ? "Forget this Visit's best" : "Forget your best";
   bestForget.title = forgetsThisVisit
     ? "Forget this Visit's best: only play from now on counts towards it"
     : "Forget your best here: your next-best Visit takes over";
