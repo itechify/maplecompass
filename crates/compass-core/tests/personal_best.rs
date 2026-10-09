@@ -127,6 +127,12 @@ impl Player {
         self.compass.on_hotkey("ctrl+shift+n");
         self.compass.panel_state().clone()
     }
+
+    /// Press one of the Grind Tracker's buttons.
+    fn press(&mut self, control: PanelControl) -> PanelState {
+        self.compass.press(control);
+        self.compass.panel_state().clone()
+    }
 }
 
 /// Last 5 min's EXP/h as the Grind Tracker shows it.
@@ -529,4 +535,34 @@ fn the_overlay_gets_the_line_as_the_grind_tracker_renders_it() {
             "newBest": { "expPerHour": 10_800, "setAtUnixMs": beaten_at },
         })
     );
+}
+
+/// Sunset Sky's best Visits: 10,800 EXP/h on the first, 7,200 on the second; then back on
+/// it a third time.
+fn back_on_sunset_sky_after_bests_of_10800_and_7200() -> (Player, PanelState) {
+    let mut player = Player::new(tracking());
+    player.arrive(SUNSET);
+    player.hunt(6 * MIN, 30);
+    player.arrive(CONSTRUCTION_SITE);
+    player.hunt(2 * MIN, 30);
+    player.arrive(SUNSET);
+    player.hunt(6 * MIN, 20);
+    player.arrive(CONSTRUCTION_SITE);
+    player.hunt(2 * MIN, 30);
+    let back = player.arrive(SUNSET);
+    (player, back)
+}
+
+#[test]
+fn forgetting_the_best_this_visit_has_not_beaten_leaves_the_next_best_visit_to_compare_with() {
+    let (mut player, back) = back_on_sunset_sky_after_bests_of_10800_and_7200();
+    assert_eq!(back.exp_tracking.personal_best, best(10_800, None, None));
+
+    // 3,600 EXP/h for 5 minutes: 33.3% of the 10,800, which this Visit hasn't beaten.
+    let five = player.hunt(5 * MIN, 10);
+    assert_eq!(five.exp_tracking.personal_best, best(10_800, Some(3333), None));
+
+    // Forget takes the 10,800: the 7,200 is the best now, and 3,600 is 50% of it.
+    let forgot = player.press(PanelControl::ForgetBest);
+    assert_eq!(forgot.exp_tracking.personal_best, best(7200, Some(5000), None));
 }
