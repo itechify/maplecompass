@@ -1,5 +1,6 @@
 //! The map index and the injected map data source it comes from (MeowDB, ADR 0003).
 
+use crate::item_lookup::ItemHit;
 use crate::map_data::MapData;
 use crate::mob_card::MobDetails;
 use std::task::Poll;
@@ -94,4 +95,11 @@ pub trait MapDataSource {
     /// apart from it, since it comes from another site. A cached image up to 30 days old
     /// may be used as it is. [`SourceError::FormatChanged`] when maplestory.io has none.
     fn mob_image(&mut self, id: &str) -> Poll<Result<String, SourceError>>;
+
+    /// The items MeowDB's search ([`crate::meowdb::ITEM_SEARCH_URL`]) gives for `name`, an
+    /// item's name as read from an Item Tooltip, closest first (ADR 0007): the core asks
+    /// once per Item Lookup, ahead of the world crawl, and keeps to MeowDB's pace after
+    /// it. Read with [`crate::meowdb::read_item_search`]. A cached answer may be used as
+    /// it is; answer at once when it is.
+    fn item_search(&mut self, name: &str) -> Poll<Result<Fetched<Vec<ItemHit>>, SourceError>>;
 }
