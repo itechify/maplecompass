@@ -7,7 +7,7 @@
 //!   a Map Summary: the core says which map that is.
 //! - A map's Personal Best is the best of its Visits'. During a Visit the rate is
 //!   compared with the earlier Visits' best, which can't change until the Visit ends:
-//!   this Visit's best joins them then. Nothing is capped or rejected.
+//!   this Visit's best joins them then. No rate is capped or rejected.
 //! - A Visit's best is for the map it was last certain on: the player may choose among
 //!   Candidates, and the hotkey goes past the others on the way.
 //! - A best is dated by the wall clock at the refresh that first showed it, for the line's
