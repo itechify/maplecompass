@@ -391,11 +391,17 @@ fn a_forget_and_its_undo_change_the_bests_the_shell_saves() {
     assert_eq!(saving(&mut player, PanelControl::ForgetBest), [] as [u64; 0]);
     assert_eq!(saving(&mut player, PanelControl::UndoForget), [7200]);
 
-    // Back after the Construction Site, at 3,600 EXP/h: forgetting the earlier Visit's
-    // best leaves this Visit's. Undo brings it back.
+    // Back after the Construction Site: forgetting the earlier Visit's best, Sunset Sky's
+    // only one, leaves it none to save. Undo brings it back.
     player.arrive(CONSTRUCTION_SITE);
     player.hunt(MIN, 30);
     player.arrive(SUNSET);
+    assert_eq!(saving(&mut player, PanelControl::ForgetBest), [] as [u64; 0]);
+    assert!(player.compass.bests().maps.iter().all(|m| m.id != SUNSET_SKY_ID));
+    assert_eq!(saving(&mut player, PanelControl::UndoForget), [7200]);
+
+    // At 3,600 EXP/h: forgetting the earlier Visit's best leaves this Visit's. Undo brings
+    // it back.
     player.hunt(5 * MIN, 10);
     assert_eq!(sunset_rates(&player), [7200, 3600]);
     assert_eq!(saving(&mut player, PanelControl::ForgetBest), [3600]);
