@@ -1,12 +1,15 @@
 /* The Item Lookup alert: what the latest lookup came to, at the top centre of the game
-   window, where the player is looking. One of the panel's see-through windows without
-   its bar, as wide as its words and centred in the window, which the shell makes 440 CSS
-   px wide (WIDTH in src-tauri/src/item_lookup.rs) and as tall as the alert. A problem
-   wears the panel's problem note: cream, with the orange dot. It fades out over its last
-   second; a new lookup's alert shows afresh. */
+   window, where the player is looking. One of the panel's windows without its bar, as
+   wide as its words and centred in the window, which the shell makes 440 CSS px wide
+   (WIDTH in src-tauri/src/item_lookup.rs) and as tall as the alert. It sits over
+   whatever the scene has there, so it takes the near-opaque lavender the panel sets its
+   densest reading on, not the see-through glass. A problem wears the panel's problem
+   note: cream, with the orange dot. It fades out over its last second; a new lookup's
+   alert shows afresh. */
 .panel.alert {
   /* The panel's inline-size containment would size it as if empty. */
   container-type: normal;
+  background: var(--body);
   width: fit-content;
   max-width: 100%;
   margin: 0 auto;
