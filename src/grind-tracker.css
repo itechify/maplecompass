@@ -110,8 +110,10 @@
 }
 
 /* The rates over the last 5 minutes and the whole Session, the panel's summary in
-   miniature: each figure beside its unit, the figures right-aligned in their columns. */
-.rates {
+   miniature: each figure beside its unit, the figures right-aligned in their columns.
+   The Personal Best line's opened rows are set out the same (below). */
+.rates,
+.best-rows {
   display: grid;
   grid-template-columns: auto auto auto auto auto;
   justify-content: start;
@@ -122,11 +124,13 @@
   color: var(--ink-2);
 }
 
-.rates .row {
+.rates .row,
+.best-rows .row {
   display: contents;
 }
 
-.rates .period {
+.rates .period,
+.best-rows .period {
   padding-right: 8px;
   white-space: nowrap;
 }
@@ -135,7 +139,8 @@
   color: var(--ink-3);
 }
 
-.rates .value {
+.rates .value,
+.best-rows .value {
   text-align: right;
   font-size: 13px;
   font-weight: 700;
@@ -180,31 +185,9 @@
   margin-top: 2px;
 }
 
+/* Period, figure and when it was set. */
 .best-rows {
-  display: grid;
   grid-template-columns: auto auto auto;
-  justify-content: start;
-  align-items: baseline;
-  row-gap: 1px;
-  font-size: 12px;
-  line-height: 17px;
-  color: var(--ink-2);
-}
-
-.best-rows .row {
-  display: contents;
-}
-
-.best-rows .period {
-  padding-right: 8px;
-  white-space: nowrap;
-}
-
-.best-rows .value {
-  text-align: right;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink);
 }
 
 /* Where a figure in the millions leaves "set 3 Oct 2025" no room, it wraps under itself. */
