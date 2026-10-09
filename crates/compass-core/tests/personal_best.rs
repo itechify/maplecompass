@@ -614,38 +614,36 @@ fn undo_keeps_a_higher_best_set_since_the_forget() {
 
 #[test]
 fn undo_counts_windows_from_where_they_counted_before_the_forget_not_from_arriving() {
-    let mut player = Player::new(tracking_with(sharing_a_title()));
-    player.arrive(KERNING);
+    let mut player = Player::new(tracking());
+    player.arrive(SUNSET);
 
-    // Sunset Sky chosen: 3,600 EXP/h, its first best this Visit.
-    player.choose_next();
-    assert_eq!(player.hunt(6 * MIN, 10).exp_tracking.personal_best, first_best(3600));
-
-    // On to the Construction Site, and a bad jump: 36,000 EXP/h, forgotten.
-    player.choose_next();
+    // A bad jump: 36,000 EXP/h for 5 minutes, forgotten.
     assert_eq!(player.hunt(5 * MIN, 100).exp_tracking.personal_best, first_best(36_000));
     assert_eq!(player.press(PanelControl::ForgetBest).exp_tracking.personal_best, None);
-    let after = player.hunt(30 * S, 10);
-    assert_eq!(rolling(&after), Some(32_760));
-    assert_eq!(after.exp_tracking.personal_best, None);
 
-    // Back on Sunset Sky, its 3,600 forgotten and brought back: the jump, still in the
-    // Rolling Rate's window, started before the first Forget, and isn't recorded.
-    let sunset = player.choose_next();
-    assert_eq!(shown_map(&sunset), Some(SUNSET_SKY_ID));
-    assert_eq!(sunset.exp_tracking.personal_best, first_best(3600));
-    player.press(PanelControl::ForgetBest);
-    let undone = player.press(PanelControl::UndoForget);
-    assert_eq!(undone.exp_tracking.personal_best, first_best(3600));
-    // 4 minutes more at 3,600 EXP/h: the jump is still in the window, and still out.
-    let later = player.hunt(4 * MIN, 10);
-    assert_eq!(rolling(&later), Some(6840));
-    assert_eq!(later.exp_tracking.personal_best, first_best(3600));
+    // 3,600 EXP/h for 3 and a half minutes, then a minute and a half with no EXP, a gap
+    // in play: 5 minutes since the Forget, at 2,520 EXP/h, a best.
+    player.hunt(3 * MIN + 30 * S, 10);
+    let gap = player.hunt(90 * S, 0);
+    assert_eq!(gap.exp_tracking.state, TrackingState::Active);
+    assert_eq!(gap.exp_tracking.personal_best, first_best(2520));
 
-    // The Visit's best handed out to save is Sunset Sky's 3,600.
+    // That one forgotten too, and brought back.
+    assert_eq!(player.press(PanelControl::ForgetBest).exp_tracking.personal_best, None);
+    assert_eq!(player.press(PanelControl::UndoForget).exp_tracking.personal_best, first_best(2520));
+
+    // The gap becomes a break, which takes its time back: the Rolling Rate's window
+    // reaches back into the jump again. The jump started before the first Forget, which
+    // still stands, and isn't recorded.
+    let paused = player.hunt(MIN, 0);
+    assert_eq!(paused.exp_tracking.state, TrackingState::Paused);
+    assert_eq!(rolling(&paused), Some(13_320));
+    assert_eq!(paused.exp_tracking.personal_best, first_best(2520));
+
+    // The Visit's best handed out to save is the 2,520.
     let saved = player.compass.bests();
     let saved: Vec<_> = saved.maps.iter().map(|m| (m.id.as_str(), m.visits[0].exp_per_hour)).collect();
-    assert_eq!(saved, [(SUNSET_SKY_ID, 3600)]);
+    assert_eq!(saved, [(SUNSET_SKY_ID, 2520)]);
 }
 
 #[test]
