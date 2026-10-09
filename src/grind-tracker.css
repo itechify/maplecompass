@@ -165,24 +165,38 @@
 }
 
 /* "new best" after the Personal Best line, the game's small label as "warming up" is
-   beside Time to Level; it goes under the line whole where it doesn't fit. */
-.tracking .line .tag {
-  display: inline-block;
-  margin-left: 6px;
-  vertical-align: 1px;
+   beside Time to Level. Where the two don't fit on one line the tag goes under whole, from
+   the line's start, and the sentence keeps together rather than sending its figure down
+   with the tag. */
+.panel .tracking .best > .line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 6px;
+  row-gap: 2px;
+}
+
+.tracking .best > .line > .tag {
+  flex: none;
   white-space: nowrap;
+}
+
+/* Opened, the line steps up to the main ink: the rows under it are its own. */
+.panel .tracking .best.open > .line {
+  color: var(--ink);
 }
 
 /* The Personal Best line opened in place under the pointer: the best and when it was set,
    and this Visit's once it beat it, set out as the rates are, figures right-aligned. The
    line above names the unit, so "set 3 Oct 2025" keeps to one line beside the figure. The
    window grows to fit: nothing floats over the figures. No motion: it is there or not.
-   Bests rather than figures that move, so they stay bold while the figures are held. */
+   Bests rather than figures that move, so they stay bold while the figures are held. Held
+   close under its line, and a step clear of the ceiling's line below. */
 .tracking .best-open {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 2px;
+  margin: 2px 0 3px;
 }
 
 /* Period, figure and when it was set. */
@@ -196,8 +210,8 @@
   color: var(--ink-3);
 }
 
-/* Forget under the bests, at their start: it removes the higher of the two. Its note at
-   the top of the window carries the Undo. */
+/* Forget under the bests, at their start, naming the one it removes: the higher of the
+   two. Its note at the top of the window carries the Undo. */
 .best-open .text-button {
   align-self: flex-start;
 }
