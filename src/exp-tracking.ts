@@ -4,6 +4,13 @@ export type ExpRate = { expPerHour: number; percentPerHourHundredths: number | n
 /** Mirror of `compass_core::ExpBar`: the EXP bar's figures, "EXP 160 [3.81%]". */
 export type ExpBar = { exp: number; percentHundredths: number };
 
+/** Mirror of `compass_core::VisitBest`: the best one Visit had on a map. */
+export type VisitBest = {
+  expPerHour: number;
+  /** When it was first shown (ms since the Unix epoch), if the wall clock was known. */
+  setAtUnixMs: number | null;
+};
+
 /** Mirror of `compass_core::PersonalBestLine`: how Last 5 min compares with the best on
  *  the map the player is on. */
 export type PersonalBestLine = {
@@ -15,8 +22,9 @@ export type PersonalBestLine = {
   first: boolean;
   /** Last 5 min's share of the earlier best, once it is 5 minutes of play here. */
   shareHundredths: number | null;
-  /** This Visit beat the earlier best: the "new best" tag, for the rest of the Visit. */
-  newBest: boolean;
+  /** This Visit's best, once it beat the earlier one: the "new best" tag, for the rest of
+   *  the Visit. */
+  newBest: VisitBest | null;
 };
 
 /** Mirror of `compass_core::ExpTracking`. */
