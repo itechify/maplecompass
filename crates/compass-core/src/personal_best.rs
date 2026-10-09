@@ -325,10 +325,12 @@ impl Bests {
         self.changing(|bests| bests.earlier = saved);
     }
 
-    /// Changes whenever what [`Bests::saved`] hands out does, and only then: the Visit
-    /// under way's best set, raised, or moved to a Candidate chosen that counts a rate,
-    /// where it makes its map's [`VISITS_KEPT`]; a best forgotten or brought back; bests
-    /// restored. A Visit ending changes nothing handed out.
+    /// Changes whenever what [`Bests::saved`] hands out does, and only then: an earlier
+    /// Visit's best forgotten or brought back; the Visit under way's best set, raised,
+    /// moved to a Candidate chosen that counts a rate, forgotten, or brought back above
+    /// any set since, where it makes its map's [`VISITS_KEPT`]; bests restored. A Visit
+    /// ending changes nothing handed out, nor does bringing back a Candidate's best from
+    /// this Visit while the Visit's best is another map's.
     pub fn revision(&self) -> u64 {
         self.revision
     }
