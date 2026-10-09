@@ -42,9 +42,11 @@
               </button>
             </div>
             <!-- Meso and item rows come later, from the Pickup Log. -->
+            <!-- The Best row is the map's Personal Best from its history; the star marks
+                 Last 5 min while it beats it. -->
             <div class="rates">
               <div class="row">
-                <span class="period">Last 5 min</span>
+                <span class="period">Last 5 min<svg class="star" id="rolling-star" viewBox="0 0 16 16" role="img" aria-label="New best on this map"><title>New best on this map</title><path d="M8 1.5L9.76 6.07L14.66 6.34L10.85 9.43L12.11 14.16L8 11.5L3.89 14.16L5.15 9.43L1.34 6.34L6.24 6.07Z" /><ellipse class="lit" cx="7.1" cy="6.9" rx="1.5" ry="1.1" /></svg></span>
                 <span class="value" id="rolling-exp"></span><span class="unit">EXP/h</span>
                 <span class="value" id="rolling-percent"></span><span class="unit per">/h</span>
               </div>
@@ -53,28 +55,12 @@
                 <span class="value" id="session-exp"></span><span class="unit">EXP/h</span>
                 <span class="value" id="session-percent"></span><span class="unit per">/h</span>
               </div>
-            </div>
-            <!-- Under the pointer the Personal Best line opens in place, and the window grows
-                 to fit: the best and when it was set, and this Visit's once it beat it; under
-                 them, Forget, which removes the higher of the two. -->
-            <div class="best" id="tracking-best" hidden>
-              <p class="line">
-                <span id="tracking-best-text"></span><span class="tag" id="tracking-best-tag" hidden>new best</span>
-              </p>
-              <div class="best-open" id="tracking-best-open" hidden>
-                <div class="best-rows">
-                  <div class="row" id="best-earlier">
-                    <span class="period">Your best</span>
-                    <span class="value" id="best-earlier-exp"></span>
-                    <span class="when" id="best-earlier-when"></span>
-                  </div>
-                  <div class="row" id="best-visit">
-                    <span class="period">This Visit</span>
-                    <span class="value" id="best-visit-exp"></span>
-                    <span class="when" id="best-visit-when"></span>
-                  </div>
-                </div>
-                <button type="button" class="text-button" id="best-forget" data-control="forgetBest" title="Forget your best here: your next-best Visit takes over">Forget your best</button>
+              <div class="row best" id="best-row" hidden>
+                <span class="period">Best</span>
+                <span class="value" id="best-exp"></span><span class="unit">EXP/h</span>
+                <button type="button" class="icon-button light" data-control="removeBest" aria-label="Remove this best from your history" title="Remove this best from your history">
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+                </button>
               </div>
             </div>
             <p class="line" id="tracking-share" hidden></p>

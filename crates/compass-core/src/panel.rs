@@ -105,7 +105,7 @@ pub enum Action {
     UndoReset,
     /// Remove the shown map's Personal Best from its history: one that came from a bug.
     /// The map's next-best Visit takes over. There is no undo.
-    ForgetBest,
+    RemoveBest,
     /// Open the Grind Tracker's window, or close it (the panel's button, or its hotkey).
     ToggleGrindTracker,
     /// Close the Grind Tracker's window (its ×). The Session carries on.

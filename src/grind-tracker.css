@@ -29,8 +29,7 @@
   color: var(--ink);
 }
 
-/* A reset can be undone until the next EXP gain, a Forget until the player leaves the map:
-   the note carries the button. */
+/* A reset can be undone until the next EXP gain: the note carries the button. */
 .panel .tracking .note.undo {
   display: flex;
   align-items: center;
@@ -111,9 +110,8 @@
 
 /* The rates over the last 5 minutes and the whole Session, the panel's summary in
    miniature: each figure beside its unit, the figures right-aligned in their columns.
-   The Personal Best line's opened rows are set out the same (below). */
-.rates,
-.best-rows {
+   Under them, the map's Personal Best from its history, its × where the percentages go. */
+.rates {
   display: grid;
   grid-template-columns: auto auto auto auto auto;
   justify-content: start;
@@ -124,13 +122,11 @@
   color: var(--ink-2);
 }
 
-.rates .row,
-.best-rows .row {
+.rates .row {
   display: contents;
 }
 
-.rates .period,
-.best-rows .period {
+.rates .period {
   padding-right: 8px;
   white-space: nowrap;
 }
@@ -139,12 +135,43 @@
   color: var(--ink-3);
 }
 
-.rates .value,
-.best-rows .value {
+.rates .value {
   text-align: right;
   font-size: 13px;
   font-weight: 700;
   color: var(--ink);
+}
+
+/* Last 5 min is a new best on the map: a star after the period, the player's own You
+   Yellow as the minimap's dot for them is, lit up and to the left and ringed in its dark
+   gold. Its room is kept while it's off, so the figures never shift as it comes and goes. */
+.rates .star {
+  width: 11px;
+  height: 11px;
+  margin-left: 4px;
+  vertical-align: -1px;
+  visibility: hidden;
+  fill: var(--you);
+  stroke: var(--you-edge);
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+}
+
+.rates .star.on {
+  visibility: visible;
+}
+
+.rates .star .lit {
+  fill: var(--you-light);
+  stroke: none;
+}
+
+/* The Best row's ×: the light body button, as the reset's is, never the window bar's blue
+   ×. Level with the row, and kept from making it taller. */
+.rates .best .icon-button {
+  align-self: center;
+  justify-self: start;
+  margin: -1px 0;
 }
 
 .rates .unit {
@@ -164,63 +191,12 @@
   color: var(--ink-2);
 }
 
-/* "new best" after the Personal Best line, the game's small label as "warming up" is
-   beside Time to Level. Where the two don't fit on one line the tag goes under whole, from
-   the line's start, and the sentence keeps together rather than sending its figure down
-   with the tag. */
-.panel .tracking .best > .line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  column-gap: 6px;
-  row-gap: 2px;
-}
-
-.tracking .best > .line > .tag {
-  flex: none;
-  white-space: nowrap;
-}
-
-/* Opened, the line steps up to the main ink: the rows under it are its own. */
-.panel .tracking .best.open > .line {
-  color: var(--ink);
-}
-
-/* The Personal Best line opened in place under the pointer: the best and when it was set,
-   and this Visit's once it beat it, set out as the rates are, figures right-aligned. The
-   line above names the unit, so "set 3 Oct 2025" keeps to one line beside the figure. The
-   window grows to fit: nothing floats over the figures. No motion: it is there or not.
-   Bests rather than figures that move, so they stay bold while the figures are held. Held
-   close under its line, and a step clear of the ceiling's line below. */
-.tracking .best-open {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 2px 0 3px;
-}
-
-/* Period, figure and when it was set. */
-.best-rows {
-  grid-template-columns: auto auto auto;
-}
-
-/* Where a figure in the millions leaves "set 3 Oct 2025" no room, it wraps under itself. */
-.best-rows .when {
-  padding-left: 8px;
-  color: var(--ink-3);
-}
-
-/* Forget under the bests, at their start, naming the one it removes: the higher of the
-   two. Its note at the top of the window carries the Undo. */
-.best-open .text-button {
-  align-self: flex-start;
-}
-
 /* Rates still settling, held while paused, or held while the bar can't be read (the note
    above says why): the figures show in the light weight, a step back from the bold they
-   stand in when they move. Never faded: they stay as legible as ever. */
+   stand in when they move. Never faded: they stay as legible as ever. The Best row's
+   figure doesn't move, so it stays bold. */
 .tracking.held .time-to-level,
-.tracking.held .rates .value {
+.tracking.held .rates .row:not(.best) .value {
   font-weight: 400;
 }
 
