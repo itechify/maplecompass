@@ -7,6 +7,7 @@
 
 mod crawl;
 mod exp_bar;
+mod grind_tracker;
 mod map_data;
 mod map_index;
 mod matcher;
@@ -29,6 +30,7 @@ mod world;
 
 pub use crawl::CrawlProgress;
 pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
+pub use grind_tracker::{ClientOffset, GrindTrackerWindow};
 pub use map_data::{
     HiddenPortal, LISTED_MOBS, MapData, MapDataStatus, MapSpot, MapSummary, Mob, MoreMobs, PerParty,
     Portal, PortalKind,
@@ -52,6 +54,7 @@ pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
 pub use world::{Distance, Step, Travel};
 
 use crawl::Crawl;
+use grind_tracker::GrindTracker;
 use search::{MobSearch, Searched};
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
@@ -196,6 +199,8 @@ pub struct PanelState {
     pub exp_bar: Option<ExpBar>,
     /// EXP tracking: the Session's state, Time to Level, rates and deaths.
     pub exp_tracking: ExpTracking,
+    /// The Grind Tracker's window, which shows `exp_tracking`.
+    pub grind_tracker: GrindTrackerWindow,
     /// The title of the game window to look for: "MapleStory", or one the player
     /// picked by hand.
     pub game_window_title: String,
@@ -227,7 +232,8 @@ pub enum Request {
 }
 
 /// Something the player can do with a hotkey or with the matching icon at the top of
-/// the panel. Either way it goes through [`Compass::press`].
+/// the panel, or with an icon at the top of the Grind Tracker's window (which have no
+/// hotkeys). Either way it goes through [`Compass::press`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PanelControl {
@@ -243,8 +249,13 @@ pub enum PanelControl {
     ChooseCandidate,
     /// Open the search view.
     Search,
-    /// Start the Session afresh, back to waiting for an EXP change.
+    /// Open the Grind Tracker's window, or close it.
+    ToggleGrindTracker,
+    /// The Grind Tracker window's reset icon: start the Session afresh, back to waiting
+    /// for an EXP change.
     ResetSession,
+    /// The Grind Tracker window's ×: close it.
+    CloseGrindTracker,
 }
 
 /// The game window's title, unless the player picked another by hand.
@@ -265,6 +276,8 @@ pub struct Compass {
     exp_bar: Option<ExpBar>,
     /// The Session measured from the EXP bar's readings.
     session: Session,
+    /// The Grind Tracker's window.
+    grind_tracker: GrindTracker,
     source: Box<dyn MapDataSource + Send>,
     matcher: Option<Matcher>,
     /// When asking for the map index last failed (frame time).
@@ -295,6 +308,7 @@ impl Compass {
             exp_bar_reader: None,
             exp_bar: None,
             session: Session::default(),
+            grind_tracker: GrindTracker::default(),
             source: Box::new(source),
             matcher: None,
             index_failed_at: None,
@@ -430,6 +444,12 @@ impl Compass {
         self.sync_panel()
     }
 
+    /// The Grind Tracker window's size, in physical px for the current display.
+    pub fn set_grind_tracker_size(&mut self, size: Size) -> &PanelState {
+        self.grind_tracker.size = size;
+        self.sync_panel()
+    }
+
     /// Apply something the player did.
     pub fn act(&mut self, action: Action) -> &PanelState {
         match action {
@@ -466,7 +486,12 @@ impl Compass {
                 }
             }
             Action::CancelSelection => self.setup.cancel_selection(),
-            Action::FinishSetup => self.setup.finish(),
+            Action::FinishSetup => {
+                // A newly marked EXP bar: the player wants to see what it measures.
+                if self.setup.finish() {
+                    self.grind_tracker.open = true;
+                }
+            }
             Action::RequestSetup => self.setup.request(),
             Action::LaunchedAgain => {
                 if self.setup.state().window_open {
@@ -482,6 +507,13 @@ impl Compass {
                 self.setup.cancel();
             }
             Action::ResetSession => self.session.reset(),
+            Action::ToggleGrindTracker => self.grind_tracker.open = !self.grind_tracker.open,
+            Action::CloseGrindTracker => self.grind_tracker.open = false,
+            Action::GrindTrackerMoved { x, y } => {
+                if let Some(game) = &self.panel.game {
+                    self.grind_tracker.moved_to(x, y, game);
+                }
+            }
             Action::OpenSearch => {
                 // The search view is on the expanded panel.
                 self.panel.expanded = true;
@@ -565,8 +597,8 @@ impl Compass {
             PanelControl::ChooseCandidate
         } else if is(&hotkeys.search) {
             PanelControl::Search
-        } else if is(&hotkeys.reset_session) {
-            PanelControl::ResetSession
+        } else if is(&hotkeys.grind_tracker) {
+            PanelControl::ToggleGrindTracker
         } else if is(&hotkeys.open_meowdb_page) {
             PanelControl::OpenMeowdbPage
         } else {
@@ -583,7 +615,9 @@ impl Compass {
             PanelControl::CyclePlacement => Action::CyclePlacement,
             PanelControl::Setup => Action::RequestSetup,
             PanelControl::ChooseCandidate => Action::ChooseCandidate,
+            PanelControl::ToggleGrindTracker => Action::ToggleGrindTracker,
             PanelControl::ResetSession => Action::ResetSession,
+            PanelControl::CloseGrindTracker => Action::CloseGrindTracker,
             // An open search view stays as it is; the shell brings the overlay in front on
             // opening it.
             PanelControl::Search if self.search.is_open() => return Some(Request::RaiseOverlay),
@@ -635,6 +669,8 @@ impl Compass {
         self.panel.resized_to(settings.panel_width.unwrap_or(DEFAULT_PANEL_WIDTH));
         self.setup.saved = settings.title_region;
         self.setup.saved_exp_bar = settings.exp_bar_region;
+        self.grind_tracker.open = settings.grind_tracker_open;
+        self.grind_tracker.at = settings.grind_tracker_at;
         self.settings = settings;
         // The travel toggles change Distances.
         self.sync_search();
@@ -658,6 +694,8 @@ impl Compass {
             panel_width: (self.panel.width != DEFAULT_PANEL_WIDTH).then_some(self.panel.width),
             title_region: self.setup.saved,
             exp_bar_region: self.setup.saved_exp_bar,
+            grind_tracker_open: self.grind_tracker.open,
+            grind_tracker_at: self.grind_tracker.at,
             ..self.settings.clone()
         }
     }
@@ -735,6 +773,7 @@ impl Compass {
         self.state.placement = self.panel.placement();
         self.state.layer = self.panel.layer();
         self.state.draggable = self.panel.draggable();
+        self.sync_grind_tracker();
         self.state.hotkeys = self.settings.hotkeys.clone();
         self.state.game_window_title =
             self.settings.game_window_title.clone().unwrap_or_else(|| GAME_WINDOW_TITLE.into());
@@ -756,6 +795,17 @@ impl Compass {
         } else {
             ExpTracking::default()
         };
+    }
+
+    /// The Grind Tracker's window shows while the player wants it and there is something
+    /// to track, but not while setup is open (it may be marking the EXP bar).
+    fn sync_grind_tracker(&mut self) {
+        let shows = self.grind_tracker.open && self.tracking_on() && !self.state.setup.window_open;
+        let placement = match (&self.panel.game, self.panel.expanded_placement()) {
+            (Some(game), Some(panel)) if shows => Some(self.grind_tracker.placement(game, panel, &self.panel.avoid)),
+            _ => None,
+        };
+        self.state.grind_tracker = GrindTrackerWindow { open: self.grind_tracker.open, placement };
     }
 
     /// Whether EXP tracking is on: there is an EXP Bar Region to read, kept and fitting
