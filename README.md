@@ -61,6 +61,8 @@ Settings, including the placement, collapsed sections, the marked title, a hand-
 
 ## Credits
 
+The windows are set in NEXON's Maplestory typeface; see `assets/fonts/NOTICE.md`.
+
 Title recognition uses [ocrs](https://github.com/robertknight/ocrs). Its recognition model is CC BY-SA 4.0; see `crates/compass-core/models/NOTICE.md`.
 
 Created in [T3 Code](https://t3.codes).
