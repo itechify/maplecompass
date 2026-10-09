@@ -338,6 +338,20 @@ fn with_another_app_in_front_of_the_game_the_overlay_hides() {
 }
 
 #[test]
+fn a_detached_panel_hides_with_another_app_in_front_too_wherever_it_is() {
+    let mut compass = compass();
+    compass.on_game_window(game(GAME));
+    detach(&mut compass);
+    // On a monitor of its own, say.
+    compass.act(Action::PanelMoved { x: 3000, y: 100 });
+
+    let state = compass.on_foreground(Foreground::OtherApp);
+
+    assert_eq!(state.layer, Layer::Hidden);
+    assert_eq!(state.placement, Some(rect(3000, 100, 340, 72)), "it keeps its spot");
+}
+
+#[test]
 fn with_the_game_or_maplecompass_back_in_front_the_overlay_shows_again_where_it_was() {
     let mut compass = compass();
     let shown = compass.on_game_window(game(GAME)).clone();
