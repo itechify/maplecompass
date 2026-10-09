@@ -50,9 +50,12 @@
   text-shadow: none;
 }
 
+/* The dot's ring reaches past the dot: the line must not clip it, as the panel's lines
+   clip what overflows them. */
 .panel.alert.problem .note {
   position: relative;
-  padding-left: 16px;
+  overflow: visible;
+  padding-left: 17px;
   text-align: left;
   color: var(--problem-ink);
 }
@@ -60,7 +63,7 @@
 .panel.alert.problem .note::before {
   content: "";
   position: absolute;
-  left: 0;
+  left: 1px;
   top: 4px;
   width: 8px;
   height: 8px;
