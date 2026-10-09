@@ -38,13 +38,13 @@
 //!   there are, a death, a level-up, a reset or its undoing, a character switch, a new
 //!   Visit, a map with another ceiling or Personal Best, and a best forgotten or brought
 //!   back. The bar's last reading shows as it comes.
-//! - Last 5 min as shown afresh, over a full 5 minutes of the Visit's play, counts towards
-//!   the Visit's Personal Best on the map (see [`crate::personal_best`]), unless the bar
-//!   can't be read. The core says which map that is, if any: one it is certain of, with
-//!   a Map Summary. Maps that share a title but would show the same count as the first
-//!   of them, the one the panel shows. After the player forgets the Visit's best, only play since counts,
-//!   and the line's share with it, until they undo the Forget. Bests outlast Sessions,
-//!   as Visits do.
+//! - The Rolling Rate as shown afresh, over a full 5 minutes of the Visit's play, counts
+//!   towards the Visit's Personal Best on the map (see [`crate::personal_best`]), unless
+//!   the bar can't be read. The core says which map that is, if any: one it is certain
+//!   of, with a Map Summary. Maps that share a title but would show the same count as the
+//!   first of them, the one the panel shows. After the player forgets the Visit's best,
+//!   only play since counts, and the line's share with it, until they undo the Forget.
+//!   Bests outlast Sessions, as Visits do.
 
 use crate::ExpBar;
 use crate::personal_best::{Bests, PersonalBestLine, Whose};
@@ -98,7 +98,7 @@ pub struct ExpTracking {
     /// reading rather than holding with the figures, so the player sees it being read.
     /// `None` until one is.
     pub bar: Option<ExpBar>,
-    /// How Last 5 min compares with the Personal Best on the shown map, while it is
+    /// How the Rolling Rate compares with the Personal Best on the shown map, while it is
     /// certain and has a Map Summary; `None` there until there is a best to name.
     pub personal_best: Option<PersonalBestLine>,
     /// The player forgot a Personal Best and hasn't left the map since: the Forget can be
@@ -363,9 +363,9 @@ struct Figures {
     /// Active time when the Visit under way started: the share of the map's ceiling
     /// counts only the play since.
     visit_from: u64,
-    /// Active time from which Last 5 min counts towards the Visit's Personal Best, and is
-    /// measured against the best: when the Visit started, or when the player last forgot
-    /// the Visit's best since.
+    /// Active time from which the Rolling Rate counts towards the Visit's Personal Best,
+    /// and is measured against the best: when the Visit started, or when the player last
+    /// forgot the Visit's best since.
     best_from: u64,
 }
 
@@ -597,7 +597,7 @@ impl Session {
     /// The player forgot the higher of `map`'s Personal Best and this Visit's best there:
     /// the line shows at once what is left. After forgetting this Visit's, only windows
     /// that start from now count, here and in the Session a reset set aside: the one
-    /// forgotten may still be in Last 5 min.
+    /// forgotten may still be in the Rolling Rate's window.
     pub fn forget_best(&mut self, map: &str) {
         if self.bests.forget(map) == Some(Whose::ThisVisit) {
             let now = self.now;
@@ -713,9 +713,9 @@ impl Session {
             Some(shown) if holds => shown.tracking.state = fresh.state,
             _ => {
                 if let Some(map) = map {
-                    // Last 5 min shown over a full 5 minutes of active play here (since the
-                    // player last forgot this Visit's best, if they did) counts towards
-                    // this Visit's best, unless nothing is known of the EXP.
+                    // The Rolling Rate shown over a full 5 minutes of active play here
+                    // (since the player last forgot this Visit's best, if they did) counts
+                    // towards this Visit's best, unless nothing is known of the EXP.
                     let here = self.figures.as_ref().map(|f| f.rolling_since(self.now, f.best_from));
                     let full = here.filter(|h| h.over_ms >= ROLLING_MS && h.exp > 0);
                     let counted = full.filter(|_| !unreadable).map(|here| here.per_hour(1, 1) as u64);
