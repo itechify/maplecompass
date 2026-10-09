@@ -968,7 +968,7 @@ impl Compass {
             // Map Summary: in a town, quest turn-ins would set one.
             let certain = self.state.candidates.as_ref().is_none_or(|c| c.chosen);
             let map = self.state.map.as_ref().filter(|_| certain && ceiling.is_some());
-            self.session.tracking(ceiling, map.map(|m| m.id.as_str()))
+            self.session.tracking(ceiling, map.map(|m| m.id.as_str()), self.wall_clock)
         } else {
             ExpTracking::default()
         };

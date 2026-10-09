@@ -9,6 +9,8 @@ export type ExpBar = { exp: number; percentHundredths: number };
 export type PersonalBestLine = {
   /** The best the line names: earlier Visits' best, or on a first Visit, this one's. */
   expPerHour: number;
+  /** When that best was set (ms since the Unix epoch), if the wall clock was known. */
+  setAtUnixMs: number | null;
   /** No earlier Visit had a best here: "Your first best EXP/h here". */
   first: boolean;
   /** Last 5 min's share of the earlier best, once it is 5 minutes of play here. */
