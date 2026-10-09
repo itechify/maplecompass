@@ -11,12 +11,9 @@ export type VisitBest = {
   setAtUnixMs: number | null;
 };
 
-/** Mirror of `compass_core::Whose`: this Visit's best, or the earlier Visits'. */
-export type Whose = "thisVisit" | "earlierVisits";
-
 /** Mirror of `compass_core::PersonalBestLine`: how the Rolling Rate compares with the best
  *  on the map the player is on, by the best the line names (`compass_core::BestNamed`). */
-export type PersonalBestLine = (
+export type PersonalBestLine =
   | {
       /** No earlier Visit had a best here: "Your first best EXP/h here", this Visit's. */
       kind: "firstVisit";
@@ -31,11 +28,7 @@ export type PersonalBestLine = (
       /** This Visit's best, once it beat the earlier one: the "new best" tag, for the
        *  rest of the Visit. */
       newBest: VisitBest | null;
-    }
-) & {
-  /** Whose best the hover's Forget takes: the higher of the two the hover shows. */
-  forgets: Whose;
-};
+    };
 
 /** Mirror of `compass_core::ExpTracking`. */
 export type ExpTracking = {
@@ -59,6 +52,4 @@ export type ExpTracking = {
   bar: ExpBar | null;
   /** The Personal Best line, on a certain map with a Map Summary that has a best to name. */
   personalBest: PersonalBestLine | null;
-  /** The player forgot a Personal Best and hasn't left the map since. */
-  forgetUndoable: boolean;
 };

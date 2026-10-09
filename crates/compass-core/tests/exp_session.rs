@@ -540,7 +540,6 @@ fn the_overlay_gets_tracking_as_the_panel_renders_it() {
             "resetUndoable": false,
             "bar": { "exp": 266, "percentHundredths": 633 },
             "personalBest": null,
-            "forgetUndoable": false,
         })
     );
 
@@ -564,7 +563,6 @@ fn the_overlay_gets_tracking_as_the_panel_renders_it() {
             "resetUndoable": false,
             "bar": { "exp": 335, "percentHundredths": 798 },
             "personalBest": null,
-            "forgetUndoable": false,
         })
     );
     let died = serde_json::to_value(read(&mut compass, 75 * S, 266, 633)).unwrap();

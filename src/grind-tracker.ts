@@ -13,7 +13,6 @@ const tracking = byId("tracking");
 const unreadable = byId("tracking-unreadable");
 const switched = byId("tracking-switched");
 const resetNote = byId("tracking-reset");
-const forgottenNote = byId("tracking-forgotten");
 const waiting = byId("tracking-waiting");
 const figures = byId("tracking-figures");
 const timeToLevel = byId("time-to-level");
@@ -113,8 +112,8 @@ let bestLine: PersonalBestLine | null = null;
 
 /** The Personal Best line opened in place while the pointer is on it: the best it names
  *  and when it was set, and this Visit's best once it has beaten it; on a first Visit,
- *  this Visit's. Dated afresh each time, as days pass. Under them, Forget, labelled with
- *  the row it takes, as the core says: the higher of the two. */
+ *  this Visit's. Dated afresh each time, as days pass. Under them, Forget, which takes
+ *  the best from earlier Visits: this Visit's isn't one of them until the Visit ends. */
 function renderBestOpen() {
   const line = bestLine;
   bestOpen.hidden = !bestHovered || !line;
@@ -123,11 +122,7 @@ function renderBestOpen() {
   const [earlier, thisVisit] = line.kind === "earlierVisits" ? [line.best, line.newBest] : [null, line.best];
   showBest(bestEarlier, bestEarlierExp, bestEarlierWhen, earlier);
   showBest(bestVisit, bestVisitExp, bestVisitWhen, thisVisit);
-  const forgetsThisVisit = line.forgets === "thisVisit";
-  bestForget.textContent = forgetsThisVisit ? "Forget this Visit's best" : "Forget your best";
-  bestForget.title = forgetsThisVisit
-    ? "Forget this Visit's best: only play from now on counts towards it"
-    : "Forget your best here: your next-best Visit takes over";
+  bestForget.hidden = !earlier;
 }
 
 /** Why there is no Time to Level, in words: never a bare dash beside the label. */
@@ -151,7 +146,6 @@ function render({ shown, tracking: t }: TrackerView) {
   unreadable.hidden = t.state !== "unreadable";
   switched.hidden = !t.characterSwitched;
   resetNote.hidden = !t.resetUndoable;
-  forgottenNote.hidden = !t.forgetUndoable;
   waiting.hidden = started || t.state === "unreadable";
 
   figures.hidden = !started;

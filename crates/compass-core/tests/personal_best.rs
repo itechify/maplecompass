@@ -8,7 +8,7 @@ mod common;
 use common::player::Player;
 use common::{CONSTRUCTION_SITE_ID, FakeSource, SUNSET_SKY_ID, saved_map_page, sharing_a_title, tracking, tracking_with};
 use compass_core::{
-    BestNamed, ExpBar, ExpBarReading, PanelControl, PanelState, PersonalBestLine, TrackingState, VisitBest, Whose,
+    BestNamed, ExpBar, ExpBarReading, PanelControl, PanelState, PersonalBestLine, TrackingState, VisitBest,
 };
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -34,10 +34,10 @@ fn first_best(exp_per_hour: u64) -> Option<PersonalBestLine> {
 }
 
 /// The line on a first Visit to a map, its best set at `set_at_unix_ms` by the wall
-/// clock. Forget would take that best.
+/// clock.
 fn first_best_set(exp_per_hour: u64, set_at_unix_ms: Option<u64>) -> Option<PersonalBestLine> {
     let best = VisitBest { exp_per_hour, set_at_unix_ms };
-    Some(PersonalBestLine { named: BestNamed::FirstVisit { best }, forgets: Whose::ThisVisit })
+    Some(PersonalBestLine { named: BestNamed::FirstVisit { best } })
 }
 
 #[test]
@@ -100,11 +100,9 @@ fn a_first_visit_shows_its_best_so_far_once_there_have_been_five_minutes_of_play
 
 /// The line once earlier Visits had `best` here: "Your best EXP/h here: …", or with a
 /// share, "N% of your best EXP/h here (…)"; with this Visit's best once it has beaten
-/// it, and the "new best" tag. Forget would take the higher of the two: this Visit's
-/// once it has beaten the earlier Visits'.
+/// it, and the "new best" tag.
 fn earlier_best(best: VisitBest, share_hundredths: Option<i64>, new_best: Option<VisitBest>) -> Option<PersonalBestLine> {
-    let forgets = if new_best.is_some() { Whose::ThisVisit } else { Whose::EarlierVisits };
-    Some(PersonalBestLine { named: BestNamed::EarlierVisits { best, share_hundredths, new_best }, forgets })
+    Some(PersonalBestLine { named: BestNamed::EarlierVisits { best, share_hundredths, new_best } })
 }
 
 /// As [`earlier_best`], with no wall clock to date the bests.
@@ -433,8 +431,8 @@ fn with_the_bar_unreadable_or_paused_the_line_holds_like_the_other_figures() {
 }
 
 #[test]
-fn the_overlay_gets_the_line_as_the_grind_tracker_renders_it_with_whose_best_forget_takes() {
-    // A first Visit's best so far: Forget would take it.
+fn the_overlay_gets_the_line_as_the_grind_tracker_renders_it() {
+    // A first Visit's best so far.
     let mut first = Player::clocked(tracking());
     first.arrive(SUNSET);
     let five = serde_json::to_value(first.hunt(5 * MIN, 10)).unwrap();
@@ -442,11 +440,10 @@ fn the_overlay_gets_the_line_as_the_grind_tracker_renders_it_with_whose_best_for
         five["expTracking"]["personalBest"],
         serde_json::json!({
             "kind": "firstVisit", "best": { "expPerHour": 3600, "setAtUnixMs": first.wall_clock() },
-            "forgets": "thisVisit",
         })
     );
 
-    // Earlier Visits' 7,200 beaten: Forget would take this Visit's 10,800...
+    // Earlier Visits' 7,200 beaten by this Visit's 10,800.
     let (mut player, _, set) = back_after_a_best_of_7200(Player::clocked(tracking()));
     let beaten = serde_json::to_value(player.hunt(5 * MIN, 30)).unwrap();
     let beaten_at = player.wall_clock();
@@ -454,21 +451,9 @@ fn the_overlay_gets_the_line_as_the_grind_tracker_renders_it_with_whose_best_for
         beaten["expTracking"]["personalBest"],
         serde_json::json!({
             "kind": "earlierVisits", "best": { "expPerHour": 7200, "setAtUnixMs": set }, "shareHundredths": 15_000,
-            "newBest": { "expPerHour": 10_800, "setAtUnixMs": beaten_at }, "forgets": "thisVisit",
+            "newBest": { "expPerHour": 10_800, "setAtUnixMs": beaten_at },
         })
     );
-    assert_eq!(beaten["expTracking"]["forgetUndoable"], false);
-
-    // ...and with it forgotten, the 7,200, the Forget undoable.
-    let forgot = serde_json::to_value(player.press(PanelControl::ForgetBest)).unwrap();
-    assert_eq!(
-        forgot["expTracking"]["personalBest"],
-        serde_json::json!({
-            "kind": "earlierVisits", "best": { "expPerHour": 7200, "setAtUnixMs": set }, "shareHundredths": null,
-            "newBest": null, "forgets": "earlierVisits",
-        })
-    );
-    assert_eq!(forgot["expTracking"]["forgetUndoable"], true);
 }
 
 /// Sunset Sky's best Visits: 10,800 EXP/h on the first, 7,200 on the second; then back on
@@ -487,6 +472,42 @@ fn back_on_sunset_sky_after_bests_of_10800_and_7200() -> (Player, PanelState) {
     (player, back)
 }
 
+/// The EXP/h of each Visit's best `map`'s saved bests hold, in their order.
+fn saved_rates(player: &Player, map: &str) -> Vec<u64> {
+    let bests = player.compass.bests();
+    let map = bests.maps.iter().find(|m| m.id == map);
+    map.map_or_else(Vec::new, |m| m.visits.iter().map(|v| v.exp_per_hour).collect())
+}
+
+#[test]
+fn removing_a_best_takes_the_maps_best_from_history_never_this_visits() {
+    let (mut player, _) = back_on_sunset_sky_after_a_best_of_7200();
+
+    // 10,800 EXP/h for 5 minutes beats the 7,200: removing takes the 7,200 all the same,
+    // and this Visit's 10,800 is left to join the history when the Visit ends.
+    player.hunt(5 * MIN, 30);
+    assert_eq!(saved_rates(&player, SUNSET_SKY_ID), [10_800, 7200]);
+    player.press(PanelControl::ForgetBest);
+    assert_eq!(saved_rates(&player, SUNSET_SKY_ID), [10_800]);
+}
+
+#[test]
+fn a_first_visits_best_cannot_be_removed_until_it_has_joined_the_history() {
+    let mut player = Player::new(tracking());
+    player.arrive(SUNSET);
+    player.hunt(6 * MIN, 30);
+
+    // No history here: removing takes nothing.
+    player.press(PanelControl::ForgetBest);
+    assert_eq!(saved_rates(&player, SUNSET_SKY_ID), [10_800]);
+
+    // Once the Visit has ended, it can go.
+    player.arrive(CONSTRUCTION_SITE);
+    player.arrive(SUNSET);
+    player.press(PanelControl::ForgetBest);
+    assert_eq!(saved_rates(&player, SUNSET_SKY_ID), [] as [u64; 0]);
+}
+
 #[test]
 fn forgetting_the_best_this_visit_has_not_beaten_leaves_the_next_best_visit_to_compare_with() {
     let (mut player, back) = back_on_sunset_sky_after_bests_of_10800_and_7200();
@@ -499,40 +520,6 @@ fn forgetting_the_best_this_visit_has_not_beaten_leaves_the_next_best_visit_to_c
     // Forget takes the 10,800: the 7,200 is the best now, and 3,600 is 50% of it.
     let forgot = player.press(PanelControl::ForgetBest);
     assert_eq!(forgot.exp_tracking.personal_best, best(7200, Some(5000), None));
-}
-
-#[test]
-fn forgetting_this_visits_best_once_it_beat_the_best_counts_only_windows_that_start_after() {
-    let (mut player, _) = back_on_sunset_sky_after_a_best_of_7200();
-
-    // A bad jump: 36,000 EXP/h for 5 minutes, 500% of 7,200, a new best.
-    let jump = player.hunt(5 * MIN, 100);
-    assert_eq!(jump.exp_tracking.personal_best, best(7200, Some(50_000), Some(36_000)));
-
-    // Forget takes this Visit's 36,000: the 7,200 is left, and the window starts over.
-    let forgot = player.press(PanelControl::ForgetBest);
-    assert_eq!(forgot.exp_tracking.personal_best, best(7200, None, None));
-
-    // 3,600 EXP/h for 2 minutes: the Rolling Rate still has 3 minutes of the jump, 23,040
-    // EXP/h, and it isn't recorded again.
-    let after = player.hunt(2 * MIN, 10);
-    assert_eq!(rolling(&after), Some(23_040));
-    assert_eq!(after.exp_tracking.personal_best, best(7200, None, None));
-
-    // 5 minutes since the Forget: the Rolling Rate's 3,600 EXP/h is 50% of 7,200.
-    let five = player.hunt(3 * MIN, 10);
-    assert_eq!(rolling(&five), Some(3600));
-    assert_eq!(five.exp_tracking.personal_best, best(7200, Some(5000), None));
-
-    // 10,800 EXP/h for 5 minutes beats it: a new best since the Forget.
-    let beaten = player.hunt(5 * MIN, 30);
-    assert_eq!(beaten.exp_tracking.personal_best, best(7200, Some(15_000), Some(10_800)));
-
-    // That is this Visit's best when it ends: the 36,000 never joins Sunset Sky's.
-    player.arrive(CONSTRUCTION_SITE);
-    player.hunt(MIN, 30);
-    let next = player.arrive(SUNSET);
-    assert_eq!(next.exp_tracking.personal_best, best(10_800, None, None));
 }
 
 #[test]
@@ -549,131 +536,4 @@ fn forgetting_a_maps_only_best_from_an_earlier_visit_reads_as_a_first_visit() {
     // ...and from 5 minutes, its best so far.
     let five = player.hunt(MIN, 10);
     assert_eq!(five.exp_tracking.personal_best, first_best(3600));
-}
-
-#[test]
-fn forgetting_a_first_visits_best_leaves_the_map_none_until_a_window_after_the_forget() {
-    let mut player = Player::new(tracking());
-    player.arrive(SUNSET);
-    assert_eq!(player.hunt(6 * MIN, 30).exp_tracking.personal_best, first_best(10_800));
-
-    // Forget takes the 10,800, the map's only best.
-    let forgot = player.press(PanelControl::ForgetBest);
-    assert_eq!(forgot.exp_tracking.personal_best, None);
-
-    // 3,600 EXP/h: nothing until 5 minutes since the Forget, then this Visit's best anew.
-    assert_eq!(player.hunt(4 * MIN + 30 * S, 10).exp_tracking.personal_best, None);
-    assert_eq!(player.hunt(30 * S, 10).exp_tracking.personal_best, first_best(3600));
-}
-
-#[test]
-fn undo_brings_back_this_visits_forgotten_best_as_it_was() {
-    let (mut player, _, _) = back_after_a_best_of_7200(Player::clocked(tracking()));
-    let beaten = player.hunt(5 * MIN, 30);
-    assert!(!beaten.exp_tracking.forget_undoable);
-
-    // Forget takes this Visit's 10,800, and says so with an Undo.
-    let forgot = player.press(PanelControl::ForgetBest);
-    assert!(forgot.exp_tracking.forget_undoable);
-    assert_ne!(forgot.exp_tracking.personal_best, beaten.exp_tracking.personal_best);
-
-    // Undo: the line is as it was, share and dates and all, and the note goes.
-    let undone = player.press(PanelControl::UndoForget);
-    assert!(!undone.exp_tracking.forget_undoable);
-    assert_eq!(undone.exp_tracking.personal_best, beaten.exp_tracking.personal_best);
-}
-
-#[test]
-fn undo_brings_back_an_earlier_visits_forgotten_best_as_the_one_compared_with() {
-    let (mut player, _) = back_on_sunset_sky_after_bests_of_10800_and_7200();
-    assert_eq!(player.hunt(5 * MIN, 10).exp_tracking.personal_best, best(10_800, Some(3333), None));
-
-    let forgot = player.press(PanelControl::ForgetBest);
-    assert!(forgot.exp_tracking.forget_undoable);
-    assert_eq!(forgot.exp_tracking.personal_best, best(7200, Some(5000), None));
-
-    let undone = player.press(PanelControl::UndoForget);
-    assert!(!undone.exp_tracking.forget_undoable);
-    assert_eq!(undone.exp_tracking.personal_best, best(10_800, Some(3333), None));
-}
-
-#[test]
-fn undo_keeps_a_higher_best_set_since_the_forget() {
-    let (mut player, _) = back_on_sunset_sky_after_a_best_of_7200();
-    player.hunt(5 * MIN, 30);
-    player.press(PanelControl::ForgetBest);
-
-    // 14,400 EXP/h for 5 minutes since the Forget: a new best above the 10,800 forgotten.
-    let since = player.hunt(5 * MIN, 40);
-    assert_eq!(since.exp_tracking.personal_best, best(7200, Some(20_000), Some(14_400)));
-
-    // Undo brings the 10,800 back under it: the higher stays this Visit's best.
-    let undone = player.press(PanelControl::UndoForget);
-    assert_eq!(undone.exp_tracking.personal_best, best(7200, Some(20_000), Some(14_400)));
-}
-
-#[test]
-fn undo_counts_windows_from_where_they_counted_before_the_forget_not_from_arriving() {
-    let mut player = Player::new(tracking());
-    player.arrive(SUNSET);
-
-    // A bad jump: 36,000 EXP/h for 5 minutes, forgotten.
-    assert_eq!(player.hunt(5 * MIN, 100).exp_tracking.personal_best, first_best(36_000));
-    assert_eq!(player.press(PanelControl::ForgetBest).exp_tracking.personal_best, None);
-
-    // 3,600 EXP/h for 3 and a half minutes, then a minute and a half with no EXP, a gap
-    // in play: 5 minutes since the Forget, at 2,520 EXP/h, a best.
-    player.hunt(3 * MIN + 30 * S, 10);
-    let gap = player.hunt(90 * S, 0);
-    assert_eq!(gap.exp_tracking.state, TrackingState::Active);
-    assert_eq!(gap.exp_tracking.personal_best, first_best(2520));
-
-    // That one forgotten too, and brought back.
-    assert_eq!(player.press(PanelControl::ForgetBest).exp_tracking.personal_best, None);
-    assert_eq!(player.press(PanelControl::UndoForget).exp_tracking.personal_best, first_best(2520));
-
-    // The gap becomes a break, which takes its time back: the Rolling Rate's window
-    // reaches back into the jump again. The jump started before the first Forget, which
-    // still stands, and isn't recorded.
-    let paused = player.hunt(MIN, 0);
-    assert_eq!(paused.exp_tracking.state, TrackingState::Paused);
-    assert_eq!(rolling(&paused), Some(13_320));
-    assert_eq!(paused.exp_tracking.personal_best, first_best(2520));
-
-    // The Visit's best handed out to save is the 2,520.
-    let saved = player.compass.bests();
-    let saved: Vec<_> = saved.maps.iter().map(|m| (m.id.as_str(), m.visits[0].exp_per_hour)).collect();
-    assert_eq!(saved, [(SUNSET_SKY_ID, 2520)]);
-}
-
-#[test]
-fn leaving_the_map_ends_the_undo_and_the_forget_stands() {
-    let (mut player, _) = back_on_sunset_sky_after_bests_of_10800_and_7200();
-    player.hunt(5 * MIN, 10);
-    assert!(player.press(PanelControl::ForgetBest).exp_tracking.forget_undoable);
-
-    // Off to the Construction Site: the note goes, and Undo does nothing.
-    let away = player.arrive(CONSTRUCTION_SITE);
-    assert!(!away.exp_tracking.forget_undoable);
-    player.hunt(MIN, 30);
-    player.press(PanelControl::UndoForget);
-
-    // Back on Sunset Sky, the 10,800 is gone for good: this Visit's 3,600 joined the 7,200.
-    let back = player.arrive(SUNSET);
-    assert!(!back.exp_tracking.forget_undoable);
-    assert_eq!(back.exp_tracking.personal_best, best(7200, None, None));
-}
-
-#[test]
-fn a_forgotten_best_is_not_recorded_again_from_a_session_whose_reset_is_undone() {
-    let (mut player, _) = back_on_sunset_sky_after_a_best_of_7200();
-    player.hunt(5 * MIN, 100);
-
-    // The player resets the Session, forgets this Visit's 36,000, then undoes the reset:
-    // the Rolling Rate is the jump again, but it started before the Forget.
-    player.press(PanelControl::ResetSession);
-    player.press(PanelControl::ForgetBest);
-    let undone = player.press(PanelControl::UndoReset);
-    assert_eq!(rolling(&undone), Some(36_000));
-    assert_eq!(undone.exp_tracking.personal_best, best(7200, None, None));
 }

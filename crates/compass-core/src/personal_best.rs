@@ -11,13 +11,12 @@
 //!   compared with the earlier Visits' best, which can't change until the Visit ends:
 //!   this Visit's best joins them then. No rate is capped or rejected.
 //! - A Visit's best is for the map it was last certain on with a rate to count, and only
-//!   that map's line and Forget see it: on any other they see only the earlier Visits'.
-//!   The player may choose among Candidates, and the hotkey goes past the others on the
-//!   way. One shown with nothing to count yet (just after a reset, say) doesn't take the
-//!   Visit's best, even if it had one of its own earlier in the Visit, so closing
-//!   MapleCompass then keeps it for the map it came from. A Candidate's own best from
-//!   earlier in the Visit counts again once it has a rate to count again, unless the
-//!   player has forgotten the Visit's best since: that Forget took it too.
+//!   that map's line sees it: on any other it sees only the earlier Visits'. The player
+//!   may choose among Candidates, and the hotkey goes past the others on the way. One
+//!   shown with nothing to count yet (just after a reset, say) doesn't take the Visit's
+//!   best, even if it had one of its own earlier in the Visit, so closing MapleCompass
+//!   then keeps it for the map it came from. A Candidate's own best from earlier in the
+//!   Visit counts again once it has a rate to count again.
 //! - A best is dated by the wall clock at the refresh that first showed it, for the line's
 //!   hover to say when it was set. The UI words the date, in the player's local time.
 //! - Bests are per map (MeowDB map ID), for every character: nothing about the Session
@@ -27,13 +26,10 @@
 //!   as [`SavedBests`], with a revision so it saves them only when they change, and takes
 //!   them back at startup. What it hands out includes the Visit under way's best, as if
 //!   it had ended: closing MapleCompass ends it.
-//! - The player can forget a best that came from a bug: the higher of the two the line's
-//!   hover shows, this Visit's once it has beaten the earlier Visits', theirs otherwise.
-//!   The map's next-best Visit's takes over. Forgetting this Visit's forgets every
-//!   Candidate's best from the Visit with it, since all are from windows that started
-//!   before the Forget, and after it only windows that start after the Forget count: the
-//!   Session sees to that. Undo brings back what the Forget took until the Visit ends,
-//!   keeping any higher best set since.
+//! - The player can remove a best that came from a bug from the history: the map's
+//!   Personal Best from earlier Visits. The map's next-best Visit's takes over. There is
+//!   no undo. This Visit's best can't be removed: it joins the history when the Visit
+//!   ends, and can be removed then.
 
 use serde::{Deserialize, Serialize};
 
@@ -89,8 +85,6 @@ pub struct PersonalBestLine {
     /// The best the line names, and how the Rolling Rate compares with it.
     #[serde(flatten)]
     pub named: BestNamed,
-    /// Whose best the hover's Forget takes: the higher of the two the hover shows.
-    pub forgets: Whose,
 }
 
 /// The best the Personal Best line names: the earlier Visits', or on a first Visit, this
@@ -115,43 +109,22 @@ pub enum BestNamed {
     },
 }
 
-/// Whose best on a map: this Visit's, or the earlier Visits'.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Whose {
-    ThisVisit,
-    EarlierVisits,
-}
-
 /// Every map's Visit bests, and the Visit under way's.
 #[derive(Debug, Default)]
 pub(crate) struct Bests {
     /// The best of each Visit that has ended.
     earlier: SavedBests,
-    /// The Visit under way's best on each map it was certain on with a rate to count since
-    /// the player last forgot this Visit's best (that Forget takes them all): one, unless
-    /// the player chose among Candidates. Only `on`'s is the Visit's best.
+    /// The Visit under way's best on each map it was certain on with a rate to count: one,
+    /// unless the player chose among Candidates. Only `on`'s is the Visit's best.
     visit: Vec<(String, VisitBest)>,
     /// The map the Visit under way was last certain on with a rate to count: the one its
-    /// best is for, and the only one whose line, Forget and [`Bests::saved`] see a best
-    /// from this Visit. The hotkey goes past the other Candidates on the way to the one
+    /// best is for, and the only one whose line and [`Bests::saved`] see a best from this
+    /// Visit. The hotkey goes past the other Candidates on the way to the one
     /// the player chooses; one it shows with nothing to count doesn't take the best, even
     /// if it had one of its own earlier in the Visit.
     on: Option<String>,
     /// Changes whenever what [`Bests::saved`] hands out does.
     revision: u64,
-    /// What the player last forgot, until the Visit ends: Undo brings it back.
-    forgotten: Option<Forgotten>,
-}
-
-/// What a Forget took, to bring back if the player undoes it.
-#[derive(Debug)]
-enum Forgotten {
-    /// This Visit's best on every map it had one: all from windows that started before
-    /// the Forget.
-    ThisVisit(Vec<(String, VisitBest)>),
-    /// The earlier Visits' best on `map`.
-    EarlierVisits { map: String, best: VisitBest },
 }
 
 impl Bests {
@@ -179,9 +152,8 @@ impl Bests {
         }
     }
 
-    /// The Visit under way ended: its best joins its map's, and a Forget stands.
+    /// The Visit under way ended: its best joins its map's.
     pub fn end_visit(&mut self) {
-        self.forgotten = None;
         let on = self.on.take();
         let Some((map, best)) = self.visit.drain(..).find(|(id, _)| Some(id) == on.as_ref()) else { return };
         join(&mut self.earlier, map, best);
@@ -214,92 +186,35 @@ impl Bests {
         self.earlier.maps.iter().find(|m| m.id == map).and_then(|m| m.visits.first()).copied()
     }
 
-    /// Whose is the higher of `map`'s Personal Best from earlier Visits and this Visit's
-    /// best there: this Visit's once it has beaten the other, or with no other.
-    fn higher(&self, map: &str) -> Option<Whose> {
-        match (self.this_visit_on(map), self.earlier_on(map)) {
-            (Some(this), Some(earlier)) if this.exp_per_hour > earlier.exp_per_hour => Some(Whose::ThisVisit),
-            (_, Some(_)) => Some(Whose::EarlierVisits),
-            (Some(_), None) => Some(Whose::ThisVisit),
-            (None, None) => None,
-        }
-    }
-
-    /// Forget the higher of `map`'s Personal Best and this Visit's best there, as the line
-    /// says. The next-best Visit's takes over. Forgetting this Visit's forgets every
-    /// Candidate's best from the Visit with it: all are from windows that started before
-    /// the Forget. It can be undone until the Visit ends, or the next Forget. Whose it
-    /// was, if there was one.
-    pub fn forget(&mut self, map: &str) -> Option<Whose> {
-        self.changing(|bests| bests.forget_higher(map))
-    }
-
-    /// As [`Bests::forget`], leaving the revision to it.
-    fn forget_higher(&mut self, map: &str) -> Option<Whose> {
-        let whose = self.higher(map)?;
-        self.forgotten = Some(match whose {
-            Whose::ThisVisit => Forgotten::ThisVisit(std::mem::take(&mut self.visit)),
-            Whose::EarlierVisits => {
-                let at = self.earlier.maps.iter().position(|m| m.id == map)?;
-                let best = self.earlier.maps[at].visits.remove(0);
-                if self.earlier.maps[at].visits.is_empty() {
-                    self.earlier.maps.remove(at);
-                }
-                Forgotten::EarlierVisits { map: map.to_string(), best }
+    /// Remove `map`'s Personal Best from its history: the earlier Visits' best. The map's
+    /// next-best Visit's takes over. This Visit's best isn't in the history until the
+    /// Visit ends.
+    pub fn remove(&mut self, map: &str) {
+        self.changing(|bests| {
+            let maps = &mut bests.earlier.maps;
+            let Some(at) = maps.iter().position(|m| m.id == map) else { return };
+            if !maps[at].visits.is_empty() {
+                maps[at].visits.remove(0);
+            }
+            if maps[at].visits.is_empty() {
+                maps.remove(at);
             }
         });
-        Some(whose)
-    }
-
-    /// Bring back what the player last forgot, unless the Visit has ended since: an
-    /// earlier Visit's best in front again, or this Visit's on every map it had one, each
-    /// unless a higher one was set there since. Whose it was, if there was one.
-    pub fn undo_forget(&mut self) -> Option<Whose> {
-        self.changing(Self::bring_back)
-    }
-
-    /// As [`Bests::undo_forget`], leaving the revision to it.
-    fn bring_back(&mut self) -> Option<Whose> {
-        match self.forgotten.take()? {
-            Forgotten::ThisVisit(forgotten) => {
-                for (map, best) in forgotten {
-                    match self.visit.iter_mut().find(|(id, _)| *id == map) {
-                        Some((_, since)) if since.exp_per_hour > best.exp_per_hour => {}
-                        Some((_, since)) => *since = best,
-                        None => self.visit.push((map, best)),
-                    }
-                }
-                Some(Whose::ThisVisit)
-            }
-            Forgotten::EarlierVisits { map, best } => {
-                let visits = visits_of(&mut self.earlier, map);
-                // It was the highest: in front of any equal to it too, as before.
-                let at = visits.iter().position(|v| v.exp_per_hour <= best.exp_per_hour).unwrap_or(visits.len());
-                visits.insert(at, best);
-                Some(Whose::EarlierVisits)
-            }
-        }
-    }
-
-    /// Whether there is a Forget to undo.
-    pub fn forget_undoable(&self) -> bool {
-        self.forgotten.is_some()
     }
 
     /// The line for `map`, where `share` gives the Rolling Rate's share of a best, if it
     /// is over a full 5 minutes there; `None` while there is nothing to compare with.
     pub fn line(&self, map: &str, share: impl FnOnce(u64) -> Option<i64>) -> Option<PersonalBestLine> {
-        let forgets = self.higher(map)?;
         let this = self.this_visit_on(map);
         let named = match self.earlier_on(map) {
             Some(best) => BestNamed::EarlierVisits {
                 best,
                 share_hundredths: share(best.exp_per_hour),
-                new_best: this.filter(|_| forgets == Whose::ThisVisit),
+                new_best: this.filter(|this| this.exp_per_hour > best.exp_per_hour),
             },
             None => BestNamed::FirstVisit { best: this? },
         };
-        Some(PersonalBestLine { named, forgets })
+        Some(PersonalBestLine { named })
     }
 
     /// Every map's Visit bests, for the shell to save: the Visit under way's as if it
@@ -326,14 +241,10 @@ impl Bests {
         self.changing(|bests| bests.earlier = saved);
     }
 
-    /// Changes whenever what [`Bests::saved`] hands out does: an earlier
-    /// Visit's best forgotten or brought back; the Visit under way's best set, raised,
-    /// moved to a Candidate chosen that counts a rate, forgotten, or brought back above
-    /// any set since, where it makes its map's [`VISITS_KEPT`]; bests restored. A Visit
-    /// ending changes nothing handed out, nor does bringing back a Candidate's best from
-    /// this Visit while the Visit's best is another map's. One press can move it twice and
-    /// leave the bests as they were (an Undo, then the refresh it asks for), so the shell
-    /// may now and then write the same bests again; it never misses a change.
+    /// Changes whenever what [`Bests::saved`] hands out does: a best removed from the
+    /// history; the Visit under way's best set, raised, or moved to a Candidate chosen that
+    /// counts a rate, where it makes its map's [`VISITS_KEPT`]; bests restored. A Visit
+    /// ending changes nothing handed out.
     pub fn revision(&self) -> u64 {
         self.revision
     }

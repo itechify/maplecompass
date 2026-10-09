@@ -49,7 +49,7 @@ pub use panel::{
     PlacementMode, ScreenPoint,
     ScreenRect, Section, Size,
 };
-pub use personal_best::{BESTS_VERSION, BestNamed, MapBests, PersonalBestLine, SavedBests, VisitBest, Whose};
+pub use personal_best::{BESTS_VERSION, BestNamed, MapBests, PersonalBestLine, SavedBests, VisitBest};
 pub use saved_world::{SavedMap, SavedMapData, SavedWorld, WORLD_VERSION};
 pub use search::{DensityTier, HuntingTarget, MobChoice, RouteStop, SearchResult, SearchState, SearchView, Trip};
 pub use session::{Deaths, ExpRate, ExpTracking, TrackingState};
@@ -278,11 +278,8 @@ pub enum PanelControl {
     /// The Grind Tracker window's Undo, after a reset: bring the old Session back.
     UndoReset,
     /// The Forget in the Grind Tracker's Personal Best line, opened under the pointer:
-    /// forget the higher of the map's Personal Best and this Visit's best there. This
-    /// Visit's goes on every Candidate at once, since all of them come from before it.
+    /// remove the map's Personal Best from its history, the earlier Visits' best.
     ForgetBest,
-    /// The Grind Tracker window's Undo, after a Forget: bring back what it forgot.
-    UndoForget,
     /// The Grind Tracker window's ×: close it.
     CloseGrindTracker,
 }
@@ -580,10 +577,9 @@ impl Compass {
             Action::UndoReset => self.session.undo_reset(),
             Action::ForgetBest => {
                 if let Some(map) = bests_map(&self.state) {
-                    self.session.forget_best(map);
+                    self.session.remove_best(map);
                 }
             }
-            Action::UndoForget => self.session.undo_forget_best(),
             Action::ToggleGrindTracker => self.grind_tracker.open = !self.grind_tracker.open,
             Action::CloseGrindTracker => self.grind_tracker.open = false,
             Action::GrindTrackerMoved { x, y } => {
@@ -701,7 +697,6 @@ impl Compass {
             PanelControl::ResetSession => Action::ResetSession,
             PanelControl::UndoReset => Action::UndoReset,
             PanelControl::ForgetBest => Action::ForgetBest,
-            PanelControl::UndoForget => Action::UndoForget,
             PanelControl::CloseGrindTracker => Action::CloseGrindTracker,
             // An open search view stays as it is; the shell brings the overlay in front on
             // opening it.

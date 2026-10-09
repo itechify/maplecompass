@@ -36,18 +36,16 @@
 //!   jumping with every kill. Events show at once: the state changing (the Session
 //!   starting, warming up, pausing, resuming, or the bar going unread), the first figures
 //!   there are, a death, a level-up, a reset or its undoing, a character switch, a new
-//!   Visit, a map with another ceiling or Personal Best, and a best forgotten or brought
-//!   back. The bar's last reading shows as it comes.
+//!   Visit, a map with another ceiling or Personal Best, and a best removed from the
+//!   history. The bar's last reading shows as it comes.
 //! - The Rolling Rate as shown afresh, over a full 5 minutes of the Visit's play, counts
 //!   towards the Visit's Personal Best on the map (see [`crate::personal_best`]), unless
 //!   the bar can't be read. The core says which map that is, if any: one it is certain
 //!   of, with a Map Summary. Maps that share a title but would show the same count as the
-//!   first of them, the one the panel shows. After the player forgets the Visit's best,
-//!   only play since counts, and the line's share with it, until they undo the Forget.
-//!   Bests outlast Sessions, as Visits do.
+//!   first of them, the one the panel shows. Bests outlast Sessions, as Visits do.
 
 use crate::ExpBar;
-use crate::personal_best::{Bests, PersonalBestLine, SavedBests, Whose};
+use crate::personal_best::{Bests, PersonalBestLine, SavedBests};
 use serde::Serialize;
 
 /// What EXP tracking shows: everything the panel's tracking section and the collapsed
@@ -101,9 +99,6 @@ pub struct ExpTracking {
     /// How the Rolling Rate compares with the Personal Best on the shown map, while it is
     /// certain and has a Map Summary; `None` there until there is a best to name.
     pub personal_best: Option<PersonalBestLine>,
-    /// The player forgot a Personal Best and hasn't left the map since: the Forget can be
-    /// undone, bringing the best back.
-    pub forget_undoable: bool,
 }
 
 /// The deaths in a Session: drops in EXP within the level.
@@ -367,17 +362,9 @@ struct Figures {
     /// The Session has had [`WARM_UP_MS`] of active time at some point. A break later
     /// takes active time back, but not this.
     warmed_up: bool,
-    /// Active time when the Visit under way started: the share of the map's ceiling
-    /// counts only the play since.
+    /// Active time when the Visit under way started: the share of the map's ceiling, and
+    /// the Visit's Personal Best, count only the play since.
     visit_from: u64,
-    /// Active time from which the Rolling Rate counts towards the Visit's Personal Best,
-    /// and is measured against the best: when the Visit started, or when the player last
-    /// forgot the Visit's best since, of the Forgets that stand. An undone Forget doesn't:
-    /// undoing the latest puts back an earlier one's.
-    best_from: u64,
-    /// What `best_from` was before the player last forgot the Visit's best: undoing that
-    /// Forget puts it back, so a best forgotten before it stays out.
-    best_from_before_forget: u64,
 }
 
 impl Figures {
@@ -391,8 +378,6 @@ impl Figures {
             deaths: Deaths::default(),
             warmed_up: false,
             visit_from: 0,
-            best_from: 0,
-            best_from_before_forget: 0,
         }
     }
 
@@ -596,7 +581,6 @@ impl Session {
             // Reset on another map: the EXP hasn't changed since, so the time from then
             // to arriving here counts as it would have.
             figures.visit_from = figures.active(self.visit.at);
-            figures.best_from = figures.visit_from;
         }
         self.figures = Some(figures);
         self.largest_gain_hundredths = undo.largest_gain_hundredths;
@@ -606,39 +590,11 @@ impl Session {
         self.shown = None;
     }
 
-    /// The player forgot the higher of `map`'s Personal Best and this Visit's best there:
-    /// the line shows at once what is left. After forgetting this Visit's, only windows
-    /// that start from now count, here and in the Session a reset set aside: the one
-    /// forgotten may still be in the Rolling Rate's window.
-    pub fn forget_best(&mut self, map: &str) {
-        if self.bests.forget(map) == Some(Whose::ThisVisit) {
-            let now = self.now;
-            self.count_bests_from(|figures| {
-                figures.best_from_before_forget = figures.best_from;
-                figures.best_from = figures.active(now);
-            });
-        }
+    /// The player removed `map`'s Personal Best from its history: what is shown is
+    /// measured afresh against the next best, at once.
+    pub fn remove_best(&mut self, map: &str) {
+        self.bests.remove(map);
         self.shown = None;
-    }
-
-    /// Bring back what the player last forgot, if they haven't left the map since: the
-    /// earlier Visits' best, or this Visit's best on every Candidate that had one, as
-    /// though they never forgot it, unless a higher best was set since. Windows count from
-    /// where they did before that Forget, so a best forgotten before it stays out.
-    pub fn undo_forget_best(&mut self) {
-        if self.bests.undo_forget() == Some(Whose::ThisVisit) {
-            self.count_bests_from(|figures| figures.best_from = figures.best_from_before_forget);
-        }
-        self.shown = None;
-    }
-
-    /// Move where the Rolling Rate counts towards the Visit's best from, with `change`, in
-    /// the Session's figures and in those a reset set aside.
-    fn count_bests_from(&mut self, change: impl Fn(&mut Figures)) {
-        let set_aside = self.undo.as_mut().map(|undo| &mut undo.figures);
-        for figures in [self.figures.as_mut(), set_aside].into_iter().flatten() {
-            change(figures);
-        }
     }
 
     /// The panel confirmed another map: a new Visit starts, as of the latest time seen.
@@ -649,7 +605,6 @@ impl Session {
         self.bests.end_visit();
         if let Some(figures) = &mut self.figures {
             figures.visit_from = figures.active(now);
-            figures.best_from = figures.visit_from;
         }
     }
 
@@ -732,9 +687,8 @@ impl Session {
             _ => {
                 if let Some(map) = map {
                     // The Rolling Rate shown over a full 5 minutes of active play here
-                    // (since the player last forgot this Visit's best, if they did) counts
-                    // towards this Visit's best, unless nothing is known of the EXP.
-                    let here = self.figures.as_ref().map(|f| f.rolling_since(self.now, f.best_from));
+                    // counts towards this Visit's best, unless nothing is known of the EXP.
+                    let here = self.figures.as_ref().map(|f| f.rolling_since(self.now, f.visit_from));
                     let full = here.filter(|h| h.over_ms >= ROLLING_MS && h.exp > 0);
                     let counted = full.filter(|_| !unreadable).map(|here| here.per_hour(1, 1) as u64);
                     self.bests.on_shown(map, counted, now_unix_ms);
@@ -745,7 +699,7 @@ impl Session {
             }
         }
         let held = self.shown.as_ref().map(|shown| shown.tracking.clone()).unwrap_or_default();
-        ExpTracking { bar: self.last, forget_undoable: self.bests.forget_undoable(), ..held }
+        ExpTracking { bar: self.last, ..held }
     }
 
     /// The figures as they stand now.
@@ -800,7 +754,6 @@ impl Session {
             reset_undoable: false,
             bar: None,
             personal_best: None,
-            forget_undoable: false,
         }
     }
 }
