@@ -1031,8 +1031,11 @@ fn searched<'a>(crawl: &'a Option<Crawl>, state: &'a PanelState, settings: &Sett
 }
 
 /// The shown map, by MeowDB ID, if Personal Bests are kept there: only where the map is
-/// certain (one map has the title, the map the player came from settled it, or the player
-/// chose it), and has a Map Summary: in a town, quest turn-ins would set one.
+/// certain, and has a Map Summary (in a town, quest turn-ins would set one). Certain is
+/// no Candidates waiting for a choice: one map has the title, the map the player came
+/// from settled it, or the player chose it. Maps that share a title but would show the
+/// same are certain too, as they show the same: the panel always shows the first of
+/// them, and their bests are kept under its ID.
 fn bests_map(state: &PanelState) -> Option<&str> {
     let certain = state.candidates.as_ref().is_none_or(|c| c.chosen);
     let summary = state.data.solo_exp_ceiling().is_some();
