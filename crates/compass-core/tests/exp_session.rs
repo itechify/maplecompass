@@ -9,37 +9,21 @@
 
 mod common;
 
-use common::{FakeSource, arrive, black_frame, index_with_title, saved_page};
+use common::{
+    CONSTRUCTION_SITE_ID, FakeSource, SUNSET_SKY_ID, arrive, black_frame, saved_map_page, sharing_a_title, tracking,
+    tracking_with,
+};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::Poll;
 use compass_core::{
-    Action, Compass, Deaths, ExpBar, ExpBarReading, ExpBarRegion, ExpRate, ExpTracking, GameWindow, MapData, MapDataStatus,
-    PanelControl, PanelState, Rect, ScreenRect, Settings, Size, SourceError, TitleRegion, TrackingState, meowdb,
+    Action, Compass, Deaths, ExpBar, ExpBarReading, ExpRate, ExpTracking, GameWindow, MapDataStatus, PanelControl,
+    PanelState, ScreenRect, TrackingState,
 };
 
 const S: u64 = 1000;
 const MIN: u64 = 60 * S;
-
-/// A core with EXP tracking on: both regions kept, on a 1920x1200 game window.
-fn tracking() -> Compass {
-    tracking_with(FakeSource::meowdb())
-}
-
-/// As [`tracking`], with maps and their pages from `source`.
-fn tracking_with(source: FakeSource) -> Compass {
-    let client = Size { width: 1920, height: 1200 };
-    let mut compass = Compass::new(source);
-    compass.restore(Settings {
-        title_region: Some(TitleRegion { marked: Rect { x: 70, y: 40, width: 130, height: 48 }, client }),
-        exp_bar_region: Some(ExpBarRegion { marked: Rect { x: 1005, y: 1144, width: 240, height: 32 }, client }),
-        ..Settings::default()
-    });
-    let screen = ScreenRect { x: 0, y: 0, width: 1920, height: 1200 };
-    compass.on_game_window(Some(GameWindow { client: screen, frame: screen, screens: vec![screen] }));
-    compass
-}
 
 /// The EXP bar read as `exp [percent_hundredths / 100 %]` at `at_ms`.
 fn read(compass: &mut Compass, at_ms: u64, exp: u64, percent_hundredths: u32) -> PanelState {
@@ -635,9 +619,6 @@ fn the_rate_on_a_map_is_compared_with_its_solo_ceiling_after_a_minute_of_play_th
     assert_eq!(exp_per_hour(&on), (Some(3703), Some(3703)), "144 EXP in 140 s");
 }
 
-const SUNSET_SKY_ID: &str = "010003070";
-const CONSTRUCTION_SITE_ID: &str = "010003080";
-
 /// MeowDB's saved index and pages, but for each `(map, stand_in)` the map's page is the
 /// stand-in's: to give two maps the same solo ceiling, or a ceiling of choice.
 fn standing_in(source: FakeSource, stand_ins: &[(&'static str, &'static str)]) -> FakeSource {
@@ -646,14 +627,6 @@ fn standing_in(source: FakeSource, stand_ins: &[(&'static str, &'static str)]) -
         let page = stand_ins.iter().find(|(map, _)| *map == id).map_or(id, |&(_, stand_in)| stand_in);
         Poll::Ready(saved_map_page(page))
     })
-}
-
-/// Map `id`'s saved MeowDB page, read; unreachable without one.
-fn saved_map_page(id: &str) -> Result<MapData, SourceError> {
-    match saved_page(id) {
-        Some(html) => meowdb::read_map_page(&html, id),
-        None => Err(SourceError::Unreachable(format!("no saved page for {id}"))),
-    }
 }
 
 #[test]
@@ -714,8 +687,7 @@ fn a_map_whose_page_arrives_after_the_player_counts_play_from_arriving() {
 fn choosing_among_candidates_with_the_hotkey_counts_play_since_arriving_for_the_map_chosen() {
     // The Construction Site and Sunset Sky share the Kerning City sample's title here.
     // The first in the map index, the Construction Site, shows first.
-    let index = index_with_title("Victoria Road", "Kerning City", &[CONSTRUCTION_SITE_ID, SUNSET_SKY_ID]);
-    let mut compass = tracking_with(FakeSource::with_index(index));
+    let mut compass = tracking_with(sharing_a_title());
     arrive(&mut compass, KERNING, 0);
     read(&mut compass, 0, 160, 381);
     read(&mut compass, 10 * S, 266, 633);

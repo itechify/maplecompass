@@ -5,11 +5,9 @@
 
 mod common;
 
-use compass_core::{
-    Compass, ExpBar, ExpBarReading, ExpBarRegion, GameWindow, MapData, PanelControl, PanelState, PersonalBestLine,
-    Rect, ScreenRect, Settings, Size, SourceError, TitleRegion, TrackingState, VisitBest, meowdb,
-};
-use common::{FakeSource, index_with_title, saved_page};
+use common::player::Player;
+use common::{CONSTRUCTION_SITE_ID, FakeSource, SUNSET_SKY_ID, saved_map_page, sharing_a_title, tracking, tracking_with};
+use compass_core::{ExpBar, ExpBarReading, PanelControl, PanelState, PersonalBestLine, TrackingState, VisitBest};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::Poll;
@@ -21,119 +19,6 @@ const SUNSET: &str = "victoria-road__sunset-sky--window";
 const CONSTRUCTION_SITE: &str = "victoria-road__construction-site-north-of-kerning-city--window";
 const KERNING: &str = "victoria-road__kerning-city--window";
 const ROCKY_ROAD: &str = "victoria-road__rocky-road-i--title-region";
-const SUNSET_SKY_ID: &str = "010003070";
-const CONSTRUCTION_SITE_ID: &str = "010003080";
-
-/// A core with EXP tracking on: both regions kept, on a 1920x1200 game window.
-fn tracking() -> Compass {
-    tracking_with(FakeSource::meowdb())
-}
-
-/// As [`tracking`], with maps and their pages from `source`.
-fn tracking_with(source: FakeSource) -> Compass {
-    let client = Size { width: 1920, height: 1200 };
-    let mut compass = Compass::new(source);
-    compass.restore(Settings {
-        title_region: Some(TitleRegion { marked: Rect { x: 70, y: 40, width: 130, height: 48 }, client }),
-        exp_bar_region: Some(ExpBarRegion { marked: Rect { x: 1005, y: 1144, width: 240, height: 32 }, client }),
-        ..Settings::default()
-    });
-    let screen = ScreenRect { x: 0, y: 0, width: 1920, height: 1200 };
-    compass.on_game_window(Some(GameWindow { client: screen, frame: screen, screens: vec![screen] }));
-    compass
-}
-
-/// The percentage the game shows for `exp` on a 20,000 EXP level, rounded to hundredths.
-fn percent(exp: u64) -> u32 {
-    ((exp * 20_000 + 20_000) / (2 * 20_000)) as u32
-}
-
-/// The wall clock at capture time 0 when the shell tells it: 9 Oct 2026, 12:00 UTC.
-const WALL_AT_START: u64 = 1_791_547_200_000;
-
-/// The player hunting on a 20,000 EXP level, the EXP bar read every 10 s. Readings at
-/// whole half minutes of capture time are where the Grind Tracker's figures refresh.
-struct Player {
-    compass: Compass,
-    exp: u64,
-    at: u64,
-    /// The wall clock at capture time 0, if the shell tells it.
-    wall_at_start: Option<u64>,
-}
-
-impl Player {
-    /// The bar read at 1,000 [5.00%] at 0 s, then 10 EXP more every 10 s on a map the
-    /// panel doesn't know, up to 30 s: the Session has started.
-    fn new(compass: Compass) -> Self {
-        Self::start(compass, None)
-    }
-
-    /// As [`Player::new`], with the shell telling the wall clock before every reading, as
-    /// it does: [`WALL_AT_START`] at capture time 0, running with it.
-    fn clocked(compass: Compass) -> Self {
-        Self::start(compass, Some(WALL_AT_START))
-    }
-
-    fn start(compass: Compass, wall_at_start: Option<u64>) -> Self {
-        let mut player = Player { compass, exp: 1000, at: 0, wall_at_start };
-        player.read();
-        player.hunt(30 * S, 10);
-        player
-    }
-
-    /// The wall clock now, as the shell last told it.
-    fn wall_clock(&self) -> Option<u64> {
-        self.wall_at_start.map(|start| start + self.at)
-    }
-
-    fn read(&mut self) -> PanelState {
-        if let Some(now) = self.wall_clock() {
-            self.compass.on_wall_clock(now);
-        }
-        let bar = Some(ExpBar { exp: self.exp, percent_hundredths: percent(self.exp) });
-        self.compass.on_exp_bar_reading(ExpBarReading { bar, at_ms: self.at }).clone()
-    }
-
-    /// The panel confirms the map of a sample: a Visit starts now.
-    fn arrive(&mut self, sample: &str) -> PanelState {
-        common::arrive(&mut self.compass, sample, self.at)
-    }
-
-    /// Hunt for `ms` more, `gain` EXP every 10 s (`gain` × 360 EXP/h): the panel state at
-    /// the last reading.
-    fn hunt(&mut self, ms: u64, gain: u64) -> PanelState {
-        let mut state = self.compass.panel_state().clone();
-        for _ in 0..ms / (10 * S) {
-            self.at += 10 * S;
-            self.exp += gain;
-            state = self.read();
-        }
-        state
-    }
-
-    /// The bar doesn't read whole for `ms` more, a frame every 10 s: the panel state at
-    /// the last.
-    fn unread(&mut self, ms: u64) -> PanelState {
-        let mut state = self.compass.panel_state().clone();
-        for _ in 0..ms / (10 * S) {
-            self.at += 10 * S;
-            state = self.compass.on_exp_bar_reading(ExpBarReading { bar: None, at_ms: self.at }).clone();
-        }
-        state
-    }
-
-    /// Choose the next of the Candidates with the hotkey.
-    fn choose_next(&mut self) -> PanelState {
-        self.compass.on_hotkey("ctrl+shift+n");
-        self.compass.panel_state().clone()
-    }
-
-    /// Press one of the Grind Tracker's buttons.
-    fn press(&mut self, control: PanelControl) -> PanelState {
-        self.compass.press(control);
-        self.compass.panel_state().clone()
-    }
-}
 
 /// Last 5 min's EXP/h as the Grind Tracker shows it.
 fn rolling(state: &PanelState) -> Option<i64> {
@@ -326,14 +211,6 @@ fn the_best_compared_with_is_fixed_on_arrival_and_a_new_one_counts_from_the_next
     assert_eq!(five.exp_tracking.personal_best, best(10_800, Some(8333), None));
 }
 
-/// Map `id`'s saved MeowDB page, read; unreachable without one.
-fn saved_map_page(id: &str) -> Result<MapData, SourceError> {
-    match saved_page(id) {
-        Some(html) => meowdb::read_map_page(&html, id),
-        None => Err(SourceError::Unreachable(format!("no saved page for {id}"))),
-    }
-}
-
 /// MeowDB's saved index and pages, but Sunset Sky's page is held back until `page_in`
 /// lets it through.
 fn sunset_sky_held_back(page_in: &Arc<AtomicBool>) -> FakeSource {
@@ -366,12 +243,6 @@ fn nothing_is_recorded_on_a_map_without_a_map_summary() {
     assert_eq!(back.data.solo_exp_ceiling(), Some(223_928));
     assert_eq!(back.exp_tracking.personal_best, None);
     assert_eq!(player.hunt(5 * MIN, 10).exp_tracking.personal_best, first_best(3600));
-}
-
-/// The Construction Site and Sunset Sky sharing the Kerning City sample's title: the
-/// Construction Site, first in the map index, shows first.
-fn sharing_a_title() -> FakeSource {
-    FakeSource::with_index(index_with_title("Victoria Road", "Kerning City", &[CONSTRUCTION_SITE_ID, SUNSET_SKY_ID]))
 }
 
 fn shown_map(state: &PanelState) -> Option<&str> {
