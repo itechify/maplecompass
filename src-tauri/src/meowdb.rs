@@ -23,12 +23,16 @@
 //! served to the overlay from them ([`serve_mob_image`]): the webview never asks
 //! maplestory.io itself.
 //!
+//! Item Lookup (ADR 0007): the core asks MeowDB's search for an item's name once per
+//! lookup the player makes. An answer is cached for [`ITEM_SEARCH_FRESH_FOR`] (a week),
+//! so looking the same item up again asks MeowDB nothing.
+//!
 //! Fetches run on the async runtime and never block the caller: the first call starts
 //! one and answers `Pending`, later calls collect it. A map page is read from the cache
 //! there too (a page is a few hundred KB to read): only the map index, read once at
 //! startup, and the few mob pages a map lists are read on the caller's thread.
 
-use compass_core::{Fetched, MapData, MapDataSource, MapEntry, MobDetails, SourceError, meowdb};
+use compass_core::{Fetched, ItemHit, MapData, MapDataSource, MapEntry, MobDetails, SourceError, meowdb};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::task::Poll;
@@ -44,6 +48,10 @@ const MOB_FRESH_FOR: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 /// How long a cached mob image is used without asking maplestory.io again: sprites
 /// practically never change.
 const IMAGE_FRESH_FOR: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+
+/// How long a cached answer of MeowDB's search is used without asking again: the items a
+/// name finds hardly change.
+const ITEM_SEARCH_FRESH_FOR: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 /// Who is asking: name, version, purpose and where to find out more. Never a browser UA.
 const USER_AGENT: &str = concat!(
@@ -71,6 +79,8 @@ pub struct MeowDbSource {
     mob_page_in_flight: Option<(String, Receiver<Answer<MobDetails>>)>,
     /// The mob image being fetched from maplestory.io, and where its address will arrive.
     mob_image_in_flight: Option<(String, Receiver<Result<String, SourceError>>)>,
+    /// The item name being searched for, and where MeowDB's items will arrive.
+    item_search_in_flight: Option<(String, Receiver<Answer<Vec<ItemHit>>>)>,
 }
 
 impl MeowDbSource {
@@ -89,6 +99,7 @@ impl MeowDbSource {
             crawl_pages: PageFetches::default(),
             mob_page_in_flight: None,
             mob_image_in_flight: None,
+            item_search_in_flight: None,
         })
     }
 
@@ -194,6 +205,39 @@ impl MapDataSource for MeowDbSource {
         });
         self.mob_image_in_flight = Some((id.to_string(), rx));
         Poll::Pending
+    }
+
+    fn item_search(&mut self, name: &str) -> Poll<Answer<Vec<ItemHit>>> {
+        if let Some((asked, arriving)) = &self.item_search_in_flight {
+            if asked == name {
+                let Poll::Ready(items) = collect(arriving) else { return Poll::Pending };
+                self.item_search_in_flight = None;
+                if let Err(e) = &items {
+                    eprintln!("item search {name:?}: {e}");
+                }
+                return Poll::Ready(items);
+            }
+        }
+        // Read here, so a cached answer is given at once and the page opens right away.
+        let path = self.item_search_file(name);
+        if let Some(answer) = cached(&path, ITEM_SEARCH_FRESH_FOR) {
+            return Poll::Ready(meowdb::read_item_search(&answer).map(Fetched::Fresh));
+        }
+        let url = match reqwest::Url::parse_with_params(meowdb::ITEM_SEARCH_URL, [("q", name), ("locale", "en")]) {
+            Ok(url) => url.to_string(),
+            Err(e) => return Poll::Ready(Err(SourceError::FormatChanged(format!("search URL: {e}")))),
+        };
+        let arriving = self.fetch(url, path, None, meowdb::read_item_search);
+        self.item_search_in_flight = Some((name.to_string(), arriving));
+        Poll::Pending
+    }
+}
+
+impl MeowDbSource {
+    fn item_search_file(&self, name: &str) -> PathBuf {
+        // The name as hex: any name makes a safe file name, and no two share one.
+        let key: String = name.to_lowercase().bytes().map(|b| format!("{b:02x}")).collect();
+        self.cache_dir.join(format!("item-search-{key}.json"))
     }
 }
 
