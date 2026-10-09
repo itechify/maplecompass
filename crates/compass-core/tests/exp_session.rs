@@ -754,8 +754,8 @@ fn a_bar_unread_for_longer_than_a_break_counts_neither_the_time_nor_the_exp() {
     }
 
     // 1,000 [23.81%] at 610 s: 665 EXP that no one saw come. Counted at once, as a break
-    // would count it, it would show 39,900 EXP/h for one minute's hunting. It is where
-    // the Session stands now, nothing more; the figures hold until the next change.
+    // would count it, it would show 44,040 EXP/h (734 EXP in the 1 active minute). It is
+    // where the Session stands now, nothing more; the figures hold until the next change.
     let back = read(&mut compass, 610 * S, 1000, percent(1000));
     assert_eq!(back.exp_tracking.state, TrackingState::Paused);
     assert_eq!(exp_per_hour(&back), (Some(4140), Some(4140)));
