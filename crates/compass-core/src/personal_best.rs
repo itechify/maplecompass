@@ -72,34 +72,44 @@ pub struct PersonalBestLine {
 pub(crate) struct Bests {
     /// The best of each Visit that has ended.
     earlier: SavedBests,
-    /// The Visit under way's best on each map it has one for.
+    /// The Visit under way's best on each map it was certain on: one, unless the player
+    /// chose among Candidates.
     visit: Vec<(String, u64)>,
+    /// The map the Visit under way was last certain on: the one its best is for. The
+    /// hotkey goes past the other Candidates on the way to the one the player chooses.
+    on: Option<String>,
 }
 
 impl Bests {
-    /// Last 5 min showed `exp_per_hour` over a full 5 minutes of active play on `map`.
-    pub fn record(&mut self, map: &str, exp_per_hour: u64) {
+    /// Last 5 min was shown afresh with the player certain to be on `map`. `rate` is its
+    /// EXP/h if it counts towards this Visit's best there: over a full 5 minutes of
+    /// active play all on the map, with the EXP bar read.
+    pub fn shown(&mut self, map: &str, rate: Option<u64>) {
+        if self.on.as_deref() != Some(map) {
+            self.on = Some(map.to_string());
+        }
+        let Some(rate) = rate else { return };
         match self.visit.iter_mut().find(|(id, _)| id == map) {
-            Some((_, best)) => *best = (*best).max(exp_per_hour),
-            None => self.visit.push((map.to_string(), exp_per_hour)),
+            Some((_, best)) => *best = (*best).max(rate),
+            None => self.visit.push((map.to_string(), rate)),
         }
     }
 
-    /// The Visit under way ended: its bests join their maps'.
+    /// The Visit under way ended: its best joins its map's.
     pub fn end_visit(&mut self) {
-        for (map, exp_per_hour) in self.visit.drain(..) {
-            let maps = &mut self.earlier.maps;
-            let at = match maps.iter().position(|m| m.id == map) {
-                Some(at) => at,
-                None => {
-                    maps.push(MapBests { id: map, visits: Vec::new() });
-                    maps.len() - 1
-                }
-            };
-            let visits = &mut maps[at].visits;
-            let below = visits.iter().position(|v| v.exp_per_hour < exp_per_hour).unwrap_or(visits.len());
-            visits.insert(below, VisitBest { exp_per_hour });
-        }
+        let on = self.on.take();
+        let Some((map, exp_per_hour)) = self.visit.drain(..).find(|(id, _)| Some(id) == on.as_ref()) else { return };
+        let maps = &mut self.earlier.maps;
+        let at = match maps.iter().position(|m| m.id == map) {
+            Some(at) => at,
+            None => {
+                maps.push(MapBests { id: map, visits: Vec::new() });
+                maps.len() - 1
+            }
+        };
+        let visits = &mut maps[at].visits;
+        let below = visits.iter().position(|v| v.exp_per_hour < exp_per_hour).unwrap_or(visits.len());
+        visits.insert(below, VisitBest { exp_per_hour });
     }
 
     /// The line for `map`, where `share` gives Last 5 min's share of a best, if it is
