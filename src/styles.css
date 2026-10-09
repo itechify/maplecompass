@@ -1639,6 +1639,19 @@ body:has(#badge:not([hidden])) .icon .count {
   cursor: pointer;
 }
 
+/* The map's title opens its MeowDB page: a link wherever the panel is, which still drags
+   it once the mouse moves. Its lettering underlines under the pointer, in its own ink. */
+.panel .titlebar.linked,
+.panel .titlebar.linked * {
+  cursor: pointer;
+}
+
+.titlebar.linked:hover .street,
+.titlebar.linked:hover .map {
+  text-decoration: underline 1px var(--title-ink);
+  text-underline-offset: 3px;
+}
+
 /* No game window (minimised or closed): the overlay window stays but draws nothing. */
 .hidden .panel,
 .hidden .icon,
