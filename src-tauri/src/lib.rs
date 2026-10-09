@@ -16,9 +16,10 @@ mod setup;
 mod sizemove;
 mod tray;
 mod view;
+mod world;
 
 use compass_core::{
-    Action, Compass, ExpBarReader, ExpBarReading, Frame, GameWindow, Layer, MIN_PANEL_WIDTH, PanelControl, PanelSizes,
+    Action, Compass, SavedWorld, ExpBarReader, ExpBarReading, Frame, GameWindow, Layer, MIN_PANEL_WIDTH, PanelControl, PanelSizes,
     PlacementMode,
     PanelState, Request, ScreenRect, Size, TitleReader, TitleReading, default_title_region,
 };
@@ -30,7 +31,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent};
 use tauri_plugin_opener::OpenerExt;
 
@@ -43,6 +44,9 @@ const EXP_BAR_TICK: Duration = Duration::from_millis(1000);
 const WINDOW_TICK: Duration = Duration::from_millis(50);
 /// Settings are saved once they have stopped changing for this long (after a drag).
 const SAVE_DELAY: Duration = Duration::from_millis(500);
+/// What the world crawl learned is saved once it has stopped changing for this long:
+/// a few hundred KB to write, so not after every page.
+const WORLD_SAVE_DELAY: Duration = Duration::from_secs(10);
 /// The overlay's size in CSS px (logical); `src/styles.css` lays out to fit. The
 /// expanded panel is as wide as the core says (the player sets it by a bottom corner),
 /// and its height follows its content, as the overlay reports it; the core keeps it
@@ -102,6 +106,9 @@ pub(crate) enum Command {
     /// The reader is done with a capture of the EXP Bar Region `region`: what it read,
     /// or `None` if the capture failed.
     ReadExpBar { region: ScreenRect, reading: Option<ExpBarReading> },
+    /// The world an earlier launch's crawl learned has been read (or built from the
+    /// cached pages, and so is still to be saved: `from_file` false).
+    WorldLoaded { world: Box<SavedWorld>, from_file: bool },
 }
 
 /// The overlay's drags and resizes, as the compass loop hears them.
@@ -166,12 +173,21 @@ pub fn run() {
 
             // MeowDB pages are cached on disk (ADR 0003), and maplestory.io's mob images
             // (ADR 0006).
-            let source = MeowDbSource::new(cache_dir(app.handle())?)?;
+            let cache = cache_dir(app.handle())?;
+            let source = MeowDbSource::new(cache.clone())?;
             let mut compass = Compass::new(source);
             let settings_path = settings::path(app.handle())?;
             // The core brings older settings up to date (hotkeys included).
             compass.restore(settings::load(&settings_path));
             let (commands, commands_rx) = mpsc::channel();
+            // What the crawl learned at earlier launches: read (or built from the cached
+            // pages) on a thread of its own, while the crawl holds for it.
+            compass.await_world();
+            let (loaded_to, world_dir) = (commands.clone(), cache.clone());
+            std::thread::Builder::new().name("world-loader".into()).spawn(move || {
+                let world::Loaded { world, from_file } = world::load(&world_dir);
+                let _ = loaded_to.send(Command::WorldLoaded { world: Box::new(world), from_file });
+            })?;
             // Registered only while the game or one of our windows is in front.
             let hotkeys = hotkeys::install(app, &compass.panel_state().hotkeys, commands.clone())?;
             // The one way to quit at any time, the game open or not.
@@ -217,7 +233,7 @@ pub fn run() {
             let channels = Channels { commands: commands_rx, picks: picks_rx };
             let windows = Windows { overlay, setup: setup_windows, grind_tracker, hotkeys };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
-                compass_loop(handle, windows, compass, reader, channels, settings_path)
+                compass_loop(handle, windows, compass, reader, channels, Files { settings: settings_path, cache })
             })?;
             Ok(())
         })
@@ -260,6 +276,59 @@ struct Windows {
     grind_tracker: GrindTrackerWindow,
     /// Not a window, but registered and released as the foreground changes.
     hotkeys: hotkeys::GlobalHotkeys,
+}
+
+/// Where the compass loop saves the settings, and what the world crawl learned.
+struct Files {
+    settings: PathBuf,
+    cache: PathBuf,
+}
+
+/// The world crawl's saves: what was saved last, so it is saved only when it changed.
+struct WorldSaves {
+    /// The saved world has been read: until then there is nothing to save, and the file
+    /// must not be overwritten with less.
+    loaded: bool,
+    /// The core's world revision last saved (or read).
+    saved: Option<u64>,
+    /// The revision waiting to be saved, and since when.
+    pending: Option<(u64, Instant)>,
+}
+
+impl WorldSaves {
+    /// Save the world if it changed and has settled (`now` on Quit), off the loop
+    /// unless it is the last save before quitting.
+    fn save(&mut self, compass: &Compass, cache: &std::path::Path, now: bool) {
+        let revision = compass.world_revision();
+        if !self.loaded || self.saved == Some(revision) {
+            self.pending = None;
+            return;
+        }
+        if self.pending.is_none_or(|(pending, _)| pending != revision) {
+            self.pending = Some((revision, Instant::now()));
+        }
+        if !now && self.pending.is_some_and(|(_, since)| since.elapsed() < WORLD_SAVE_DELAY) {
+            return;
+        }
+        self.saved = Some(revision);
+        self.pending = None;
+        let (world, cache) = (compass.world(), cache.to_path_buf());
+        let write = move || {
+            if let Err(e) = world::save(&cache, &world) {
+                eprintln!("saving the world failed: {e}");
+            }
+        };
+        if now {
+            write();
+        } else if let Err(e) = std::thread::Builder::new().name("world-saver".into()).spawn(write) {
+            eprintln!("saving the world failed: {e}");
+        }
+    }
+}
+
+/// The wall clock, in ms since the Unix epoch.
+fn unix_now_ms() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
 }
 
 /// What the compass loop hears from hotkeys, the overlay, the setup window and the
@@ -352,8 +421,10 @@ fn compass_loop(
     mut compass: Compass,
     mut reader: ReaderThread,
     channels: Channels,
-    settings_path: PathBuf,
+    files: Files,
 ) {
+    let settings_path = files.settings;
+    let mut world_saves = WorldSaves { loaded: false, saved: None, pending: None };
     let Windows { overlay, setup: mut setup_windows, mut grind_tracker, mut hotkeys } = windows;
     let mut window = OverlayWindow::new(overlay);
     let mut saved = compass.settings();
@@ -399,6 +470,7 @@ fn compass_loop(
             }
             Ok(Command::Quit) => {
                 // Whatever the player changed last (a drag, say) is saved first.
+                world_saves.save(&compass, &files.cache, true);
                 let current = compass.settings();
                 if current != saved
                     && let Err(e) = settings::save(&settings_path, &current)
@@ -455,6 +527,12 @@ fn compass_loop(
                     compass.on_exp_bar_reading(reading);
                 }
             }
+            Ok(Command::WorldLoaded { world, from_file }) => {
+                compass.restore_world(*world);
+                world_saves.loaded = true;
+                // Read from its file, it is saved already; built from the pages, not yet.
+                world_saves.saved = from_file.then(|| compass.world_revision());
+            }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
         }
@@ -478,6 +556,7 @@ fn compass_loop(
             }
         }
         // Fetches in flight (map index, map pages) are checked on, never waited for.
+        compass.on_wall_clock(unix_now_ms());
         compass.tick(reader.now_ms());
         if Instant::now() >= next_capture {
             next_capture = Instant::now() + TICK;
@@ -520,6 +599,7 @@ fn compass_loop(
             }
             saved = pending.0.clone();
         }
+        world_saves.save(&compass, &files.cache, false);
     }
 }
 

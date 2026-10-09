@@ -215,6 +215,19 @@ const searchCredit = byId("search-credit");
 const resultsHeader = resultsHead();
 resultsTable.append(resultsHeader);
 let draggable = false;
+
+/**
+ * What each part of the panel was last rendered from. The panel state comes again
+ * whenever anything in it changes (the world crawl's progress, say): a part whose own
+ * inputs didn't change keeps its rows, and the scroll and hover on them.
+ */
+const renderedFrom = new Map<string, string>();
+function changed(part: string, ...inputs: unknown[]): boolean {
+  const key = JSON.stringify(inputs);
+  if (renderedFrom.get(part) === key) return false;
+  renderedFrom.set(part, key);
+  return true;
+}
 /** The search view's open step, as last rendered. */
 let step: SearchState["view"] = null;
 
@@ -374,6 +387,8 @@ function renderData(panel: PanelState) {
   dataEl.hidden = !shown;
   footer.hidden = !shown;
   if (!shown) return;
+  const inputs = [data, panel.candidates, panel.collapsedSections, panel.credit, panel.recognition];
+  if (!changed("data", ...inputs, panel.hotkeys, panel.unavailableHotkeys)) return;
 
   const { candidates } = panel;
   candidatesEl.hidden = !candidates;
@@ -517,7 +532,7 @@ function renderToolbar(panel: PanelState) {
 function renderHunting(panel: PanelState) {
   const target: HuntingTarget | null = panel.search.hunting;
   hunting.hidden = !target;
-  if (!target) return;
+  if (!target || !changed("hunting", target, panel.search.credit, panel.credit)) return;
   const { mob, map } = target;
   // The mob on the first line, the map on the next.
   const mobLine = document.createElement("span");
@@ -598,6 +613,7 @@ function renderSearchView(panel: PanelState) {
 
 /** The first step: the suggestions (the highlighted one is what Enter picks). */
 function renderMobs(search: SearchState) {
+  if (!changed("suggestions", search.suggestions, search.highlighted, search.query, search.crawl.total)) return;
   suggestions.replaceChildren(
     ...search.suggestions.map((mob, i) => {
       const row = document.createElement("li");
@@ -634,6 +650,7 @@ function renderMaps(search: SearchState) {
   searchNearest.hidden = searchNearest.textContent === "";
   searchNote.textContent = resultsNote(search);
   searchNote.hidden = searchNote.textContent === "";
+  if (!changed("results", search.results, search.highlightedResult)) return;
   const groups = search.results.map((result, i) => {
     const group = resultGroup(result);
     const current = i === search.highlightedResult;
