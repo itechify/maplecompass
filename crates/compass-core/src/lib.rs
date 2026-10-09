@@ -8,6 +8,8 @@
 mod crawl;
 mod exp_bar;
 mod grind_tracker;
+mod item_lookup;
+mod item_tooltip;
 mod map_data;
 mod map_index;
 mod matcher;
@@ -32,6 +34,8 @@ mod world;
 pub use crawl::CrawlProgress;
 pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use grind_tracker::{ClientOffset, GrindTrackerWindow};
+pub use item_lookup::{ItemChoice, ItemHit, ItemLookup, ItemLookupLine, OurWindow};
+pub use item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReader, ItemTooltipReading};
 pub use map_data::{
     HiddenPortal, LISTED_MOBS, MapData, MapDataStatus, MapSpot, MapSummary, Mob, MoreMobs, PerParty,
     Portal, PortalKind,
@@ -57,6 +61,7 @@ pub use world::{Distance, Step, Travel};
 
 use crawl::Crawl;
 use grind_tracker::GrindTracker;
+use item_lookup::ItemLookups;
 use search::{MobSearch, Searched};
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
@@ -69,9 +74,11 @@ pub use recogniser::{TitleLines, TitleReader, TitleReading};
 use tracker::Tracker;
 use world::Here;
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::task::Poll;
 
-/// A captured Title Region or EXP Bar Region image: tightly packed RGBA, top-down rows.
+/// A captured Title Region or EXP Bar Region image, or the game's whole client area for
+/// Item Lookup: tightly packed RGBA, top-down rows.
 #[derive(Debug, Clone)]
 pub struct Frame {
     pub width: u32,
@@ -220,6 +227,8 @@ pub struct PanelState {
     pub quit: bool,
     /// Mob search, and how far the world crawl behind it has got.
     pub search: SearchState,
+    /// What the latest Item Lookup came to, for a few seconds; `None` once it has gone.
+    pub item_lookup: Option<ItemLookupLine>,
 }
 
 /// What a hotkey asks the shell to do at once, beyond rendering the panel state.
@@ -231,6 +240,11 @@ pub enum Request {
     /// Bring the overlay, with the search view already open, back in front (the search
     /// hotkey): the game may have come in front of it. Our own window only (ADR 0001).
     RaiseOverlay,
+    /// Item Lookup (ADR 0007): read the pointer's position and capture the game's whole
+    /// client area now, while the Item Tooltip shows, for [`Compass::on_item_capture`]
+    /// (or [`Compass::on_item_tooltip_reading`] with what an [`ItemTooltipReader`] reads
+    /// in it, or `None` if the capture failed).
+    CaptureItemTooltip,
 }
 
 /// Something the player can do with a hotkey or with the matching icon at the top of
@@ -308,6 +322,19 @@ pub struct Compass {
     meowdb_pace: Pace,
     /// What the player typed, highlighted and picked in mob search.
     search: MobSearch,
+    /// Reads captures fed to [`Compass::on_item_capture`]; loaded on the first one.
+    item_reader: Option<ItemTooltipReader>,
+    /// The latest Item Lookup.
+    item_lookups: ItemLookups,
+    /// The panel is expanded only to show an Item Lookup's line, and collapses again when
+    /// the line goes, unless the player uses it meanwhile. Never saved.
+    lookup_expanded: bool,
+    /// The Item Lookup whose line last asked for the panel: one the player collapsed
+    /// doesn't expand it again.
+    lookup_shown: Option<u32>,
+    /// What the shell must do that came of time passing (a page MeowDB's answer settled),
+    /// for [`Compass::take_request`].
+    requests: VecDeque<Request>,
     panel: Panel,
     setup: Setup,
     /// The last settings restored; the panel's own fields live in `panel`.
@@ -338,6 +365,11 @@ impl Compass {
             mob_cards: MobCards::default(),
             meowdb_pace: Pace::default(),
             search: MobSearch::default(),
+            item_reader: None,
+            item_lookups: ItemLookups::default(),
+            lookup_expanded: false,
+            lookup_shown: None,
+            requests: VecDeque::new(),
             panel: Panel::default(),
             setup: Setup::default(),
             settings: Settings::default(),
@@ -474,6 +506,11 @@ impl Compass {
 
     /// Apply something the player did.
     pub fn act(&mut self, action: Action) -> &PanelState {
+        // A panel expanded for an Item Lookup's line: collapsing it is the player's say,
+        // and using it keeps it expanded once the line goes.
+        if self.lookup_expanded && (action == Action::ToggleExpanded || uses_panel(action)) {
+            self.lookup_expanded = false;
+        }
         match action {
             Action::ToggleExpanded => {
                 self.panel.expanded = !self.panel.expanded;
@@ -610,6 +647,11 @@ impl Compass {
     pub fn on_hotkey(&mut self, pressed: &str) -> Option<Request> {
         let hotkeys = &self.settings.hotkeys;
         let is = |hotkey: &str| same_hotkey(hotkey, pressed);
+        if is(&hotkeys.item_lookup) {
+            // Only over a game window, and not while the last capture is being read.
+            let capture = self.panel.game.is_some() && self.item_lookups.start();
+            return capture.then_some(Request::CaptureItemTooltip);
+        }
         let control = if is(&hotkeys.toggle_panel) {
             PanelControl::TogglePanel
         } else if is(&hotkeys.cycle_placement) {
@@ -659,6 +701,48 @@ impl Compass {
     pub fn open_mob_page(&self, id: &str) -> Option<Request> {
         let card = self.state.mob_cards.iter().find(|card| card.id == id)?;
         Some(Request::OpenInBrowser { url: card.url.clone() })
+    }
+
+    /// Read an Item Lookup capture ([`Request::CaptureItemTooltip`]) and update the panel
+    /// state: the same as [`Compass::on_item_tooltip_reading`] with what an
+    /// [`ItemTooltipReader`] reads in it, here.
+    pub fn on_item_capture(&mut self, capture: ItemCapture) -> &PanelState {
+        let reading = self.item_reader.get_or_insert_with(ItemTooltipReader::bundled).read(&capture);
+        self.on_item_tooltip_reading(Some(reading))
+    }
+
+    /// Take what an Item Lookup capture read as (read by an [`ItemTooltipReader`], possibly
+    /// on another thread; `None` if the capture failed) and look its name up on MeowDB. A
+    /// page to open comes from [`Compass::take_request`], at once if MeowDB's answer was
+    /// at hand, else once it arrives.
+    pub fn on_item_tooltip_reading(&mut self, reading: Option<ItemTooltipReading>) -> &PanelState {
+        // Our windows show in the capture: one over the name would be read instead.
+        let panel = self.state.placement.filter(|_| self.state.layer != Layer::Hidden);
+        let ours: Vec<(OurWindow, ScreenRect)> = [
+            panel.map(|at| (OurWindow::Panel, at)),
+            self.state.grind_tracker.placement.map(|at| (OurWindow::GrindTracker, at)),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        let open = self.item_lookups.read(reading, &ours, &mut *self.source, &mut self.meowdb_pace);
+        self.requests.extend(open.map(|url| Request::OpenInBrowser { url }));
+        self.sync_panel()
+    }
+
+    /// The player picked one of the items an Item Lookup found sharing the name read:
+    /// open its MeowDB page. `None` for an item the panel doesn't list.
+    pub fn pick_item(&mut self, id: &str) -> Option<Request> {
+        let url = self.item_lookups.pick(id)?;
+        self.sync_panel();
+        Some(Request::OpenInBrowser { url })
+    }
+
+    /// What the shell must do that came of time passing or of a reading, rather than of
+    /// the player's press: an Item Lookup's page, once MeowDB has answered. The shell
+    /// takes them after each call, until there are none.
+    pub fn take_request(&mut self) -> Option<Request> {
+        self.requests.pop_front()
     }
 
     /// Another window came to the front. The hotkeys are live while the game or one of
@@ -711,7 +795,8 @@ impl Compass {
     /// The settings to save: whatever the player has changed since [`Compass::restore`].
     pub fn settings(&self) -> Settings {
         Settings {
-            expanded: self.panel.expanded,
+            // Not when only an Item Lookup's line expanded it.
+            expanded: self.panel.expanded && !self.lookup_expanded,
             inside_offset: self.panel.inside_offset,
             placement_mode: self.panel.mode,
             detached_at: self.panel.detached_at,
@@ -775,6 +860,9 @@ impl Compass {
             self.mob_cards.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
             self.state.mob_cards = self.mob_cards.cards();
         }
+        // An Item Lookup's search, which the player waits on, before the crawl.
+        let open = self.item_lookups.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
+        self.requests.extend(open.map(|url| Request::OpenInBrowser { url }));
         // After the shown map, which never waits for the crawl, and its listed mobs' pages.
         let crawling = !self.world_awaited && !self.mob_cards.wants_meowdb(at_ms);
         if let Some(crawl) = self.crawl.as_mut().filter(|_| crawling) {
@@ -829,6 +917,7 @@ impl Compass {
 
     fn sync_panel(&mut self) -> &PanelState {
         self.sync_setup();
+        self.sync_item_lookup();
         // Never over a captured region: the capture would read the panel.
         self.panel.avoid = [self.state.title_region, self.state.exp_bar_region].into_iter().flatten().collect();
         self.state.expanded = self.panel.expanded;
@@ -844,6 +933,28 @@ impl Compass {
         self.state.game_window_title =
             self.settings.game_window_title.clone().unwrap_or_else(|| GAME_WINDOW_TITLE.into());
         &self.state
+    }
+
+    /// The Item Lookup's line. A failure, or items to pick from, expands a collapsed panel
+    /// so the player sees it (once per lookup), and it collapses again when the line goes.
+    fn sync_item_lookup(&mut self) {
+        let line = self.item_lookups.line();
+        let wanting = line.as_ref().filter(|_| self.item_lookups.needs_panel()).map(|line| line.lookup);
+        match wanting {
+            Some(lookup) if self.lookup_shown != Some(lookup) => {
+                self.lookup_shown = Some(lookup);
+                if !self.panel.expanded {
+                    self.panel.expanded = true;
+                    self.lookup_expanded = true;
+                }
+            }
+            None if self.lookup_expanded => {
+                self.panel.expanded = false;
+                self.lookup_expanded = false;
+            }
+            _ => {}
+        }
+        self.state.item_lookup = line;
     }
 
     fn sync_setup(&mut self) {
@@ -891,6 +1002,25 @@ fn searched<'a>(crawl: &'a Option<Crawl>, state: &'a PanelState, settings: &Sett
         here: state.map.as_ref().map(|map| Here { id: &map.id, page: state.data.data() }),
         travel: settings.travel,
     }
+}
+
+/// Whether the player did this with the panel itself: then a panel expanded for an
+/// Item Lookup's line stays expanded once the line goes.
+fn uses_panel(action: Action) -> bool {
+    matches!(
+        action,
+        Action::PanelMoved { .. }
+            | Action::PanelResized { .. }
+            | Action::CyclePlacement
+            | Action::ChooseCandidate
+            | Action::OpenSearch
+            | Action::ReopenMapList
+            | Action::ClearHuntingTarget
+            | Action::ToggleTaxis
+            | Action::ToggleTeleportScrolls
+            | Action::ToggleSection(_)
+            | Action::LaunchedAgain
+    )
 }
 
 /// Whether two accelerator strings name the same keys ("Ctrl+Shift+C", "shift + ctrl + c").

@@ -627,6 +627,82 @@ h2 {
   line-height: 15px;
 }
 
+/* Item Lookup's line: what the latest lookup came to, for a few seconds, then gone. It
+   fades out over its last second; a new lookup's line shows afresh. */
+.item-lookup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: item-lookup-fade var(--item-lookup-ms, 6000ms) linear forwards;
+}
+
+.item-lookup.stays {
+  animation: none;
+}
+
+@keyframes item-lookup-fade {
+  0%, 83% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* The items sharing the name read, each a link to its MeowDB page, with its category. */
+.item-lookup ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 17px;
+}
+
+.item-choice {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 7px;
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.item-choice:hover {
+  background: var(--select);
+  box-shadow: inset 0 0 0 1px var(--select-edge);
+  color: var(--portal);
+}
+
+.item-choice:active {
+  color: var(--frame);
+}
+
+.item-choice:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 2px;
+}
+
+.item-choice-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.item-choice-category {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item-lookup {
+    animation: none;
+  }
+}
+
 /* The maps sharing the title, each led by what sets it apart; the shown one selected. */
 .candidates ol {
   margin: 5px 0 0;

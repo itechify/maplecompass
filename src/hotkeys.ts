@@ -7,6 +7,7 @@ export type Hotkeys = {
   chooseCandidate: string;
   search: string;
   grindTracker: string;
+  itemLookup: string;
 };
 
 export function keyLabel(accelerator: string): string {

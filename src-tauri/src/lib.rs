@@ -1,6 +1,6 @@
 //! MapleCompass shell: a thin adapter around `compass-core`. It finds the game window,
-//! captures the Title Region and the EXP Bar Region, feeds frames, hotkeys and drags to
-//! the core and renders the panel state in an overlay that sits just above the game
+//! captures the Title Region and the EXP Bar Region (and, for Item Lookup, the client
+//! area with the pointer), feeds frames, hotkeys and drags to the core and renders the panel state in an overlay that sits just above the game
 //! (or, detached, in an ordinary window), and the Grind Tracker in a window of its own
 //! beside it. All logic lives in the core.
 
@@ -19,9 +19,9 @@ mod view;
 mod world;
 
 use compass_core::{
-    Action, Compass, SavedWorld, ExpBarReader, ExpBarReading, Frame, GameWindow, Layer, MIN_PANEL_WIDTH, PanelControl, PanelSizes,
-    PlacementMode,
-    PanelState, Request, ScreenRect, Size, TitleReader, TitleReading, default_title_region,
+    Action, Compass, SavedWorld, ExpBarReader, ExpBarReading, Frame, GameWindow, ItemCapture, ItemTooltipReader,
+    ItemTooltipReading, Layer, MIN_PANEL_WIDTH, PanelControl, PanelSizes, PlacementMode, PanelState, Request,
+    ScreenPoint, ScreenRect, Size, TitleReader, TitleReading, default_title_region,
 };
 use meowdb::MeowDbSource;
 use grind_tracker::GrindTrackerWindow;
@@ -75,6 +75,9 @@ pub(crate) enum Command {
     SearchPick(String),
     /// The player clicked the name of the listed mob with this MeowDB ID in the panel.
     OpenMobPage(String),
+    /// The player picked the item with this MeowDB ID from the ones an Item Lookup found
+    /// sharing the name it read.
+    PickItem(String),
     /// The expanded panel's content is this tall (CSS px).
     PanelHeight(f64),
     /// The overlay window moved here (its outer top-left corner). The player's move only
@@ -106,6 +109,8 @@ pub(crate) enum Command {
     /// The reader is done with a capture of the EXP Bar Region `region`: what it read,
     /// or `None` if the capture failed.
     ReadExpBar { region: ScreenRect, reading: Option<ExpBarReading> },
+    /// The reader is done with an Item Lookup's capture: what it read.
+    ReadItemTooltip(ItemTooltipReading),
     /// The world an earlier launch's crawl learned has been read (or built from the
     /// cached pages, and so is still to be saved: `from_file` false).
     WorldLoaded { world: Box<SavedWorld>, from_file: bool },
@@ -251,6 +256,7 @@ pub fn run() {
             setup::finish_setup,
             search::panel_press,
             search::open_mob_page,
+            search::pick_item,
             search::search_query,
             search::search_move,
             search::search_enter,
@@ -339,14 +345,17 @@ struct Channels {
     picks: Receiver<String>,
 }
 
-/// A region for the reader thread to capture and read.
-#[derive(Debug, Clone, Copy)]
+/// A region for the reader thread to capture and read, or an Item Lookup's capture,
+/// taken already, to read.
+#[derive(Debug, Clone)]
 enum Capture {
     Title(ScreenRect),
     ExpBar(ScreenRect),
+    Item(Box<ItemCapture>),
 }
 
-/// Captures and reads the Title Region and the EXP Bar Region on its own thread. Reading
+/// Captures and reads the Title Region and the EXP Bar Region on its own thread, and reads
+/// Item Lookup's captures (taken at the press, while the Item Tooltip shows). Reading
 /// takes tens of ms (far more in a debug build), so the compass loop never waits for it:
 /// it keeps following the game window at its own pace and takes each reading when it
 /// arrives.
@@ -365,9 +374,10 @@ impl ReaderThread {
         let start = Instant::now();
         let (captures, asked) = mpsc::channel::<Capture>();
         std::thread::Builder::new().name("reader".into()).spawn(move || {
-            // The two readers share one recogniser.
+            // The readers share one recogniser.
             let title_reader = TitleReader::bundled();
             let exp_bar_reader = ExpBarReader::bundled();
+            let item_reader = ItemTooltipReader::bundled();
             let grab = |r: ScreenRect| match capture::capture_rgba(r.x, r.y, r.width as i32, r.height as i32) {
                 Ok(rgba) => {
                     let at_ms = start.elapsed().as_millis() as u64;
@@ -386,6 +396,7 @@ impl ReaderThread {
                     Capture::ExpBar(region) => {
                         Command::ReadExpBar { region, reading: grab(region).map(|f| exp_bar_reader.read(&f)) }
                     }
+                    Capture::Item(capture) => Command::ReadItemTooltip(item_reader.read(&capture)),
                 };
                 if commands.send(command).is_err() {
                     return;
@@ -408,6 +419,18 @@ impl ReaderThread {
         if !self.exp_bar_busy {
             self.exp_bar_busy = self.captures.send(Capture::ExpBar(region)).is_ok();
         }
+    }
+
+    /// Item Lookup: take the pointer's position and capture the game's client area now,
+    /// while the Item Tooltip shows, and have it read. Only reads the pointer position
+    /// and copies screen pixels (ADR 0001).
+    fn read_item_tooltip(&self) -> Result<(), String> {
+        let pointer = gamewin::cursor_position().ok_or("no pointer position")?;
+        let client = gamewin::find_game_client().ok_or("no game window")?;
+        let rgba = capture::capture_rgba(client.x, client.y, client.width as i32, client.height as i32)?;
+        let frame = Frame { width: client.width, height: client.height, rgba, at_ms: self.now_ms() };
+        let capture = ItemCapture { frame, origin: ScreenPoint { x: client.x, y: client.y }, pointer };
+        self.captures.send(Capture::Item(Box::new(capture))).map_err(|_| "the reader has stopped".to_string())
     }
 
     fn now_ms(&self) -> u64 {
@@ -444,11 +467,11 @@ fn compass_loop(
             }
             Ok(Command::Hotkey(pressed)) => {
                 let request = compass.on_hotkey(&pressed);
-                carry_out(&app, &window.overlay, request);
+                carry_out(&app, &window.overlay, &reader, &mut compass, request);
             }
             Ok(Command::Press(control)) => {
                 let request = compass.press(control);
-                carry_out(&app, &window.overlay, request);
+                carry_out(&app, &window.overlay, &reader, &mut compass, request);
             }
             Ok(Command::SearchQuery(query)) => {
                 compass.search_query(&query);
@@ -458,7 +481,11 @@ fn compass_loop(
             }
             Ok(Command::OpenMobPage(id)) => {
                 let request = compass.open_mob_page(&id);
-                carry_out(&app, &window.overlay, request);
+                carry_out(&app, &window.overlay, &reader, &mut compass, request);
+            }
+            Ok(Command::PickItem(id)) => {
+                let request = compass.pick_item(&id);
+                carry_out(&app, &window.overlay, &reader, &mut compass, request);
             }
             Ok(Command::PanelHeight(height)) => {
                 expanded_height = height.clamp(MIN_EXPANDED_HEIGHT, MAX_EXPANDED_HEIGHT);
@@ -527,6 +554,9 @@ fn compass_loop(
                     compass.on_exp_bar_reading(reading);
                 }
             }
+            Ok(Command::ReadItemTooltip(reading)) => {
+                compass.on_item_tooltip_reading(Some(reading));
+            }
             Ok(Command::WorldLoaded { world, from_file }) => {
                 compass.restore_world(*world);
                 world_saves.loaded = true;
@@ -558,6 +588,10 @@ fn compass_loop(
         // Fetches in flight (map index, map pages) are checked on, never waited for.
         compass.on_wall_clock(unix_now_ms());
         compass.tick(reader.now_ms());
+        // An Item Lookup's page, once MeowDB has answered.
+        while let Some(request) = compass.take_request() {
+            carry_out(&app, &window.overlay, &reader, &mut compass, Some(request));
+        }
         if Instant::now() >= next_capture {
             next_capture = Instant::now() + TICK;
             // The region the player marked; none until setup is done, nor after the
@@ -627,12 +661,24 @@ fn set_panel_sizes(compass: &mut Compass, overlay: &WebviewWindow, expanded_heig
     }
 }
 
-/// Do what a hotkey or a panel icon asked of the shell at once. Right after the player's
-/// own key press or click, so Windows lets us take the foreground.
-fn carry_out(app: &AppHandle, overlay: &WebviewWindow, request: Option<Request>) {
+/// Do what a hotkey, a panel icon or an Item Lookup asked of the shell. Right after the
+/// player's own key press or click, so Windows lets us take the foreground.
+fn carry_out(
+    app: &AppHandle,
+    overlay: &WebviewWindow,
+    reader: &ReaderThread,
+    compass: &mut Compass,
+    request: Option<Request>,
+) {
     match request {
         Some(Request::OpenInBrowser { url }) => open_in_browser(app, &url),
         Some(Request::RaiseOverlay) => search::take_focus(overlay),
+        Some(Request::CaptureItemTooltip) => {
+            if let Err(e) = reader.read_item_tooltip() {
+                eprintln!("Item Lookup: {e}");
+                compass.on_item_tooltip_reading(None);
+            }
+        }
         None => {}
     }
 }
