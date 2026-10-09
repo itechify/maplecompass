@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { dayText } from "./dates";
 import type { ExpTracking } from "./exp-tracking";
 import { hotkeyAvailable, keyLabel, type Hotkeys } from "./hotkeys";
 import {
@@ -356,8 +357,7 @@ function candidateRow(id: string, outline: Outline | null): HTMLLIElement {
 }
 
 /** "7 Oct 2026", in the player's time zone. */
-const savedOn = (unixMs: number) =>
-  new Date(unixMs).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const savedOn = (unixMs: number) => dayText(new Date(unixMs), true);
 
 /** The note shown in place of (or above) the map's data. */
 function dataNote(data: MapDataStatus, recognition: Recognition, sourceHint: string): string {

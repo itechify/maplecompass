@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { dayText } from "./dates";
 import type { ExpRate, ExpTracking, PersonalBestLine, VisitBest } from "./exp-tracking";
 
 /** What the shell sends: the figures, and whether the window shows at all. */
@@ -52,6 +53,10 @@ const whole = (n: number) => signed(n.toLocaleString("en-US"));
 const percent = (hundredths: number, decimals = Math.abs(hundredths) >= 10_000 ? 0 : 1) =>
   signed(`${(hundredths / 100).toFixed(decimals)}%`);
 
+/** A share of a rate (a map's solo ceiling, a Personal Best): "73%", and "7.3%" under
+ *  10%, where one decimal still says something. */
+const sharePercent = (hundredths: number) => percent(hundredths, hundredths < 1000 ? 1 : 0);
+
 /** An EXP rate to 3 significant figures, written out as the panel writes its rates:
  *  840, 6,120, 61,200, 1,230,000. */
 const rate = (n: number) => whole(Number(n.toPrecision(3)));
@@ -75,11 +80,8 @@ function personalBest(line: PersonalBestLine) {
   if (line.kind === "firstVisit") return `Your first best EXP/h here: ${named}`;
   const of = line.shareHundredths;
   if (of === null) return `Your best EXP/h here: ${named}`;
-  return `${percent(of, of < 1000 ? 1 : 0)} of your best EXP/h here (${named})`;
+  return `${sharePercent(of)} of your best EXP/h here (${named})`;
 }
-
-/** The months as dates are written here: "3 Oct". Not the locale's, which may say "Sept". */
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** Whether two moments fall on the same day in the player's local time. */
 const sameDay = (a: Date, b: Date) =>
@@ -91,8 +93,7 @@ function setOn(unixMs: number, now = new Date()) {
   const set = new Date(unixMs);
   if (sameDay(set, now)) return "set today";
   if (sameDay(set, new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))) return "set yesterday";
-  const day = `${set.getDate()} ${MONTHS[set.getMonth()]}`;
-  return set.getFullYear() === now.getFullYear() ? `set ${day}` : `set ${day} ${set.getFullYear()}`;
+  return `set ${dayText(set, set.getFullYear() !== now.getFullYear())}`;
 }
 
 /** One best in the opened line: its figure as the Rolling Rate showed it, and when it was
@@ -184,7 +185,7 @@ function render({ shown, tracking: t }: TrackerView) {
   const shareOf = t.ceilingShareHundredths;
   share.hidden = shareOf === null || t.soloExpCeiling === null;
   if (shareOf !== null && t.soloExpCeiling !== null) {
-    share.textContent = `${percent(shareOf, shareOf < 1000 ? 1 : 0)} of this map's solo EXP/h (${whole(t.soloExpCeiling)})`;
+    share.textContent = `${sharePercent(shareOf)} of this map's solo EXP/h (${whole(t.soloExpCeiling)})`;
   }
   const died = t.deaths.count;
   deaths.hidden = died === 0;
