@@ -73,9 +73,10 @@ pub struct PersonalBestLine {
     /// percent: 9200 for "92%". `None` on a first Visit, until Last 5 min is a full 5
     /// minutes of active play here, or while its rate is zero or negative.
     pub share_hundredths: Option<i64>,
-    /// This Visit has beaten the earlier Visits' best: the "new best" tag, for the rest
-    /// of the Visit, whatever the rate does after.
-    pub new_best: bool,
+    /// This Visit's best, once it has beaten the earlier Visits': the "new best" tag, for
+    /// the rest of the Visit, whatever the rate does after, and the line's hover shows it.
+    /// `None` on a first Visit, whose best the line names.
+    pub new_best: Option<VisitBest>,
 }
 
 /// Every map's Visit bests, and the Visit under way's.
@@ -137,14 +138,14 @@ impl Bests {
                 set_at_unix_ms: best.set_at_unix_ms,
                 first: false,
                 share_hundredths: share(best.exp_per_hour),
-                new_best: this.is_some_and(|this| this.exp_per_hour > best.exp_per_hour),
+                new_best: this.filter(|this| this.exp_per_hour > best.exp_per_hour),
             }),
             None => this.map(|this| PersonalBestLine {
                 exp_per_hour: this.exp_per_hour,
                 set_at_unix_ms: this.set_at_unix_ms,
                 first: true,
                 share_hundredths: None,
-                new_best: false,
+                new_best: None,
             }),
         }
     }
