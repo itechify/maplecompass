@@ -79,10 +79,14 @@ function render(tracking: ExpTracking) {
   reportHeight();
 }
 
-// The shell sizes the window to the content, as the overlay does the panel.
+// The shell sizes the window to the content, as the overlay does the panel. The panel is
+// no taller than the window, so it is measured without that limit, or the window could
+// never grow.
 let reportedHeight = 0;
 function reportHeight() {
+  panelEl.classList.add("measuring");
   const height = Math.ceil(panelEl.getBoundingClientRect().height);
+  panelEl.classList.remove("measuring");
   if (height > 0 && height !== reportedHeight) {
     reportedHeight = height;
     invoke("grind_tracker_height", { height });
