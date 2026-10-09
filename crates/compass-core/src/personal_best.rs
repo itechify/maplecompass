@@ -20,6 +20,9 @@ use serde::{Deserialize, Serialize};
 /// The shape [`SavedBests`] has now. Bumped whenever it changes.
 pub const BESTS_VERSION: u32 = 1;
 
+/// How many Visits' bests each map keeps: the best of them.
+const VISITS_KEPT: usize = 10;
+
 /// Every map's Visit bests, as plain data the shell can keep between launches.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -167,7 +170,8 @@ impl Bests {
     }
 }
 
-/// A Visit's `best` on `map` joins the map's, highest first.
+/// A Visit's `best` on `map` joins the map's, highest first; one that doesn't make the
+/// map's [`VISITS_KEPT`] is dropped.
 fn join(bests: &mut SavedBests, map: String, best: VisitBest) {
     let maps = &mut bests.maps;
     let at = match maps.iter().position(|m| m.id == map) {
@@ -180,4 +184,5 @@ fn join(bests: &mut SavedBests, map: String, best: VisitBest) {
     let visits = &mut maps[at].visits;
     let below = visits.iter().position(|v| v.exp_per_hour < best.exp_per_hour).unwrap_or(visits.len());
     visits.insert(below, best);
+    visits.truncate(VISITS_KEPT);
 }

@@ -16,6 +16,7 @@ const DAY: u64 = 24 * 60 * MIN;
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
 const CONSTRUCTION_SITE: &str = "victoria-road__construction-site-north-of-kerning-city--window";
+const SUNSET_SKY_ID: &str = "010003070";
 
 /// The wall clock at capture time 0 of the first launch: 9 Oct 2026, 12:00 UTC.
 const WALL_AT_START: u64 = 1_791_547_200_000;
@@ -185,6 +186,39 @@ fn bests_saved_in_another_shape_are_left_and_the_app_starts_with_none() {
     // 5 minutes at 3,600 EXP/h: a first Visit's best.
     let five = next.hunt(5 * MIN, 10);
     assert_eq!(line(&five).map(|l| (l.exp_per_hour, l.first)), Some((3600, true)));
+}
+
+/// The EXP/h of each Visit's best a map's saved bests hold, in their order.
+fn saved_rates(bests: &SavedBests, map: &str) -> Vec<u64> {
+    let map = bests.maps.iter().find(|m| m.id == map);
+    map.map_or_else(Vec::new, |m| m.visits.iter().map(|v| v.exp_per_hour).collect())
+}
+
+#[test]
+fn each_map_keeps_only_its_10_best_visits() {
+    // 11 Visits to Sunset Sky, 5 minutes each, at 3,600 to 7,200 EXP/h in steps of 360
+    // (the slowest the third), each but the last ended by stepping onto the Construction
+    // Site. The last is under way when the bests are handed out.
+    let mut first = Player::first_launch();
+    for (i, gain) in [15, 11, 10, 20, 18, 12, 19, 13, 17, 14, 16].into_iter().enumerate() {
+        if i > 0 {
+            first.arrive(CONSTRUCTION_SITE);
+        }
+        first.arrive(SUNSET);
+        first.hunt(5 * MIN, gain);
+    }
+
+    // The slowest Visit didn't make the 10, highest first.
+    let kept: Vec<u64> = (11..=20).rev().map(|gain| gain * 360).collect();
+    assert_eq!(saved_rates(&handed_out(&first.compass), SUNSET_SKY_ID), kept);
+
+    // A twelfth Visit at 3,240 EXP/h doesn't make them either, ended or not.
+    first.arrive(CONSTRUCTION_SITE);
+    first.arrive(SUNSET);
+    first.hunt(5 * MIN, 9);
+    assert_eq!(saved_rates(&handed_out(&first.compass), SUNSET_SKY_ID), kept);
+    first.arrive(CONSTRUCTION_SITE);
+    assert_eq!(saved_rates(&handed_out(&first.compass), SUNSET_SKY_ID), kept);
 }
 
 #[test]
