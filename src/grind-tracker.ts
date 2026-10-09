@@ -58,8 +58,8 @@ function length(seconds: number) {
   return h === 0 ? `${m}m` : m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
+/** The headline's tag: only "paused". Warming up has none: its figures in Light say it. */
 const TAGS: Partial<Record<ExpTracking["state"], string>> = {
-  warmingUp: "warming up",
   paused: "paused",
 };
 
