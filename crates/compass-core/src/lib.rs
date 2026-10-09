@@ -867,7 +867,7 @@ impl Compass {
     /// Pick up the Personal Bests an earlier launch saved ([`SavedBests::default`] when
     /// none were). The shell restores them at startup, before any reading.
     pub fn restore_bests(&mut self, bests: SavedBests) -> &PanelState {
-        self.session.bests_mut().restore(bests);
+        self.session.restore_bests(bests);
         self.sync_panel()
     }
 
