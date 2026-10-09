@@ -936,10 +936,13 @@ impl Compass {
     }
 
     /// The Item Lookup's line. A failure, or items to pick from, expands a collapsed panel
-    /// so the player sees it (once per lookup), and it collapses again when the line goes.
+    /// so the player sees it (once per lookup), and it collapses again when the line goes
+    /// or a page opens; not while the next lookup waits on MeowDB, whose answer may want
+    /// the panel again.
     fn sync_item_lookup(&mut self) {
         let line = self.item_lookups.line();
         let wanting = line.as_ref().filter(|_| self.item_lookups.needs_panel()).map(|line| line.lookup);
+        let done = line.as_ref().is_none_or(|line| matches!(line.outcome, ItemLookup::Opened { .. }));
         match wanting {
             Some(lookup) if self.lookup_shown != Some(lookup) => {
                 self.lookup_shown = Some(lookup);
@@ -948,7 +951,7 @@ impl Compass {
                     self.lookup_expanded = true;
                 }
             }
-            None if self.lookup_expanded => {
+            None if self.lookup_expanded && done => {
                 self.panel.expanded = false;
                 self.lookup_expanded = false;
             }

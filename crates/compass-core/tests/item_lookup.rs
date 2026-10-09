@@ -518,6 +518,40 @@ fn picking_from_the_list_collapses_the_panel_again() {
 }
 
 #[test]
+fn a_panel_expanded_for_a_line_stays_expanded_while_the_next_lookup_waits_on_meowdb() {
+    let mut compass = started_with(FakeSource::offline().items_taking(2), settings());
+    compass.act(Action::ToggleExpanded);
+    compass.on_hotkey("ctrl+shift+i");
+    compass.on_item_tooltip_reading(Some(ItemTooltipReading { tooltip: ItemTooltip::None, at_ms: 1_000 }));
+    assert!(compass.panel_state().expanded);
+
+    let state = look_up(&mut compass, "Zqxv Nothing", 2_000);
+    assert_eq!(line(&state), Some(ItemLookup::LookingUp { read: "Zqxv Nothing".into() }));
+    assert!(state.expanded, "no collapse while MeowDB is asked");
+    compass.tick(2_100);
+    let state = compass.tick(2_200).clone();
+
+    assert_eq!(line(&state), not_found("Zqxv Nothing"));
+    assert!(state.expanded);
+    assert!(!compass.tick(8_200).expanded, "collapsed once that line goes too");
+}
+
+#[test]
+fn a_panel_expanded_for_a_line_collapses_when_the_next_lookup_opens_a_page() {
+    let mut compass = started_with(FakeSource::offline().items_taking(2), settings());
+    compass.act(Action::ToggleExpanded);
+    compass.on_hotkey("ctrl+shift+i");
+    compass.on_item_tooltip_reading(Some(ItemTooltipReading { tooltip: ItemTooltip::None, at_ms: 1_000 }));
+
+    assert!(look_up(&mut compass, "Orihalcon Ore", 2_000).expanded);
+    compass.tick(2_100);
+    let state = compass.tick(2_200).clone();
+
+    assert_eq!(line(&state), opened("Orihalcon Ore", "418"));
+    assert!(!state.expanded);
+}
+
+#[test]
 fn an_expanded_panel_stays_expanded_after_a_failure_goes() {
     let mut compass = started();
 

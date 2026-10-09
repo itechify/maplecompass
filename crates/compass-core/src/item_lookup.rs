@@ -84,7 +84,8 @@ pub struct ItemLookupLine {
     pub outcome: ItemLookup,
 }
 
-/// How long a line stays, from when it was set (capture time).
+/// How long a line stays, from when it was set (capture time). The overlay fades it out
+/// over its last second (`ITEM_LOOKUP_LINE_MS` and `ITEM_CHOICES_MS` in `src/main.ts`).
 const LINE_MS: u64 = 6_000;
 /// How long the list of items sharing a name stays: long enough to read and pick.
 const CHOICES_MS: u64 = 30_000;

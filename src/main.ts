@@ -902,7 +902,10 @@ mobRows.addEventListener("click", (e) => {
   hoverMob(null);
 });
 
-/** How long the core keeps an Item Lookup's line (ms): the line fades out over its last second. */
+/**
+ * How long the core keeps an Item Lookup's line (ms; `LINE_MS` and `CHOICES_MS` in
+ * `crates/compass-core/src/item_lookup.rs`): the line fades out over its last second.
+ */
 const ITEM_LOOKUP_LINE_MS = 6_000;
 const ITEM_CHOICES_MS = 30_000;
 
