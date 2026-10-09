@@ -39,7 +39,7 @@ body {
   /* The game draws its window text heavier than Arial renders here (the Quest Helper's
      regular lines are near-bold). Arial has no 500 or 600, so a hairline stroke in the
      text's own colour gives every line that weight. */
-  --text-weight-stroke: 0.4px;
+  --text-weight-stroke: 0.3px;
   --inset-bg: rgba(255, 255, 255, 0.5);
   --inset-edge: rgba(30, 45, 90, 0.3);
   /* Set here, not inherited: the body's ink is resolved before the panel's is. Text

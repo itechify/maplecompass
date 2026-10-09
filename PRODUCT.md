@@ -43,6 +43,7 @@ The companion follows the player's current Map by recognising the displayed Mini
 ## Brand Commitments
 
 - Product name: MapleCompass. The app icon is the pixel-art gold compass in [assets/icon.png](assets/icon.png), with packaged variants in `src-tauri/icons`.
+- The windows are set in NEXON's Maplestory typeface, bundled in `assets/fonts` with its provenance in `NOTICE.md`. Its terms for a third-party app need confirming before any public release.
 - Every screen displaying MeowDB data credits it as `NiaMeowDB (meowdb.com)`; the panel adds `images: maplestory.io` while its Mob Cards show maplestory.io's mob images.
 - Preserve the explicit first-run account-risk disclosure. The product is a third-party companion, not made or approved by Nexon.
 - The windows lean into MapleStory: they borrow the game's own window language (the minimap and the Quest Helper), so they read as if they shipped with the game (chosen by the user in the October 2026 critique; see DESIGN.md).
