@@ -283,7 +283,7 @@ fn each_map_keeps_only_its_10_best_visits() {
     // 11 Visits to Sunset Sky, 5 minutes each, at 3,600 to 7,200 EXP/h in steps of 360
     // (the slowest the third), each but the last ended by stepping onto the Construction
     // Site. The last is under way when the bests are handed out.
-    let mut first = Player::first_launch();
+    let mut first = Player::saved_by_the_shell(tracking());
     for (i, gain) in [15, 11, 10, 20, 18, 12, 19, 13, 17, 14, 16].into_iter().enumerate() {
         if i > 0 {
             first.arrive(CONSTRUCTION_SITE);
@@ -296,13 +296,16 @@ fn each_map_keeps_only_its_10_best_visits() {
     let kept: Vec<u64> = (11..=20).rev().map(|gain| gain * 360).collect();
     assert_eq!(saved_rates(&handed_out(&first.compass), SUNSET_SKY_ID), kept);
 
-    // A twelfth Visit at 3,240 EXP/h doesn't make them either, ended or not.
+    // A twelfth Visit at 3,240 EXP/h doesn't make them either, ended or not, so the
+    // shell has nothing to save.
     first.arrive(CONSTRUCTION_SITE);
     first.arrive(SUNSET);
+    let saves = first.saves();
     first.hunt(5 * MIN, 9);
     assert_eq!(saved_rates(&handed_out(&first.compass), SUNSET_SKY_ID), kept);
     first.arrive(CONSTRUCTION_SITE);
     assert_eq!(saved_rates(&handed_out(&first.compass), SUNSET_SKY_ID), kept);
+    assert_eq!(first.saves(), saves);
 }
 
 #[test]

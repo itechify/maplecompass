@@ -112,11 +112,9 @@ impl Bests {
     pub fn shown(&mut self, map: &str, rate: Option<u64>, now_unix_ms: Option<u64>) {
         if self.on.as_deref() != Some(map) {
             // The best handed out moves with it, if either map has one this Visit.
-            if self.this_visit().is_some() {
-                self.revision += 1;
-            }
+            let left = self.handed_out();
             self.on = Some(map.to_string());
-            if self.this_visit().is_some() {
+            if left || self.handed_out() {
                 self.revision += 1;
             }
         }
@@ -127,7 +125,9 @@ impl Bests {
             Some((_, best)) => *best = shown,
             None => self.visit.push((map.to_string(), shown)),
         }
-        self.revision += 1;
+        if self.handed_out() {
+            self.revision += 1;
+        }
     }
 
     /// The Visit under way ended: its best joins its map's.
@@ -141,6 +141,15 @@ impl Bests {
     fn this_visit(&self) -> Option<(&String, VisitBest)> {
         let on = self.on.as_ref()?;
         self.visit.iter().find(|(id, _)| id == on).map(|(id, best)| (id, *best))
+    }
+
+    /// Whether [`Bests::saved`] hands out the Visit under way's best: it has one, and it
+    /// makes its map's [`VISITS_KEPT`].
+    fn handed_out(&self) -> bool {
+        self.this_visit().is_some_and(|(map, best)| {
+            let visits = self.earlier.maps.iter().find(|m| &m.id == map).map_or(&[][..], |m| &m.visits);
+            visits.get(VISITS_KEPT - 1).is_none_or(|last| best.exp_per_hour > last.exp_per_hour)
+        })
     }
 
     /// The line for `map`, where `share` gives Last 5 min's share of a best, if it is
@@ -185,9 +194,9 @@ impl Bests {
         }
     }
 
-    /// Changes whenever what [`Bests::saved`] hands out does: the Visit under way's best
-    /// set, raised, or moved to the Candidate chosen, or bests restored. A Visit ending
-    /// changes nothing handed out.
+    /// Changes whenever what [`Bests::saved`] hands out does, and only then: the Visit
+    /// under way's best set, raised, or moved to the Candidate chosen, where it makes its
+    /// map's [`VISITS_KEPT`], or bests restored. A Visit ending changes nothing handed out.
     pub fn revision(&self) -> u64 {
         self.revision
     }
