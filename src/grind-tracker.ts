@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { ExpRate, ExpTracking } from "./exp-tracking";
+import type { ExpRate, ExpTracking, PersonalBestLine } from "./exp-tracking";
 
 /** What the shell sends: the figures, and whether the window shows at all. */
 type TrackerView = { shown: boolean; tracking: ExpTracking };
@@ -22,6 +22,9 @@ const sessionRow = byId("session-row");
 const sessionLength = byId("session-length");
 const sessionExp = byId("session-exp");
 const sessionPercent = byId("session-percent");
+const best = byId("tracking-best");
+const bestText = byId("tracking-best-text");
+const bestTag = byId("tracking-best-tag");
 const share = byId("tracking-share");
 const deaths = byId("tracking-deaths");
 const exp = byId("tracking-exp");
@@ -55,6 +58,16 @@ const TAGS: Partial<Record<ExpTracking["state"], string>> = {
   warmingUp: "warming up",
   paused: "paused",
 };
+
+/** The Personal Best line: the best named as Last 5 min shows its rates, so it reads as
+ *  the figure the player saw there. */
+function personalBest(line: PersonalBestLine) {
+  const named = rate(line.expPerHour);
+  if (line.first) return `Your first best EXP/h here: ${named}`;
+  const of = line.shareHundredths;
+  if (of === null) return `Your best EXP/h here: ${named}`;
+  return `${percent(of, of < 1000 ? 1 : 0)} of your best EXP/h here (${named})`;
+}
 
 /** Why there is no Time to Level, in words: never a bare dash beside the label. */
 function noTimeToLevel(rolling: ExpRate | null) {
@@ -99,6 +112,12 @@ function render({ shown, tracking: t }: TrackerView) {
   sessionExp.textContent = expPerHour(t.sessionAverage);
   sessionPercent.textContent = percentPerHour(t.sessionAverage);
 
+  // Just above the ceiling's line, in its style; the tag as the headline's.
+  best.hidden = !t.personalBest;
+  if (t.personalBest) {
+    bestText.textContent = personalBest(t.personalBest);
+    bestTag.hidden = !t.personalBest.newBest;
+  }
   const shareOf = t.ceilingShareHundredths;
   share.hidden = shareOf === null || t.soloExpCeiling === null;
   if (shareOf !== null && t.soloExpCeiling !== null) {
