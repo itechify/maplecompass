@@ -145,3 +145,24 @@ fn bests_handed_out_by_one_launch_show_the_same_line_and_hover_in_the_next() {
     assert_eq!(line(&next.arrive(SUNSET)), line(&back));
     assert_eq!(line(&next.hunt(5 * MIN, 10)), line(&five));
 }
+
+#[test]
+fn a_visit_cut_short_by_closing_maplecompass_keeps_its_best() {
+    // A first Visit to Sunset Sky at 7,200 EXP/h, its best set 5 minutes in, closed a
+    // minute later.
+    let mut first = Player::first_launch();
+    first.arrive(SUNSET);
+    first.hunt(5 * MIN, 20);
+    let set = first.wall_clock();
+    first.hunt(MIN, 20);
+
+    // Closing ended the Visit: the next launch has its best as the earlier Visits'.
+    let mut next = relaunch(handed_out(&first.compass), WALL_AT_START + DAY);
+    assert_eq!(line(&next.arrive(SUNSET)), earlier(7200, set, None));
+
+    // 10,800 EXP/h beats it, and that Visit is closed in turn: it is the best after.
+    next.hunt(5 * MIN, 30);
+    let beaten = next.wall_clock();
+    let mut third = relaunch(handed_out(&next.compass), WALL_AT_START + 2 * DAY);
+    assert_eq!(line(&third.arrive(SUNSET)), earlier(10_800, beaten, None));
+}

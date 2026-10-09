@@ -116,17 +116,13 @@ impl Bests {
     pub fn end_visit(&mut self) {
         let on = self.on.take();
         let Some((map, best)) = self.visit.drain(..).find(|(id, _)| Some(id) == on.as_ref()) else { return };
-        let maps = &mut self.earlier.maps;
-        let at = match maps.iter().position(|m| m.id == map) {
-            Some(at) => at,
-            None => {
-                maps.push(MapBests { id: map, visits: Vec::new() });
-                maps.len() - 1
-            }
-        };
-        let visits = &mut maps[at].visits;
-        let below = visits.iter().position(|v| v.exp_per_hour < best.exp_per_hour).unwrap_or(visits.len());
-        visits.insert(below, best);
+        join(&mut self.earlier, map, best);
+    }
+
+    /// The Visit under way's best on the map it was last certain on, if it has one.
+    fn this_visit(&self) -> Option<(&String, VisitBest)> {
+        let on = self.on.as_ref()?;
+        self.visit.iter().find(|(id, _)| id == on).map(|(id, best)| (id, *best))
     }
 
     /// The line for `map`, where `share` gives Last 5 min's share of a best, if it is
@@ -152,13 +148,33 @@ impl Bests {
         }
     }
 
-    /// Every map's Visit bests, for the shell to save.
+    /// Every map's Visit bests, for the shell to save: the Visit under way's as if it
+    /// ended now, since closing MapleCompass ends it.
     pub fn saved(&self) -> SavedBests {
-        self.earlier.clone()
+        let mut saved = self.earlier.clone();
+        if let Some((map, best)) = self.this_visit() {
+            join(&mut saved, map.clone(), best);
+        }
+        saved
     }
 
     /// Take back the bests an earlier launch saved, in place of any there are.
     pub fn restore(&mut self, saved: SavedBests) {
         self.earlier = saved;
     }
+}
+
+/// A Visit's `best` on `map` joins the map's, highest first.
+fn join(bests: &mut SavedBests, map: String, best: VisitBest) {
+    let maps = &mut bests.maps;
+    let at = match maps.iter().position(|m| m.id == map) {
+        Some(at) => at,
+        None => {
+            maps.push(MapBests { id: map, visits: Vec::new() });
+            maps.len() - 1
+        }
+    };
+    let visits = &mut maps[at].visits;
+    let below = visits.iter().position(|v| v.exp_per_hour < best.exp_per_hour).unwrap_or(visits.len());
+    visits.insert(below, best);
 }
