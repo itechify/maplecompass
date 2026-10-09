@@ -173,6 +173,17 @@ pub fn sharing_a_title() -> FakeSource {
     FakeSource::with_index(index_with_title("Victoria Road", "Kerning City", &[CONSTRUCTION_SITE_ID, SUNSET_SKY_ID]))
 }
 
+/// The Northern Top of the Construction Site's MeowDB map ID: it has a Map Summary.
+pub const NORTHERN_TOP_ID: &str = "010003081";
+
+/// As [`sharing_a_title`], with the Northern Top of the Construction Site sharing the
+/// title too: three Candidates in map index order, the Northern Top first (shown first),
+/// then the Construction Site, then Sunset Sky.
+pub fn three_sharing_a_title() -> FakeSource {
+    let ids = [NORTHERN_TOP_ID, CONSTRUCTION_SITE_ID, SUNSET_SKY_ID];
+    FakeSource::with_index(index_with_title("Victoria Road", "Kerning City", &ids))
+}
+
 /// A MeowDB mob page saved on 2026-10-08:
 /// `tests/fixtures/meowdb-monsters/<7-digit id>__<slug>.html`.
 pub fn saved_mob_page(id: &str) -> Option<String> {
