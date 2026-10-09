@@ -372,7 +372,8 @@ struct Figures {
     visit_from: u64,
     /// Active time from which the Rolling Rate counts towards the Visit's Personal Best,
     /// and is measured against the best: when the Visit started, or when the player last
-    /// forgot the Visit's best since.
+    /// forgot the Visit's best since, of the Forgets that stand. An undone Forget doesn't:
+    /// undoing the latest puts back an earlier one's.
     best_from: u64,
     /// What `best_from` was before the player last forgot the Visit's best: undoing that
     /// Forget puts it back, so a best forgotten before it stays out.
