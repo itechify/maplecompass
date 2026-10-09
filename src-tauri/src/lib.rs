@@ -225,6 +225,7 @@ pub fn run() {
             search::hunting_clear,
             search::search_toggle_taxis,
             search::search_toggle_teleport_scrolls,
+            search::panel_toggle_section,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
