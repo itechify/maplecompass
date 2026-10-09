@@ -40,7 +40,9 @@
 //!   back. The bar's last reading shows as it comes.
 //! - Last 5 min as shown afresh, over a full 5 minutes of the Visit's play, counts towards
 //!   the Visit's Personal Best on the map (see [`crate::personal_best`]), unless the bar
-//!   can't be read. After the player forgets the Visit's best, only play since counts,
+//!   can't be read. The core says which map that is, if any: one it is certain of, with
+//!   a Map Summary. Maps that share a title but would show the same count as the first
+//!   of them, the one the panel shows. After the player forgets the Visit's best, only play since counts,
 //!   and the line's share with it, until they undo the Forget. Bests outlast Sessions,
 //!   as Visits do.
 
