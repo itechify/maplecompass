@@ -2,11 +2,14 @@
 //! Visit by Visit.
 //!
 //! - A Visit's best on a map is the highest Last 5 min EXP/h the Grind Tracker showed at
-//!   a refresh whose window was a full 5 minutes of active play, all on the map: the
-//!   Session decides what counts, and records it here.
+//!   a refresh whose window was a full 5 minutes of active play, all on the map, with the
+//!   EXP bar read: the Session decides what counts. Only while the map is certain and has
+//!   a Map Summary: the core says which map that is.
 //! - A map's Personal Best is the best of its Visits'. During a Visit the rate is
 //!   compared with the earlier Visits' best, which can't change until the Visit ends:
-//!   this Visit's best joins them then.
+//!   this Visit's best joins them then. Nothing is capped or rejected.
+//! - A Visit's best is for the map it was last certain on: the player may choose among
+//!   Candidates, and the hotkey goes past the others on the way.
 //! - Bests are per map (MeowDB map ID), for every character: nothing about the Session
 //!   touches them.
 
@@ -61,9 +64,11 @@ pub struct PersonalBestLine {
     /// No earlier Visit had a best here: "Your first best EXP/h here".
     pub first: bool,
     /// Last 5 min's EXP/h as a share of the earlier Visits' best, in hundredths of a
-    /// percent: 9200 for "92%".
+    /// percent: 9200 for "92%". `None` on a first Visit, until Last 5 min is a full 5
+    /// minutes of active play here, or while its rate is zero or negative.
     pub share_hundredths: Option<i64>,
-    /// This Visit has beaten the earlier Visits' best.
+    /// This Visit has beaten the earlier Visits' best: the "new best" tag, for the rest
+    /// of the Visit, whatever the rate does after.
     pub new_best: bool,
 }
 
@@ -122,7 +127,6 @@ impl Bests {
                 exp_per_hour: best.exp_per_hour,
                 first: false,
                 share_hundredths: share(best.exp_per_hour),
-                // A best this Visit set stays its best, whatever the rate does after.
                 new_best: this.is_some_and(|this| this > best.exp_per_hour),
             }),
             None => this.map(|exp_per_hour| PersonalBestLine {
