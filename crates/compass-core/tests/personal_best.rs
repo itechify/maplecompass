@@ -1,7 +1,7 @@
-//! The Personal Best (GLOSSARY): the Grind Tracker's Last 5 min EXP/h measured against
-//! the best the player has had on the map they're on. A Visit's best is the highest
-//! Last 5 min EXP/h shown at a refresh over a full 5 minutes of active play on the map;
-//! the map's Personal Best is the best of its Visits'.
+//! The Personal Best (GLOSSARY): the Grind Tracker's Rolling Rate, in EXP/h, measured
+//! against the best the player has had on the map they're on. A Visit's best is the
+//! highest Rolling Rate shown at a refresh over a full 5 minutes of active play on the
+//! map; the map's Personal Best is the best of its Visits'.
 
 mod common;
 
@@ -22,7 +22,7 @@ const CONSTRUCTION_SITE: &str = "victoria-road__construction-site-north-of-kerni
 const KERNING: &str = "victoria-road__kerning-city--window";
 const ROCKY_ROAD: &str = "victoria-road__rocky-road-i--title-region";
 
-/// Last 5 min's EXP/h as the Grind Tracker shows it.
+/// The Rolling Rate's EXP/h as the Grind Tracker shows it ("Last 5 min").
 fn rolling(state: &PanelState) -> Option<i64> {
     state.exp_tracking.rolling.map(|r| r.exp_per_hour)
 }
@@ -75,18 +75,19 @@ fn a_first_visit_shows_its_best_so_far_once_there_have_been_five_minutes_of_play
     player.hunt(6 * MIN, 30);
     player.arrive(SUNSET);
 
-    // 3,600 EXP/h there. Under 5 minutes in, Last 5 min still counts some of the
+    // 3,600 EXP/h there. Under 5 minutes in, the Rolling Rate still counts some of the
     // Construction Site's play: no best yet, and nothing to show.
     let under = player.hunt(4 * MIN + 30 * S, 10);
     assert_eq!(rolling(&under), Some(4320));
     assert_eq!(under.exp_tracking.personal_best, None);
 
-    // 5 minutes there: Last 5 min is all Sunset Sky's, and this Visit's first best.
+    // 5 minutes there: the Rolling Rate is all Sunset Sky's, and this Visit's first
+    // best.
     let five = player.hunt(30 * S, 10);
     assert_eq!(rolling(&five), Some(3600));
     assert_eq!(five.exp_tracking.personal_best, first_best(3600));
 
-    // Faster, the best so far rises with what Last 5 min shows...
+    // Faster, the best so far rises with what the Rolling Rate shows...
     let faster = player.hunt(5 * MIN, 20);
     assert_eq!(rolling(&faster), Some(7200));
     assert_eq!(faster.exp_tracking.personal_best, first_best(7200));
@@ -174,11 +175,11 @@ fn coming_back_shows_the_best_until_five_minutes_there_then_the_rate_as_a_share_
     let (mut player, back) = back_on_sunset_sky_after_a_best_of_7200();
     assert_eq!(back.exp_tracking.personal_best, best(7200, None, None));
 
-    // 3,600 EXP/h: under 5 minutes, Last 5 min isn't all Sunset Sky's yet.
+    // 3,600 EXP/h: under 5 minutes, the Rolling Rate isn't all Sunset Sky's yet.
     let under = player.hunt(4 * MIN + 30 * S, 10);
     assert_eq!(under.exp_tracking.personal_best, best(7200, None, None));
 
-    // 5 minutes there: Last 5 min's 3,600 EXP/h is 50% of 7,200.
+    // 5 minutes there: the Rolling Rate's 3,600 EXP/h is 50% of 7,200.
     let five = player.hunt(30 * S, 10);
     assert_eq!(rolling(&five), Some(3600));
     assert_eq!(five.exp_tracking.personal_best, best(7200, Some(5000), None));
@@ -270,8 +271,8 @@ fn the_five_minutes_count_from_arriving_even_when_the_maps_page_comes_later() {
     assert_eq!(paged.data.solo_exp_ceiling(), Some(223_928));
     assert_eq!(paged.exp_tracking.personal_best, None);
 
-    // Under 5 minutes from arriving, Last 5 min still counts some of the Construction
-    // Site's play: nothing yet.
+    // Under 5 minutes from arriving, the Rolling Rate still counts some of the
+    // Construction Site's play: nothing yet.
     let under = player.hunt(2 * MIN + 30 * S, 10);
     assert_eq!(under.exp_tracking.personal_best, None);
 
@@ -300,8 +301,8 @@ fn nothing_is_recorded_while_candidates_wait_for_a_choice() {
     player.choose_next();
     let chosen = player.choose_next();
     assert_eq!(shown_map(&chosen), Some(CONSTRUCTION_SITE_ID));
-    // Its first best is Last 5 min as it shows now: the 10,800 shown before the choice
-    // never counted.
+    // Its first best is the Rolling Rate as it shows now: the 10,800 shown before the
+    // choice never counted.
     assert_eq!(chosen.exp_tracking.personal_best, first_best(3600));
 }
 
@@ -360,14 +361,15 @@ fn a_best_is_last_5_min_as_shown_at_a_refresh_never_a_peak_between() {
     player.arrive(SUNSET);
     assert_eq!(player.hunt(6 * MIN, 10).exp_tracking.personal_best, first_best(3600));
 
-    // 10 s into a half minute, a burst of 310 EXP: Last 5 min would read 7,200 EXP/h
-    // (600 EXP in 5 minutes), but the figures shown hold till the half minute is out.
+    // 10 s into a half minute, a burst of 310 EXP: the Rolling Rate would read 7,200
+    // EXP/h (600 EXP in 5 minutes), but the figures shown hold till the half minute is
+    // out.
     let burst = player.hunt(10 * S, 310);
     assert_eq!(rolling(&burst), Some(3600));
     assert_eq!(burst.exp_tracking.personal_best, first_best(3600));
 
-    // Nothing more till then: Last 5 min shows 6,960 EXP/h (580 EXP), and that is the
-    // best, as long as the burst counts in it.
+    // Nothing more till then: the Rolling Rate shows 6,960 EXP/h (580 EXP), and that is
+    // the best, as long as the burst counts in it.
     let shown = player.hunt(20 * S, 0);
     assert_eq!(rolling(&shown), Some(6960));
     assert_eq!(shown.exp_tracking.personal_best, first_best(6960));
@@ -419,8 +421,8 @@ fn with_the_bar_unreadable_or_paused_the_line_holds_like_the_other_figures() {
     assert_eq!(rolling(&unreadable), Some(3600));
     assert_eq!(unreadable.exp_tracking.personal_best, held);
 
-    // It reads again, unchanged: the Session is paused at Last 5 min's 3,600 EXP/h, and
-    // the line with it, however long the break.
+    // It reads again, unchanged: the Session is paused at the Rolling Rate's 3,600 EXP/h,
+    // and the line with it, however long the break.
     let paused = player.hunt(10 * S, 0);
     assert_eq!(paused.exp_tracking.state, TrackingState::Paused);
     assert_eq!(rolling(&paused), Some(3600));
@@ -511,13 +513,13 @@ fn forgetting_this_visits_best_once_it_beat_the_best_counts_only_windows_that_st
     let forgot = player.press(PanelControl::ForgetBest);
     assert_eq!(forgot.exp_tracking.personal_best, best(7200, None, None));
 
-    // 3,600 EXP/h for 2 minutes: Last 5 min still has 3 minutes of the jump, 23,040 EXP/h,
-    // and it isn't recorded again.
+    // 3,600 EXP/h for 2 minutes: the Rolling Rate still has 3 minutes of the jump, 23,040
+    // EXP/h, and it isn't recorded again.
     let after = player.hunt(2 * MIN, 10);
     assert_eq!(rolling(&after), Some(23_040));
     assert_eq!(after.exp_tracking.personal_best, best(7200, None, None));
 
-    // 5 minutes since the Forget: Last 5 min's 3,600 EXP/h is 50% of 7,200.
+    // 5 minutes since the Forget: the Rolling Rate's 3,600 EXP/h is 50% of 7,200.
     let five = player.hunt(3 * MIN, 10);
     assert_eq!(rolling(&five), Some(3600));
     assert_eq!(five.exp_tracking.personal_best, best(7200, Some(5000), None));
@@ -634,7 +636,7 @@ fn a_forgotten_best_is_not_recorded_again_from_a_session_whose_reset_is_undone()
     player.hunt(5 * MIN, 100);
 
     // The player resets the Session, forgets this Visit's 36,000, then undoes the reset:
-    // Last 5 min is the jump again, but it started before the Forget.
+    // the Rolling Rate is the jump again, but it started before the Forget.
     player.press(PanelControl::ResetSession);
     player.press(PanelControl::ForgetBest);
     let undone = player.press(PanelControl::UndoReset);

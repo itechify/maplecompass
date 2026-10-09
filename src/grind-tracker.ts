@@ -68,8 +68,8 @@ const TAGS: Partial<Record<ExpTracking["state"], string>> = {
   paused: "paused",
 };
 
-/** The Personal Best line: the best named as Last 5 min shows its rates, so it reads as
- *  the figure the player saw there. */
+/** The Personal Best line: the best named as the Rolling Rate's row shows its rates, so
+ *  it reads as the figure the player saw there. */
 function personalBest(line: PersonalBestLine) {
   const named = rate(line.best.expPerHour);
   if (line.kind === "firstVisit") return `Your first best EXP/h here: ${named}`;
@@ -95,7 +95,8 @@ function setOn(unixMs: number, now = new Date()) {
   return set.getFullYear() === now.getFullYear() ? `set ${day}` : `set ${day} ${set.getFullYear()}`;
 }
 
-/** One best in the opened line: its figure as Last 5 min showed it, and when it was set. */
+/** One best in the opened line: its figure as the Rolling Rate showed it, and when it was
+ *  set. */
 function showBest(row: HTMLElement, figure: HTMLElement, date: HTMLElement, visitBest: VisitBest | null) {
   row.hidden = !visitBest;
   if (!visitBest) return;
