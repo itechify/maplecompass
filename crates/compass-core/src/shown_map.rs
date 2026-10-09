@@ -102,9 +102,11 @@ impl Default for Settling {
 
 impl ShownMap {
     /// The title confirmed on the latest frame belongs to `maps` (none: no title yet).
-    /// Asks the source for whatever data is needed and not yet had.
-    pub fn show(&mut self, maps: Vec<CurrentMap>, source: &mut dyn MapDataSource) {
-        if maps != self.maps {
+    /// Asks the source for whatever data is needed and not yet had. Whether it is
+    /// another title than before: the player arrived on another map, a new Visit.
+    pub fn show(&mut self, maps: Vec<CurrentMap>, source: &mut dyn MapDataSource) -> bool {
+        let arrived = maps != self.maps;
+        if arrived {
             let came_from = self.connected_maps();
             self.loader.forget();
             // The map the player came from settles it when it leads to just one of
@@ -118,6 +120,7 @@ impl ShownMap {
             self.maps = maps;
         }
         self.poll(source);
+        arrived
     }
 
     /// The maps the shown map leads to, if the core is sure it's the player's and has
