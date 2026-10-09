@@ -124,7 +124,7 @@ A rate measured over the last few minutes of active play in a session, as oppose
 _Avoid_: current rate, live rate
 
 **Personal Best**:
-The highest Rolling Rate, in EXP/h, the player has had over a full 5 minutes of active play on one map, shared by all their characters. The Grind Tracker measures the Rolling Rate against it, and the player can forget one that came from a bug.
+The highest Rolling Rate, in EXP/h, the player has had over a full 5 minutes of active play on one map, shared by all their characters. The Grind Tracker shows the one from earlier Visits and marks the Rolling Rate while it beats it, and the player can remove one from history that came from a bug.
 _Avoid_: record, high score, PB, max
 
 **Visit**:
