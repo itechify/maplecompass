@@ -19,6 +19,11 @@
 //!   as [`SavedBests`], with a revision so it saves them only when they change, and takes
 //!   them back at startup. What it hands out includes the Visit under way's best, as if
 //!   it had ended: closing MapleCompass ends it.
+//! - The player can forget a best that came from a bug: the higher of the two the line's
+//!   hover shows, this Visit's once it has beaten the earlier Visits', theirs otherwise.
+//!   The map's next-best Visit's takes over. After forgetting this Visit's, only windows
+//!   that start after the Forget count: the Session sees to that. Undo brings the best
+//!   back until the Visit ends.
 
 use serde::{Deserialize, Serialize};
 
@@ -102,6 +107,18 @@ pub(crate) struct Bests {
     on: Option<String>,
     /// Changes whenever what [`Bests::saved`] hands out does.
     revision: u64,
+    /// The best the player last forgot, until the Visit ends: Undo brings it back.
+    forgotten: Option<Forgotten>,
+}
+
+/// A best the player forgot, to bring back if they undo it.
+#[derive(Debug)]
+struct Forgotten {
+    /// The map it was on.
+    map: String,
+    best: VisitBest,
+    /// It was the Visit under way's best, not an earlier Visit's.
+    this_visit: bool,
 }
 
 impl Bests {
@@ -130,8 +147,9 @@ impl Bests {
         }
     }
 
-    /// The Visit under way ended: its best joins its map's.
+    /// The Visit under way ended: its best joins its map's, and a Forget stands.
     pub fn end_visit(&mut self) {
+        self.forgotten = None;
         let on = self.on.take();
         let Some((map, best)) = self.visit.drain(..).find(|(id, _)| Some(id) == on.as_ref()) else { return };
         join(&mut self.earlier, map, best);
@@ -150,6 +168,58 @@ impl Bests {
             let visits = self.earlier.maps.iter().find(|m| &m.id == map).map_or(&[][..], |m| &m.visits);
             visits.get(VISITS_KEPT - 1).is_none_or(|last| best.exp_per_hour > last.exp_per_hour)
         })
+    }
+
+    /// Forget the higher of `map`'s Personal Best and this Visit's best there, as the line
+    /// shows them: this Visit's once it has beaten the other (or there is no other), the
+    /// other otherwise. The next-best Visit's takes over. It can be undone until the Visit
+    /// ends, or the next Forget. Whether it was this Visit's.
+    pub fn forget(&mut self, map: &str) -> bool {
+        let this = self.visit.iter().position(|(id, _)| id == map);
+        let earlier = self.earlier.maps.iter().position(|m| m.id == map);
+        let top = earlier.and_then(|at| self.earlier.maps[at].visits.first()).map(|best| best.exp_per_hour);
+        let forgotten = match (this, earlier) {
+            (Some(at), _) if top.is_none_or(|top| self.visit[at].1.exp_per_hour > top) => {
+                let (map, best) = self.visit.remove(at);
+                Forgotten { map, best, this_visit: true }
+            }
+            (_, Some(at)) if top.is_some() => {
+                let best = self.earlier.maps[at].visits.remove(0);
+                if self.earlier.maps[at].visits.is_empty() {
+                    self.earlier.maps.remove(at);
+                }
+                Forgotten { map: map.to_string(), best, this_visit: false }
+            }
+            _ => return false,
+        };
+        let this_visit = forgotten.this_visit;
+        self.forgotten = Some(forgotten);
+        this_visit
+    }
+
+    /// Bring back the best the player last forgot, unless the Visit has ended since: an
+    /// earlier Visit's in front again, this Visit's unless a higher one was set since.
+    /// Whether it was this Visit's.
+    pub fn undo_forget(&mut self) -> bool {
+        let Some(Forgotten { map, best, this_visit }) = self.forgotten.take() else { return false };
+        if this_visit {
+            match self.visit.iter_mut().find(|(id, _)| *id == map) {
+                Some((_, since)) if since.exp_per_hour > best.exp_per_hour => {}
+                Some((_, since)) => *since = best,
+                None => self.visit.push((map, best)),
+            }
+        } else {
+            let visits = visits_of(&mut self.earlier, map);
+            // It was the highest: in front of any equal to it too, as before.
+            let at = visits.iter().position(|v| v.exp_per_hour <= best.exp_per_hour).unwrap_or(visits.len());
+            visits.insert(at, best);
+        }
+        this_visit
+    }
+
+    /// Whether there is a Forget to undo.
+    pub fn forget_undoable(&self) -> bool {
+        self.forgotten.is_some()
     }
 
     /// The line for `map`, where `share` gives Last 5 min's share of a best, if it is
@@ -205,6 +275,14 @@ impl Bests {
 /// A Visit's `best` on `map` joins the map's, highest first; one that doesn't make the
 /// map's [`VISITS_KEPT`] is dropped.
 fn join(bests: &mut SavedBests, map: String, best: VisitBest) {
+    let visits = visits_of(bests, map);
+    let below = visits.iter().position(|v| v.exp_per_hour < best.exp_per_hour).unwrap_or(visits.len());
+    visits.insert(below, best);
+    visits.truncate(VISITS_KEPT);
+}
+
+/// `map`'s Visit bests, highest first: none yet if it had none.
+fn visits_of(bests: &mut SavedBests, map: String) -> &mut Vec<VisitBest> {
     let maps = &mut bests.maps;
     let at = match maps.iter().position(|m| m.id == map) {
         Some(at) => at,
@@ -213,8 +291,5 @@ fn join(bests: &mut SavedBests, map: String, best: VisitBest) {
             maps.len() - 1
         }
     };
-    let visits = &mut maps[at].visits;
-    let below = visits.iter().position(|v| v.exp_per_hour < best.exp_per_hour).unwrap_or(visits.len());
-    visits.insert(below, best);
-    visits.truncate(VISITS_KEPT);
+    &mut maps[at].visits
 }

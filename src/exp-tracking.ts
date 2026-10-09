@@ -49,4 +49,6 @@ export type ExpTracking = {
   bar: ExpBar | null;
   /** The Personal Best line, on a certain map with a Map Summary that has a best to name. */
   personalBest: PersonalBestLine | null;
+  /** The player forgot a Personal Best and hasn't left the map since. */
+  forgetUndoable: boolean;
 };
