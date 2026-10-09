@@ -621,7 +621,8 @@ impl Session {
         self.shown = None;
     }
 
-    /// Bring back the best the player last forgot, if they haven't left the map since: as
+    /// Bring back what the player last forgot, if they haven't left the map since: the
+    /// earlier Visits' best, or this Visit's best on every Candidate that had one, as
     /// though they never forgot it, unless a higher best was set since. Windows count from
     /// where they did before that Forget, so a best forgotten before it stays out.
     pub fn undo_forget_best(&mut self) {
