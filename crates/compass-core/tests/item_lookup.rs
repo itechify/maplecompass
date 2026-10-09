@@ -9,14 +9,15 @@
 //!
 //! Worked example, as in `grind_tracker_window.rs`: the game's client area at (812,110),
 //! 1920x1200 physical px, on one 3440x1440 monitor; an expanded panel of 340x72, so at
-//! (2376,510). The Item Tooltip's name line is read at (1000,600), well clear of it.
+//! (2376,510), and an Item Lookup alert of 420x40. The Item Tooltip's name line is read
+//! at (1000,600), clear of both.
 
 mod common;
 
 use common::{FakeSource, saved_search};
 use compass_core::{
     Action, Compass, ExpBarRegion, GameWindow, ItemChoice, ItemHit, ItemLookup, ItemTooltip, ItemTooltipReading,
-    OurWindow, PanelSizes, PanelState, Rect, Request, ScreenRect, Section, Settings, Size, SourceError, TitleRegion,
+    OurWindow, PanelSizes, PanelState, Rect, Request, ScreenRect, Settings, Size, SourceError, TitleRegion,
     meowdb,
 };
 
@@ -25,6 +26,8 @@ const SCREEN: ScreenRect = ScreenRect { x: 0, y: 0, width: 3440, height: 1440 };
 const CLIENT: Size = Size { width: 1920, height: 1200 };
 /// Where the name line of the Item Tooltip read is on screen.
 const NAME: ScreenRect = ScreenRect { x: 1000, y: 600, width: 200, height: 19 };
+/// The Item Lookup alert's size.
+const ALERT: Size = Size { width: 420, height: 40 };
 /// Where the expanded panel is.
 const PANEL: ScreenRect = ScreenRect { x: 2376, y: 510, width: 340, height: 72 };
 
@@ -45,6 +48,7 @@ fn started_with(source: FakeSource, settings: Settings) -> Compass {
         collapsed: Size { width: 44, height: 44 },
     });
     compass.set_grind_tracker_size(Size { width: 300, height: 150 });
+    compass.set_item_lookup_size(ALERT);
     let frame = ScreenRect { x: GAME.x - 1, y: GAME.y - 31, width: GAME.width + 2, height: GAME.height + 32 };
     compass.on_game_window(Some(GameWindow { client: GAME, frame, screens: vec![SCREEN] }));
     compass
@@ -454,108 +458,70 @@ fn each_lookup_is_numbered_so_the_same_line_twice_shows_afresh() {
     assert_ne!(first.lookup, second.lookup);
 }
 
-/// A core whose panel the player collapsed to its icon.
-fn collapsed() -> Compass {
-    let mut compass = started();
-    compass.act(Action::ToggleExpanded);
-    assert!(!compass.panel_state().expanded);
-    compass
-}
-
 #[test]
-fn a_failure_expands_a_collapsed_panel_until_its_line_goes() {
-    let mut compass = collapsed();
+fn the_alert_shows_at_the_top_centre_of_the_game_window() {
+    let mut compass = started();
 
     let state = look_up(&mut compass, "Zqxv Nothing", 1_000);
 
-    assert!(state.expanded, "so the player sees why nothing opened");
-    assert!(!compass.settings().expanded, "the player's collapsed panel is what's saved");
-    assert!(!compass.tick(7_000).expanded, "collapsed again once the line goes");
+    // Centred on the 1920 px client at x 812, a twentieth of its 1200 px down from y 110.
+    assert_eq!(state.item_lookup_placement, Some(ScreenRect { x: 1562, y: 170, width: 420, height: 40 }));
 }
 
 #[test]
-fn an_opened_page_leaves_a_collapsed_panel_collapsed() {
-    let mut compass = collapsed();
-
-    let state = look_up(&mut compass, "Orihalcon Ore", 1_000);
-
-    assert!(!state.expanded);
-    assert_eq!(line(&state), opened("Orihalcon Ore", "418"));
-}
-
-#[test]
-fn a_panel_the_player_uses_while_expanded_for_a_line_stays_expanded() {
-    let mut compass = collapsed();
-    look_up(&mut compass, "Zqxv Nothing", 1_000);
-
-    compass.act(Action::ToggleSection(Section::Mobs));
-
-    assert!(compass.tick(7_000).expanded);
-    assert!(compass.settings().expanded);
-}
-
-#[test]
-fn collapsing_a_panel_expanded_for_a_line_keeps_it_collapsed() {
-    let mut compass = collapsed();
-    look_up(&mut compass, "Zqxv Nothing", 1_000);
-
-    let state = compass.act(Action::ToggleExpanded).clone();
-
-    assert!(!state.expanded);
-    assert!(line(&state).is_some(), "the line is still there, behind the icon");
-    assert!(!compass.tick(2_000).expanded);
-    assert!(!compass.tick(7_000).expanded);
-}
-
-#[test]
-fn picking_from_the_list_collapses_the_panel_again() {
-    let mut compass = collapsed();
-
-    assert!(look_up(&mut compass, "Hero's Gladius", 1_000).expanded, "a list to pick from shows");
-    compass.pick_item("465");
-
-    assert!(!compass.panel_state().expanded);
-}
-
-#[test]
-fn a_panel_expanded_for_a_line_stays_expanded_while_the_next_lookup_waits_on_meowdb() {
-    let mut compass = started_with(FakeSource::offline().items_taking(2), settings());
-    compass.act(Action::ToggleExpanded);
-    compass.on_hotkey("ctrl+shift+i");
-    compass.on_item_tooltip_reading(Some(ItemTooltipReading { tooltip: ItemTooltip::None, at_ms: 1_000 }));
-    assert!(compass.panel_state().expanded);
-
-    let state = look_up(&mut compass, "Zqxv Nothing", 2_000);
-    assert_eq!(line(&state), Some(ItemLookup::LookingUp { read: "Zqxv Nothing".into() }));
-    assert!(state.expanded, "no collapse while MeowDB is asked");
-    compass.tick(2_100);
-    let state = compass.tick(2_200).clone();
-
-    assert_eq!(line(&state), not_found("Zqxv Nothing"));
-    assert!(state.expanded);
-    assert!(!compass.tick(8_200).expanded, "collapsed once that line goes too");
-}
-
-#[test]
-fn a_panel_expanded_for_a_line_collapses_when_the_next_lookup_opens_a_page() {
-    let mut compass = started_with(FakeSource::offline().items_taking(2), settings());
-    compass.act(Action::ToggleExpanded);
-    compass.on_hotkey("ctrl+shift+i");
-    compass.on_item_tooltip_reading(Some(ItemTooltipReading { tooltip: ItemTooltip::None, at_ms: 1_000 }));
-
-    assert!(look_up(&mut compass, "Orihalcon Ore", 2_000).expanded);
-    compass.tick(2_100);
-    let state = compass.tick(2_200).clone();
-
-    assert_eq!(line(&state), opened("Orihalcon Ore", "418"));
-    assert!(!state.expanded);
-}
-
-#[test]
-fn an_expanded_panel_stays_expanded_after_a_failure_goes() {
+fn there_is_no_alert_before_a_lookup_or_once_its_line_goes() {
     let mut compass = started();
+    assert_eq!(compass.panel_state().item_lookup_placement, None);
 
     look_up(&mut compass, "Zqxv Nothing", 1_000);
 
-    assert!(compass.tick(7_000).expanded);
+    assert!(compass.tick(6_999).item_lookup_placement.is_some());
+    assert_eq!(compass.tick(7_000).item_lookup_placement, None);
+}
+
+#[test]
+fn the_alert_goes_below_a_title_region_marked_where_it_would_be() {
+    // A minimap title marked at the top centre of the client area.
+    let title = TitleRegion { marked: Rect { x: 800, y: 40, width: 320, height: 48 }, client: CLIENT };
+    let mut compass = started_with(FakeSource::offline(), Settings { title_region: Some(title), ..settings() });
+    let region = compass.panel_state().title_region.expect("the Title Region is captured");
+
+    let alert = look_up(&mut compass, "Zqxv Nothing", 1_000).item_lookup_placement.expect("an alert");
+
+    assert!(alert.y >= region.y + region.height as i32, "{alert:?} clear of {region:?}");
+    assert_eq!(alert.x, 1562, "still centred");
+}
+
+#[test]
+fn the_alert_is_never_wider_than_the_game_window() {
+    let mut compass = started();
+    compass.set_item_lookup_size(Size { width: 2400, height: 40 });
+
+    let alert = look_up(&mut compass, "Zqxv Nothing", 1_000).item_lookup_placement.expect("an alert");
+
+    assert_eq!((alert.x, alert.width), (GAME.x, GAME.width));
+}
+
+#[test]
+fn a_collapsed_panel_stays_collapsed_whatever_a_lookup_comes_to() {
+    let mut compass = started();
+    compass.act(Action::ToggleExpanded);
+
+    assert!(!look_up(&mut compass, "Zqxv Nothing", 1_000).expanded, "a failure shows in the alert");
+    assert!(!look_up(&mut compass, "Hero's Gladius", 2_000).expanded, "and so does a list to pick from");
+    assert!(!look_up(&mut compass, "Orihalcon Ore", 3_000).expanded);
+    assert!(!compass.settings().expanded);
+}
+
+#[test]
+fn the_last_lookups_alert_over_the_name_says_so() {
+    let mut compass = started();
+    let alert = look_up(&mut compass, "Zqxv Nothing", 1_000).item_lookup_placement.expect("an alert");
+    compass.on_hotkey("ctrl+shift+i");
+
+    let under_alert = ScreenRect { x: alert.x + 20, y: alert.y + 10, width: 170, height: 19 };
+    let tooltip = ItemTooltip::Found { area: under_alert, name: Some("Orihalcon Ore".into()) };
+    let state = compass.on_item_tooltip_reading(Some(ItemTooltipReading { tooltip, at_ms: 2_000 }));
+
+    assert_eq!(line(state), Some(ItemLookup::Covered { by: OurWindow::Alert }));
 }
