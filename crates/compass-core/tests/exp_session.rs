@@ -9,12 +9,14 @@
 
 mod common;
 
-use common::{FakeSource, arrive, saved_page};
+use common::{FakeSource, arrive, black_frame, saved_page};
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::Poll;
 use compass_core::{
-    Action, Compass, Deaths, ExpBar, ExpBarReading, ExpBarRegion, ExpRate, ExpTracking, GameWindow, PanelControl, PanelState, Rect,
-    ScreenRect, Settings, Size, SourceError, TitleRegion, TrackingState, meowdb,
+    Action, Compass, Deaths, ExpBar, ExpBarReading, ExpBarRegion, ExpRate, ExpTracking, GameWindow, MapData, MapDataStatus,
+    PanelControl, PanelState, Rect, ScreenRect, Settings, Size, SourceError, TitleRegion, TrackingState, meowdb,
 };
 
 const S: u64 = 1000;
@@ -638,11 +640,16 @@ fn standing_in(source: FakeSource, stand_ins: &[(&'static str, &'static str)]) -
     let stand_ins = stand_ins.to_vec();
     source.with_pages(move |id| {
         let page = stand_ins.iter().find(|(map, _)| *map == id).map_or(id, |&(_, stand_in)| stand_in);
-        Poll::Ready(match saved_page(page) {
-            Some(html) => meowdb::read_map_page(&html, page),
-            None => Err(SourceError::Unreachable(format!("no saved page for {id}"))),
-        })
+        Poll::Ready(saved_map_page(page))
     })
+}
+
+/// Map `id`'s saved MeowDB page, read; unreachable without one.
+fn saved_map_page(id: &str) -> Result<MapData, SourceError> {
+    match saved_page(id) {
+        Some(html) => meowdb::read_map_page(&html, id),
+        None => Err(SourceError::Unreachable(format!("no saved page for {id}"))),
+    }
 }
 
 #[test]
@@ -666,6 +673,37 @@ fn on_the_second_of_two_maps_with_the_same_ceiling_the_share_counts_only_play_si
     let there = read(&mut compass, 130 * S, 400, 952);
     assert_eq!(there.exp_tracking.ceiling_share_hundredths, Some(174));
     assert_eq!(there.exp_tracking.solo_exp_ceiling, Some(223_928));
+}
+
+#[test]
+fn a_map_whose_page_arrives_after_the_player_counts_play_from_arriving() {
+    // MeowDB's pages are held back until `page_in` lets them through.
+    let page_in = Arc::new(AtomicBool::new(false));
+    let source = FakeSource::meowdb().with_pages({
+        let page_in = page_in.clone();
+        move |id| if page_in.load(Ordering::SeqCst) { Poll::Ready(saved_map_page(id)) } else { Poll::Pending }
+    });
+    let mut compass = tracking_with(source);
+    read(&mut compass, 0, 160, 381);
+    read(&mut compass, 10 * S, 266, 633);
+    read(&mut compass, 70 * S, 335, 798);
+    let arrived = arrive(&mut compass, SUNSET, 70 * S);
+    assert_eq!(arrived.data, MapDataStatus::Loading);
+
+    // The minimap covered a moment (a loading screen) doesn't end the Visit.
+    compass.on_frame(black_frame(90 * S));
+    arrive(&mut compass, SUNSET, 91 * S);
+    read(&mut compass, 100 * S, 360, 857);
+
+    // Sunset Sky's page comes 40 s after the player did.
+    page_in.store(true, Ordering::SeqCst);
+    let paged = compass.tick(110 * S).clone();
+    assert_eq!(paged.data.solo_exp_ceiling(), Some(223_928));
+    assert_eq!(paged.exp_tracking.ceiling_share_hundredths, None, "40 s there");
+
+    // A minute after arriving, not after the page: 65 EXP, 3,900 EXP/h of 223,928.
+    let there = read(&mut compass, 130 * S, 400, 952);
+    assert_eq!(there.exp_tracking.ceiling_share_hundredths, Some(174));
 }
 
 #[test]

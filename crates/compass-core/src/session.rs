@@ -605,14 +605,7 @@ impl Session {
     /// `ceiling` (if it is known): the figures measured earlier in this [`REFRESH_MS`]
     /// stretch, unless an event since asks for them afresh; and the bar's last reading.
     pub fn tracking(&mut self, ceiling: Option<u64>) -> ExpTracking {
-        if ceiling != self.ceiling {
-            // Another map, or its page come: its share counts from here.
-            self.ceiling = ceiling;
-            let now = self.now;
-            if let Some(figures) = &mut self.figures {
-                figures.visit_from = figures.active(now);
-            }
-        }
+        self.ceiling = ceiling;
         let fresh = self.measure(ceiling);
         let stretch = self.now / REFRESH_MS;
         // While the bar can't be read nothing new is known: the figures shown stay as
