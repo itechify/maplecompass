@@ -1,11 +1,13 @@
 //! MapleCompass shell: a thin adapter around `compass-core`. It finds the game window,
 //! captures the Title Region and the EXP Bar Region, feeds frames, hotkeys and drags to
 //! the core and renders the panel state in an overlay that sits just above the game
-//! (or, detached, in an ordinary window). All logic lives in the core.
+//! (or, detached, in an ordinary window), and the Grind Tracker in a window of its own
+//! beside it. All logic lives in the core.
 
 pub mod capture;
 pub mod gamewin;
 mod files;
+mod grind_tracker;
 mod hotkeys;
 pub mod meowdb;
 mod search;
@@ -21,8 +23,9 @@ use compass_core::{
     PanelState, Request, ScreenRect, Size, TitleReader, TitleReading, default_title_region,
 };
 use meowdb::MeowDbSource;
+use grind_tracker::GrindTrackerWindow;
 use setup::{Bridge, SetupWindows};
-use sizemove::Gesture;
+use sizemove::{Gesture, SizeMove};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -51,7 +54,7 @@ const MAX_EXPANDED_HEIGHT: f64 = 600.0;
 const COLLAPSED: (f64, f64) = (44.0, 44.0);
 /// A drag or resize the player started whose move or size loop hasn't started within this
 /// long never will (the mouse was let go first): the shell places the panel again.
-const LOOP_START_GRACE: Duration = Duration::from_secs(1);
+pub(crate) const LOOP_START_GRACE: Duration = Duration::from_secs(1);
 
 /// What the compass loop is asked to do.
 #[derive(Debug, Clone)]
@@ -85,6 +88,10 @@ pub(crate) enum Command {
     SizeMoveStarted,
     /// Windows' move or size loop on the overlay ended: the player let go of the mouse.
     SizeMoveEnded,
+    /// The Grind Tracker's content is this tall (CSS px).
+    GrindTrackerHeight(f64),
+    /// Windows told of a drag of the Grind Tracker's window.
+    GrindTrackerSizeMove(SizeMove),
     /// The player chose Quit in the tray icon's menu: save the settings and exit.
     Quit,
     /// The player started MapleCompass again; that one exited, and this one shows itself.
@@ -95,6 +102,15 @@ pub(crate) enum Command {
     /// The reader is done with a capture of the EXP Bar Region `region`: what it read,
     /// or `None` if the capture failed.
     ReadExpBar { region: ScreenRect, reading: Option<ExpBarReading> },
+}
+
+/// The overlay's drags and resizes, as the compass loop hears them.
+fn overlay_size_move(what: SizeMove) -> Command {
+    match what {
+        SizeMove::Pressed(gesture) => Command::GestureStarted(gesture),
+        SizeMove::LoopStarted => Command::SizeMoveStarted,
+        SizeMove::LoopEnded => Command::SizeMoveEnded,
+    }
 }
 
 /// The overlay reports how tall its expanded content is, so the window fits it.
@@ -170,9 +186,12 @@ pub fn run() {
             });
             let setup_windows = SetupWindows::new(app.handle())?;
             // Without it the player's drags and resizes don't stick, but the panel works.
-            if let Err(e) = sizemove::watch(&overlay, commands.clone()) {
+            if let Err(e) =
+                sizemove::watch(&overlay, commands.clone(), overlay_size_move, sizemove::overlay_resizable())
+            {
                 eprintln!("{e}");
             }
+            let grind_tracker = GrindTrackerWindow::new(app.handle(), commands.clone());
             overlay.on_window_event(move |event| match event {
                 // Only moves during a drag the overlay started are the player's.
                 WindowEvent::Moved(to) => {
@@ -196,7 +215,7 @@ pub fn run() {
             // Per-Monitor-V2 DPI aware.
             let reader = ReaderThread::spawn(app.state::<Sender<Command>>().inner().clone())?;
             let channels = Channels { commands: commands_rx, picks: picks_rx };
-            let windows = Windows { overlay, setup: setup_windows, hotkeys };
+            let windows = Windows { overlay, setup: setup_windows, grind_tracker, hotkeys };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
                 compass_loop(handle, windows, compass, reader, channels, settings_path)
             })?;
@@ -226,15 +245,19 @@ pub fn run() {
             search::search_toggle_taxis,
             search::search_toggle_teleport_scrolls,
             search::panel_toggle_section,
+            grind_tracker::grind_tracker_height,
+            grind_tracker::grind_tracker_view,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
-/// Our windows: the overlay (with mob search in it) and setup (with its region window).
+/// Our windows: the overlay (with mob search in it), setup (with its region window) and
+/// the Grind Tracker's.
 struct Windows {
     overlay: WebviewWindow,
     setup: SetupWindows,
+    grind_tracker: GrindTrackerWindow,
     /// Not a window, but registered and released as the foreground changes.
     hotkeys: hotkeys::GlobalHotkeys,
 }
@@ -331,7 +354,7 @@ fn compass_loop(
     channels: Channels,
     settings_path: PathBuf,
 ) {
-    let Windows { overlay, setup: mut setup_windows, mut hotkeys } = windows;
+    let Windows { overlay, setup: mut setup_windows, mut grind_tracker, mut hotkeys } = windows;
     let mut window = OverlayWindow::new(overlay);
     let mut saved = compass.settings();
     let mut pending = (saved.clone(), Instant::now());
@@ -407,6 +430,17 @@ fn compass_loop(
                     compass.act(Action::PanelMoved { x: to.x, y: to.y });
                 }
             }
+            Ok(Command::GrindTrackerHeight(height)) => {
+                grind_tracker.set_height(height);
+                if let Some(size) = grind_tracker.size() {
+                    compass.set_grind_tracker_size(size);
+                }
+            }
+            Ok(Command::GrindTrackerSizeMove(what)) => {
+                if let Some(at) = grind_tracker.size_move(what) {
+                    compass.act(Action::GrindTrackerMoved { x: at.x, y: at.y });
+                }
+            }
             Ok(Command::Read { region, reading }) => {
                 reader.title_busy = false;
                 // A reading of a region no longer captured (setup marked a new one, or
@@ -433,6 +467,10 @@ fn compass_loop(
         if Instant::now() >= next_window_check {
             next_window_check = Instant::now() + WINDOW_TICK;
             game = find_game(&mut compass, &window.overlay, expanded_height);
+            // For the display it is on now.
+            if let Some(size) = grind_tracker.size() {
+                compass.set_grind_tracker_size(size);
+            }
             // The hotkeys are live only while the game or one of our windows is in front.
             compass.on_foreground(gamewin::foreground(game.map(|g| g.handle)));
             if let Some((taken, invalid)) = hotkeys.sync(&app, compass.panel_state().hotkeys_live) {
@@ -469,6 +507,7 @@ fn compass_loop(
             emitted = Some(state.clone());
         }
         window.show(state);
+        grind_tracker.sync(state);
 
         // Save once the settings settle, not on every move of a drag.
         let current = compass.settings();
@@ -526,7 +565,7 @@ fn open_in_browser(app: &AppHandle, url: &str) {
 }
 
 /// CSS px to physical px, rounded up so the panel's content is never clipped.
-fn physical((width, height): (f64, f64), scale: f64) -> Size {
+pub(crate) fn physical((width, height): (f64, f64), scale: f64) -> Size {
     Size { width: (width * scale).ceil() as u32, height: (height * scale).ceil() as u32 }
 }
 
@@ -562,26 +601,7 @@ struct OverlayWindow {
 
 impl OverlayWindow {
     fn new(overlay: WebviewWindow) -> Self {
-        let above_game = Arc::new(AtomicBool::new(false));
-        // Its own thread, at its own steady pace: the overlay should be back above the
-        // game within a tick of the game coming to the front, whatever the compass loop
-        // is doing (setting window sizes and positions can take a while). It gets the
-        // overlay's handle once, here: asking Tauri for it from another thread waits on
-        // the main thread's event loop, which can leave the keeper idle for seconds while
-        // another app covers the game, and the overlay stays topmost over that app.
-        #[cfg(windows)]
-        match overlay.hwnd() {
-            Ok(hwnd) => {
-                let (handle, keeper_flag) = (hwnd.0 as isize, above_game.clone());
-                let spawned = std::thread::Builder::new()
-                    .name("z-order".into())
-                    .spawn(move || keep_above_game(handle, keeper_flag));
-                if let Err(e) = spawned {
-                    eprintln!("z-order keeper not started: {e}");
-                }
-            }
-            Err(e) => eprintln!("z-order keeper not started: no overlay window handle: {e}"),
-        }
+        let above_game = keep_just_above_game(&overlay, "z-order");
         Self {
             overlay,
             layer: None,
@@ -707,12 +727,38 @@ impl OverlayWindow {
     }
 }
 
-/// While `above_game` is set, check every `WINDOW_TICK` that the overlay (its window
-/// handle) is still just above the game in the z-order, and restack it if not: the game
-/// came to the front, or another app did. Nothing here waits on the main thread.
+/// Keep our `window` just above the game in the z-order while the flag returned is set,
+/// on a thread of its own (named `name`), at its own steady pace: the window should be
+/// back above the game within a tick of the game coming to the front, whatever the
+/// compass loop is doing (setting window sizes and positions can take a while). It gets
+/// the window's handle once, here: asking Tauri for it from another thread waits on the
+/// main thread's event loop, which can leave the keeper idle for seconds while another
+/// app covers the game, and the window stays topmost over that app.
+pub(crate) fn keep_just_above_game(window: &WebviewWindow, name: &str) -> Arc<AtomicBool> {
+    let above_game = Arc::new(AtomicBool::new(false));
+    #[cfg(windows)]
+    match window.hwnd() {
+        Ok(hwnd) => {
+            let (handle, keeper_flag) = (hwnd.0 as isize, above_game.clone());
+            let spawned =
+                std::thread::Builder::new().name(name.into()).spawn(move || keep_above_game(handle, keeper_flag));
+            if let Err(e) = spawned {
+                eprintln!("{name} keeper not started: {e}");
+            }
+        }
+        Err(e) => eprintln!("{name} keeper not started: no {} window handle: {e}", window.label()),
+    }
+    #[cfg(not(windows))]
+    let _ = (window, name);
+    above_game
+}
+
+/// While `above_game` is set, check every `WINDOW_TICK` that our window (its handle) is
+/// still just above the game in the z-order, and restack it if not: the game came to the
+/// front, or another app did. Nothing here waits on the main thread.
 #[cfg(windows)]
-fn keep_above_game(overlay: isize, above_game: Arc<AtomicBool>) {
-    let overlay = windows::Win32::Foundation::HWND(overlay as *mut _);
+fn keep_above_game(window: isize, above_game: Arc<AtomicBool>) {
+    let window = windows::Win32::Foundation::HWND(window as *mut _);
     let mut last_error = None;
     loop {
         std::thread::sleep(WINDOW_TICK);
@@ -721,18 +767,18 @@ fn keep_above_game(overlay: isize, above_game: Arc<AtomicBool>) {
         }
         if let Some(game) = gamewin::find_game() {
             // Polled 20 times a second: report a failure once, not every time.
-            let error = gamewin::keep_above(overlay, game.handle).err().map(|e| e.to_string());
+            let error = gamewin::keep_above(window, game.handle).err().map(|e| e.to_string());
             if error.is_some() && error != last_error {
-                eprintln!("keeping the overlay above the game failed: {}", error.as_deref().unwrap_or_default());
+                eprintln!("keeping our window above the game failed: {}", error.as_deref().unwrap_or_default());
             }
             last_error = error;
         }
     }
 }
 
-/// Size the overlay to the core's placement, and move it there unless the player is
+/// Size our window to the core's placement, and move it there unless the player is
 /// dragging it.
-fn place(overlay: &WebviewWindow, placement: ScreenRect, player_drags_it: bool) {
+pub(crate) fn place(overlay: &WebviewWindow, placement: ScreenRect, player_drags_it: bool) {
     let size = PhysicalSize::new(placement.width, placement.height);
     if overlay.inner_size().ok() != Some(size) {
         let _ = overlay.set_size(size);

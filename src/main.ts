@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { ExpTracking } from "./exp-tracking";
 import { hotkeyAvailable, keyLabel, type Hotkeys } from "./hotkeys";
 import {
   TIER_NAMES,
@@ -114,20 +115,6 @@ type Candidates = {
 /** Mirror of `compass_core::ExpBar`. */
 type ExpBar = { exp: number; percentHundredths: number };
 
-/** Mirror of `compass_core::ExpRate`. */
-type ExpRate = { expPerHour: number; percentPerHourHundredths: number | null };
-
-/** Mirror of `compass_core::ExpTracking`. */
-type ExpTracking = {
-  state: "off" | "waiting" | "warmingUp" | "active" | "paused";
-  timeToLevelS: number | null;
-  timeToLevelBadge: string | null;
-  rolling: ExpRate | null;
-  sessionAverage: ExpRate | null;
-  ceilingShareHundredths: number | null;
-  deaths: { count: number; expLost: number; percentLostHundredths: number };
-};
-
 /** Mirror of `compass_core::PanelState`. */
 type PanelState = {
   recognition: Recognition;
@@ -158,6 +145,8 @@ type PanelState = {
   expBarRegion: { x: number; y: number; width: number; height: number } | null;
   expBar: ExpBar | null;
   expTracking: ExpTracking;
+  /** Mirror of `compass_core::GrindTrackerWindow`: the player wants it open. */
+  grindTracker: { open: boolean };
   search: SearchState;
 };
 
@@ -179,17 +168,7 @@ const portalRows = byId("portal-rows");
 const footer = byId("footer");
 const credit = byId("credit");
 const hotkeyProblem = byId("hotkey-problem");
-const trackingEl = byId("tracking");
-const trackingWaiting = byId("tracking-waiting");
-const trackingFigures = byId("tracking-figures");
-const timeToLevel = byId("time-to-level");
-const trackingTag = byId("tracking-tag");
-const rollingExp = byId("rolling-exp");
-const sessionExp = byId("session-exp");
-const rollingPercent = byId("rolling-percent");
-const sessionPercent = byId("session-percent");
-const trackingExtra = byId("tracking-extra");
-const resetSession = byId("reset-session");
+const grindTracker = byId("grind-tracker");
 const badge = byId("badge");
 const mapMobs = byId("map-mobs");
 const noMobs = byId("no-mobs");
@@ -501,13 +480,14 @@ const CONTROL_HOTKEYS: Record<string, keyof Hotkeys> = {
   cyclePlacement: "cyclePlacement",
   setup: "setup",
   togglePanel: "togglePanel",
-  resetSession: "resetSession",
+  toggleGrindTracker: "grindTracker",
 };
 
 /**
  * The icons at the top of the panel, one per hotkey action. Each tooltip names its
  * hotkey (unless another app has it). The MeowDB icon shows only while a map is shown,
- * the next-candidate icon only while maps share its title.
+ * the next-candidate icon only while maps share its title, the Grind Tracker's only while
+ * the EXP bar is tracked (pressed while its window is open).
  */
 function renderToolbar(panel: PanelState) {
   for (const button of toolbar.querySelectorAll<HTMLButtonElement>("button[data-control]")) {
@@ -517,6 +497,14 @@ function renderToolbar(panel: PanelState) {
   }
   openMeowdb.hidden = !panel.map;
   nextCandidate.hidden = !panel.candidates;
+  grindTracker.hidden = panel.expTracking.state === "off";
+  const open = panel.grindTracker.open;
+  grindTracker.setAttribute("aria-pressed", String(open));
+  grindTracker.setAttribute("aria-label", open ? "Hide the Grind Tracker" : "Show the Grind Tracker");
+  const trackerKey = panel.hotkeys.grindTracker;
+  grindTracker.title = hotkeyAvailable(trackerKey, panel.unavailableHotkeys)
+    ? `${grindTracker.getAttribute("aria-label")} (${keyLabel(trackerKey)})`
+    : grindTracker.getAttribute("aria-label") ?? "";
   icon.title = hotkeyAvailable(panel.hotkeys.togglePanel, panel.unavailableHotkeys)
     ? `Click to expand (${keyLabel(panel.hotkeys.togglePanel)})` : "Click to expand";
 }
@@ -667,67 +655,6 @@ function scrollWithin(box: HTMLElement, item: HTMLElement) {
   const top = outer.top + (box.querySelector("thead")?.getBoundingClientRect().height ?? 0);
   if (inner.top < top) box.scrollTop -= top - inner.top;
   else if (inner.bottom > outer.bottom) box.scrollTop += inner.bottom - outer.bottom;
-}
-
-/** "−" (U+2212) for a negative figure, as the deaths counter writes it. */
-const signed = (text: string) => text.replace(/^-/, "−");
-
-/** 1234 hundredths -> "12.3%" with one decimal, "12%" with none: no finer than the
- *  figure can be trusted, so it doesn't flicker. */
-const percent = (hundredths: number, decimals = 1) =>
-  signed(`${(hundredths / 100).toFixed(decimals)}%`);
-
-/** An EXP rate to 3 significant figures: 840, 6,120, 61.2k, 1.23M. */
-function compact(n: number): string {
-  const abs = Math.abs(n);
-  if (abs < 10_000) return signed(Number(n.toPrecision(3)).toLocaleString("en-US"));
-  // 999,999 rounds to 1,000k: write it 1M.
-  const [value, unit] = Number((abs / 1_000).toPrecision(3)) < 1_000 ? [n / 1_000, "k"] : [n / 1_000_000, "M"];
-  return signed(`${Number(value.toPrecision(3))}${unit}`);
-}
-
-const TRACKING_TAGS: Partial<Record<ExpTracking["state"], string>> = {
-  warmingUp: "warming up",
-  paused: "paused",
-};
-
-/** The Grind Tracker section: nothing while tracking is off, a quiet line until the
- *  Session starts, then Time to Level, the rates, and the ceiling and deaths when the
- *  state carries them. "—" for any figure not there yet. */
-function renderTracking(panel: PanelState) {
-  const tracking = panel.expTracking;
-  trackingEl.hidden = tracking.state === "off";
-  const waiting = tracking.state === "waiting";
-  trackingWaiting.hidden = !waiting;
-  trackingFigures.hidden = waiting;
-  // The toolbar's reset icon, while there is a Session to reset.
-  resetSession.hidden = tracking.state === "off" || waiting;
-
-  timeToLevel.textContent = tracking.timeToLevelBadge ?? "—";
-  const tag = TRACKING_TAGS[tracking.state];
-  trackingTag.hidden = !tag;
-  trackingTag.textContent = tag ?? "";
-  trackingTag.className = `tag ${tracking.state}`;
-
-  const exp = (rate: ExpRate | null) => (rate ? compact(rate.expPerHour) : "—");
-  const share = (rate: ExpRate | null) =>
-    rate?.percentPerHourHundredths != null ? percent(rate.percentPerHourHundredths) : "—";
-  rollingExp.textContent = exp(tracking.rolling);
-  sessionExp.textContent = exp(tracking.sessionAverage);
-  rollingPercent.textContent = share(tracking.rolling);
-  sessionPercent.textContent = share(tracking.sessionAverage);
-
-  const extra = [];
-  if (tracking.ceilingShareHundredths !== null) {
-    extra.push(`${percent(tracking.ceilingShareHundredths, 0)} of the map's solo ceiling`);
-  }
-  const { deaths } = tracking;
-  if (deaths.count > 0) {
-    // No-break spaces: on a narrow panel, where the line wraps, the deaths read as one.
-    extra.push(`deaths: ${deaths.count} (${percent(-deaths.percentLostHundredths)})`);
-  }
-  trackingExtra.textContent = extra.join(" · ");
-  trackingExtra.hidden = extra.length === 0;
 }
 
 /** Time to Level on the collapsed icon, while there is one. */
@@ -982,7 +909,6 @@ function render(panel: PanelState) {
       : "Close the other app, or edit %APPDATA%\com.itechify.maplecompass\settings.json, then restart MapleCompass."
   }`;
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
-  renderTracking(panel);
   // The world crawl, while it runs, with or without a search: "Mapping the world: 312
   // of 422 maps known". Search can only find mobs on the maps known so far.
   const crawl = crawlLine(panel.search);

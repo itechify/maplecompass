@@ -24,8 +24,8 @@
             <button type="button" class="icon-button" id="open-meowdb" data-control="openMeowdbPage" aria-label="Open this map on MeowDB" hidden>
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5M11.5 9.5v4h-9v-9h4" /></svg>
             </button>
-            <button type="button" class="icon-button" id="reset-session" data-control="resetSession" aria-label="Reset the Session: measure EXP afresh" hidden>
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.3 6.2A5 5 0 1 1 3 9.5M2.8 2.8v3.6h3.6" /></svg>
+            <button type="button" class="icon-button" id="grind-tracker" data-control="toggleGrindTracker" aria-label="Show the Grind Tracker" aria-pressed="false" hidden>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 12.5 6.5 8.5 9 11l4.5-4.5M10.5 6.5h3v3" /></svg>
             </button>
             <button type="button" class="icon-button" id="cycle-placement" data-control="cyclePlacement" aria-label="Move the panel: inside, docked right, docked left or detached">
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 5.5h8v8h-8zM5.5 2.5h8v8" /></svg>
@@ -47,27 +47,6 @@
         </div>
         <p class="note" id="recovery" role="status" hidden></p>
         <p class="note problem" id="hotkey-problem" role="status" hidden></p>
-        <section class="tracking" id="tracking" aria-label="Grind Tracker" hidden>
-          <p class="waiting" id="tracking-waiting">Grind Tracker: waiting for EXP</p>
-          <div id="tracking-figures">
-            <p class="headline">
-              <span class="label">Time to Level</span>
-              <span class="time-to-level" id="time-to-level"></span>
-              <span class="tag" id="tracking-tag" hidden></span>
-            </p>
-            <table class="rates">
-              <thead>
-                <tr><th></th><th>Rolling 5 min</th><th>Session</th></tr>
-              </thead>
-              <!-- Meso and item rows come later, from the Pickup Log. -->
-              <tbody>
-                <tr><th>EXP/h</th><td id="rolling-exp"></td><td id="session-exp"></td></tr>
-                <tr><th>%/h</th><td id="rolling-percent"></td><td id="session-percent"></td></tr>
-              </tbody>
-            </table>
-            <p class="extra" id="tracking-extra" hidden></p>
-          </div>
-        </section>
         <section id="data" hidden>
           <section class="candidates" id="candidates" hidden>
             <p class="note" id="candidates-note"></p>
