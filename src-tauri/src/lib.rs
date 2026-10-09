@@ -6,6 +6,7 @@
 
 pub mod capture;
 pub mod gamewin;
+mod bests;
 mod files;
 mod grind_tracker;
 mod hotkeys;
@@ -188,6 +189,10 @@ pub fn run() {
             let settings_path = settings::path(app.handle())?;
             // The core brings older settings up to date (hotkeys included).
             compass.restore(settings::load(&settings_path));
+            // The Personal Bests earlier launches set, beside the settings: a small file,
+            // read before anything is captured, so no best is set before they are back.
+            let bests_path = bests::path(app.handle())?;
+            compass.restore_bests(bests::load(&bests_path));
             let (commands, commands_rx) = mpsc::channel();
             // What the crawl learned at earlier launches: read (or built from the cached
             // pages) on a thread of its own, while the crawl holds for it.
@@ -243,7 +248,8 @@ pub fn run() {
             let channels = Channels { commands: commands_rx, picks: picks_rx };
             let windows = Windows { overlay, setup: setup_windows, grind_tracker, item_lookup, hotkeys };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
-                compass_loop(handle, windows, compass, reader, channels, Files { settings: settings_path, cache })
+                let files = Files { settings: settings_path, bests: bests_path, cache };
+                compass_loop(handle, windows, compass, reader, channels, files)
             })?;
             Ok(())
         })
@@ -292,10 +298,26 @@ struct Windows {
     hotkeys: hotkeys::GlobalHotkeys,
 }
 
-/// Where the compass loop saves the settings, and what the world crawl learned.
+/// Where the compass loop saves the settings, the Personal Bests, and what the world
+/// crawl learned.
 struct Files {
     settings: PathBuf,
+    bests: PathBuf,
     cache: PathBuf,
+}
+
+/// Save the Personal Bests if the core's bests revision moved on from `saved` (the one
+/// last saved, or restored at startup). At once, not once they settle: the Visit under
+/// way's best is kept as it changes, so however MapleCompass closes, it keeps it.
+fn save_bests(compass: &Compass, path: &std::path::Path, saved: &mut u64) {
+    let revision = compass.bests_revision();
+    if *saved == revision {
+        return;
+    }
+    *saved = revision;
+    if let Err(e) = bests::save(path, &compass.bests()) {
+        eprintln!("saving personal bests failed: {e}");
+    }
 }
 
 /// The world crawl's saves: what was saved last, so it is saved only when it changed.
@@ -456,6 +478,8 @@ fn compass_loop(
 ) {
     let settings_path = files.settings;
     let mut world_saves = WorldSaves { loaded: false, saved: None, pending: None };
+    // Restored at startup: saved already.
+    let mut bests_saved = compass.bests_revision();
     let Windows { overlay, setup: mut setup_windows, mut grind_tracker, mut item_lookup, mut hotkeys } = windows;
     let mut window = OverlayWindow::new(overlay);
     let mut saved = compass.settings();
@@ -506,6 +530,7 @@ fn compass_loop(
             Ok(Command::Quit) => {
                 // Whatever the player changed last (a drag, say) is saved first.
                 world_saves.save(&compass, &files.cache, true);
+                save_bests(&compass, &files.bests, &mut bests_saved);
                 let current = compass.settings();
                 if current != saved
                     && let Err(e) = settings::save(&settings_path, &current)
@@ -626,6 +651,7 @@ fn compass_loop(
         }
         let state = compass.panel_state();
         if state.quit {
+            save_bests(&compass, &files.bests, &mut bests_saved);
             app.exit(0);
             return;
         }
@@ -652,6 +678,7 @@ fn compass_loop(
             saved = pending.0.clone();
         }
         world_saves.save(&compass, &files.cache, false);
+        save_bests(&compass, &files.bests, &mut bests_saved);
     }
 }
 
