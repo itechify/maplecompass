@@ -255,8 +255,11 @@ mod win {
     }
 
     /// Put our `window` on top of every other window (in the topmost band), or take it
-    /// out of sight. Only our own window is moved, and only when it isn't where it should
-    /// be; returns whether it moved it.
+    /// out of sight. Only our own window is moved, and only when it may not be where it
+    /// should be: its style says otherwise, or the caller last set it (`set_before`)
+    /// otherwise. (Tao rewrites our windows' extended style from its own flags whenever
+    /// one of them changes, without `WS_EX_TOPMOST`, so the style alone can say a window
+    /// on top isn't.) Returns whether it moved it.
     ///
     /// Any process may make its own window topmost, so this works while the game has the
     /// foreground (Windows silently ignores a background process raising a normal window
@@ -266,8 +269,8 @@ mod win {
     ///
     /// No owner/parent link to the game (that would attach input queues across the
     /// processes, ADR 0001) and no event hook: the caller polls this.
-    pub fn set_on_top(window: HWND, on_top: bool) -> windows::core::Result<bool> {
-        if is_topmost(window) == on_top {
+    pub fn set_on_top(window: HWND, on_top: bool, set_before: Option<bool>) -> windows::core::Result<bool> {
+        if is_topmost(window) == on_top && set_before == Some(on_top) {
             return Ok(false);
         }
         let after = if on_top { HWND_TOPMOST } else { HWND_BOTTOM };
