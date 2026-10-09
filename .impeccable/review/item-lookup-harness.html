@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/item-lookup.css" />
+    <title>Item Lookup alert review harness</title>
+    <style>
+      /* The alert at the top centre of the game window, over the scene it sits on there.
+         ?s=<status> picks what it says: lookingUp, opened, choose, noTooltip, unreadable,
+         covered, notFound, unreachable, formatChanged. */
+      html {
+        background: #222 url("/samples/minimap/victoria-road__kerning-city--window.png") no-repeat;
+        background-size: 1916px auto;
+        background-position: center top -27px;
+        overflow: visible !important;
+      }
+      /* The window is 440 CSS px wide (WIDTH in src-tauri/src/item_lookup.rs), a twentieth
+         of the 1200 px client down. */
+      body { width: 440px; margin: 60px auto 0; overflow: visible !important; outline: 1px dashed #fff6; }
+      #h { position: fixed; left: 6px; bottom: 6px; font: 12px monospace; color: #fff; background: #000a; padding: 2px 5px; }
+    </style>
+    <script>
+      const cbs = {};
+      let next = 1;
+      window.__handlers = {};
+      window.__TAURI_INTERNALS__ = {
+        metadata: { currentWindow: { label: "item-lookup" }, currentWebview: { windowLabel: "item-lookup", label: "item-lookup" } },
+        transformCallback(cb) { const id = next++; cbs[id] = cb; return id; },
+        unregisterCallback(id) { delete cbs[id]; },
+        async invoke(cmd, args) {
+          if (cmd === "plugin:event|listen") { window.__handlers[args.event] = cbs[args.handler]; return 1; }
+          if (cmd === "item_lookup_height") { document.getElementById("h").textContent = "window " + args.height + "px"; }
+          return null;
+        },
+      };
+      window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
+    </script>
+  </head>
+  <body>
+    <div id="h"></div>
+    <script type="module">
+      const page = new DOMParser().parseFromString(await (await fetch("/item-lookup.html")).text(), "text/html");
+      document.body.prepend(page.getElementById("alert"));
+      await import("/src/item-lookup.ts");
+      const item = (id, name, category) => ({ id, name, category, url: `https://meowdb.com/msclassic/item-db/${id}` });
+      const lines = {
+        lookingUp: { status: "lookingUp", read: "Orihalcon Ore" },
+        opened: { status: "opened", name: "Orihalcon Ore", url: "https://meowdb.com/msclassic/item-db/418" },
+        choose: {
+          status: "choose", read: "Red Cloth Pants",
+          items: [item("1168", "Red Cloth Pants", "Bottom"), item("1177", "Red Cloth Pants", "Bottom")],
+        },
+        chooseHero: {
+          status: "choose", read: "Hero's Gladius",
+          items: [item("465", "Hero's Gladius", "Quest Item"), item("556", "Hero's Gladius", "One-Handed Sword")],
+        },
+        noTooltip: { status: "noTooltip" },
+        unreadable: { status: "unreadable" },
+        covered: { status: "covered", by: "panel" },
+        notFound: { status: "notFound", read: "Mithril Guardz" },
+        unreachable: { status: "unreachable" },
+        formatChanged: { status: "formatChanged" },
+      };
+      const s = new URLSearchParams(location.search).get("s") ?? "opened";
+      await new Promise((r) => setTimeout(r, 50));
+      window.__handlers["item-lookup-state"]({ payload: { shown: true, hotkey: "ctrl+shift+i", line: { lookup: 1, ...lines[s] } } });
+      // Held still for review: no fade.
+      document.getElementById("alert").style.animation = "none";
+    </script>
+  </body>
+</html>
