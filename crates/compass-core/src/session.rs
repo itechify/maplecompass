@@ -28,11 +28,15 @@
 //!   frames at all, as while the game window is minimised, is no evidence either way.)
 //! - The player's reset can be undone until the EXP next changes, which starts the new
 //!   Session; a character switch ends the old one for good.
+//! - Each map the panel confirms starts a Visit (GLOSSARY), which Sessions don't end:
+//!   the share of the map's solo ceiling counts only the play since. The title going
+//!   unread for a while doesn't end it, nor does the map's page coming later, nor the
+//!   player choosing among Candidates (they haven't moved).
 //! - The figures shown hold still for each [`REFRESH_MS`] of capture time, rather than
 //!   jumping with every kill. Events show at once: the state changing (the Session
 //!   starting, warming up, pausing, resuming, or the bar going unread), the first figures
-//!   there are, a death, a level-up, a reset or its undoing, a character switch, and a
-//!   map with another ceiling. The bar's last reading shows as it comes.
+//!   there are, a death, a level-up, a reset or its undoing, a character switch, a new
+//!   Visit, and a map with another ceiling. The bar's last reading shows as it comes.
 
 use crate::ExpBar;
 use serde::Serialize;
@@ -58,10 +62,10 @@ pub struct ExpTracking {
     pub session_average: Option<ExpRate>,
     /// The Rolling Rate's EXP/h on the shown map, as a share of its MeowDB solo EXP/h
     /// ceiling (its Map Summary), in hundredths of a percent: 7300 for "73%". It counts
-    /// only the play since the map was shown, once there has been [`WARM_UP_MS`] of it,
-    /// so a map change never measures one map's EXP against another's ceiling. `None`
-    /// without a recognised map with a Map Summary, until then, or while the rate there
-    /// is zero or negative.
+    /// only the play since arriving on the map (the Visit's), once there has been
+    /// [`WARM_UP_MS`] of it, so one map's EXP is never measured against another's
+    /// ceiling, the same or not. `None` without a recognised map with a Map Summary,
+    /// until then, or while the rate there is zero or negative.
     pub ceiling_share_hundredths: Option<i64>,
     /// The ceiling the share is of: the shown map's MeowDB solo EXP/h, while there is a
     /// share.
@@ -240,11 +244,18 @@ pub(crate) struct Session {
     unread_since: Option<u64>,
     /// The Session the player's reset ended, until the EXP next changes.
     undo: Option<Undo>,
-    /// The shown map's solo EXP/h ceiling, as last measured against.
-    ceiling: Option<u64>,
-    /// Which Visit is under way: one more with each map the panel confirms, none before
-    /// the first.
-    visit: u64,
+    /// The Visit under way. It outlasts Sessions: a reset or a character switch doesn't
+    /// move the player.
+    visit: Visit,
+}
+
+/// A Visit (GLOSSARY): from the panel confirming a map until it confirms another.
+#[derive(Debug, Default, Clone, Copy)]
+struct Visit {
+    /// Which it is: one more with each map the panel confirms, none before the first.
+    count: u64,
+    /// When it started: the latest capture time seen then.
+    at: u64,
 }
 
 /// What the player's reset set aside, to bring back if they undo it.
@@ -254,8 +265,8 @@ struct Undo {
     largest_gain_hundredths: u32,
     level_ups: u32,
     character_switched: bool,
-    /// The ceiling then: on another map since, the share starts over.
-    ceiling: Option<u64>,
+    /// The Visit then: on another map since, the share counts from arriving there.
+    visit: u64,
 }
 
 /// The figures the panel shows, held for the rest of the [`REFRESH_MS`] stretch they
@@ -531,7 +542,7 @@ impl Session {
                 largest_gain_hundredths: self.largest_gain_hundredths,
                 level_ups: self.level_ups,
                 character_switched: self.character_switched,
-                ceiling: self.ceiling,
+                visit: self.visit.count,
             }),
             None => self.undo.take(),
         };
@@ -544,8 +555,10 @@ impl Session {
     pub fn undo_reset(&mut self) {
         let Some(undo) = self.undo.take() else { return };
         let mut figures = undo.figures;
-        if undo.ceiling != self.ceiling {
-            figures.visit_from = figures.active(self.now);
+        if undo.visit != self.visit.count {
+            // Reset on another map: the EXP hasn't changed since, so the time from then
+            // to arriving here counts as it would have.
+            figures.visit_from = figures.active(self.visit.at);
         }
         self.figures = Some(figures);
         self.largest_gain_hundredths = undo.largest_gain_hundredths;
@@ -558,8 +571,8 @@ impl Session {
     /// The panel confirmed another map: a new Visit starts, as of the latest time seen.
     /// The share of the map's ceiling counts only the play since.
     pub fn arrive(&mut self) {
-        self.visit += 1;
         let now = self.now;
+        self.visit = Visit { count: self.visit.count + 1, at: now };
         if let Some(figures) = &mut self.figures {
             figures.visit_from = figures.active(now);
         }
@@ -605,14 +618,15 @@ impl Session {
     /// `ceiling` (if it is known): the figures measured earlier in this [`REFRESH_MS`]
     /// stretch, unless an event since asks for them afresh; and the bar's last reading.
     pub fn tracking(&mut self, ceiling: Option<u64>) -> ExpTracking {
-        self.ceiling = ceiling;
         let fresh = self.measure(ceiling);
         let stretch = self.now / REFRESH_MS;
         // While the bar can't be read nothing new is known: the figures shown stay as
-        // they were, unless the map changes.
+        // they were, unless the player arrives on another map or the share would be of
+        // another ceiling (the map's page come, or another Candidate chosen).
         let unreadable = fresh.state == TrackingState::Unreadable;
+        let visit = self.visit.count;
         let holds = self.shown.as_ref().is_some_and(|shown| {
-            shown.visit == self.visit
+            shown.visit == visit
                 && shown.ceiling == ceiling
                 && (unreadable
                     || shown.stretch == stretch
@@ -630,8 +644,7 @@ impl Session {
         match &mut self.shown {
             Some(shown) if holds => shown.tracking.state = fresh.state,
             _ => {
-                self.shown =
-                    Some(Shown { stretch, visit: self.visit, ceiling, level_ups: self.level_ups, tracking: fresh });
+                self.shown = Some(Shown { stretch, visit, ceiling, level_ups: self.level_ups, tracking: fresh });
             }
         }
         let held = self.shown.as_ref().map(|shown| shown.tracking.clone()).unwrap_or_default();
