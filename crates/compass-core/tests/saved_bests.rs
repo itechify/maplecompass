@@ -5,7 +5,10 @@
 mod common;
 
 use common::player::{Player, WALL_AT_START};
-use common::{CONSTRUCTION_SITE_ID, SUNSET_SKY_ID, sharing_a_title, tracking, tracking_with};
+use common::{
+    CONSTRUCTION_SITE_ID, NORTHERN_TOP_ID, SUNSET_SKY_ID, sharing_a_title, three_sharing_a_title, tracking,
+    tracking_with,
+};
 use compass_core::{
     BESTS_VERSION, BestNamed, Compass, PanelControl, PanelState, PersonalBestLine, SavedBests, VisitBest, Whose,
 };
@@ -252,8 +255,12 @@ fn the_shell_saves_the_bests_whenever_they_change_and_only_then() {
     assert_eq!((player.saves(), site_rates(&player)), (joined, vec![14_400, 7200]));
 }
 
+fn shown_map(state: &PanelState) -> Option<&str> {
+    state.map.as_ref().map(|m| m.id.as_str())
+}
+
 #[test]
-fn a_candidate_chosen_again_takes_back_its_best_from_this_visit_and_saves_what_its_line_shows() {
+fn a_candidate_chosen_again_with_no_rate_shows_and_forgets_no_best_but_the_one_saved() {
     let mut player = Player::saved_by_the_shell(tracking_with(sharing_a_title()));
     let site_rates = |player: &Player| saved_rates(&player.compass.bests(), CONSTRUCTION_SITE_ID);
     let sunset_rates = |player: &Player| saved_rates(&player.compass.bests(), SUNSET_SKY_ID);
@@ -263,25 +270,80 @@ fn a_candidate_chosen_again_takes_back_its_best_from_this_visit_and_saves_what_i
     player.arrive(KERNING);
     player.hunt(6 * MIN, 30);
     player.choose_next();
-    let set = player.wall_clock();
     // 3,600 EXP/h, and on to the Construction Site, which takes the Visit's best.
     player.hunt(5 * MIN, 10);
     player.choose_next();
+    let set = player.wall_clock();
     assert_eq!((sunset_rates(&player), site_rates(&player)), (vec![], vec![3600]));
 
-    // With no rate since a reset, back on Sunset Sky: its line shows the best it had this
-    // Visit, and that is the Visit's best the shell saves.
+    // With no rate since a reset, back on Sunset Sky: it had a best this Visit, but the
+    // Visit's best stays the Construction Site's, so Sunset Sky's line shows none...
     player.press(PanelControl::ResetSession);
-    let sunset = player.choose_next();
-    assert_eq!(sunset.map.as_ref().map(|m| m.id.as_str()), Some(SUNSET_SKY_ID));
-    assert_eq!(line(&sunset), first_visit(10_800, set));
-    assert_eq!((sunset_rates(&player), site_rates(&player)), (vec![10_800], vec![]));
-
-    // Forget takes it, from the line and from what the shell saves.
     let saves = player.saves();
-    assert_eq!(line(&player.press(PanelControl::ForgetBest)), None);
-    assert_eq!(player.saves(), saves + 1);
-    assert_eq!((sunset_rates(&player), site_rates(&player)), (vec![], vec![]));
+    let sunset = player.choose_next();
+    assert_eq!(shown_map(&sunset), Some(SUNSET_SKY_ID));
+    assert_eq!(line(&sunset), None);
+    assert_eq!((sunset_rates(&player), site_rates(&player)), (vec![], vec![3600]));
+
+    // ...and Forget there takes nothing, from the line or from what the shell saves.
+    let forgot = player.press(PanelControl::ForgetBest);
+    assert_eq!(line(&forgot), None);
+    assert!(!forgot.exp_tracking.forget_undoable);
+    assert_eq!(player.saves(), saves);
+    assert_eq!((sunset_rates(&player), site_rates(&player)), (vec![], vec![3600]));
+
+    // Back on the Construction Site, its line shows the Visit's best: the one saved.
+    let site = player.choose_next();
+    assert_eq!(shown_map(&site), Some(CONSTRUCTION_SITE_ID));
+    assert_eq!(line(&site), first_visit(3600, set));
+}
+
+#[test]
+fn the_hotkey_passing_a_candidate_that_had_a_best_this_visit_leaves_the_visits_best_where_it_counted() {
+    let mut player = Player::saved_by_the_shell(tracking_with(three_sharing_a_title()));
+    let rates = |player: &Player, map| saved_rates(&player.compass.bests(), map);
+
+    // Three Candidates: the Northern Top shows first, waiting for a choice.
+    let arrived = player.arrive(KERNING);
+    assert_eq!(shown_map(&arrived), Some(NORTHERN_TOP_ID));
+    assert_eq!(arrived.candidates.as_ref().map(|c| (c.maps.len(), c.chosen)), Some((3, false)));
+    assert!(arrived.data.solo_exp_ceiling().is_some());
+
+    // 10,800 EXP/h, then the player chooses the Construction Site, and the hotkey goes on
+    // to Sunset Sky, which takes the Visit's best: 10,800 there.
+    player.hunt(6 * MIN, 30);
+    assert_eq!(shown_map(&player.choose_next()), Some(CONSTRUCTION_SITE_ID));
+    assert_eq!(shown_map(&player.choose_next()), Some(SUNSET_SKY_ID));
+    assert_eq!((rates(&player, CONSTRUCTION_SITE_ID), rates(&player, SUNSET_SKY_ID)), (vec![], vec![10_800]));
+
+    // After a reset, the hotkey goes past the Northern Top back to the Construction Site,
+    // and 21,600 EXP/h for 6 minutes there: the Visit's best is the Construction Site's.
+    player.press(PanelControl::ResetSession);
+    player.choose_next();
+    assert_eq!(shown_map(&player.choose_next()), Some(CONSTRUCTION_SITE_ID));
+    player.hunt(6 * MIN, 60);
+    assert_eq!((rates(&player, CONSTRUCTION_SITE_ID), rates(&player, SUNSET_SKY_ID)), (vec![21_600], vec![]));
+
+    // After another reset, the hotkey passes Sunset Sky, with no rate since, on its way to
+    // the Northern Top: the Visit's best stays the Construction Site's 21,600, and Sunset
+    // Sky's line shows no best from this Visit.
+    player.press(PanelControl::ResetSession);
+    let saves = player.saves();
+    let sunset = player.choose_next();
+    assert_eq!(shown_map(&sunset), Some(SUNSET_SKY_ID));
+    assert_eq!((rates(&player, CONSTRUCTION_SITE_ID), rates(&player, SUNSET_SKY_ID)), (vec![21_600], vec![]));
+    assert_eq!(line(&sunset), None);
+    let top = player.choose_next();
+    assert_eq!(shown_map(&top), Some(NORTHERN_TOP_ID));
+    assert_eq!(line(&top), None);
+    assert_eq!(player.saves(), saves);
+    assert_eq!((rates(&player, CONSTRUCTION_SITE_ID), rates(&player, SUNSET_SKY_ID)), (vec![21_600], vec![]));
+
+    // The Visit ends with the Construction Site's 21,600 joining its bests.
+    player.arrive(ROCKY_ROAD);
+    let maps: Vec<_> = player.compass.bests().maps.into_iter().map(|m| m.id).collect();
+    assert_eq!(maps, [CONSTRUCTION_SITE_ID]);
+    assert_eq!(rates(&player, CONSTRUCTION_SITE_ID), [21_600]);
 }
 
 #[test]
