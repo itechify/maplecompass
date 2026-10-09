@@ -185,7 +185,7 @@ const normalView = byId("normal-view");
 const toolbar = byId("toolbar");
 const icon = document.querySelector<HTMLElement>(".icon")!;
 const nextCandidate = byId("next-candidate");
-const openMeowdb = byId("open-meowdb");
+const titlebar = byId("titlebar");
 const hunting = byId("hunting");
 const huntingTitle = byId("hunting-title");
 const huntingReopen = byId("hunting-reopen");
@@ -491,7 +491,6 @@ function foldSection(section: HTMLElement, toggle: HTMLButtonElement, collapsed:
 const CONTROL_HOTKEYS: Record<string, keyof Hotkeys> = {
   search: "search",
   chooseCandidate: "chooseCandidate",
-  openMeowdbPage: "openMeowdbPage",
   cyclePlacement: "cyclePlacement",
   setup: "setup",
   togglePanel: "togglePanel",
@@ -500,8 +499,8 @@ const CONTROL_HOTKEYS: Record<string, keyof Hotkeys> = {
 
 /**
  * The icons at the top of the panel, one per hotkey action. Each tooltip names its
- * hotkey (unless another app has it). The MeowDB icon shows only while a map is shown,
- * the next-candidate icon only while maps share its title, the Grind Tracker's only while
+ * hotkey (unless another app has it). The next-candidate icon shows only while maps share
+ * its title, the Grind Tracker's only while
  * the EXP bar is tracked (pressed while its window is open).
  */
 function renderToolbar(panel: PanelState) {
@@ -510,7 +509,14 @@ function renderToolbar(panel: PanelState) {
     const hotkey = panel.hotkeys[CONTROL_HOTKEYS[button.dataset.control ?? ""]];
     button.title = hotkey && hotkeyAvailable(hotkey, panel.unavailableHotkeys) ? `${label} (${keyLabel(hotkey)})` : label;
   }
-  openMeowdb.hidden = !panel.map;
+  // The map's title opens its MeowDB page, while a map is shown.
+  titlebar.classList.toggle("linked", !!panel.map);
+  const pageKey = panel.hotkeys.openMeowdbPage;
+  titlebar.title = !panel.map
+    ? ""
+    : hotkeyAvailable(pageKey, panel.unavailableHotkeys)
+      ? `Open this map on MeowDB (${keyLabel(pageKey)})`
+      : "Open this map on MeowDB";
   nextCandidate.hidden = !panel.candidates;
   grindTracker.hidden = panel.expTracking.state === "off";
   const open = panel.grindTracker.open;
@@ -992,7 +998,9 @@ function startDrag() {
 document.addEventListener("mousedown", (e) => {
   const target = e.target instanceof Element ? e.target : null;
   const onHeader = !!target?.closest(".drag-handle") && !target?.closest("button, input");
-  if (draggable && e.button === 0 && onHeader) startDrag();
+  // The map's title is also a link: it drags only once the mouse moves (below).
+  const onLink = !!target?.closest(".titlebar.linked");
+  if (draggable && e.button === 0 && onHeader && !onLink) startDrag();
 });
 
 // The expanded panel's bottom corners resize it, whatever its placement, as its edges
@@ -1005,27 +1013,41 @@ for (const grip of document.querySelectorAll<HTMLElement>(".grip")) {
   });
 }
 
-// The collapsed icon: a click expands the panel again (like the collapse hotkey), and
-// pressing on it and moving the mouse drags it, where the panel can be dragged.
+/** How far the mouse moves, pressed, before a press on something clickable drags. */
 const DRAG_AFTER_PX = 4;
-let iconPress: { x: number; y: number } | null = null;
-icon.addEventListener("mousedown", (e) => {
-  if (e.button === 0) iconPress = { x: e.screenX, y: e.screenY };
-});
-icon.addEventListener("mousemove", (e) => {
-  if (!iconPress || !draggable) return;
-  if (Math.abs(e.screenX - iconPress.x) + Math.abs(e.screenY - iconPress.y) >= DRAG_AFTER_PX) {
-    iconPress = null;
-    startDrag();
-  }
-});
-icon.addEventListener("mouseup", (e) => {
-  if (iconPress && e.button === 0) invoke("panel_press", { control: "togglePanel" });
-  iconPress = null;
-});
-icon.addEventListener("mouseleave", () => {
-  iconPress = null;
-});
+
+/**
+ * `el` is clicked to `press` its control, and dragged to move the panel where it can be:
+ * a press becomes a drag once the mouse moves (and never a click), and a click if it is let
+ * go first. Only
+ * while `clickable` says so; otherwise it is left to the header's own drag.
+ */
+function clickOrDrag(el: HTMLElement, control: string, clickable: () => boolean) {
+  let pressed: { x: number; y: number } | null = null;
+  el.addEventListener("mousedown", (e) => {
+    pressed = e.button === 0 && clickable() ? { x: e.screenX, y: e.screenY } : null;
+  });
+  el.addEventListener("mousemove", (e) => {
+    if (!pressed) return;
+    // Moved: not a click, and a drag where the panel can be dragged.
+    if (Math.abs(e.screenX - pressed.x) + Math.abs(e.screenY - pressed.y) >= DRAG_AFTER_PX) {
+      pressed = null;
+      if (draggable) startDrag();
+    }
+  });
+  el.addEventListener("mouseup", (e) => {
+    if (pressed && e.button === 0) invoke("panel_press", { control });
+    pressed = null;
+  });
+  el.addEventListener("mouseleave", () => {
+    pressed = null;
+  });
+}
+
+// The collapsed icon expands the panel again (like the collapse hotkey); the map's title
+// opens its MeowDB page (like Ctrl+Shift+M).
+clickOrDrag(icon, "togglePanel", () => true);
+clickOrDrag(titlebar, "openMeowdbPage", () => titlebar.classList.contains("linked"));
 
 // Each icon at the top of the panel does what its hotkey does.
 toolbar.addEventListener("click", (e) => {

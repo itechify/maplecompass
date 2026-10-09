@@ -21,9 +21,6 @@
             <button type="button" class="icon-button" id="next-candidate" data-control="chooseCandidate" aria-label="Next map with this title" hidden>
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 5.5h10M10 3l2.5 2.5L10 8M13.5 10.5h-10M6 8l-2.5 2.5L6 13" /></svg>
             </button>
-            <button type="button" class="icon-button" id="open-meowdb" data-control="openMeowdbPage" aria-label="Open this map on MeowDB" hidden>
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5M11.5 9.5v4h-9v-9h4" /></svg>
-            </button>
             <button type="button" class="icon-button" id="grind-tracker" data-control="toggleGrindTracker" aria-label="Show the Grind Tracker" aria-pressed="false" hidden>
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 12.5 6.5 8.5 9 11l4.5-4.5M10.5 6.5h3v3" /></svg>
             </button>
@@ -38,7 +35,7 @@
             </button>
           </div>
         </header>
-        <div class="titlebar drag-handle">
+        <div class="titlebar drag-handle" id="titlebar">
           <p class="street" id="street"></p>
           <div class="map-line">
             <p class="map" id="map">Starting…</p>
