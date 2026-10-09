@@ -36,11 +36,13 @@
 //!   jumping with every kill. Events show at once: the state changing (the Session
 //!   starting, warming up, pausing, resuming, or the bar going unread), the first figures
 //!   there are, a death, a level-up, a reset or its undoing, a character switch, a new
-//!   Visit, and a map with another ceiling or Personal Best. The bar's last reading shows
-//!   as it comes.
+//!   Visit, a map with another ceiling or Personal Best, and a best forgotten or brought
+//!   back. The bar's last reading shows as it comes.
 //! - Last 5 min as shown afresh, over a full 5 minutes of the Visit's play, counts towards
 //!   the Visit's Personal Best on the map (see [`crate::personal_best`]), unless the bar
-//!   can't be read. Bests outlast Sessions, as Visits do.
+//!   can't be read. After the player forgets the Visit's best, only play since counts,
+//!   and the line's share with it, until they undo the Forget. Bests outlast Sessions,
+//!   as Visits do.
 
 use crate::ExpBar;
 use crate::personal_best::{Bests, PersonalBestLine};
