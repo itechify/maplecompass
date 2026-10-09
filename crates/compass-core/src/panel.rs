@@ -103,6 +103,9 @@ pub enum Action {
     ResetSession,
     /// Bring back the Session the last reset ended, if the EXP hasn't changed since.
     UndoReset,
+    /// Forget the higher of the shown map's Personal Best and this Visit's best there: one
+    /// that came from a bug. The map's next-best Visit takes over.
+    ForgetBest,
     /// Open the Grind Tracker's window, or close it (the panel's button, or its hotkey).
     ToggleGrindTracker,
     /// Close the Grind Tracker's window (its ×). The Session carries on.
