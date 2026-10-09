@@ -410,6 +410,38 @@ fn a_misread_that_fits_the_level_and_misleads_it_keeps_the_session() {
 }
 
 #[test]
+fn the_same_misread_on_a_still_bar_keeps_the_session() {
+    // 100 EXP every 10 s on the recording's ~16,682 EXP level, up to 5,000 [29.97%] at
+    // 100 s; then the bar stands still while the player loots, and 5,100 at 120 s.
+    let mut readings: Vec<(u64, u64, u32)> =
+        (0..=10).map(|k| (k * 10, 4000 + 100 * k, percent_lv15(4000 + 100 * k))).collect();
+    readings.extend((101..=110).map(|at| (at, 5000, percent_lv15(5000))));
+    readings.push((120, 5100, percent_lv15(5100)));
+    let mut clean = tracking();
+    for &(at, exp, percent) in &readings {
+        read(&mut clean, at * S, exp, percent);
+    }
+
+    // The still frames read the same, and the first three read 29.97% as 29.37%: a level
+    // of ~17,024 EXP, three times in a row. The Session goes on, the level learned anew,
+    // and learned back from the true readings after them.
+    let mut misread = tracking();
+    for &(at, exp, percent) in &readings {
+        let percent = if (101..=103).contains(&at) { 2937 } else { percent };
+        let state = read(&mut misread, at * S, exp, percent);
+        assert_eq!(state.exp_tracking.state == TrackingState::Waiting, at == 0, "at {at} s");
+        assert!(!state.exp_tracking.character_switched, "at {at} s");
+    }
+
+    let clean = clean.tick(150 * S).clone();
+    let misread = misread.tick(150 * S).clone();
+    assert_eq!(misread.exp_tracking.state, TrackingState::Active);
+    assert_eq!(exp_per_hour(&misread), exp_per_hour(&clean));
+    // From 4,100 at 10 s, the Session's start; the 30 s since 5,100 count too.
+    assert_eq!(exp_per_hour(&misread), (Some(25_714), Some(25_714)), "1,000 EXP in 140 s");
+}
+
+#[test]
 fn once_warmed_up_a_session_never_warms_up_again() {
     let mut compass = tracking();
     read(&mut compass, 0, 160, 381);
