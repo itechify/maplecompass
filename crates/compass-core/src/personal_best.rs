@@ -13,7 +13,9 @@
 //! - A Visit's best is for the map it was last certain on with a rate to count: the
 //!   player may choose among Candidates, and the hotkey goes past the others on the way.
 //!   One shown with nothing to count yet (just after a reset, say) doesn't take it, so
-//!   closing MapleCompass then keeps it for the map it came from.
+//!   closing MapleCompass then keeps it for the map it came from, unless it had a best
+//!   of its own earlier in the Visit: it takes the Visit's best back, and its line shows
+//!   the best that is saved.
 //! - A best is dated by the wall clock at the refresh that first showed it, for the line's
 //!   hover to say when it was set. The UI words the date, in the player's local time.
 //! - Bests are per map (MeowDB map ID), for every character: nothing about the Session
@@ -127,7 +129,8 @@ pub(crate) struct Bests {
     visit: Vec<(String, VisitBest)>,
     /// The map the Visit under way was last certain on with a rate to count: the one its
     /// best is for. The hotkey goes past the other Candidates on the way to the one the
-    /// player chooses; one it shows with nothing to count doesn't take the best.
+    /// player chooses; one it shows with nothing to count doesn't take the best, unless
+    /// it had one of its own earlier in the Visit.
     on: Option<String>,
     /// Changes whenever what [`Bests::saved`] hands out does.
     revision: u64,
@@ -155,8 +158,14 @@ impl Bests {
 
     /// As [`Bests::on_shown`], leaving the revision to it.
     fn record(&mut self, map: &str, rate: Option<u64>, now_unix_ms: Option<u64>) {
-        // A Candidate shown with nothing to count doesn't take the Visit's best.
-        let Some(rate) = rate else { return };
+        // A Candidate shown with nothing to count takes the Visit's best only if it had
+        // one this Visit: its own.
+        let Some(rate) = rate else {
+            if self.this_visit_on(map).is_some() {
+                self.on = Some(map.to_string());
+            }
+            return;
+        };
         if self.on.as_deref() != Some(map) {
             self.on = Some(map.to_string());
         }
@@ -313,9 +322,10 @@ impl Bests {
     }
 
     /// Changes whenever what [`Bests::saved`] hands out does, and only then: the Visit
-    /// under way's best set, raised, or moved to a Candidate chosen that counts a rate,
-    /// where it makes its map's [`VISITS_KEPT`]; a best forgotten or brought back; bests
-    /// restored. A Visit ending changes nothing handed out.
+    /// under way's best set, raised, or moved to a Candidate chosen that counts a rate or
+    /// had a best earlier in the Visit, where it makes its map's [`VISITS_KEPT`]; a best
+    /// forgotten or brought back; bests restored. A Visit ending changes nothing handed
+    /// out.
     pub fn revision(&self) -> u64 {
         self.revision
     }
