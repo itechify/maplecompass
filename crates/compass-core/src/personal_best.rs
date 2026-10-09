@@ -46,11 +46,14 @@ pub struct MapBests {
 }
 
 /// The best one Visit had on a map.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VisitBest {
     /// The Last 5 min EXP/h shown, over a full 5 minutes of active play on the map.
     pub exp_per_hour: u64,
+    /// When it was first shown, by the wall clock (ms since the Unix epoch); `None` if
+    /// the shell hadn't told the wall clock by then.
+    pub set_at_unix_ms: Option<u64>,
 }
 
 /// The Grind Tracker's line on how Last 5 min compares with the Personal Best on the map
@@ -61,6 +64,9 @@ pub struct PersonalBestLine {
     /// The best the line names, in EXP/h: the map's Personal Best from earlier Visits,
     /// fixed on arrival; on a first Visit, this Visit's best so far.
     pub exp_per_hour: u64,
+    /// When that best was set, by the wall clock (ms since the Unix epoch), for the
+    /// line's hover to say ("set today"); `None` if the shell hadn't told the wall clock.
+    pub set_at_unix_ms: Option<u64>,
     /// No earlier Visit had a best here: "Your first best EXP/h here".
     pub first: bool,
     /// Last 5 min's EXP/h as a share of the earlier Visits' best, in hundredths of a
@@ -79,31 +85,34 @@ pub(crate) struct Bests {
     earlier: SavedBests,
     /// The Visit under way's best on each map it was certain on: one, unless the player
     /// chose among Candidates.
-    visit: Vec<(String, u64)>,
+    visit: Vec<(String, VisitBest)>,
     /// The map the Visit under way was last certain on: the one its best is for. The
     /// hotkey goes past the other Candidates on the way to the one the player chooses.
     on: Option<String>,
 }
 
 impl Bests {
-    /// Last 5 min was shown afresh with the player certain to be on `map`. `rate` is its
-    /// EXP/h if it counts towards this Visit's best there: over a full 5 minutes of
-    /// active play all on the map, with the EXP bar read.
-    pub fn shown(&mut self, map: &str, rate: Option<u64>) {
+    /// Last 5 min was shown afresh with the player certain to be on `map`, at
+    /// `now_unix_ms` by the wall clock. `rate` is its EXP/h if it counts towards this
+    /// Visit's best there: over a full 5 minutes of active play all on the map, with the
+    /// EXP bar read. A best is set when it is first shown: the same rate again keeps it.
+    pub fn shown(&mut self, map: &str, rate: Option<u64>, now_unix_ms: Option<u64>) {
         if self.on.as_deref() != Some(map) {
             self.on = Some(map.to_string());
         }
         let Some(rate) = rate else { return };
+        let shown = VisitBest { exp_per_hour: rate, set_at_unix_ms: now_unix_ms };
         match self.visit.iter_mut().find(|(id, _)| id == map) {
-            Some((_, best)) => *best = (*best).max(rate),
-            None => self.visit.push((map.to_string(), rate)),
+            Some((_, best)) if best.exp_per_hour >= rate => {}
+            Some((_, best)) => *best = shown,
+            None => self.visit.push((map.to_string(), shown)),
         }
     }
 
     /// The Visit under way ended: its best joins its map's.
     pub fn end_visit(&mut self) {
         let on = self.on.take();
-        let Some((map, exp_per_hour)) = self.visit.drain(..).find(|(id, _)| Some(id) == on.as_ref()) else { return };
+        let Some((map, best)) = self.visit.drain(..).find(|(id, _)| Some(id) == on.as_ref()) else { return };
         let maps = &mut self.earlier.maps;
         let at = match maps.iter().position(|m| m.id == map) {
             Some(at) => at,
@@ -113,8 +122,8 @@ impl Bests {
             }
         };
         let visits = &mut maps[at].visits;
-        let below = visits.iter().position(|v| v.exp_per_hour < exp_per_hour).unwrap_or(visits.len());
-        visits.insert(below, VisitBest { exp_per_hour });
+        let below = visits.iter().position(|v| v.exp_per_hour < best.exp_per_hour).unwrap_or(visits.len());
+        visits.insert(below, best);
     }
 
     /// The line for `map`, where `share` gives Last 5 min's share of a best, if it is
@@ -125,12 +134,14 @@ impl Bests {
         match earlier {
             Some(best) => Some(PersonalBestLine {
                 exp_per_hour: best.exp_per_hour,
+                set_at_unix_ms: best.set_at_unix_ms,
                 first: false,
                 share_hundredths: share(best.exp_per_hour),
-                new_best: this.is_some_and(|this| this > best.exp_per_hour),
+                new_best: this.is_some_and(|this| this.exp_per_hour > best.exp_per_hour),
             }),
-            None => this.map(|exp_per_hour| PersonalBestLine {
-                exp_per_hour,
+            None => this.map(|this| PersonalBestLine {
+                exp_per_hour: this.exp_per_hour,
+                set_at_unix_ms: this.set_at_unix_ms,
                 first: true,
                 share_hundredths: None,
                 new_best: false,
