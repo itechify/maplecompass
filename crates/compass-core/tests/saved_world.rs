@@ -90,6 +90,8 @@ fn while_the_saved_world_is_loading_the_crawl_waits_for_it() {
     compass.restore_world(SavedWorld::default());
     tick_through(&mut compass, 10_000, 20_000);
     assert_eq!(crawled.lock().unwrap().len(), 5);
+    // Each dated by when MeowDB served it, to tell when it is due again.
+    assert!(compass.world().maps.iter().all(|m| m.as_of_unix_ms == NOW));
 }
 
 #[test]
