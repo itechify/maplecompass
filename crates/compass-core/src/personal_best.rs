@@ -129,6 +129,17 @@ impl Bests {
         visits.insert(below, best);
     }
 
+    /// Forget the higher of `map`'s Personal Best and this Visit's best there: the next-best
+    /// Visit's takes over.
+    pub fn forget(&mut self, map: &str) {
+        let maps = &mut self.earlier.maps;
+        let Some(at) = maps.iter().position(|m| m.id == map) else { return };
+        maps[at].visits.remove(0);
+        if maps[at].visits.is_empty() {
+            maps.remove(at);
+        }
+    }
+
     /// The line for `map`, where `share` gives Last 5 min's share of a best, if it is
     /// over a full 5 minutes there; `None` while there is nothing to compare with.
     pub fn line(&self, map: &str, share: impl FnOnce(u64) -> Option<i64>) -> Option<PersonalBestLine> {

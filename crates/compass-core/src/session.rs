@@ -580,6 +580,13 @@ impl Session {
         self.shown = None;
     }
 
+    /// The player forgot the higher of `map`'s Personal Best and this Visit's best there:
+    /// the line shows at once what is left.
+    pub fn forget_best(&mut self, map: &str) {
+        self.bests.forget(map);
+        self.shown = None;
+    }
+
     /// The panel confirmed another map: a new Visit starts, as of the latest time seen.
     /// The share of the map's ceiling counts only the play since.
     pub fn arrive(&mut self) {
