@@ -1622,7 +1622,8 @@ body:has(#badge:not([hidden])) .icon .count {
   text-underline-offset: 3px;
 }
 
-/* No game window (minimised or closed): the overlay window stays but draws nothing. */
+/* No game window (minimised or closed), or another app in front: the overlay window
+   stays but draws nothing. */
 .hidden .panel,
 .hidden .icon,
 .hidden .badge {
