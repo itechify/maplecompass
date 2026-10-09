@@ -630,8 +630,9 @@ impl Session {
     /// What the panel shows, with tracking on, on a map whose solo EXP/h ceiling is
     /// `ceiling` (if it is known), and which is `map` (its MeowDB ID) if Personal Bests
     /// are kept there: the figures measured earlier in this [`REFRESH_MS`] stretch, unless
-    /// an event since asks for them afresh; and the bar's last reading.
-    pub fn tracking(&mut self, ceiling: Option<u64>, map: Option<&str>) -> ExpTracking {
+    /// an event since asks for them afresh; and the bar's last reading. A best is dated
+    /// by `now_unix_ms`, the wall clock, if the shell has told it.
+    pub fn tracking(&mut self, ceiling: Option<u64>, map: Option<&str>, now_unix_ms: Option<u64>) -> ExpTracking {
         let mut fresh = self.measure(ceiling);
         let stretch = self.now / REFRESH_MS;
         // While the bar can't be read nothing new is known: the figures shown stay as
@@ -665,7 +666,7 @@ impl Session {
                     let here = self.figures.as_ref().map(|f| f.rolling_since(self.now, f.visit_from));
                     let full = here.filter(|h| h.over_ms >= ROLLING_MS && h.exp > 0);
                     let counted = full.filter(|_| !unreadable).map(|here| here.per_hour(1, 1) as u64);
-                    self.bests.shown(map, counted);
+                    self.bests.shown(map, counted, now_unix_ms);
                     let share = |best| full.map(|here| here.per_hour(u64::from(HUNDRED_PERCENT), best));
                     fresh.personal_best = self.bests.line(map, share);
                 }

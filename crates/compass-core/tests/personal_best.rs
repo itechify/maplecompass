@@ -48,25 +48,48 @@ fn percent(exp: u64) -> u32 {
     ((exp * 20_000 + 20_000) / (2 * 20_000)) as u32
 }
 
+/// The wall clock at capture time 0 when the shell tells it: 9 Oct 2026, 12:00 UTC.
+const WALL_AT_START: u64 = 1_791_547_200_000;
+
 /// The player hunting on a 20,000 EXP level, the EXP bar read every 10 s. Readings at
 /// whole half minutes of capture time are where the Grind Tracker's figures refresh.
 struct Player {
     compass: Compass,
     exp: u64,
     at: u64,
+    /// The wall clock at capture time 0, if the shell tells it.
+    wall_at_start: Option<u64>,
 }
 
 impl Player {
     /// The bar read at 1,000 [5.00%] at 0 s, then 10 EXP more every 10 s on a map the
     /// panel doesn't know, up to 30 s: the Session has started.
     fn new(compass: Compass) -> Self {
-        let mut player = Player { compass, exp: 1000, at: 0 };
+        Self::start(compass, None)
+    }
+
+    /// As [`Player::new`], with the shell telling the wall clock before every reading, as
+    /// it does: [`WALL_AT_START`] at capture time 0, running with it.
+    fn clocked(compass: Compass) -> Self {
+        Self::start(compass, Some(WALL_AT_START))
+    }
+
+    fn start(compass: Compass, wall_at_start: Option<u64>) -> Self {
+        let mut player = Player { compass, exp: 1000, at: 0, wall_at_start };
         player.read();
         player.hunt(30 * S, 10);
         player
     }
 
+    /// The wall clock now, as the shell last told it.
+    fn wall_clock(&self) -> Option<u64> {
+        self.wall_at_start.map(|start| start + self.at)
+    }
+
     fn read(&mut self) -> PanelState {
+        if let Some(now) = self.wall_clock() {
+            self.compass.on_wall_clock(now);
+        }
         let bar = Some(ExpBar { exp: self.exp, percent_hundredths: percent(self.exp) });
         self.compass.on_exp_bar_reading(ExpBarReading { bar, at_ms: self.at }).clone()
     }
@@ -111,9 +134,43 @@ fn rolling(state: &PanelState) -> Option<i64> {
     state.exp_tracking.rolling.map(|r| r.exp_per_hour)
 }
 
-/// The line on a first Visit to a map: "Your first best EXP/h here: …".
+/// The line on a first Visit to a map: "Your first best EXP/h here: …", with no wall
+/// clock to date it by.
 fn first_best(exp_per_hour: u64) -> Option<PersonalBestLine> {
-    Some(PersonalBestLine { exp_per_hour, first: true, share_hundredths: None, new_best: false })
+    first_best_set(exp_per_hour, None)
+}
+
+/// The line on a first Visit to a map, its best set at `set_at_unix_ms` by the wall
+/// clock.
+fn first_best_set(exp_per_hour: u64, set_at_unix_ms: Option<u64>) -> Option<PersonalBestLine> {
+    Some(PersonalBestLine { exp_per_hour, set_at_unix_ms, first: true, share_hundredths: None, new_best: false })
+}
+
+#[test]
+fn a_first_visits_best_is_dated_by_the_wall_clock_at_the_refresh_that_showed_it() {
+    let mut player = Player::clocked(tracking());
+    player.arrive(SUNSET);
+
+    // 3,600 EXP/h: the first best shows at the refresh 5 minutes in, and was set then.
+    let five = player.hunt(5 * MIN, 10);
+    let first_set = player.wall_clock();
+    assert_eq!(rolling(&five), Some(3600));
+    assert_eq!(five.exp_tracking.personal_best, first_best_set(3600, first_set));
+
+    // The same rate shown again isn't a new best: it keeps when it was first set.
+    let same = player.hunt(MIN, 10);
+    assert_eq!(same.exp_tracking.personal_best, first_best_set(3600, first_set));
+
+    // Faster, the best rises with each refresh, set at the last.
+    let faster = player.hunt(5 * MIN, 20);
+    let faster_set = player.wall_clock();
+    assert_eq!(rolling(&faster), Some(7200));
+    assert_eq!(faster.exp_tracking.personal_best, first_best_set(7200, faster_set));
+
+    // Slower, it stays as it was, and when.
+    let slower = player.hunt(5 * MIN, 10);
+    assert_eq!(rolling(&slower), Some(3600));
+    assert_eq!(slower.exp_tracking.personal_best, first_best_set(7200, faster_set));
 }
 
 #[test]
@@ -149,19 +206,42 @@ fn a_first_visit_shows_its_best_so_far_once_there_have_been_five_minutes_of_play
 /// The line once earlier Visits had a best here: "Your best EXP/h here: …", or with a
 /// share, "N% of your best EXP/h here (…)".
 fn best(exp_per_hour: u64, share_hundredths: Option<i64>, new_best: bool) -> Option<PersonalBestLine> {
-    Some(PersonalBestLine { exp_per_hour, first: false, share_hundredths, new_best })
+    Some(PersonalBestLine { exp_per_hour, set_at_unix_ms: None, first: false, share_hundredths, new_best })
 }
 
 /// A first Visit to Sunset Sky at 7,200 EXP/h for 6 minutes, then 2 minutes on the
 /// Construction Site, and back to Sunset Sky.
 fn back_on_sunset_sky_after_a_best_of_7200() -> (Player, PanelState) {
-    let mut player = Player::new(tracking());
+    let (player, back, _) = back_after_a_best_of_7200(Player::new(tracking()));
+    (player, back)
+}
+
+/// As [`back_on_sunset_sky_after_a_best_of_7200`], for `player`: and when the 7,200 was
+/// set by the wall clock, at the refresh 5 minutes into that first Visit, the first to
+/// show it.
+fn back_after_a_best_of_7200(mut player: Player) -> (Player, PanelState, Option<u64>) {
     player.arrive(SUNSET);
-    player.hunt(6 * MIN, 20);
+    player.hunt(5 * MIN, 20);
+    let set = player.wall_clock();
+    player.hunt(MIN, 20);
     player.arrive(CONSTRUCTION_SITE);
     player.hunt(2 * MIN, 30);
     let back = player.arrive(SUNSET);
-    (player, back)
+    (player, back, set)
+}
+
+#[test]
+fn the_best_from_earlier_visits_keeps_when_it_was_set() {
+    let (mut player, back, set) = back_after_a_best_of_7200(Player::clocked(tracking()));
+    let earlier = |share_hundredths| {
+        Some(PersonalBestLine { exp_per_hour: 7200, set_at_unix_ms: set, first: false, share_hundredths, new_best: false })
+    };
+    assert!(set.is_some());
+    assert_eq!(back.exp_tracking.personal_best, earlier(None));
+
+    // 5 minutes at 3,600 EXP/h, 50% of it: the best is as it was, and when.
+    let five = player.hunt(5 * MIN, 10);
+    assert_eq!(five.exp_tracking.personal_best, earlier(Some(5000)));
 }
 
 #[test]
@@ -413,10 +493,12 @@ fn with_the_bar_unreadable_or_paused_the_line_holds_like_the_other_figures() {
 
 #[test]
 fn the_overlay_gets_the_line_as_the_grind_tracker_renders_it() {
-    let (mut player, _) = back_on_sunset_sky_after_a_best_of_7200();
+    let (mut player, _, set) = back_after_a_best_of_7200(Player::clocked(tracking()));
     let beaten = serde_json::to_value(player.hunt(5 * MIN, 30)).unwrap();
     assert_eq!(
         beaten["expTracking"]["personalBest"],
-        serde_json::json!({ "expPerHour": 7200, "first": false, "shareHundredths": 15_000, "newBest": true })
+        serde_json::json!({
+            "expPerHour": 7200, "setAtUnixMs": set, "first": false, "shareHundredths": 15_000, "newBest": true,
+        })
     );
 }
