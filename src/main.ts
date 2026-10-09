@@ -899,7 +899,8 @@ function render(panel: PanelState) {
   const { hotkeys } = panel;
   const { recognition, map: current, notSure } = panel;
   draggable = panel.draggable;
-  // Hidden while the game is minimised or gone: the window stays, but draws nothing.
+  // Hidden while the game is minimised or gone, or another app is in front: the window
+  // stays, but draws nothing.
   document.body.classList.toggle("hidden", panel.layer === "hidden");
   document.body.classList.toggle("collapsed", !panel.expanded);
   document.body.classList.toggle("draggable", panel.draggable);
