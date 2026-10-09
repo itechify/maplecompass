@@ -280,6 +280,8 @@ pub enum PanelControl {
     /// The Forget in the Grind Tracker's Personal Best line, opened under the pointer:
     /// forget the higher of the map's Personal Best and this Visit's best there.
     ForgetBest,
+    /// The Grind Tracker window's Undo, after a Forget: bring the best back.
+    UndoForget,
     /// The Grind Tracker window's ×: close it.
     CloseGrindTracker,
 }
@@ -580,6 +582,7 @@ impl Compass {
                     self.session.forget_best(map);
                 }
             }
+            Action::UndoForgetBest => self.session.undo_forget_best(),
             Action::ToggleGrindTracker => self.grind_tracker.open = !self.grind_tracker.open,
             Action::CloseGrindTracker => self.grind_tracker.open = false,
             Action::GrindTrackerMoved { x, y } => {
@@ -697,6 +700,7 @@ impl Compass {
             PanelControl::ResetSession => Action::ResetSession,
             PanelControl::UndoReset => Action::UndoReset,
             PanelControl::ForgetBest => Action::ForgetBest,
+            PanelControl::UndoForget => Action::UndoForgetBest,
             PanelControl::CloseGrindTracker => Action::CloseGrindTracker,
             // An open search view stays as it is; the shell brings the overlay in front on
             // opening it.

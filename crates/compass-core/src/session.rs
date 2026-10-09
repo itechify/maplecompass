@@ -97,6 +97,9 @@ pub struct ExpTracking {
     /// How Last 5 min compares with the Personal Best on the shown map, while it is
     /// certain and has a Map Summary; `None` there until there is a best to name.
     pub personal_best: Option<PersonalBestLine>,
+    /// The player forgot a Personal Best and hasn't left the map since: the Forget can be
+    /// undone, bringing the best back.
+    pub forget_undoable: bool,
 }
 
 /// The deaths in a Session: drops in EXP within the level.
@@ -601,6 +604,18 @@ impl Session {
         self.shown = None;
     }
 
+    /// Bring back the best the player last forgot, if they haven't left the map since: as
+    /// though they never forgot it, unless a higher best was set since.
+    pub fn undo_forget_best(&mut self) {
+        if self.bests.undo_forget() {
+            let set_aside = self.undo.as_mut().map(|undo| &mut undo.figures);
+            for figures in [self.figures.as_mut(), set_aside].into_iter().flatten() {
+                figures.best_from = figures.visit_from;
+            }
+        }
+        self.shown = None;
+    }
+
     /// The panel confirmed another map: a new Visit starts, as of the latest time seen.
     /// The share of the map's ceiling counts only the play since.
     pub fn arrive(&mut self) {
@@ -698,7 +713,7 @@ impl Session {
             }
         }
         let held = self.shown.as_ref().map(|shown| shown.tracking.clone()).unwrap_or_default();
-        ExpTracking { bar: self.last, ..held }
+        ExpTracking { bar: self.last, forget_undoable: self.bests.forget_undoable(), ..held }
     }
 
     /// The figures as they stand now.
@@ -753,6 +768,7 @@ impl Session {
             reset_undoable: false,
             bar: None,
             personal_best: None,
+            forget_undoable: false,
         }
     }
 }
