@@ -1,14 +1,15 @@
 //! MapleCompass shell: a thin adapter around `compass-core`. It finds the game window,
 //! captures the Title Region and the EXP Bar Region (and, for Item Lookup, the client
 //! area with the pointer), feeds frames, hotkeys and drags to the core and renders the panel state in an overlay that sits just above the game
-//! (or, detached, in an ordinary window), and the Grind Tracker in a window of its own
-//! beside it. All logic lives in the core.
+//! (or, detached, in an ordinary window), the Grind Tracker in a window of its own
+//! beside it, and the Item Lookup alert at the top centre of the game window. All logic lives in the core.
 
 pub mod capture;
 pub mod gamewin;
 mod files;
 mod grind_tracker;
 mod hotkeys;
+mod item_lookup;
 pub mod meowdb;
 mod search;
 mod settings;
@@ -25,6 +26,7 @@ use compass_core::{
 };
 use meowdb::MeowDbSource;
 use grind_tracker::GrindTrackerWindow;
+use item_lookup::ItemLookupWindow;
 use setup::{Bridge, SetupWindows};
 use sizemove::{Gesture, SizeMove};
 use std::path::PathBuf;
@@ -99,6 +101,8 @@ pub(crate) enum Command {
     GrindTrackerHeight(f64),
     /// Windows told of a drag of the Grind Tracker's window.
     GrindTrackerSizeMove(SizeMove),
+    /// The Item Lookup alert is this tall (CSS px).
+    ItemLookupHeight(f64),
     /// The player chose Quit in the tray icon's menu: save the settings and exit.
     Quit,
     /// The player started MapleCompass again; that one exited, and this one shows itself.
@@ -213,6 +217,7 @@ pub fn run() {
                 eprintln!("{e}");
             }
             let grind_tracker = GrindTrackerWindow::new(app.handle(), commands.clone());
+            let item_lookup = ItemLookupWindow::new(app.handle());
             overlay.on_window_event(move |event| match event {
                 // Only moves during a drag the overlay started are the player's.
                 WindowEvent::Moved(to) => {
@@ -236,7 +241,7 @@ pub fn run() {
             // Per-Monitor-V2 DPI aware.
             let reader = ReaderThread::spawn(app.state::<Sender<Command>>().inner().clone())?;
             let channels = Channels { commands: commands_rx, picks: picks_rx };
-            let windows = Windows { overlay, setup: setup_windows, grind_tracker, hotkeys };
+            let windows = Windows { overlay, setup: setup_windows, grind_tracker, item_lookup, hotkeys };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
                 compass_loop(handle, windows, compass, reader, channels, Files { settings: settings_path, cache })
             })?;
@@ -269,17 +274,20 @@ pub fn run() {
             search::panel_toggle_section,
             grind_tracker::grind_tracker_height,
             grind_tracker::grind_tracker_view,
+            item_lookup::item_lookup_height,
+            item_lookup::item_lookup_view,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
-/// Our windows: the overlay (with mob search in it), setup (with its region window) and
-/// the Grind Tracker's.
+/// Our windows: the overlay (with mob search in it), setup (with its region window), the
+/// Grind Tracker's and the Item Lookup alert's.
 struct Windows {
     overlay: WebviewWindow,
     setup: SetupWindows,
     grind_tracker: GrindTrackerWindow,
+    item_lookup: ItemLookupWindow,
     /// Not a window, but registered and released as the foreground changes.
     hotkeys: hotkeys::GlobalHotkeys,
 }
@@ -448,7 +456,7 @@ fn compass_loop(
 ) {
     let settings_path = files.settings;
     let mut world_saves = WorldSaves { loaded: false, saved: None, pending: None };
-    let Windows { overlay, setup: mut setup_windows, mut grind_tracker, mut hotkeys } = windows;
+    let Windows { overlay, setup: mut setup_windows, mut grind_tracker, mut item_lookup, mut hotkeys } = windows;
     let mut window = OverlayWindow::new(overlay);
     let mut saved = compass.settings();
     let mut pending = (saved.clone(), Instant::now());
@@ -535,6 +543,12 @@ fn compass_loop(
                     compass.set_grind_tracker_size(size);
                 }
             }
+            Ok(Command::ItemLookupHeight(height)) => {
+                item_lookup.set_height(height);
+                if let Some(size) = item_lookup.size() {
+                    compass.set_item_lookup_size(size);
+                }
+            }
             Ok(Command::GrindTrackerSizeMove(what)) => {
                 if let Some(at) = grind_tracker.size_move(what) {
                     compass.act(Action::GrindTrackerMoved { x: at.x, y: at.y });
@@ -575,9 +589,12 @@ fn compass_loop(
         if Instant::now() >= next_window_check {
             next_window_check = Instant::now() + WINDOW_TICK;
             game = find_game(&mut compass, &window.overlay, expanded_height);
-            // For the display it is on now.
+            // For the display they are on now.
             if let Some(size) = grind_tracker.size() {
                 compass.set_grind_tracker_size(size);
+            }
+            if let Some(size) = item_lookup.size() {
+                compass.set_item_lookup_size(size);
             }
             // The hotkeys are live only while the game or one of our windows is in front.
             compass.on_foreground(gamewin::foreground(game.map(|g| g.handle)));
@@ -621,6 +638,7 @@ fn compass_loop(
         }
         window.show(state);
         grind_tracker.sync(state);
+        item_lookup.sync(state);
 
         // Save once the settings settle, not on every move of a drag.
         let current = compass.settings();

@@ -145,5 +145,5 @@ _Avoid_: drop, loot (when meaning the item itself)
 The box the game draws by the mouse pointer when the player hovers an item: the item's name on the line with the blue bullet (a crafted item's maker sits above it), then its picture and figures. It is the game's, not ours: the Mob Card is MapleCompass's own.
 
 **Item Lookup**:
-The hotkey (Ctrl+Shift+I by default) that reads the Item Tooltip nearest the pointer and opens the item's MeowDB page. When several items share the name, the panel lists them for the player to pick.
+The hotkey (Ctrl+Shift+I by default) that reads the Item Tooltip nearest the pointer and opens the item's MeowDB page. An alert at the top centre of the game window says what came of it, and when several items share the name, lists them for the player to pick.
 _Avoid_: item search (mob search is the search view's)

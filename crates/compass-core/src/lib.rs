@@ -229,6 +229,9 @@ pub struct PanelState {
     pub search: SearchState,
     /// What the latest Item Lookup came to, for a few seconds; `None` once it has gone.
     pub item_lookup: Option<ItemLookupLine>,
+    /// Where its alert goes on screen: at the top centre of the game window, clear of the
+    /// captured regions; `None` while there is none or no game window.
+    pub item_lookup_placement: Option<ScreenRect>,
 }
 
 /// What a hotkey asks the shell to do at once, beyond rendering the panel state.
@@ -326,12 +329,8 @@ pub struct Compass {
     item_reader: Option<ItemTooltipReader>,
     /// The latest Item Lookup.
     item_lookups: ItemLookups,
-    /// The panel is expanded only to show an Item Lookup's line, and collapses again when
-    /// the line goes, unless the player uses it meanwhile. Never saved.
-    lookup_expanded: bool,
-    /// The Item Lookup whose line last asked for the panel: one the player collapsed
-    /// doesn't expand it again.
-    lookup_shown: Option<u32>,
+    /// The Item Lookup alert's size, in physical px for the current display.
+    item_lookup_size: Size,
     /// What the shell must do that came of time passing (a page MeowDB's answer settled),
     /// for [`Compass::take_request`].
     requests: VecDeque<Request>,
@@ -367,8 +366,7 @@ impl Compass {
             search: MobSearch::default(),
             item_reader: None,
             item_lookups: ItemLookups::default(),
-            lookup_expanded: false,
-            lookup_shown: None,
+            item_lookup_size: Size { width: 0, height: 0 },
             requests: VecDeque::new(),
             panel: Panel::default(),
             setup: Setup::default(),
@@ -498,6 +496,12 @@ impl Compass {
         self.sync_panel()
     }
 
+    /// The Item Lookup alert's size, in physical px for the current display.
+    pub fn set_item_lookup_size(&mut self, size: Size) -> &PanelState {
+        self.item_lookup_size = size;
+        self.sync_panel()
+    }
+
     /// The Grind Tracker window's size, in physical px for the current display.
     pub fn set_grind_tracker_size(&mut self, size: Size) -> &PanelState {
         self.grind_tracker.size = size;
@@ -506,11 +510,6 @@ impl Compass {
 
     /// Apply something the player did.
     pub fn act(&mut self, action: Action) -> &PanelState {
-        // A panel expanded for an Item Lookup's line: collapsing it is the player's say,
-        // and using it keeps it expanded once the line goes.
-        if self.lookup_expanded && (action == Action::ToggleExpanded || uses_panel(action)) {
-            self.lookup_expanded = false;
-        }
         match action {
             Action::ToggleExpanded => {
                 self.panel.expanded = !self.panel.expanded;
@@ -721,6 +720,7 @@ impl Compass {
         let ours: Vec<(OurWindow, ScreenRect)> = [
             panel.map(|at| (OurWindow::Panel, at)),
             self.state.grind_tracker.placement.map(|at| (OurWindow::GrindTracker, at)),
+            self.state.item_lookup_placement.map(|at| (OurWindow::Alert, at)),
         ]
         .into_iter()
         .flatten()
@@ -795,8 +795,7 @@ impl Compass {
     /// The settings to save: whatever the player has changed since [`Compass::restore`].
     pub fn settings(&self) -> Settings {
         Settings {
-            // Not when only an Item Lookup's line expanded it.
-            expanded: self.panel.expanded && !self.lookup_expanded,
+            expanded: self.panel.expanded,
             inside_offset: self.panel.inside_offset,
             placement_mode: self.panel.mode,
             detached_at: self.panel.detached_at,
@@ -917,7 +916,6 @@ impl Compass {
 
     fn sync_panel(&mut self) -> &PanelState {
         self.sync_setup();
-        self.sync_item_lookup();
         // Never over a captured region: the capture would read the panel.
         self.panel.avoid = [self.state.title_region, self.state.exp_bar_region].into_iter().flatten().collect();
         self.state.expanded = self.panel.expanded;
@@ -929,34 +927,21 @@ impl Compass {
         self.state.layer = self.panel.layer();
         self.state.draggable = self.panel.draggable();
         self.sync_grind_tracker();
+        self.sync_item_lookup();
         self.state.hotkeys = self.settings.hotkeys.clone();
         self.state.game_window_title =
             self.settings.game_window_title.clone().unwrap_or_else(|| GAME_WINDOW_TITLE.into());
         &self.state
     }
 
-    /// The Item Lookup's line. A failure, or items to pick from, expands a collapsed panel
-    /// so the player sees it (once per lookup), and it collapses again when the line goes
-    /// or a page opens; not while the next lookup waits on MeowDB, whose answer may want
-    /// the panel again.
+    /// The Item Lookup's alert, at the top centre of the game window while it has one,
+    /// clear of the captured regions.
     fn sync_item_lookup(&mut self) {
         let line = self.item_lookups.line();
-        let wanting = line.as_ref().filter(|_| self.item_lookups.needs_panel()).map(|line| line.lookup);
-        let done = line.as_ref().is_none_or(|line| matches!(line.outcome, ItemLookup::Opened { .. }));
-        match wanting {
-            Some(lookup) if self.lookup_shown != Some(lookup) => {
-                self.lookup_shown = Some(lookup);
-                if !self.panel.expanded {
-                    self.panel.expanded = true;
-                    self.lookup_expanded = true;
-                }
-            }
-            None if self.lookup_expanded && done => {
-                self.panel.expanded = false;
-                self.lookup_expanded = false;
-            }
-            _ => {}
-        }
+        self.state.item_lookup_placement = match (&line, &self.panel.game) {
+            (Some(_), Some(game)) => Some(item_lookup::alert_placement(game, self.item_lookup_size, &self.panel.avoid)),
+            _ => None,
+        };
         self.state.item_lookup = line;
     }
 
@@ -1005,25 +990,6 @@ fn searched<'a>(crawl: &'a Option<Crawl>, state: &'a PanelState, settings: &Sett
         here: state.map.as_ref().map(|map| Here { id: &map.id, page: state.data.data() }),
         travel: settings.travel,
     }
-}
-
-/// Whether the player did this with the panel itself: then a panel expanded for an
-/// Item Lookup's line stays expanded once the line goes.
-fn uses_panel(action: Action) -> bool {
-    matches!(
-        action,
-        Action::PanelMoved { .. }
-            | Action::PanelResized { .. }
-            | Action::CyclePlacement
-            | Action::ChooseCandidate
-            | Action::OpenSearch
-            | Action::ReopenMapList
-            | Action::ClearHuntingTarget
-            | Action::ToggleTaxis
-            | Action::ToggleTeleportScrolls
-            | Action::ToggleSection(_)
-            | Action::LaunchedAgain
-    )
 }
 
 /// Whether two accelerator strings name the same keys ("Ctrl+Shift+C", "shift + ctrl + c").
