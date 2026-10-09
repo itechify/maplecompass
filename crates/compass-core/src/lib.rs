@@ -582,7 +582,7 @@ impl Compass {
                     self.session.forget_best(map);
                 }
             }
-            Action::UndoForgetBest => self.session.undo_forget_best(),
+            Action::UndoForget => self.session.undo_forget_best(),
             Action::ToggleGrindTracker => self.grind_tracker.open = !self.grind_tracker.open,
             Action::CloseGrindTracker => self.grind_tracker.open = false,
             Action::GrindTrackerMoved { x, y } => {
@@ -700,7 +700,7 @@ impl Compass {
             PanelControl::ResetSession => Action::ResetSession,
             PanelControl::UndoReset => Action::UndoReset,
             PanelControl::ForgetBest => Action::ForgetBest,
-            PanelControl::UndoForget => Action::UndoForgetBest,
+            PanelControl::UndoForget => Action::UndoForget,
             PanelControl::CloseGrindTracker => Action::CloseGrindTracker,
             // An open search view stays as it is; the shell brings the overlay in front on
             // opening it.

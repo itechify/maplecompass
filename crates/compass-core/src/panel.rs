@@ -108,7 +108,7 @@ pub enum Action {
     /// the map, the Forget can be undone.
     ForgetBest,
     /// Bring back the best the last Forget took, if the player hasn't left the map since.
-    UndoForgetBest,
+    UndoForget,
     /// Open the Grind Tracker's window, or close it (the panel's button, or its hotkey).
     ToggleGrindTracker,
     /// Close the Grind Tracker's window (its ×). The Session carries on.

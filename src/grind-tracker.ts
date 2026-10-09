@@ -96,11 +96,11 @@ function setOn(unixMs: number, now = new Date()) {
 }
 
 /** One best in the opened line: its figure as Last 5 min showed it, and when it was set. */
-function showBest(row: HTMLElement, exp: HTMLElement, when: HTMLElement, best: VisitBest | null) {
-  row.hidden = !best;
-  if (!best) return;
-  exp.textContent = rate(best.expPerHour);
-  when.textContent = best.setAtUnixMs === null ? "" : setOn(best.setAtUnixMs);
+function showBest(row: HTMLElement, figure: HTMLElement, date: HTMLElement, visitBest: VisitBest | null) {
+  row.hidden = !visitBest;
+  if (!visitBest) return;
+  figure.textContent = rate(visitBest.expPerHour);
+  date.textContent = visitBest.setAtUnixMs === null ? "" : setOn(visitBest.setAtUnixMs);
 }
 
 /** The pointer is on the Personal Best line: it shows opened. */
