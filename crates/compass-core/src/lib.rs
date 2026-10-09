@@ -37,9 +37,9 @@ pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
 pub use mob_card::{DamageRange, Elements, HpPerExp, MobCard, MobDetails, MobPage};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 pub use panel::{
-    Action, DEFAULT_PANEL_WIDTH, Foreground, GameWindow, InsideOffset, Layer, MIN_PANEL_WIDTH, PanelSizes,
+    Action, CollapsedSections, DEFAULT_PANEL_WIDTH, Foreground, GameWindow, InsideOffset, Layer, MIN_PANEL_WIDTH, PanelSizes,
     PlacementMode, ScreenPoint,
-    ScreenRect, Size,
+    ScreenRect, Section, Size,
 };
 pub use search::{DensityTier, HuntingTarget, MobChoice, RouteStop, SearchResult, SearchState, SearchView, Trip};
 pub use session::{Deaths, ExpRate, ExpTracking, TrackingState};
@@ -165,6 +165,8 @@ pub struct PanelState {
     pub mob_cards: Vec<MobCard>,
     /// Expanded to the full panel, or collapsed to a small icon.
     pub expanded: bool,
+    /// The sections the player collapsed to their headings.
+    pub collapsed_sections: CollapsedSections,
     /// A visible game window was found (not minimised).
     pub game_found: bool,
     /// Where the player wants the panel: inside, docked or detached.
@@ -517,6 +519,9 @@ impl Compass {
                 self.settings.travel.teleport_scrolls = !self.settings.travel.teleport_scrolls;
                 self.sync_search();
             }
+            Action::ToggleSection(section) => {
+                self.settings.collapsed_sections = self.settings.collapsed_sections.toggled(section);
+            }
         }
         self.sync_panel()
     }
@@ -723,6 +728,7 @@ impl Compass {
         // Never over a captured region: the capture would read the panel.
         self.panel.avoid = [self.state.title_region, self.state.exp_bar_region].into_iter().flatten().collect();
         self.state.expanded = self.panel.expanded;
+        self.state.collapsed_sections = self.settings.collapsed_sections;
         self.state.game_found = self.panel.game.is_some();
         self.state.placement_mode = self.panel.mode;
         self.state.panel_width = self.panel.width;

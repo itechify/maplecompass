@@ -123,6 +123,35 @@ pub enum Action {
     /// Turn Teleport Scrolls on or off for Distance (the Teleport Scrolls checkbox in
     /// the map list).
     ToggleTeleportScrolls,
+    /// A click on a section's heading: collapse the section to it, or open it again.
+    ToggleSection(Section),
+}
+
+/// A section of the current map's facts that the player can collapse to its heading.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Section {
+    HiddenPortals,
+    Mobs,
+}
+
+/// Which sections are collapsed to their headings: both open until the player collapses
+/// one, and the same on every map. Saved in the settings as `collapsedSections`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct CollapsedSections {
+    pub hidden_portals: bool,
+    pub mobs: bool,
+}
+
+impl CollapsedSections {
+    /// The same, with `section` collapsed if it was open and open if it was collapsed.
+    pub(crate) fn toggled(self, section: Section) -> Self {
+        match section {
+            Section::HiddenPortals => Self { hidden_portals: !self.hidden_portals, ..self },
+            Section::Mobs => Self { mobs: !self.mobs, ..self },
+        }
+    }
 }
 
 /// Where the player wants the panel.

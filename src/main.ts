@@ -62,6 +62,9 @@ type MapData = {
   moreMobs: { count: number; levels: LevelRange } | null;
 };
 
+/** Mirror of `compass_core::Section`: a section the player can collapse to its heading. */
+type Section = "hiddenPortals" | "mobs";
+
 /** Mirror of `compass_core::MapDataStatus`. */
 type MapDataStatus =
   | { status: "noMap" | "loading" | "unavailable" | "formatChanged" }
@@ -137,6 +140,8 @@ type PanelState = {
   /** The Mob Card of each mob the panel lists, in its order. */
   mobCards: MobCard[];
   expanded: boolean;
+  /** Mirror of `compass_core::CollapsedSections`: the sections collapsed to their heading. */
+  collapsedSections: Record<Section, boolean>;
   gameFound: boolean;
   placementMode: PlacementMode;
   layer: "aboveGame" | "hidden";
@@ -189,6 +194,8 @@ const badge = byId("badge");
 const mapMobs = byId("map-mobs");
 const noMobs = byId("no-mobs");
 const moreMobs = byId("more-mobs");
+const portalsToggle = byId("portals-toggle") as HTMLButtonElement;
+const mobsToggle = byId("mobs-toggle") as HTMLButtonElement;
 const mobCardEl = byId("mob-card");
 const iconCount = byId("icon-count");
 const iconAlert = byId("icon-alert");
@@ -465,7 +472,25 @@ function renderData(panel: PanelState) {
   moreMobs.hidden = !more;
   if (more) moreMobs.textContent = `+${more.count} more · ${levels(more.levels)} · all on MeowDB`;
 
+  // Each section collapses to its heading, which then says how many it holds. One with
+  // nothing to list has nothing to collapse: its heading and "None" show as ever.
+  const mobCount = (ready?.listedMobs.length ?? 0) + (ready?.moreMobs?.count ?? 0);
+  foldSection(portals, portalsToggle, panel.collapsedSections.hiddenPortals, ready?.hiddenPortals.length ?? 0);
+  foldSection(mapMobs, mobsToggle, panel.collapsedSections.mobs, mobCount);
+
   credit.textContent = panel.credit ?? "";
+}
+
+/** A section collapsed to its heading, or open; `count` is how many it lists. */
+function foldSection(section: HTMLElement, toggle: HTMLButtonElement, collapsed: boolean, count: number) {
+  const folded = collapsed && count > 0;
+  section.classList.toggle("collapsed", folded);
+  toggle.disabled = count === 0;
+  toggle.setAttribute("aria-expanded", String(!folded));
+  toggle.title = count === 0 ? "" : folded ? "Show this section" : "Collapse to the heading";
+  const countEl = byId(`${toggle.id}-count`);
+  countEl.hidden = !folded;
+  countEl.textContent = String(count);
 }
 
 /** Which hotkey each icon at the top of the panel stands for. */
@@ -1051,6 +1076,10 @@ toolbar.addEventListener("click", (e) => {
 searchBack.addEventListener("click", () => invoke("search_escape"));
 huntingReopen.addEventListener("click", () => invoke("hunting_reopen"));
 huntingClear.addEventListener("click", () => invoke("hunting_clear"));
+// A click on a section's heading collapses the section to it, or opens it again.
+for (const toggle of [portalsToggle, mobsToggle]) {
+  toggle.addEventListener("click", () => invoke("panel_toggle_section", { section: toggle.dataset.section }));
+}
 
 // A click on a suggested mob or a listed map picks it, like Enter on it.
 function pickOnClick(list: HTMLElement, item: string) {
