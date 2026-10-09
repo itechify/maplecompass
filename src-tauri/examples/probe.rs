@@ -15,9 +15,18 @@
 //! milliseconds since the recording started, so names sort in time order. For example
 //! `exp-bar=1015,1150,200,22@1 pickup-log=1630,830,285,135@10`. Nothing is read or
 //! fetched: it only finds the game window and copies screen pixels.
+//!
+//! `cargo run -p maplecompass --example probe item <out-dir> "<item name>" [--desc <tag>] [--delay <s>]`
+//! Item mode, for `samples/item-tooltip`: count down (3 s by default) while the player
+//! hovers the item in the game, then save the whole client area as
+//! `<out-dir>/<item-name>@<x>,<y>[--<tag>].png`, where `(x, y)` is the mouse pointer in
+//! the client area (physical px) and the name is lower case with anything but letters
+//! and digits as `-`. Nothing is read or fetched: it only finds the game window, reads
+//! the pointer position and copies screen pixels.
 
 use compass_core::{Compass, GAME_WINDOW_TITLE, Rect, TitleReader};
 use maplecompass_lib::{capture, capture_title_frame, gamewin, meowdb::MeowDbSource};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -28,6 +37,14 @@ fn main() {
         if let Err(e) = record(&args[1..]) {
             eprintln!("{e}");
             eprintln!("usage: probe record <out-dir> <name>=<x>,<y>,<w>,<h>@<hz> ... [--seconds <n>]");
+            std::process::exit(2);
+        }
+        return;
+    }
+    if args.first().map(String::as_str) == Some("item") {
+        if let Err(e) = item(&args[1..]) {
+            eprintln!("{e}");
+            eprintln!("usage: probe item <out-dir> \"<item name>\" [--desc <tag>] [--delay <seconds>]");
             std::process::exit(2);
         }
         return;
@@ -70,6 +87,70 @@ fn main() {
         img.save(&path).expect("save png");
         println!("saved {path}");
     }
+}
+
+/// `<out-dir> "<item name>" [--desc <tag>] [--delay <seconds>]`
+fn item(args: &[String]) -> Result<(), String> {
+    let mut rest = args.iter();
+    let out = PathBuf::from(rest.next().ok_or("no output directory")?);
+    let name = rest.next().ok_or("no item name")?;
+    let (mut desc, mut delay) = (None, 3.0_f64);
+    while let Some(arg) = rest.next() {
+        match arg.as_str() {
+            "--desc" => desc = Some(slug(rest.next().ok_or("--desc needs a tag")?)),
+            "--delay" => {
+                delay = rest.next().and_then(|s| s.parse().ok()).filter(|s: &f64| *s >= 0.0).ok_or("--delay needs seconds")?;
+            }
+            other => return Err(format!("unexpected argument {other:?}")),
+        }
+    }
+    let item = slug(name);
+    if item.is_empty() || desc.as_ref().is_some_and(String::is_empty) {
+        return Err("the item name and tag need letters or digits".into());
+    }
+
+    gamewin::look_for(GAME_WINDOW_TITLE);
+    gamewin::find_game_client().ok_or(format!("No visible \"{GAME_WINDOW_TITLE}\" window found."))?;
+    println!("Hover {name:?} in the game so its tooltip shows.");
+    let start = Instant::now();
+    let total = Duration::from_secs_f64(delay);
+    while let Some(left) = total.checked_sub(start.elapsed()).filter(|left| !left.is_zero()) {
+        print!("{}… ", left.as_secs_f64().ceil());
+        let _ = std::io::stdout().flush();
+        std::thread::sleep(left.min(Duration::from_secs(1)));
+    }
+    println!();
+
+    // The pointer first: the tooltip follows it, and the capture comes right after.
+    let at = gamewin::cursor_position().ok_or("no pointer position")?;
+    let client = gamewin::find_game_client().ok_or(format!("No visible \"{GAME_WINDOW_TITLE}\" window found."))?;
+    let (x, y) = (at.x - client.x, at.y - client.y);
+    println!("Game client area: {client:?}; pointer at client ({x}, {y})");
+    if x < 0 || y < 0 || x >= client.width as i32 || y >= client.height as i32 {
+        return Err("the pointer is outside the game's client area: nothing saved".into());
+    }
+    let rgba = capture::capture_rgba(client.x, client.y, client.width as i32, client.height as i32)?;
+    let img = image::RgbaImage::from_raw(client.width, client.height, rgba).ok_or("capture size")?;
+    std::fs::create_dir_all(&out).map_err(|e| format!("{}: {e}", out.display()))?;
+    let tag = desc.map(|d| format!("--{d}")).unwrap_or_default();
+    let path = out.join(format!("{item}@{x},{y}{tag}.png"));
+    img.save(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    println!("saved {}", path.display());
+    Ok(())
+}
+
+/// A file-name form of a name: lower case, apostrophes dropped, anything else but
+/// letters and digits as one `-` ("Hero's Gladius" -> "heros-gladius").
+fn slug(name: &str) -> String {
+    let mut out = String::new();
+    for c in name.chars().filter(|c| !matches!(c, '\'' | '’')) {
+        if c.is_alphanumeric() {
+            out.extend(c.to_lowercase());
+        } else if !out.is_empty() && !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    out.trim_end_matches('-').to_string()
 }
 
 /// How often record mode looks for the game window again, so crops follow it.
