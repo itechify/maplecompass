@@ -112,7 +112,8 @@ impl Bests {
                 exp_per_hour: best.exp_per_hour,
                 first: false,
                 share_hundredths: share(best.exp_per_hour),
-                new_best: false,
+                // A best this Visit set stays its best, whatever the rate does after.
+                new_best: this.is_some_and(|this| this > best.exp_per_hour),
             }),
             None => this.map(|exp_per_hour| PersonalBestLine {
                 exp_per_hour,
