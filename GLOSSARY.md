@@ -112,7 +112,7 @@ The window beside the panel, turned on at setup by marking the EXP Bar Region, t
 _Avoid_: EXP tracking, EXP tracker
 
 **Session**:
-The stretch of play MapleCompass measures rates over, from the first EXP gain until the player resets it or switches character. Idle stretches pause it rather than count against it. A misread that leads MapleCompass to learn the level's total wrong doesn't end it: the total is learned again.
+The stretch of play MapleCompass measures rates over, from the first EXP gain until the player resets it or switches character. A reset can be undone until the next EXP gain. Idle stretches pause it rather than count against it, and so does a stretch when the EXP bar can't be read; what the EXP did over one too long to be a gap in play isn't counted either. A misread that leads MapleCompass to learn the level's total wrong doesn't end it: the total is learned again.
 _Avoid_: run, grind (the Grind Tracker measures a Session; "grind" alone names nothing)
 
 **EXP Bar Region**:

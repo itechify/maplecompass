@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-08T17:34:31.165Z",
+  "generatedAt": "2026-10-09T12:53:30.462Z",
   "title": "Design System: MapleCompass",
   "extensions": {
     "colorMeta": {
@@ -948,6 +948,81 @@
           "oklch(82% 0.056 267.2)",
           "oklch(95% 0.022 267.2)"
         ]
+      },
+      "exp-top": {
+        "role": "tertiary",
+        "displayName": "EXP Lime, Top",
+        "canonical": "oklch(95.3% 0.157 113.7)",
+        "tonalRamp": [
+          "oklch(15% 0.157 113.7)",
+          "oklch(25% 0.157 113.7)",
+          "oklch(36% 0.157 113.7)",
+          "oklch(47% 0.157 113.7)",
+          "oklch(58% 0.157 113.7)",
+          "oklch(70% 0.157 113.7)",
+          "oklch(82% 0.157 113.7)",
+          "oklch(95% 0.063 113.7)"
+        ]
+      },
+      "exp-mid": {
+        "role": "tertiary",
+        "displayName": "EXP Lime",
+        "canonical": "oklch(93.5% 0.21 115.6)",
+        "tonalRamp": [
+          "oklch(15% 0.21 115.6)",
+          "oklch(25% 0.21 115.6)",
+          "oklch(36% 0.21 115.6)",
+          "oklch(47% 0.21 115.6)",
+          "oklch(58% 0.21 115.6)",
+          "oklch(70% 0.21 115.6)",
+          "oklch(82% 0.21 115.6)",
+          "oklch(95% 0.084 115.6)"
+        ]
+      },
+      "exp-base": {
+        "role": "tertiary",
+        "displayName": "EXP Lime, Base",
+        "canonical": "oklch(87.3% 0.2 116.3)",
+        "tonalRamp": [
+          "oklch(15% 0.2 116.3)",
+          "oklch(25% 0.2 116.3)",
+          "oklch(36% 0.2 116.3)",
+          "oklch(47% 0.2 116.3)",
+          "oklch(58% 0.2 116.3)",
+          "oklch(70% 0.2 116.3)",
+          "oklch(82% 0.2 116.3)",
+          "oklch(95% 0.08 116.3)"
+        ]
+      },
+      "exp-track": {
+        "role": "tertiary",
+        "displayName": "EXP Track",
+        "canonical": "oklch(85.5% 0 0)",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(36% 0 0)",
+          "oklch(47% 0 0)",
+          "oklch(58% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(82% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "exp-frame": {
+        "role": "tertiary",
+        "displayName": "EXP Frame",
+        "canonical": "oklch(53.1% 0.009 229)",
+        "tonalRamp": [
+          "oklch(15% 0.009 229)",
+          "oklch(25% 0.009 229)",
+          "oklch(36% 0.009 229)",
+          "oklch(47% 0.009 229)",
+          "oklch(58% 0.009 229)",
+          "oklch(70% 0.009 229)",
+          "oklch(82% 0.009 229)",
+          "oklch(95% 0.004 229)"
+        ]
       }
     },
     "gradients": [
@@ -989,18 +1064,28 @@
       {
         "name": "button-light",
         "value": "linear-gradient(180deg, #f8fafe 0%, #d5dff0 100%)",
-        "purpose": "Setup's secondary buttons and the overlay's light icon buttons."
+        "purpose": "Setup's secondary buttons and the overlay's light icon and text buttons."
       },
       {
         "name": "button-light-hover",
         "value": "linear-gradient(180deg, #ffffff 0%, #dfe7f6 100%)",
         "purpose": "A light-steel button under the pointer."
+      },
+      {
+        "name": "exp-fill",
+        "value": "linear-gradient(180deg, #effb76 0%, #e5f916 28%, #dcf200 55%, #cfe400 100%)",
+        "purpose": "The game's EXP gauge lime: the Grind Tracker's EXP gauge fill, and nothing else."
+      },
+      {
+        "name": "exp-track",
+        "value": "linear-gradient(180deg, #e2e2e2 0%, #cfcfcf 25%, #d6d6d6 45%, #c3c3c3 70%, #bcbcbc 100%)",
+        "purpose": "The light grey track under the EXP gauge's fill."
       }
     ],
     "typographyMeta": {
       "headline": {
         "displayName": "Headline",
-        "purpose": "The Map Name in Title Lettering on the title panel and setup's recognised test read; Time to Level and setup's step headings at the same size in plain ink."
+        "purpose": "The Map Name in Title Lettering on the title panel and setup's recognised test read; Time to Level and setup's step headings at the same size in plain ink. Held, the Time to Level figure and the rates drop to Light, never a fainter colour; with no figure to give, the slot says why in 13px Light Panel Ink Steel, never a bare dash."
       },
       "street": {
         "displayName": "Street Name",
@@ -1127,7 +1212,7 @@
       "name": "Light Icon Button",
       "kind": "button",
       "refersTo": "icon-button-light",
-      "description": "A button in the panel's body rather than its bar: light steel with a near-black icon. The Hunting Target's reopen-search and clear.",
+      "description": "A button in the panel's body rather than its bar: light steel with a near-black icon. The Hunting Target's reopen-search and clear, and the Grind Tracker's reset.",
       "html": "<div class=\"ds-row\"><button type=\"button\" class=\"ds-lb\" aria-label=\"Pick another map for this mob\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><circle cx=\"7\" cy=\"7\" r=\"4.25\"/><path d=\"M10.2 10.2 13.5 13.5\"/></svg></button><button type=\"button\" class=\"ds-lb\" aria-label=\"Clear the Hunting Target\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M4 4l8 8M12 4l-8 8\"/></svg></button></div>",
       "css": ".ds-row { display: flex; gap: 6px; } .ds-lb { display: grid; place-items: center; box-sizing: border-box; width: 19px; height: 19px; padding: 0; border: 1px solid var(--window-edge, #6f95ba); border-radius: 2px; background: var(--button-light, linear-gradient(180deg, #f8fafe 0%, #d5dff0 100%)); box-shadow: inset 0 1px 0 #fff; color: #16191f; } .ds-lb svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; } .ds-lb:hover { background: var(--button-light-hover, linear-gradient(180deg, #ffffff 0%, #dfe7f6 100%)); } .ds-lb:active { box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25); } .ds-lb:focus-visible { outline: 2px solid var(--edit, #2f63c8); outline-offset: 2px; }"
     },
@@ -1188,12 +1273,36 @@
       "css": ".ds-panel { font-family: var(--font, \"Maplestory\", Arial, \"Segoe UI\", system-ui, sans-serif); font-variant-numeric: tabular-nums; box-sizing: border-box; width: 340px; border: 1px solid var(--window-edge, #6f95ba); border-radius: 4px; background: var(--glass, rgba(178, 194, 232, 0.62)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35); color: #16191f; overflow: hidden; } .ds-body { display: flex; flex-direction: column; gap: 6px; padding: 10px 11px; text-shadow: 0 0 2px rgba(238, 242, 255, 0.85), 0 0 4px rgba(238, 242, 255, 0.6); } .ds-field { display: flex; flex-direction: column; gap: 4px; } .ds-label { font-size: 12px; color: #222938; } .ds-field input { box-sizing: border-box; width: 100%; padding: 6px 10px; border: 1px solid var(--frame, #3e527c); border-radius: 4px; background: #fff; box-shadow: inset 0 1px 2px rgba(20, 30, 60, 0.15); color: #16191f; font: 14px var(--font, \"Maplestory\", Arial, sans-serif); } .ds-field input::placeholder { color: #343d51; } .ds-field input:focus-visible { outline: 2px solid var(--edit, #2f63c8); outline-offset: 2px; } .ds-sugg { margin: 0; padding: 3px; list-style: none; border: 1px solid var(--inset-edge, rgba(30, 45, 90, 0.3)); border-radius: 4px; background: rgba(255, 255, 255, 0.5); font-size: 13px; } .ds-sugg li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 8px; border-radius: 3px; color: #222938; } .ds-sugg li:hover { background: rgba(47, 99, 200, 0.08); } .ds-sugg li.ds-current { background: var(--select, #d3def3); box-shadow: inset 0 0 0 1px var(--select-edge, #98afda); color: #16191f; font-weight: 700; }"
     },
     {
+      "name": "Text Button",
+      "kind": "button",
+      "refersTo": "text-button",
+      "description": "The light steel button with a word where an icon couldn't say it: the Grind Tracker's Undo beside its \"Session reset.\" note, the one so far.",
+      "html": "<p class=\"ds-note\"><span>Session reset.</span><button type=\"button\" class=\"ds-tb\">Undo</button></p>",
+      "css": ".ds-note { font-family: var(--font, \"Maplestory\", Arial, \"Segoe UI\", system-ui, sans-serif); font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 8px; margin: 0; color: #16191f; font-size: 13px; line-height: 17px; } .ds-tb { flex: none; box-sizing: border-box; height: 19px; padding: 0 7px; border: 1px solid var(--window-edge, #6f95ba); border-radius: 2px; background: var(--button-light, linear-gradient(180deg, #f8fafe 0%, #d5dff0 100%)); box-shadow: inset 0 1px 0 #fff; color: #16191f; font: 700 12px/17px var(--font, \"Maplestory\", Arial, sans-serif); text-shadow: none; } .ds-tb:hover { background: var(--button-light-hover, linear-gradient(180deg, #ffffff 0%, #dfe7f6 100%)); } .ds-tb:active { background: var(--button-light, linear-gradient(180deg, #f8fafe 0%, #d5dff0 100%)); box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25); } .ds-tb:focus-visible { outline: 2px solid var(--edit, #2f63c8); outline-offset: 2px; }"
+    },
+    {
+      "name": "Grind Tracker Figures",
+      "kind": "custom",
+      "refersTo": "tracker-figures",
+      "description": "The Session's figures set into the Grind Tracker's body on near-opaque Window Lavender: Time to Level with the light reset button at the far end, the rates as the panel's summary in miniature, then the share and deaths lines. Held (warming up, paused, or the EXP bar unread), the figures drop to Light, never fainter.",
+      "html": "<div class=\"ds-stack\"><div class=\"ds-figures\"><div class=\"ds-headline\"><span class=\"ds-label\">Time to Level</span><span class=\"ds-ttl\">1h 48m</span><button type=\"button\" class=\"ds-lb\" aria-label=\"Reset the Session\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M3.3 6.2A5 5 0 1 1 3 9.5M2.8 2.8v3.6h3.6\"/></svg></button></div><div class=\"ds-rates\"><span class=\"ds-period\">Last 5 min</span><span class=\"ds-value\">61,200</span><span class=\"ds-unit\">EXP/h</span><span class=\"ds-value\">12.9%</span><span class=\"ds-unit ds-per\">/h</span><span class=\"ds-period\">Session <span class=\"ds-length\">1h 12m</span></span><span class=\"ds-value\">58,400</span><span class=\"ds-unit\">EXP/h</span><span class=\"ds-value\">12.3%</span><span class=\"ds-unit ds-per\">/h</span></div><p class=\"ds-line\">21% of this map's solo EXP/h (297,499)</p><p class=\"ds-line\">1 death (−2.1% of the level)</p></div><div class=\"ds-figures ds-held\"><div class=\"ds-headline\"><span class=\"ds-label\">Time to Level</span><span class=\"ds-ttl\">2h 5m</span><span class=\"ds-tag\">warming up</span><button type=\"button\" class=\"ds-lb\" aria-label=\"Reset the Session\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M3.3 6.2A5 5 0 1 1 3 9.5M2.8 2.8v3.6h3.6\"/></svg></button></div><div class=\"ds-rates\"><span class=\"ds-period\">Last 5 min</span><span class=\"ds-value\">61,200</span><span class=\"ds-unit\">EXP/h</span><span class=\"ds-value\">12.9%</span><span class=\"ds-unit ds-per\">/h</span></div></div></div>",
+      "css": ".ds-stack { font-family: var(--font, \"Maplestory\", Arial, \"Segoe UI\", system-ui, sans-serif); font-variant-numeric: tabular-nums; display: flex; flex-direction: column; gap: 8px; width: 258px; } .ds-figures { display: flex; flex-direction: column; gap: 3px; padding: 4px 8px 6px 9px; border: 1px solid var(--inset-edge, rgba(30, 45, 90, 0.3)); border-radius: 4px; background: var(--body, rgba(234, 232, 245, 0.95)); color: #16191f; } .ds-headline { display: flex; align-items: baseline; gap: 7px; white-space: nowrap; } .ds-label { font-size: 12px; line-height: 15px; color: #222938; } .ds-ttl { font-size: 18px; font-weight: 700; line-height: 23px; } .ds-tag { padding: 0 5px; border: 1px solid var(--tag-edge, #a3b6d8); border-radius: 3px; background: var(--tag-bg, #dae3f3); color: var(--tag-ink, #284a86); font-size: 11px; font-weight: 700; line-height: 15px; } .ds-lb { align-self: center; margin-left: auto; display: grid; place-items: center; box-sizing: border-box; width: 19px; height: 19px; padding: 0; border: 1px solid var(--window-edge, #6f95ba); border-radius: 2px; background: var(--button-light, linear-gradient(180deg, #f8fafe 0%, #d5dff0 100%)); box-shadow: inset 0 1px 0 #fff; color: #16191f; } .ds-lb svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; } .ds-lb:hover { background: var(--button-light-hover, linear-gradient(180deg, #ffffff 0%, #dfe7f6 100%)); } .ds-lb:active { box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25); } .ds-lb:focus-visible { outline: 2px solid var(--edit, #2f63c8); outline-offset: 2px; } .ds-rates { display: grid; grid-template-columns: auto auto auto auto auto; justify-content: start; align-items: baseline; row-gap: 1px; font-size: 12px; line-height: 17px; color: #222938; } .ds-period { padding-right: 8px; white-space: nowrap; } .ds-length { color: #343d51; } .ds-value { text-align: right; font-size: 13px; font-weight: 700; color: #16191f; } .ds-unit { padding: 0 10px 0 4px; } .ds-unit.ds-per { padding: 0 0 0 1px; } .ds-line { margin: 0; font-size: 12px; line-height: 16px; color: #222938; } .ds-held .ds-ttl, .ds-held .ds-value { font-weight: 400; }"
+    },
+    {
+      "name": "EXP Gauge",
+      "kind": "custom",
+      "refersTo": "exp-gauge",
+      "description": "The Grind Tracker's signature, at the window's foot: the game's status-bar EXP gauge in miniature, the reading as the bar writes it over an EXP Lime fill on the EXP Track grey. It changes with every reading, without easing; the lime draws nothing else.",
+      "html": "<div class=\"ds-exp\"><p class=\"ds-exp-figures\"><b>EXP</b> 8,435 [41.72%]</p><div class=\"ds-gauge\" role=\"progressbar\" aria-label=\"EXP this level\" aria-valuemin=\"0\" aria-valuemax=\"100\" aria-valuenow=\"41.72\" aria-valuetext=\"8,435 [41.72%]\"><div class=\"ds-gauge-fill\" style=\"--filled: 0.4172\"></div></div></div>",
+      "css": ".ds-exp { font-family: var(--font, \"Maplestory\", Arial, \"Segoe UI\", system-ui, sans-serif); font-variant-numeric: tabular-nums; display: flex; flex-direction: column; gap: 3px; width: 258px; } .ds-exp-figures { margin: 0; font-size: 12px; line-height: 15px; color: #16191f; } .ds-exp-figures b { margin-right: 2px; font-weight: 700; } .ds-gauge { position: relative; box-sizing: border-box; height: 10px; overflow: hidden; border: 1px solid var(--exp-frame, #676d70); border-radius: 2px; background: var(--exp-track, linear-gradient(180deg, #e2e2e2 0%, #cfcfcf 25%, #d6d6d6 45%, #c3c3c3 70%, #bcbcbc 100%)); box-shadow: inset 0 1px 0 #fff; } .ds-gauge-fill { position: absolute; inset: 0; background: var(--exp-fill, linear-gradient(180deg, #effb76 0%, #e5f916 28%, #dcf200 55%, #cfe400 100%)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6); transform: scaleX(var(--filled, 0)); transform-origin: left center; }"
+    },
+    {
       "name": "Collapsed Icon",
       "kind": "custom",
       "refersTo": "collapsed-icon",
-      "description": "The app icon itself, the gold compass, 44px: the Hidden Portal count on an ink pill, the orange alert dot, and Time to Level along the bottom. The compass here is a drawn stand-in for assets/icon.png.",
-      "html": "<div class=\"ds-pair\"><div class=\"ds-icon\"><svg class=\"ds-compass\" width=\"44\" height=\"44\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"9\" r=\"6\" fill=\"#e9b52c\" stroke=\"#7a4d0b\" stroke-width=\"1\"/><circle cx=\"8\" cy=\"9\" r=\"4.3\" fill=\"#f4f7fb\" stroke=\"#b07a18\" stroke-width=\".6\"/><path d=\"M8 5.6 9.1 9 8 9.6 6.9 9Z\" fill=\"#d8342a\"/><path d=\"M8 12.4 6.9 9 8 8.4 9.1 9Z\" fill=\"#2a52a6\"/><rect x=\"7\" y=\"1.5\" width=\"2\" height=\"2\" rx=\".6\" fill=\"#e9b52c\" stroke=\"#7a4d0b\" stroke-width=\".6\"/></svg><span class=\"ds-count\">2</span><span class=\"ds-alert\"></span></div><div class=\"ds-icon\"><svg class=\"ds-compass\" width=\"44\" height=\"44\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"9\" r=\"6\" fill=\"#e9b52c\" stroke=\"#7a4d0b\" stroke-width=\"1\"/><circle cx=\"8\" cy=\"9\" r=\"4.3\" fill=\"#f4f7fb\" stroke=\"#b07a18\" stroke-width=\".6\"/><path d=\"M8 5.6 9.1 9 8 9.6 6.9 9Z\" fill=\"#d8342a\"/><path d=\"M8 12.4 6.9 9 8 8.4 9.1 9Z\" fill=\"#2a52a6\"/><rect x=\"7\" y=\"1.5\" width=\"2\" height=\"2\" rx=\".6\" fill=\"#e9b52c\" stroke=\"#7a4d0b\" stroke-width=\".6\"/></svg><span class=\"ds-count ds-up\">1</span><span class=\"ds-badge\">47m</span></div></div>",
-      "css": ".ds-pair { font-family: var(--font, \"Maplestory\", Arial, \"Segoe UI\", system-ui, sans-serif); font-variant-numeric: tabular-nums; display: flex; gap: 12px; } .ds-icon { position: relative; width: 44px; height: 44px; } .ds-icon .ds-compass { display: block; } .ds-count { position: absolute; right: 0; bottom: 0; min-width: 14px; padding: 0 3px; box-sizing: border-box; border: 1px solid #fff; border-radius: 8px; background: var(--ink, #1b2648); color: #fff; font: 700 10px/13px var(--font, \"Maplestory\", Arial, sans-serif); text-align: center; } .ds-count.ds-up { bottom: 15px; } .ds-alert { position: absolute; top: 1px; right: 1px; width: 9px; height: 9px; border-radius: 50%; background: var(--orange, #f08a1c); box-shadow: 0 0 0 1px var(--orange-deep, #b85e00), 0 0 0 2px #fff; } .ds-badge { position: absolute; left: 2px; right: 2px; bottom: 2px; padding: 0 2px; border-radius: 3px; background: var(--ink, #1b2648); color: #fff; font: 700 9px/12px var(--font, \"Maplestory\", Arial, sans-serif); text-align: center; }"
+      "description": "The app icon itself, the gold compass, 44px: the Hidden Portal count on an ink pill, the orange alert dot (also while the EXP bar can't be read), and Time to Level along the bottom, in Light on Ink Steel while its figure is held. The compass here is a drawn stand-in for assets/icon.png.",
+      "html": "<div class=\"ds-pair\"><div class=\"ds-icon\"><svg class=\"ds-compass\" width=\"44\" height=\"44\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"9\" r=\"6\" fill=\"#e9b52c\" stroke=\"#7a4d0b\" stroke-width=\"1\"/><circle cx=\"8\" cy=\"9\" r=\"4.3\" fill=\"#f4f7fb\" stroke=\"#b07a18\" stroke-width=\".6\"/><path d=\"M8 5.6 9.1 9 8 9.6 6.9 9Z\" fill=\"#d8342a\"/><path d=\"M8 12.4 6.9 9 8 8.4 9.1 9Z\" fill=\"#2a52a6\"/><rect x=\"7\" y=\"1.5\" width=\"2\" height=\"2\" rx=\".6\" fill=\"#e9b52c\" stroke=\"#7a4d0b\" stroke-width=\".6\"/></svg><span class=\"ds-count\">2</span><span class=\"ds-alert\"></span></div><div class=\"ds-icon\"><svg class=\"ds-compass\" width=\"44\" height=\"44\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"9\" r=\"6\" fill=\"#e9b52c\" stroke=\"#7a4d0b\" stroke-width=\"1\"/><circle cx=\"8\" cy=\"9\" r=\"4.3\" fill=\"#f4f7fb\" stroke=\"#b07a18\" stroke-width=\".6\"/><path d=\"M8 5.6 9.1 9 8 9.6 6.9 9Z\" fill=\"#d8342a\"/><path d=\"M8 12.4 6.9 9 8 8.4 9.1 9Z\" fill=\"#2a52a6\"/><rect x=\"7\" y=\"1.5\" width=\"2\" height=\"2\" rx=\".6\" fill=\"#e9b52c\" stroke=\"#7a4d0b\" stroke-width=\".6\"/></svg><span class=\"ds-count ds-up\">1</span><span class=\"ds-badge\">47m</span></div><div class=\"ds-icon\"><svg class=\"ds-compass\" width=\"44\" height=\"44\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"9\" r=\"6\" fill=\"#e9b52c\" stroke=\"#7a4d0b\" stroke-width=\"1\"/><circle cx=\"8\" cy=\"9\" r=\"4.3\" fill=\"#f4f7fb\" stroke=\"#b07a18\" stroke-width=\".6\"/><path d=\"M8 5.6 9.1 9 8 9.6 6.9 9Z\" fill=\"#d8342a\"/><path d=\"M8 12.4 6.9 9 8 8.4 9.1 9Z\" fill=\"#2a52a6\"/><rect x=\"7\" y=\"1.5\" width=\"2\" height=\"2\" rx=\".6\" fill=\"#e9b52c\" stroke=\"#7a4d0b\" stroke-width=\".6\"/></svg><span class=\"ds-badge ds-held\">52m</span></div></div>",
+      "css": ".ds-pair { font-family: var(--font, \"Maplestory\", Arial, \"Segoe UI\", system-ui, sans-serif); font-variant-numeric: tabular-nums; display: flex; gap: 12px; } .ds-icon { position: relative; width: 44px; height: 44px; } .ds-icon .ds-compass { display: block; } .ds-count { position: absolute; right: 0; bottom: 0; min-width: 14px; padding: 0 3px; box-sizing: border-box; border: 1px solid #fff; border-radius: 8px; background: var(--ink, #1b2648); color: #fff; font: 700 10px/13px var(--font, \"Maplestory\", Arial, sans-serif); text-align: center; } .ds-count.ds-up { bottom: 15px; } .ds-alert { position: absolute; top: 1px; right: 1px; width: 9px; height: 9px; border-radius: 50%; background: var(--orange, #f08a1c); box-shadow: 0 0 0 1px var(--orange-deep, #b85e00), 0 0 0 2px #fff; } .ds-badge { position: absolute; left: 2px; right: 2px; bottom: 2px; padding: 0 2px; border-radius: 3px; background: var(--ink, #1b2648); color: #fff; font: 700 9px/12px var(--font, \"Maplestory\", Arial, sans-serif); text-align: center; } .ds-badge.ds-held { font-weight: 400; background: var(--ink-2, #44527a); }"
     },
     {
       "name": "Primary Button",
@@ -1230,7 +1339,7 @@
   ],
   "narrative": {
     "northStar": "The Window the Game Forgot to Ship",
-    "overview": "The overlay is one more of the game's windows laid over the screen, built from the two it sits beside. From the Mini Map it takes the light grey window bar with the window's name and small bright blue buttons, and the sky-blue title panel with the Street Name over the Map Name in light lettering outlined in blue. From the Quest Helper it takes the see-through periwinkle body with near-black text. The minimap's legend supplies the glyphs: blue portal rings, red mob dots, and the player's yellow dot. The pixel-art gold compass, the app icon, is the window's mark. The game supplies the materials and one signature move; organisation, hierarchy and density come from a working tool: EXP pace first when it is tracked, then hidden exits, then the mobs, then the way to the Hunting Target, then the credit. It is not a screenshot of a game window.\n\nIt is light because the game's windows are light, see-through because the game's windows over the screen are, and dense because it is read in glances between attacks. Every state is drawn in the same window. Doubt and problems get the game's orange, and nothing else does. The confirmed rejection is the generic dark dev-tools card with a stats table on top, which this world replaced. Setup is a window on the desktop rather than over the game: it keeps an opaque lavender body, navy ink and steel buttons under the same grey window bar, and shows a recognised map exactly as the overlay's title panel will. The title-marking window's hint is a small translucent lavender window.\n\nEvery window takes the pointer. The overlay is always clickable, but a click never takes the keyboard from the game except in the search view, where the query field needs it. The panel is dragged by its window bar or title panel when it sits inside the game or is detached, and resized by its sides or bottom corners, width only. Its buttons and setup's buttons carry the game's hover, pressed and keyboard-focus states; list rows in the search view take a faint hover tint. Its height follows its content. Nothing in any window moves: there is no transition or animation anywhere.",
+    "overview": "The overlay is one more of the game's windows laid over the screen, built from the two it sits beside. From the Mini Map it takes the light grey window bar with the window's name and small bright blue buttons, and the sky-blue title panel with the Street Name over the Map Name in light lettering outlined in blue. From the Quest Helper it takes the see-through periwinkle body with near-black text. The minimap's legend supplies the glyphs: blue portal rings, red mob dots, and the player's yellow dot. The pixel-art gold compass, the app icon, is the window's mark. The game supplies the materials and one signature move; organisation, hierarchy and density come from a working tool: EXP pace first when it is tracked, then hidden exits, then the mobs, then the way to the Hunting Target, then the credit. It is not a screenshot of a game window.\n\nIt is light because the game's windows are light, see-through because the game's windows over the screen are, and dense because it is read in glances between attacks. Every state is drawn in the same window. Doubt and problems get the game's orange, and nothing else does. The confirmed rejection is the generic dark dev-tools card with a stats table on top, which this world replaced. Setup is a window on the desktop rather than over the game: it keeps an opaque lavender body, navy ink and steel buttons under the same grey window bar, and shows a recognised map exactly as the overlay's title panel will. The title-marking window's hint is a small translucent lavender window.\n\nEvery window takes the pointer. The overlay is always clickable, but a click never takes the keyboard from the game except in the search view, where the query field needs it. The panel is dragged by its window bar or title panel when it sits inside the game or is detached, and resized by its sides or bottom corners, width only. Its buttons and setup's buttons carry the game's hover, pressed and keyboard-focus states; list rows in the search view take a faint hover tint. Its height follows its content. Nothing in any window moves but the world crawl's gauge: its fill eases to each new count, and a sheen runs along it while the crawl goes on. There is no other transition or animation anywhere: the Grind Tracker's EXP gauge changes with each reading, as the game's own does, without easing.",
     "keyCharacteristics": [
       "The Mini Map's light grey window bar and sky-blue title panel over the Quest Helper's see-through periwinkle body, in a 4px-cornered frame.",
       "Street Name over Map Name in light lettering outlined in blue, as the Mini Map draws its title.",
@@ -1249,6 +1358,11 @@
       {
         "name": "The Minimap Legend Rule",
         "body": "Portal blue, mob red and you yellow come from the minimap's legend and keep that meaning. Blue is for portals, red is for mobs and yellow is for where the player is, with no other uses.",
+        "section": "colors"
+      },
+      {
+        "name": "The EXP Lime Rule",
+        "body": "The lime of the game's EXP gauge draws the EXP bar's reading in the Grind Tracker and nothing else: not progress in general (the crawl gauge is Game Button Blue), and never a highlight.",
         "section": "colors"
       },
       {
@@ -1296,6 +1410,7 @@
       "**Do** keep overlay figures tabular and numeric columns right-aligned.",
       "**Do** let notes and the Map Name wrap, and truncate single-line facts with an ellipsis.",
       "**Do** keep the Street Name above the Map Name wherever a map is shown as the overlay shows it.",
+      "**Do** draw the EXP bar's reading as the game's own EXP gauge, in EXP Lime, and nothing else in that lime.",
       "**Do** give every button, in every window, hover, pressed and a 2px Edit Blue `:focus-visible` ring offset 2px: game blue on the overlay's window bars, light steel in its body, deep steel for setup's step forward and light steel beside it.",
       "**Do** mark a selected row with Selection Periwinkle and its inset edge, and set a list into the body as an inset box."
     ],

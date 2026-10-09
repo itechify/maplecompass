@@ -696,11 +696,13 @@ function scrollWithin(box: HTMLElement, item: HTMLElement) {
   else if (inner.bottom > outer.bottom) box.scrollTop += inner.bottom - outer.bottom;
 }
 
-/** Time to Level on the collapsed icon, while there is one. */
+/** Time to Level on the collapsed icon, while there is one: in the light weight while it
+ *  is still settling or held, as the Grind Tracker shows it. */
 function renderBadge(panel: PanelState) {
   const text = panel.expTracking.timeToLevelBadge;
   badge.hidden = !text;
   badge.textContent = text ?? "";
+  badge.classList.toggle("held", panel.expTracking.state !== "active");
 }
 
 /** How long the pointer rests on a mob's name before its Mob Card shows. */
@@ -888,7 +890,8 @@ function renderIcon(panel: PanelState) {
     (panel.candidates && !panel.candidates.chosen) ||
     ["unavailable", "formatChanged", "savedCopy"].includes(panel.data.status) ||
     panel.setup.needed === "firstRun" ||
-    panel.setup.needed === "resolutionChanged"
+    panel.setup.needed === "resolutionChanged" ||
+    panel.expTracking.state === "unreadable"
   );
 }
 

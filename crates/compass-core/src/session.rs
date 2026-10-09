@@ -20,10 +20,19 @@
 //!   changes counts; a longer one is a break, which pauses the Session and counts for
 //!   nothing, from the last change to the next, so the rates hold while paused. Once
 //!   the Session has warmed up it stays so, breaks or not.
+//! - A bar that can't be read isn't a break: nothing is known of the EXP then. Once it
+//!   has gone [`UNREADABLE_MS`] without reading whole the Session says so, its figures
+//!   held. If it reads again within [`IDLE_MS`] of the last whole reading, the stretch
+//!   was a gap like any other; after longer, the stretch counts for nothing, and neither
+//!   does whatever the EXP did over it: the next reading is taken without a change. (No
+//!   frames at all, as while the game window is minimised, is no evidence either way.)
+//! - The player's reset can be undone until the EXP next changes, which starts the new
+//!   Session; a character switch ends the old one for good.
 //! - The figures shown hold still for each [`REFRESH_MS`] of capture time, rather than
 //!   jumping with every kill. Events show at once: the state changing (the Session
-//!   starting, warming up, pausing or resuming), the first figures there are, a death, a
-//!   level-up, a reset or a character switch, and a map with another ceiling.
+//!   starting, warming up, pausing, resuming, or the bar going unread), the first figures
+//!   there are, a death, a level-up, a reset or its undoing, a character switch, and a
+//!   map with another ceiling. The bar's last reading shows as it comes.
 
 use crate::ExpBar;
 use serde::Serialize;
@@ -47,17 +56,35 @@ pub struct ExpTracking {
     pub rolling: Option<ExpRate>,
     /// The average over the whole Session's active time. `None` as for `rolling`.
     pub session_average: Option<ExpRate>,
-    /// The Rolling Rate's EXP/h as a share of the shown map's MeowDB solo EXP/h ceiling
-    /// (its Map Summary), in hundredths of a percent: 7300 for "73%". `None` without a
-    /// recognised map with a Map Summary, or while the Rolling Rate is zero, negative or
-    /// not there yet.
+    /// The Rolling Rate's EXP/h on the shown map, as a share of its MeowDB solo EXP/h
+    /// ceiling (its Map Summary), in hundredths of a percent: 7300 for "73%". It counts
+    /// only the play since the map was shown, once there has been [`WARM_UP_MS`] of it,
+    /// so a map change never measures one map's EXP against another's ceiling. `None`
+    /// without a recognised map with a Map Summary, until then, or while the rate there
+    /// is zero or negative.
     pub ceiling_share_hundredths: Option<i64>,
+    /// The ceiling the share is of: the shown map's MeowDB solo EXP/h, while there is a
+    /// share.
+    pub solo_exp_ceiling: Option<u64>,
     /// Deaths this Session and what they cost: "deaths: 2 (−1.4%)".
     pub deaths: Deaths,
     /// The Session started afresh by itself, on a switch to another character, and
     /// hasn't warmed up since: the panel says why the figures went. Never after a reset
     /// the player made.
     pub character_switched: bool,
+    /// The Session's active time so far, in whole seconds; 0 while waiting.
+    pub active_s: u64,
+    /// The active time the Rolling Rate covers, in whole seconds: the Session's, up to 5
+    /// minutes. Once `active_s` is more, the Session average is over a longer stretch and
+    /// says something the Rolling Rate doesn't.
+    pub rolling_s: u64,
+    /// The player reset the Session and the EXP hasn't changed since: the reset can be
+    /// undone, bringing the old Session back.
+    pub reset_undoable: bool,
+    /// The last EXP bar reading taken, as the bar shows it; it changes with every
+    /// reading rather than holding with the figures, so the player sees it being read.
+    /// `None` until one is.
+    pub bar: Option<ExpBar>,
 }
 
 /// The deaths in a Session: drops in EXP within the level.
@@ -98,10 +125,17 @@ pub enum TrackingState {
     Active,
     /// No EXP change for more than [`IDLE_MS`]: the rates hold until the next change.
     Paused,
+    /// The EXP bar hasn't read whole for [`UNREADABLE_MS`]: something covers it, or the
+    /// region no longer frames its figures. Whatever the Session was doing, its figures
+    /// hold until the bar reads again.
+    Unreadable,
 }
 
 /// A gap between EXP changes longer than this is a break: it pauses the Session.
 const IDLE_MS: u64 = 2 * 60_000;
+/// The EXP bar going this long without reading whole is a problem to tell the player
+/// about, not a moment's cover (the pointer passing over it).
+const UNREADABLE_MS: u64 = 10_000;
 /// A Session warms up for this much active time.
 const WARM_UP_MS: u64 = 60_000;
 /// The Rolling Rate covers this much active time.
@@ -200,6 +234,25 @@ pub(crate) struct Session {
     /// What the panel shows, and what it was measured for; `None` until it is first
     /// measured, and after a reset.
     shown: Option<Shown>,
+    /// When the EXP bar last read whole; `None` before it ever has.
+    read_at: Option<u64>,
+    /// The first frame since then that didn't read whole; `None` while the bar reads.
+    unread_since: Option<u64>,
+    /// The Session the player's reset ended, until the EXP next changes.
+    undo: Option<Undo>,
+    /// The shown map's solo EXP/h ceiling, as last measured against.
+    ceiling: Option<u64>,
+}
+
+/// What the player's reset set aside, to bring back if they undo it.
+#[derive(Debug)]
+struct Undo {
+    figures: Figures,
+    largest_gain_hundredths: u32,
+    level_ups: u32,
+    character_switched: bool,
+    /// The ceiling then: on another map since, the share starts over.
+    ceiling: Option<u64>,
 }
 
 /// The figures the panel shows, held for the rest of the [`REFRESH_MS`] stretch they
@@ -271,6 +324,9 @@ struct Figures {
     /// The Session has had [`WARM_UP_MS`] of active time at some point. A break later
     /// takes active time back, but not this.
     warmed_up: bool,
+    /// Active time when the shown map's ceiling last changed: the share of it counts
+    /// only the play since.
+    ceiling_from: u64,
 }
 
 impl Figures {
@@ -283,6 +339,7 @@ impl Figures {
             marks: vec![Mark { active: 0, gained: 0 }],
             deaths: Deaths::default(),
             warmed_up: false,
+            ceiling_from: 0,
         }
     }
 
@@ -320,11 +377,16 @@ impl Figures {
 
     /// The net EXP gained over the Rolling Rate's window at `now`.
     fn rolling(&self, now: u64) -> Gained {
+        self.rolling_since(now, 0)
+    }
+
+    /// The net EXP gained over the Rolling Rate's window at `now`, or over the part of
+    /// it since active time `since`, if that is later.
+    fn rolling_since(&self, now: u64, since: u64) -> Gained {
         let active = self.active(now);
-        let window = active.min(ROLLING_MS);
-        let from = active - window;
+        let from = active.saturating_sub(ROLLING_MS).max(since).min(active);
         let then = self.marks.iter().rev().find(|m| m.active <= from).map_or(0, |m| m.gained);
-        Gained { exp: self.gained - then, over_ms: window }
+        Gained { exp: self.gained - then, over_ms: active - from }
     }
 
     /// The net EXP gained over the whole Session at `now`.
@@ -334,9 +396,18 @@ impl Figures {
 }
 
 impl Session {
-    /// Take a whole EXP bar reading captured at `at_ms`.
+    /// Take a whole EXP bar reading captured at `at_ms`. After frames that didn't read
+    /// whole, for longer than [`IDLE_MS`] since the last that did, a reading of the same
+    /// level, or of the next, is taken as where the Session stands now, without counting
+    /// the change since the last one: no one saw how it came about. One that fits neither
+    /// is weighed as ever, towards a misread or a character switch.
     pub fn on_bar(&mut self, bar: ExpBar, at_ms: u64) {
         self.tick(at_ms);
+        let unseen = self.unread_since.is_some()
+            && self.read_at.is_some_and(|read_at| at_ms.saturating_sub(read_at) > IDLE_MS);
+        // Even a reading no level allows (a misread) shows the bar is there to read.
+        self.read_at = Some(at_ms);
+        self.unread_since = None;
         let Some(allowed) = Total::of(bar) else { return };
         let (Some(total), Some(last)) = (self.total, self.last) else {
             self.total = Some(allowed);
@@ -345,7 +416,11 @@ impl Session {
         };
         let wrapped = self.wrapped(total, last, bar, allowed);
         if !wrapped && let Some(narrowed) = total.meet(allowed) {
-            self.same_level(narrowed, last, bar, at_ms);
+            if unseen {
+                self.accept(narrowed, bar);
+            } else {
+                self.same_level(narrowed, last, bar, at_ms);
+            }
         } else if let Some(doubled_total) = total.doubled_midpoint()
             && (wrapped || self.levelled_up(total, last, allowed))
         {
@@ -354,7 +429,9 @@ impl Session {
             // The new level is bigger than the old: of the totals the reading allows,
             // only those count.
             self.accept(Total { lo: allowed.lo.max(total.hi + 1), ..allowed }, bar);
-            self.change(gain, at_ms);
+            if !unseen {
+                self.change(gain, at_ms);
+            }
             self.level_ups += 1;
         } else {
             // A misread, or another character's level: that takes readings in a row
@@ -427,13 +504,49 @@ impl Session {
     }
 
     /// Back to waiting for an EXP change; what was learned about the level stays, but
-    /// readings rejected so far no longer count towards a character switch.
+    /// readings rejected so far no longer count towards a character switch. Nothing is
+    /// left to undo.
     pub fn reset(&mut self) {
         self.figures = None;
         self.misfits = None;
         self.largest_gain_hundredths = 0;
         self.level_ups = 0;
         self.character_switched = false;
+        self.shown = None;
+        self.undo = None;
+    }
+
+    /// The player's reset: as [`Session::reset`], but the Session it ends is set aside
+    /// until the EXP next changes, for [`Session::undo_reset`]. Pressed again while
+    /// waiting, the one set aside stays.
+    pub fn reset_by_player(&mut self) {
+        let undo = match self.figures.take() {
+            Some(figures) => Some(Undo {
+                figures,
+                largest_gain_hundredths: self.largest_gain_hundredths,
+                level_ups: self.level_ups,
+                character_switched: self.character_switched,
+                ceiling: self.ceiling,
+            }),
+            None => self.undo.take(),
+        };
+        self.reset();
+        self.undo = undo;
+    }
+
+    /// Bring back the Session the player's reset ended, if the EXP hasn't changed since.
+    /// The time since counts as it would have: a gap in play, or a break.
+    pub fn undo_reset(&mut self) {
+        let Some(undo) = self.undo.take() else { return };
+        let mut figures = undo.figures;
+        if undo.ceiling != self.ceiling {
+            figures.ceiling_from = figures.active(self.now);
+        }
+        self.figures = Some(figures);
+        self.largest_gain_hundredths = undo.largest_gain_hundredths;
+        self.level_ups = undo.level_ups;
+        self.character_switched = undo.character_switched;
+        self.misfits = None;
         self.shown = None;
     }
 
@@ -445,6 +558,17 @@ impl Session {
         }
     }
 
+    /// A frame of the EXP bar, captured at `at_ms`, whose figures didn't read whole.
+    pub fn on_unread(&mut self, at_ms: u64) {
+        self.tick(at_ms);
+        self.unread_since.get_or_insert(at_ms);
+    }
+
+    /// Whether the bar has gone [`UNREADABLE_MS`] without reading whole.
+    fn unreadable(&self) -> bool {
+        self.unread_since.is_some_and(|since| self.now.saturating_sub(since) >= UNREADABLE_MS)
+    }
+
     /// The EXP changed by `gain` at `at`: the Session starts (from the EXP the bar shows
     /// now), or counts it. The Session's figures, if the EXP changed.
     fn change(&mut self, gain: i64, at: u64) -> Option<&mut Figures> {
@@ -453,45 +577,71 @@ impl Session {
         }
         match &mut self.figures {
             Some(figures) => figures.change(gain, at),
-            None => self.figures = Some(Figures::new(at)),
+            None => {
+                // A new Session: the one a reset ended is gone for good.
+                self.undo = None;
+                self.figures = Some(Figures::new(at));
+            }
         }
         self.figures.as_mut()
     }
 
     /// What the panel shows, with tracking on, on a map whose solo EXP/h ceiling is
     /// `ceiling` (if it is known): the figures measured earlier in this [`REFRESH_MS`]
-    /// stretch, unless an event since asks for them afresh.
+    /// stretch, unless an event since asks for them afresh; and the bar's last reading.
     pub fn tracking(&mut self, ceiling: Option<u64>) -> ExpTracking {
+        if ceiling != self.ceiling {
+            // Another map, or its page come: its share counts from here.
+            self.ceiling = ceiling;
+            let now = self.now;
+            if let Some(figures) = &mut self.figures {
+                figures.ceiling_from = figures.active(now);
+            }
+        }
         let fresh = self.measure(ceiling);
         let stretch = self.now / REFRESH_MS;
+        // While the bar can't be read nothing new is known: the figures shown stay as
+        // they were, unless the map changes.
+        let unreadable = fresh.state == TrackingState::Unreadable;
         let holds = self.shown.as_ref().is_some_and(|shown| {
-            shown.stretch == stretch
-                && shown.ceiling == ceiling
-                && shown.level_ups == self.level_ups
-                && shown.tracking.state == fresh.state
-                && shown.tracking.deaths == fresh.deaths
-                && shown.tracking.character_switched == fresh.character_switched
-                // The first figures show as soon as there are any.
-                && shown.tracking.rolling.is_some() == fresh.rolling.is_some()
+            shown.ceiling == ceiling
+                && (unreadable
+                    || shown.stretch == stretch
+                        && shown.level_ups == self.level_ups
+                        && shown.tracking.state == fresh.state
+                        && shown.tracking.deaths == fresh.deaths
+                        && shown.tracking.character_switched == fresh.character_switched
+                        && shown.tracking.reset_undoable == fresh.reset_undoable
+                        // The first figures show as soon as there are any, and the first
+                        // share.
+                        && shown.tracking.rolling.is_some() == fresh.rolling.is_some()
+                        && shown.tracking.ceiling_share_hundredths.is_some()
+                            == fresh.ceiling_share_hundredths.is_some())
         });
-        if !holds {
-            self.shown = Some(Shown { stretch, ceiling, level_ups: self.level_ups, tracking: fresh });
+        match &mut self.shown {
+            Some(shown) if holds => shown.tracking.state = fresh.state,
+            _ => self.shown = Some(Shown { stretch, ceiling, level_ups: self.level_ups, tracking: fresh }),
         }
-        self.shown.as_ref().map(|shown| shown.tracking.clone()).unwrap_or_default()
+        let held = self.shown.as_ref().map(|shown| shown.tracking.clone()).unwrap_or_default();
+        ExpTracking { bar: self.last, ..held }
     }
 
     /// The figures as they stand now.
     fn measure(&self, ceiling: Option<u64>) -> ExpTracking {
+        let unreadable = self.unreadable();
         let Some(figures) = &self.figures else {
             return ExpTracking {
-                state: TrackingState::Waiting,
+                state: if unreadable { TrackingState::Unreadable } else { TrackingState::Waiting },
                 character_switched: self.character_switched,
+                reset_undoable: self.undo.is_some(),
                 ..ExpTracking::default()
             };
         };
         let now = self.now;
         let warm = figures.warm(now);
-        let state = if figures.paused(now) {
+        let state = if unreadable {
+            TrackingState::Unreadable
+        } else if figures.paused(now) {
             TrackingState::Paused
         } else if warm {
             TrackingState::Active
@@ -509,17 +659,24 @@ impl Session {
             }
             _ => None,
         };
+        // The share counts only the play on the shown map, once there is enough of it.
+        let here = figures.rolling_since(now, figures.ceiling_from);
+        let ceiling = ceiling.filter(|&c| c > 0 && here.exp > 0 && here.over_ms >= WARM_UP_MS);
+        let average = figures.average(now);
         ExpTracking {
             state,
             time_to_level_s,
             time_to_level_badge: time_to_level_s.map(badge),
             rolling: rolling.rate(doubled_total),
-            session_average: figures.average(now).rate(doubled_total),
-            ceiling_share_hundredths: ceiling
-                .filter(|&c| c > 0 && gaining)
-                .map(|c| rolling.per_hour(u64::from(HUNDRED_PERCENT), c)),
+            session_average: average.rate(doubled_total),
+            ceiling_share_hundredths: ceiling.map(|c| here.per_hour(u64::from(HUNDRED_PERCENT), c)),
+            solo_exp_ceiling: ceiling,
             deaths: figures.deaths,
             character_switched: self.character_switched && !warm,
+            active_s: average.over_ms / 1000,
+            rolling_s: rolling.over_ms / 1000,
+            reset_undoable: false,
+            bar: None,
         }
     }
 }

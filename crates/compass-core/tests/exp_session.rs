@@ -12,8 +12,8 @@ mod common;
 use common::{FakeSource, arrive};
 use std::path::Path;
 use compass_core::{
-    Action, Compass, Deaths, ExpBar, ExpBarReading, ExpBarRegion, ExpRate, ExpTracking, GameWindow, PanelState, Rect, ScreenRect, Settings,
-    Size, TitleRegion, TrackingState,
+    Action, Compass, Deaths, ExpBar, ExpBarReading, ExpBarRegion, ExpRate, ExpTracking, GameWindow, PanelControl, PanelState, Rect,
+    ScreenRect, Settings, Size, TitleRegion, TrackingState,
 };
 
 const S: u64 = 1000;
@@ -342,7 +342,12 @@ fn a_switch_to_another_character_starts_a_new_session() {
     let switched = read(&mut compass, 82 * S, 157, 94);
     assert_eq!(
         switched.exp_tracking,
-        ExpTracking { state: TrackingState::Waiting, character_switched: true, ..ExpTracking::default() }
+        ExpTracking {
+            state: TrackingState::Waiting,
+            character_switched: true,
+            bar: Some(ExpBar { exp: 157, percent_hundredths: 94 }),
+            ..ExpTracking::default()
+        }
     );
 
     let started = read(&mut compass, 90 * S, 169, 101);
@@ -467,8 +472,10 @@ fn a_reset_by_the_player_is_not_a_character_switch() {
     read(&mut compass, 82 * S, 157, 94);
     assert!(compass.panel_state().exp_tracking.character_switched);
 
+    // Nothing to undo either: the switch ended the old Session for good.
     let reset = compass.act(Action::ResetSession);
-    assert_eq!(reset.exp_tracking, ExpTracking { state: TrackingState::Waiting, ..ExpTracking::default() });
+    let bar = Some(ExpBar { exp: 157, percent_hundredths: 94 });
+    assert_eq!(reset.exp_tracking, ExpTracking { state: TrackingState::Waiting, bar, ..ExpTracking::default() });
 }
 
 #[test]
@@ -477,7 +484,15 @@ fn resetting_the_session_clears_it_back_to_waiting() {
     sample(&mut compass, 75 * S, EXP_266);
 
     let reset = compass.act(Action::ResetSession).clone();
-    assert_eq!(reset.exp_tracking, ExpTracking { state: TrackingState::Waiting, ..ExpTracking::default() });
+    assert_eq!(
+        reset.exp_tracking,
+        ExpTracking {
+            state: TrackingState::Waiting,
+            reset_undoable: true,
+            bar: Some(ExpBar { exp: 266, percent_hundredths: 633 }),
+            ..ExpTracking::default()
+        }
+    );
     assert_eq!(read(&mut compass, 80 * S, 266, 633).exp_tracking.state, TrackingState::Waiting);
 
     // The next change starts a new Session from there.
@@ -513,6 +528,7 @@ const KERNING: &str = "victoria-road__kerning-city--window";
 #[test]
 fn the_overlay_gets_tracking_as_the_panel_renders_it() {
     let mut compass = tracking();
+    arrive(&mut compass, SUNSET, 0);
     read(&mut compass, 0, 160, 381);
     let warming_up = serde_json::to_value(read(&mut compass, 10 * S, 266, 633)).unwrap();
     assert_eq!(
@@ -524,14 +540,18 @@ fn the_overlay_gets_tracking_as_the_panel_renders_it() {
             "rolling": null,
             "sessionAverage": null,
             "ceilingShareHundredths": null,
+            "soloExpCeiling": null,
             "deaths": { "count": 0, "expLost": 0, "percentLostHundredths": 0 },
             "characterSwitched": false,
+            "activeS": 0,
+            "rollingS": 0,
+            "resetUndoable": false,
+            "bar": { "exp": 266, "percentHundredths": 633 },
         })
     );
 
     // A minute in on Sunset Sky (as above), then a death: 335 [7.98%] to 266 [6.33%].
-    read(&mut compass, 70 * S, 335, 798);
-    let sunset = serde_json::to_value(arrive(&mut compass, SUNSET, 70 * S)).unwrap();
+    let sunset = serde_json::to_value(read(&mut compass, 70 * S, 335, 798)).unwrap();
     let rate = serde_json::json!({ "expPerHour": 4140, "percentPerHourHundredths": 9858 });
     assert_eq!(
         sunset["expTracking"],
@@ -542,8 +562,13 @@ fn the_overlay_gets_tracking_as_the_panel_renders_it() {
             "rolling": rate,
             "sessionAverage": rate,
             "ceilingShareHundredths": 185,
+            "soloExpCeiling": 223_928,
             "deaths": { "count": 0, "expLost": 0, "percentLostHundredths": 0 },
             "characterSwitched": false,
+            "activeS": 60,
+            "rollingS": 60,
+            "resetUndoable": false,
+            "bar": { "exp": 335, "percentHundredths": 798 },
         })
     );
     let died = serde_json::to_value(read(&mut compass, 75 * S, 266, 633)).unwrap();
@@ -551,48 +576,61 @@ fn the_overlay_gets_tracking_as_the_panel_renders_it() {
 
     let paused = serde_json::to_value(compass.tick(10 * MIN)).unwrap();
     assert_eq!(paused["expTracking"]["state"], "paused");
+    unread(&mut compass, 10 * MIN);
+    let unreadable = serde_json::to_value(unread(&mut compass, 10 * MIN + 10 * S)).unwrap();
+    assert_eq!(unreadable["expTracking"]["state"], "unreadable");
     let off = serde_json::to_value(Compass::new(FakeSource::meowdb()).panel_state()).unwrap();
     assert_eq!(off["expTracking"]["state"], "off");
+    read(&mut compass, 10 * MIN + 20 * S, 266, 633);
     compass.act(Action::ResetSession);
     let waiting = serde_json::to_value(compass.panel_state()).unwrap();
     assert_eq!(waiting["expTracking"]["state"], "waiting");
+    assert_eq!(waiting["expTracking"]["resetUndoable"], true);
 }
 
 #[test]
-fn the_rolling_rate_is_compared_with_the_map_s_solo_ceiling_and_a_map_change_keeps_the_session() {
+fn the_rate_on_a_map_is_compared_with_its_solo_ceiling_after_a_minute_of_play_there() {
     let mut compass = tracking();
     read(&mut compass, 0, 160, 381);
     read(&mut compass, 10 * S, 266, 633);
     let unrecognised = read(&mut compass, 70 * S, 335, 798);
     assert_eq!(unrecognised.exp_tracking.ceiling_share_hundredths, None, "no map recognised");
 
-    // 4,140 EXP/h of Sunset Sky's 223,928 solo: 1.85%.
+    // Arriving on Sunset Sky, nothing has been earned there yet: the minute's 69 EXP came
+    // before it showed. The Session carries on all the same.
     let sunset = arrive(&mut compass, SUNSET, 70 * S);
-    assert_eq!(sunset.exp_tracking.ceiling_share_hundredths, Some(185));
-    assert_eq!(
-        sunset.exp_tracking,
-        ExpTracking { ceiling_share_hundredths: Some(185), ..unrecognised.exp_tracking.clone() }
-    );
+    assert_eq!(sunset.exp_tracking, unrecognised.exp_tracking);
 
-    // Of the Construction Site's 297,499: 1.39%. The Session carries on.
-    let site = arrive(&mut compass, CONSTRUCTION_SITE, 71 * S);
-    assert_eq!(
-        site.exp_tracking,
-        ExpTracking { ceiling_share_hundredths: Some(139), ..unrecognised.exp_tracking.clone() }
-    );
+    // A minute there, 65 EXP: 3,900 EXP/h of its 223,928 solo, 1.74%.
+    assert_eq!(read(&mut compass, 100 * S, 360, 857).exp_tracking.ceiling_share_hundredths, None);
+    let there = read(&mut compass, 130 * S, 400, 952);
+    assert_eq!(there.exp_tracking.ceiling_share_hundredths, Some(174));
+    assert_eq!(there.exp_tracking.solo_exp_ceiling, Some(223_928));
+    assert_eq!(exp_per_hour(&there), (Some(4020), Some(4020)), "134 EXP in the Session's 120 s");
 
-    // A town has no Map Summary, so no ceiling.
-    let town = arrive(&mut compass, KERNING, 72 * S);
-    assert_eq!(town.exp_tracking, unrecognised.exp_tracking);
-    let on = read(&mut compass, 90 * S, 360, 857);
+    // On the Construction Site its 297,499 is measured against what is earned there, from
+    // nothing again: never Sunset Sky's EXP against its ceiling.
+    let site = arrive(&mut compass, CONSTRUCTION_SITE, 131 * S);
+    assert_eq!(site.exp_tracking.ceiling_share_hundredths, None);
+    assert_eq!(site.exp_tracking.solo_exp_ceiling, None);
+    assert_eq!(site.exp_tracking.state, TrackingState::Active);
+
+    // A town has no Map Summary, so no ceiling. The Session carries on.
+    let town = arrive(&mut compass, KERNING, 140 * S);
+    assert_eq!(town.exp_tracking.ceiling_share_hundredths, None);
+    let on = read(&mut compass, 150 * S, 410, 976);
     assert_eq!(on.exp_tracking.state, TrackingState::Active);
-    assert_eq!(exp_per_hour(&on), (Some(4230), Some(4230)), "94 EXP in 80 s");
+    assert_eq!(exp_per_hour(&on), (Some(3703), Some(3703)), "144 EXP in 140 s");
 }
 
 #[test]
-fn there_is_no_share_of_the_ceiling_at_a_zero_or_negative_rolling_rate() {
-    let mut compass = a_minute_in();
-    arrive(&mut compass, SUNSET, 70 * S);
+fn there_is_no_share_of_the_ceiling_at_a_zero_or_negative_rate_on_the_map() {
+    let mut compass = tracking();
+    arrive(&mut compass, SUNSET, 0);
+    read(&mut compass, 0, 160, 381);
+    read(&mut compass, 10 * S, 266, 633);
+    let earning = read(&mut compass, 70 * S, 335, 798);
+    assert_eq!(earning.exp_tracking.ceiling_share_hundredths, Some(185), "4,140 EXP/h of 223,928");
 
     // A death takes back the minute's 69 EXP, then another loses 106 more.
     let zero = read(&mut compass, 75 * S, 266, 633);
@@ -601,7 +639,9 @@ fn there_is_no_share_of_the_ceiling_at_a_zero_or_negative_rolling_rate() {
     let negative = read(&mut compass, 80 * S, 160, 381);
     assert_eq!(negative.exp_tracking.rolling.map(|r| r.exp_per_hour < 0), Some(true));
     assert_eq!(negative.exp_tracking.ceiling_share_hundredths, None);
+    assert_eq!(negative.exp_tracking.solo_exp_ceiling, None);
 }
+
 
 #[test]
 fn replaying_the_2026_10_07_recording_waits_warms_up_and_then_shows_its_rates() {
@@ -645,20 +685,156 @@ fn replaying_the_2026_10_07_recording_waits_warms_up_and_then_shows_its_rates() 
     assert_eq!(measured.time_to_level_badge.as_deref(), Some("1h 50m"));
     assert_eq!(measured.deaths, Deaths::default());
     // The EXP rose to 492 [2.95%] by 149 s, but the panel holds what it measured at 120 s
-    // for the rest of that half minute.
-    assert_eq!(&at[&149_000], measured);
+    // for the rest of that half minute. Only the bar's reading moves on.
+    let later = &at[&149_000];
+    assert_eq!(later.bar, Some(ExpBar { exp: 492, percent_hundredths: 295 }));
+    assert_eq!(&ExpTracking { bar: measured.bar, ..later.clone() }, measured);
+}
+
+/// A frame of the EXP bar at `at_ms` whose figures don't read whole.
+fn unread(compass: &mut Compass, at_ms: u64) -> PanelState {
+    compass.on_exp_bar_reading(ExpBarReading { bar: None, at_ms }).clone()
 }
 
 #[test]
-fn time_passes_while_the_bar_cannot_be_read() {
+fn a_bar_that_cannot_be_read_says_so_rather_than_pausing() {
     let mut compass = a_minute_in();
-    for at in (80..=200).step_by(10) {
-        compass.on_exp_bar_reading(ExpBarReading { bar: None, at_ms: at * S });
+
+    // The pointer passing over it is nothing to tell.
+    unread(&mut compass, 80 * S);
+    assert_eq!(unread(&mut compass, 89 * S).exp_tracking.state, TrackingState::Active);
+
+    // Ten seconds of it is.
+    let covered = unread(&mut compass, 90 * S);
+    assert_eq!(covered.exp_tracking.state, TrackingState::Unreadable);
+
+    // However long it lasts, it isn't a break: nothing is known of the EXP. The figures
+    // hold, and so does the last reading.
+    for at in (100..=600).step_by(10) {
+        unread(&mut compass, at * S);
+    }
+    let still = compass.tick(10 * MIN).clone();
+    assert_eq!(still.exp_tracking.state, TrackingState::Unreadable);
+    assert_eq!(exp_per_hour(&still), (Some(4140), Some(4140)), "69 EXP in the 1 active minute");
+    assert_eq!(still.exp_tracking.bar, Some(ExpBar { exp: 335, percent_hundredths: 798 }));
+}
+
+#[test]
+fn a_bar_that_cannot_be_read_from_the_start_says_so_while_waiting() {
+    let mut compass = tracking();
+    unread(&mut compass, 0);
+
+    let state = unread(&mut compass, 10 * S);
+
+    assert_eq!(state.exp_tracking.state, TrackingState::Unreadable);
+    assert_eq!(state.exp_tracking.rolling, None);
+    assert_eq!(state.exp_tracking.bar, None);
+}
+
+#[test]
+fn a_bar_read_again_soon_after_counts_the_gap_as_play() {
+    let mut compass = a_minute_in();
+    for at in (75..=110).step_by(5) {
+        unread(&mut compass, at * S);
     }
 
-    let state = compass.panel_state();
-    assert_eq!(state.exp_tracking.state, TrackingState::Paused);
-    assert_eq!(exp_per_hour(state), (Some(4140), Some(4140)), "69 EXP in the 1 active minute");
+    // 400 [9.52%] at 120 s, 50 s after the last whole reading: the gain counts, and the
+    // time it took, as between any two kills. 134 EXP in the Session's 110 s.
+    let state = read(&mut compass, 120 * S, 400, 952);
+    assert_eq!(state.exp_tracking.state, TrackingState::Active);
+    assert_eq!(exp_per_hour(&state), (Some(4385), Some(4385)));
+    assert_eq!(state.exp_tracking.bar, Some(ExpBar { exp: 400, percent_hundredths: 952 }));
+}
+
+#[test]
+fn a_bar_unread_for_longer_than_a_break_counts_neither_the_time_nor_the_exp() {
+    let mut compass = a_minute_in();
+    for at in (80..=600).step_by(10) {
+        unread(&mut compass, at * S);
+    }
+
+    // 1,000 [23.81%] at 610 s: 665 EXP that no one saw come. Counted at once, as a break
+    // would count it, it would show 39,900 EXP/h for one minute's hunting. It is where
+    // the Session stands now, nothing more; the figures hold until the next change.
+    let back = read(&mut compass, 610 * S, 1000, percent(1000));
+    assert_eq!(back.exp_tracking.state, TrackingState::Paused);
+    assert_eq!(exp_per_hour(&back), (Some(4140), Some(4140)));
+    assert_eq!(back.exp_tracking.bar, Some(ExpBar { exp: 1000, percent_hundredths: 2381 }));
+
+    // The next change counts from there: 10 EXP more, 79 in the 1 active minute.
+    let on = read(&mut compass, 620 * S, 1010, percent(1010));
+    assert_eq!(on.exp_tracking.state, TrackingState::Active);
+    assert_eq!(exp_per_hour(&on), (Some(4740), Some(4740)));
+}
+
+#[test]
+fn a_reset_can_be_undone_until_the_exp_next_changes() {
+    let mut compass = a_minute_in();
+    let before = compass.panel_state().exp_tracking.clone();
+    assert!(!before.reset_undoable);
+
+    // Pressed by mistake, twice: still the one Session to bring back.
+    compass.press(PanelControl::ResetSession);
+    let reset = press(&mut compass, PanelControl::ResetSession);
+    assert_eq!(reset.exp_tracking.state, TrackingState::Waiting);
+    assert!(reset.exp_tracking.reset_undoable);
+
+    let undone = press(&mut compass, PanelControl::UndoReset);
+    assert_eq!(undone.exp_tracking, before);
+}
+
+#[test]
+fn once_the_exp_changes_after_a_reset_it_can_t_be_undone() {
+    let mut compass = a_minute_in();
+    compass.press(PanelControl::ResetSession);
+
+    // The change starts the new Session...
+    let started = read(&mut compass, 80 * S, 360, 857);
+    assert_eq!(started.exp_tracking.state, TrackingState::WarmingUp);
+    assert!(!started.exp_tracking.reset_undoable);
+
+    // ...which Undo leaves as it is.
+    let new = press(&mut compass, PanelControl::UndoReset);
+    assert_eq!(new.exp_tracking, started.exp_tracking);
+}
+
+#[test]
+fn a_character_switch_after_a_reset_leaves_nothing_to_undo() {
+    let mut compass = a_minute_in();
+    compass.press(PanelControl::ResetSession);
+
+    for at in [80, 81, 82] {
+        read(&mut compass, at * S, 157, 94);
+    }
+
+    let switched = press(&mut compass, PanelControl::UndoReset);
+    assert_eq!(switched.exp_tracking.state, TrackingState::Waiting);
+    assert!(switched.exp_tracking.character_switched);
+    assert!(!switched.exp_tracking.reset_undoable);
+}
+
+#[test]
+fn the_session_says_how_long_it_has_run_and_how_much_the_rolling_rate_covers() {
+    let mut compass = a_minute_in();
+    let minute = &compass.panel_state().exp_tracking;
+    assert_eq!((minute.active_s, minute.rolling_s), (60, 60), "one rate: the whole Session");
+
+    // 25 EXP a minute for 10 minutes more.
+    let mut exp = 335;
+    for k in 1..=10 {
+        exp += 25;
+        read(&mut compass, (70 + k * 60) * S, exp, percent(exp));
+    }
+    let later = &compass.panel_state().exp_tracking;
+    assert_eq!((later.active_s, later.rolling_s), (660, 300), "11 minutes, the last 5 rolling");
+    // 125 EXP in the last 5 minutes; 319 in the Session's 11.
+    assert_eq!(exp_per_hour(compass.panel_state()), (Some(1500), Some(1740)));
+}
+
+/// Press `control`, then the panel state after it.
+fn press(compass: &mut Compass, control: PanelControl) -> PanelState {
+    compass.press(control);
+    compass.panel_state().clone()
 }
 
 #[test]
@@ -715,9 +891,12 @@ fn the_figures_hold_for_the_rest_of_each_half_minute_then_refresh() {
     let measured = speeding_up(120).panel_state().exp_tracking.clone();
     assert_eq!(measured.state, TrackingState::Active);
 
-    // Read on to 145 s, the EXP climbing faster: the panel holds the figures of 120 s.
+    // Read on to 145 s, the EXP climbing faster: the panel holds the figures of 120 s,
+    // though the bar's reading moves on.
     let mut held = speeding_up(145);
-    assert_eq!(held.tick(149 * S).exp_tracking, measured);
+    let held = held.tick(149 * S).exp_tracking.clone();
+    assert_ne!(held.bar, measured.bar);
+    assert_eq!(ExpTracking { bar: measured.bar, ..held }, measured);
 
     // The next half minute measures them afresh.
     let refreshed = &compass.panel_state().exp_tracking;

@@ -1,15 +1,27 @@
 /** Mirror of `compass_core::ExpRate`. */
 export type ExpRate = { expPerHour: number; percentPerHourHundredths: number | null };
 
+/** Mirror of `compass_core::ExpBar`: the EXP bar's figures, "EXP 160 [3.81%]". */
+export type ExpBar = { exp: number; percentHundredths: number };
+
 /** Mirror of `compass_core::ExpTracking`. */
 export type ExpTracking = {
-  state: "off" | "waiting" | "warmingUp" | "active" | "paused";
+  state: "off" | "waiting" | "warmingUp" | "active" | "paused" | "unreadable";
   timeToLevelS: number | null;
   timeToLevelBadge: string | null;
   rolling: ExpRate | null;
   sessionAverage: ExpRate | null;
   ceilingShareHundredths: number | null;
+  /** The shown map's MeowDB solo EXP/h, while there is a share of it. */
+  soloExpCeiling: number | null;
   deaths: { count: number; expLost: number; percentLostHundredths: number };
   /** The Session started afresh on a character switch and hasn't warmed up since. */
   characterSwitched: boolean;
+  /** The Session's active time, and the part of it the Rolling Rate covers (seconds). */
+  activeS: number;
+  rollingS: number;
+  /** The player reset the Session and the EXP hasn't changed since. */
+  resetUndoable: boolean;
+  /** The last EXP bar reading, which moves with every reading. */
+  bar: ExpBar | null;
 };
