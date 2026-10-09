@@ -277,6 +277,11 @@ pub enum PanelControl {
     ResetSession,
     /// The Grind Tracker window's Undo, after a reset: bring the old Session back.
     UndoReset,
+    /// The Forget in the Grind Tracker's Personal Best line, opened under the pointer:
+    /// forget the higher of the map's Personal Best and this Visit's best there.
+    ForgetBest,
+    /// The Grind Tracker window's Undo, after a Forget: bring the best back.
+    UndoForget,
     /// The Grind Tracker window's ×: close it.
     CloseGrindTracker,
 }
@@ -572,6 +577,12 @@ impl Compass {
             }
             Action::ResetSession => self.session.reset_by_player(),
             Action::UndoReset => self.session.undo_reset(),
+            Action::ForgetBest => {
+                if let Some(map) = bests_map(&self.state) {
+                    self.session.forget_best(map);
+                }
+            }
+            Action::UndoForgetBest => self.session.undo_forget_best(),
             Action::ToggleGrindTracker => self.grind_tracker.open = !self.grind_tracker.open,
             Action::CloseGrindTracker => self.grind_tracker.open = false,
             Action::GrindTrackerMoved { x, y } => {
@@ -688,6 +699,8 @@ impl Compass {
             PanelControl::ToggleGrindTracker => Action::ToggleGrindTracker,
             PanelControl::ResetSession => Action::ResetSession,
             PanelControl::UndoReset => Action::UndoReset,
+            PanelControl::ForgetBest => Action::ForgetBest,
+            PanelControl::UndoForget => Action::UndoForgetBest,
             PanelControl::CloseGrindTracker => Action::CloseGrindTracker,
             // An open search view stays as it is; the shell brings the overlay in front on
             // opening it.
@@ -981,12 +994,7 @@ impl Compass {
         // Off while there is no region to read; the Session itself carries on.
         self.state.exp_tracking = if self.tracking_on() {
             let ceiling = self.state.data.solo_exp_ceiling();
-            // Personal Bests are kept only where the map is certain (one map has the title,
-            // the map the player came from settled it, or the player chose it), and has a
-            // Map Summary: in a town, quest turn-ins would set one.
-            let certain = self.state.candidates.as_ref().is_none_or(|c| c.chosen);
-            let map = self.state.map.as_ref().filter(|_| certain && ceiling.is_some());
-            self.session.tracking(ceiling, map.map(|m| m.id.as_str()), self.wall_clock)
+            self.session.tracking(ceiling, bests_map(&self.state), self.wall_clock)
         } else {
             ExpTracking::default()
         };
@@ -1020,6 +1028,15 @@ fn searched<'a>(crawl: &'a Option<Crawl>, state: &'a PanelState, settings: &Sett
         here: state.map.as_ref().map(|map| Here { id: &map.id, page: state.data.data() }),
         travel: settings.travel,
     }
+}
+
+/// The shown map, by MeowDB ID, if Personal Bests are kept there: only where the map is
+/// certain (one map has the title, the map the player came from settled it, or the player
+/// chose it), and has a Map Summary: in a town, quest turn-ins would set one.
+fn bests_map(state: &PanelState) -> Option<&str> {
+    let certain = state.candidates.as_ref().is_none_or(|c| c.chosen);
+    let summary = state.data.solo_exp_ceiling().is_some();
+    state.map.as_ref().filter(|_| certain && summary).map(|m| m.id.as_str())
 }
 
 /// Whether two accelerator strings name the same keys ("Ctrl+Shift+C", "shift + ctrl + c").

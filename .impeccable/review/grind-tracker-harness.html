@@ -53,7 +53,7 @@
         sessionAverage: { expPerHour: 58400, percentPerHourHundredths: 1230 },
         ceilingShareHundredths: 2050, soloExpCeiling: 297499,
         deaths: { count: 1, expLost: 120, percentLostHundredths: 210 },
-        characterSwitched: false, activeS: 4320, rollingS: 300, resetUndoable: false, bar, personalBest: null, ...over,
+        characterSwitched: false, activeS: 4320, rollingS: 300, resetUndoable: false, bar, personalBest: null, forgetUndoable: false, ...over,
       });
       // A moment `back` days ago (and `years` back), in local time, as the core dates bests.
       const daysAgo = (back, years = 0) => {
@@ -100,6 +100,12 @@
         hoverNewBest: tracking({ rolling: { expPerHour: 74500, percentPerHourHundredths: 1570 }, personalBest: best({ shareHundredths: 11200, newBest: thisVisit }) }),
         hoverNewBestPaused: tracking({ state: "paused", personalBest: best({ shareHundredths: 9200, newBest: thisVisit }) }),
         hoverExtreme: tracking({ ...extreme, personalBest: best({ expPerHour: 1104000, setAtUnixMs: daysAgo(6, 1), shareHundredths: 11180, newBest: { expPerHour: 1234567, setAtUnixMs: daysAgo(1) } }) }),
+        // Forget pressed: the note at the top carries the Undo. This Visit's best forgotten,
+        // the earlier one is left, with no share until 5 minutes after; the map's only best
+        // forgotten, there is no line; a reset and a Forget both waiting on an Undo.
+        forgotten: tracking({ forgetUndoable: true, personalBest: best() }),
+        forgottenOnly: tracking({ forgetUndoable: true }),
+        forgottenReset: tracking({ state: "waiting", ...empty, resetUndoable: true, forgetUndoable: true }),
         extreme: tracking(extreme),
       };
       const params = new URLSearchParams(location.search);

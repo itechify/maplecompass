@@ -12,6 +12,7 @@ const tracking = byId("tracking");
 const unreadable = byId("tracking-unreadable");
 const switched = byId("tracking-switched");
 const resetNote = byId("tracking-reset");
+const forgottenNote = byId("tracking-forgotten");
 const waiting = byId("tracking-waiting");
 const figures = byId("tracking-figures");
 const timeToLevel = byId("time-to-level");
@@ -32,6 +33,7 @@ const bestEarlierWhen = byId("best-earlier-when");
 const bestVisit = byId("best-visit");
 const bestVisitExp = byId("best-visit-exp");
 const bestVisitWhen = byId("best-visit-when");
+const bestForget = byId("best-forget");
 const share = byId("tracking-share");
 const deaths = byId("tracking-deaths");
 const exp = byId("tracking-exp");
@@ -108,13 +110,19 @@ let bestLine: PersonalBestLine | null = null;
 
 /** The Personal Best line opened in place while the pointer is on it: the best it names
  *  and when it was set, and this Visit's best once it has beaten it; on a first Visit,
- *  this Visit's. Dated afresh each time, as days pass. */
+ *  this Visit's. Dated afresh each time, as days pass. Under them, Forget, which removes
+ *  the higher: this Visit's whenever it shows. */
 function renderBestOpen() {
   const line = bestLine;
   bestOpen.hidden = !bestHovered || !line;
   if (!line || bestOpen.hidden) return;
   showBest(bestEarlier, bestEarlierExp, bestEarlierWhen, line.first ? null : line);
   showBest(bestVisit, bestVisitExp, bestVisitWhen, line.first ? line : line.newBest);
+  const thisVisit = line.first || line.newBest !== null;
+  bestForget.setAttribute("aria-label", thisVisit ? "Forget this Visit's best" : "Forget your best here");
+  bestForget.title = thisVisit
+    ? "Forget this Visit's best: only play from now on counts towards it"
+    : "Forget your best here: your next-best Visit takes over";
 }
 
 /** Why there is no Time to Level, in words: never a bare dash beside the label. */
@@ -138,6 +146,7 @@ function render({ shown, tracking: t }: TrackerView) {
   unreadable.hidden = t.state !== "unreadable";
   switched.hidden = !t.characterSwitched;
   resetNote.hidden = !t.resetUndoable;
+  forgottenNote.hidden = !t.forgetUndoable;
   waiting.hidden = started || t.state === "unreadable";
 
   figures.hidden = !started;
@@ -229,7 +238,7 @@ function hoverBest(on: boolean) {
 best.addEventListener("mouseenter", () => hoverBest(true));
 best.addEventListener("mouseleave", () => hoverBest(false));
 
-// Close, reset and undo, through the core like the panel's icons.
+// Close, reset, Forget and their undos, through the core like the panel's icons.
 panelEl.addEventListener("click", (e) => {
   const button = e.target instanceof Element ? e.target.closest<HTMLButtonElement>("button[data-control]") : null;
   if (button) invoke("panel_press", { control: button.dataset.control });
