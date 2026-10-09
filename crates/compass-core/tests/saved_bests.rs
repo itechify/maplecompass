@@ -5,8 +5,8 @@
 mod common;
 
 use compass_core::{
-    Compass, ExpBar, ExpBarReading, ExpBarRegion, GameWindow, PanelState, PersonalBestLine, Rect, SavedBests,
-    ScreenRect, Settings, Size, TitleRegion,
+    BESTS_VERSION, Compass, ExpBar, ExpBarReading, ExpBarRegion, GameWindow, PanelState, PersonalBestLine, Rect,
+    SavedBests, ScreenRect, Settings, Size, TitleRegion,
 };
 use common::FakeSource;
 
@@ -165,4 +165,30 @@ fn a_visit_cut_short_by_closing_maplecompass_keeps_its_best() {
     let beaten = next.wall_clock();
     let mut third = relaunch(handed_out(&next.compass), WALL_AT_START + 2 * DAY);
     assert_eq!(line(&third.arrive(SUNSET)), earlier(10_800, beaten, None));
+}
+
+/// A first Visit to Sunset Sky at 7,200 EXP/h for 6 minutes, closed then: the bests the
+/// launch hands out.
+fn a_best_of_7200_on_sunset_sky() -> SavedBests {
+    let mut first = Player::first_launch();
+    first.arrive(SUNSET);
+    first.hunt(6 * MIN, 20);
+    handed_out(&first.compass)
+}
+
+#[test]
+fn bests_saved_in_another_shape_are_left_and_the_app_starts_with_none() {
+    let saved = SavedBests { version: BESTS_VERSION + 1, ..a_best_of_7200_on_sunset_sky() };
+
+    let mut next = relaunch(saved, WALL_AT_START + DAY);
+    assert_eq!(line(&next.arrive(SUNSET)), None);
+    // 5 minutes at 3,600 EXP/h: a first Visit's best.
+    let five = next.hunt(5 * MIN, 10);
+    assert_eq!(line(&five).map(|l| (l.exp_per_hour, l.first)), Some((3600, true)));
+}
+
+#[test]
+fn with_no_bests_saved_the_app_starts_with_none() {
+    let mut next = relaunch(SavedBests::default(), WALL_AT_START + DAY);
+    assert_eq!(line(&next.arrive(SUNSET)), None);
 }
