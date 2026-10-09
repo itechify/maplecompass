@@ -49,14 +49,28 @@
 }
 
 /* Time to Level leads, with the button that starts the Session afresh at the far end:
-   away from the window's ×, and light, as buttons in a window's body are. */
+   away from the window's ×, and light, as buttons in a window's body are. The button
+   keeps its corner; where the label, the figure (or why there is none) and the tag don't
+   fit beside it, they wrap, the tag going under. */
 .tracking .headline {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 7px;
 }
 
-.tracking .headline > * {
+.panel .tracking .headline-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 7px;
+  row-gap: 2px;
+  white-space: normal;
+  overflow: visible;
+}
+
+.tracking .headline-text > * {
   flex: none;
   white-space: nowrap;
 }
@@ -81,9 +95,10 @@
   color: var(--ink-2);
 }
 
+/* Level with the first line: the 23px figure's line, less the 19px button, halved. */
 .tracking .headline .icon-button {
-  align-self: center;
-  margin-left: auto;
+  flex: none;
+  margin-top: 2px;
 }
 
 /* Paused, the figures are held: a state to notice, in the problem palette. */
