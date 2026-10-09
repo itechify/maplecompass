@@ -172,7 +172,7 @@
    and this Visit's once it beat it, set out as the rates are, figures right-aligned. The
    line above names the unit, so "set 3 Oct 2025" keeps to one line beside the figure. The
    window grows to fit: nothing floats over the figures. No motion: it is there or not.
-   Records rather than figures that move, so they stay bold while the figures are held. */
+   Bests rather than figures that move, so they stay bold while the figures are held. */
 .tracking .best-open {
   display: flex;
   flex-direction: column;
