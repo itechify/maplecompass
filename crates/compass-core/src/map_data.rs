@@ -2,7 +2,7 @@
 
 use crate::map_index::{Fetched, MapDataSource, SourceError};
 use crate::shown_map::LevelRange;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::task::Poll;
 
 /// One map's data, as the map data source reads it from the map's MeowDB page.
@@ -43,7 +43,7 @@ pub struct MapData {
 pub const LISTED_MOBS: usize = 5;
 
 /// The mobs the panel doesn't list: how many, and their levels.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MoreMobs {
     pub count: usize,
@@ -51,7 +51,7 @@ pub struct MoreMobs {
 }
 
 /// A portal from a map to another map.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Portal {
     /// MeowDB's name for the portal on its map (e.g. `"in00"`).
@@ -61,7 +61,7 @@ pub struct Portal {
 }
 
 /// What kind of portal it is, as the Hidden Portal rule and the portal overrides tell.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PortalKind {
     /// The player can see it: on the minimap, or a walk-into exit.
@@ -75,7 +75,7 @@ pub enum PortalKind {
 }
 
 /// A portal to another map that is drawn neither on the minimap nor in the world.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HiddenPortal {
     /// MeowDB's name for the portal on its map (e.g. `"in00"`); with the map ID, what
@@ -98,7 +98,7 @@ pub struct HiddenPortal {
 
 /// A cell of the minimap cut into 5 columns and 3 rows, counted from its top-left: the
 /// grid [`HiddenPortal::position`] names in words.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MapSpot {
     /// 0 (far left) to 4 (far right).
@@ -109,7 +109,7 @@ pub struct MapSpot {
 
 /// The Map Summary: MeowDB's ceiling figures (every mob killed as soon as it spawns),
 /// with the map's mob rate not applied, as MeowDB gives them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MapSummary {
     pub mobs_per_hour: PerParty,
@@ -119,7 +119,7 @@ pub struct MapSummary {
 
 /// A figure for a player alone on the map, and for a party of 6 or more. MeowDB gives
 /// only these two; sizes in between are not derived.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PerParty {
     pub solo: u64,
@@ -127,7 +127,7 @@ pub struct PerParty {
 }
 
 /// A mob that spawns on the map.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Mob {
     /// MeowDB's ID for the mob (e.g. `"3"`, Blue Snail): the same mob on every map.

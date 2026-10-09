@@ -259,6 +259,13 @@ body {
   box-shadow: inset 0 1px 2px rgba(0, 40, 80, 0.5);
 }
 
+/* A button that shows a window stays pressed while the window shows (the Grind
+   Tracker's). */
+.icon-button[aria-pressed="true"] {
+  background: var(--game-button-pressed);
+  box-shadow: inset 0 1px 2px rgba(0, 40, 80, 0.5);
+}
+
 /* Light, for a button inside the window's body rather than its bar. */
 .icon-button.light {
   border-color: var(--window-edge);
@@ -357,10 +364,85 @@ body {
 }
 
 /* Background progress: present, but quieter than a status note. */
-.panel .note.crawl {
+.panel .crawl .note {
   font-size: 12px;
   line-height: 16px;
   color: var(--ink-3);
+}
+
+/* The world crawl: its line over a gauge, the game's own HP/MP/EXP gauge in miniature.
+   A framed inset track filled with the window buttons' blue (portal blue, mob red and
+   you yellow stay the minimap's). The only motion in any window: the fill eases to each
+   new count, and a soft sheen runs along it while the crawl goes on. Hidden, the gauge
+   isn't rendered, so neither runs. */
+@property --known {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+.crawl {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gauge {
+  position: relative;
+  box-sizing: border-box;
+  height: 8px;
+  overflow: hidden;
+  /* Framed like the game's blue buttons, the track sunk dark as the game's gauges are. */
+  border: 1px solid var(--game-button-edge);
+  border-radius: 2px;
+  background: rgba(22, 34, 66, 0.42);
+  box-shadow:
+    inset 0 1px 1px rgba(5, 12, 30, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.45);
+  transition: --known 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gauge-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--game-button);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -1px 0 rgba(0, 60, 110, 0.25);
+  transform: scaleX(var(--known));
+  transform-origin: left center;
+}
+
+/* The sheen, kept to the filled part. */
+.gauge::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  clip-path: inset(0 calc((1 - var(--known)) * 100%) 0 0);
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.7) 50%, transparent 100%) no-repeat;
+  background-size: 35% 100%;
+  animation: gauge-sheen 2.6s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+
+@keyframes gauge-sheen {
+  from {
+    background-position: -60% 0;
+  }
+  70%,
+  to {
+    background-position: 160% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gauge {
+    transition: none;
+  }
+
+  .gauge::after {
+    animation: none;
+    background: none;
+  }
 }
 
 /* A section's heading, a step above its rows' 13px bold: the Street Name's size. */
@@ -1555,6 +1637,19 @@ body:has(#badge:not([hidden])) .icon .count {
 
 .draggable button {
   cursor: pointer;
+}
+
+/* The map's title opens its MeowDB page: a link wherever the panel is, which still drags
+   it once the mouse moves. Its lettering underlines under the pointer, in its own ink. */
+.panel .titlebar.linked,
+.panel .titlebar.linked * {
+  cursor: pointer;
+}
+
+.titlebar.linked:hover .street,
+.titlebar.linked:hover .map {
+  text-decoration: underline 1px var(--title-ink);
+  text-underline-offset: 3px;
 }
 
 /* No game window (minimised or closed): the overlay window stays but draws nothing. */

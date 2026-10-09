@@ -10,10 +10,11 @@ export default defineConfig(() => ({
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
-  // The overlay (with mob search), the setup window and the Title Region marking window.
+  // The overlay (with mob search), the Grind Tracker's window, the setup window and the
+  // Title Region marking window.
   build: {
     rolldownOptions: {
-      input: ["index.html", "setup.html", "region.html"],
+      input: ["index.html", "grind-tracker.html", "setup.html", "region.html"],
     },
   },
   // 2. tauri expects a fixed port, fail if that port is not available

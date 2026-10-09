@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/grind-tracker.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Grind Tracker</title>
+    <script type="module" src="/src/grind-tracker.ts" defer></script>
+  </head>
+  <body class="draggable hidden">
+    <main class="panel" id="panel">
+      <div class="view">
+        <header class="window-bar drag-handle">
+          <img class="window-icon" src="/assets/grind-tracker.png" alt="" draggable="false" />
+          <p class="window-name">Grind Tracker</p>
+          <div class="toolbar" id="toolbar" role="toolbar" aria-label="Grind Tracker">
+            <button type="button" class="icon-button" id="reset-session" data-control="resetSession" aria-label="Reset the Session: measure EXP afresh" title="Reset the Session: measure EXP afresh" hidden>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.3 6.2A5 5 0 1 1 3 9.5M2.8 2.8v3.6h3.6" /></svg>
+            </button>
+            <button type="button" class="icon-button" id="close" data-control="closeGrindTracker" aria-label="Close the Grind Tracker" title="Close the Grind Tracker">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+            </button>
+          </div>
+        </header>
+        <section class="tracking" id="tracking" aria-label="Grind Tracker">
+          <p class="note switched" id="tracking-switched" role="status" hidden>New Session: switched character</p>
+          <p class="waiting" id="tracking-waiting">Waiting for EXP</p>
+          <div id="tracking-figures" hidden>
+            <p class="headline">
+              <span class="label">Time to Level</span>
+              <span class="time-to-level" id="time-to-level"></span>
+              <span class="tag" id="tracking-tag" hidden></span>
+            </p>
+            <table class="rates">
+              <thead>
+                <tr><th></th><th>Rolling 5 min</th><th>Session</th></tr>
+              </thead>
+              <!-- Meso and item rows come later, from the Pickup Log. -->
+              <tbody>
+                <tr><th>EXP/h</th><td id="rolling-exp"></td><td id="session-exp"></td></tr>
+                <tr><th>%/h</th><td id="rolling-percent"></td><td id="session-percent"></td></tr>
+              </tbody>
+            </table>
+            <p class="extra" id="tracking-extra" hidden></p>
+          </div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

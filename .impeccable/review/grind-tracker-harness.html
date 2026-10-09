@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/grind-tracker.css" />
+    <title>Grind Tracker review harness</title>
+    <style>
+      html {
+        background: #222 url("/samples/minimap/victoria-road__kerning-city--window.png") no-repeat;
+        background-size: 1916px auto;
+        background-position: -1020px -40px;
+        overflow: visible !important;
+      }
+      /* The window is 280 CSS px wide (WIDTH in src-tauri/src/grind_tracker.rs). */
+      body { width: 280px; margin: 150px 16px 0 auto; overflow: visible !important; }
+      #h { position: fixed; left: 6px; bottom: 6px; font: 12px monospace; color: #fff; background: #000a; padding: 2px 5px; }
+    </style>
+    <script>
+      const cbs = {};
+      let next = 1;
+      window.__handlers = {};
+      window.__TAURI_INTERNALS__ = {
+        metadata: { currentWindow: { label: "grind-tracker" }, currentWebview: { windowLabel: "grind-tracker", label: "grind-tracker" } },
+        transformCallback(cb) { const id = next++; cbs[id] = cb; return id; },
+        unregisterCallback(id) { delete cbs[id]; },
+        async invoke(cmd, args) {
+          if (cmd === "plugin:event|listen") { window.__handlers[args.event] = cbs[args.handler]; return 1; }
+          if (cmd === "grind_tracker_height") { document.getElementById("h").textContent = "window " + args.height + "px"; }
+          return null;
+        },
+      };
+      window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
+    </script>
+  </head>
+  <body class="draggable">
+    <div id="h"></div>
+    <script type="module">
+      const page = new DOMParser().parseFromString(await (await fetch("/grind-tracker.html")).text(), "text/html");
+      document.body.prepend(page.getElementById("panel"));
+      await import("/src/grind-tracker.ts");
+      const none = { count: 0, expLost: 0, percentLostHundredths: 0 };
+      const tracking = (over = {}) => ({
+        state: "active", timeToLevelS: 2820, timeToLevelBadge: "47m",
+        rolling: { expPerHour: 61200, percentPerHourHundredths: 1290 },
+        sessionAverage: { expPerHour: 58400, percentPerHourHundredths: 1230 },
+        ceilingShareHundredths: 2050, deaths: { count: 1, expLost: 120, percentLostHundredths: 210 },
+        characterSwitched: false, ...over,
+      });
+      const empty = { timeToLevelS: null, timeToLevelBadge: null, rolling: null, sessionAverage: null, ceilingShareHundredths: null, deaths: none };
+      const states = {
+        active: tracking(),
+        waiting: tracking({ state: "waiting", ...empty }),
+        warmingUp: tracking({ state: "warmingUp", ceilingShareHundredths: null, deaths: none }),
+        paused: tracking({ state: "paused" }),
+        switched: tracking({ state: "waiting", ...empty, characterSwitched: true }),
+        switchedWarmingUp: tracking({ state: "warmingUp", timeToLevelS: null, timeToLevelBadge: null, ceilingShareHundredths: null, deaths: none, characterSwitched: true }),
+      };
+      const s = new URLSearchParams(location.search).get("s") ?? "active";
+      window.__handlers["grind-tracker-state"]({ event: "grind-tracker-state", id: 1, payload: { shown: true, tracking: states[s] } });
+    </script>
+  </body>
+</html>

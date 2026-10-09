@@ -7,6 +7,7 @@
 
 mod crawl;
 mod exp_bar;
+mod grind_tracker;
 mod map_data;
 mod map_index;
 mod matcher;
@@ -18,6 +19,7 @@ mod portal_overrides;
 mod portals;
 mod prep;
 mod recogniser;
+mod saved_world;
 mod search;
 mod session;
 mod settings;
@@ -29,6 +31,7 @@ mod world;
 
 pub use crawl::CrawlProgress;
 pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
+pub use grind_tracker::{ClientOffset, GrindTrackerWindow};
 pub use map_data::{
     HiddenPortal, LISTED_MOBS, MapData, MapDataStatus, MapSpot, MapSummary, Mob, MoreMobs, PerParty,
     Portal, PortalKind,
@@ -41,6 +44,7 @@ pub use panel::{
     PlacementMode, ScreenPoint,
     ScreenRect, Section, Size,
 };
+pub use saved_world::{SavedMap, SavedMapData, SavedWorld, WORLD_VERSION};
 pub use search::{DensityTier, HuntingTarget, MobChoice, RouteStop, SearchResult, SearchState, SearchView, Trip};
 pub use session::{Deaths, ExpRate, ExpTracking, TrackingState};
 pub use settings::{Hotkeys, Settings};
@@ -52,6 +56,7 @@ pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
 pub use world::{Distance, Step, Travel};
 
 use crawl::Crawl;
+use grind_tracker::GrindTracker;
 use search::{MobSearch, Searched};
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
@@ -196,6 +201,8 @@ pub struct PanelState {
     pub exp_bar: Option<ExpBar>,
     /// EXP tracking: the Session's state, Time to Level, rates and deaths.
     pub exp_tracking: ExpTracking,
+    /// The Grind Tracker's window, which shows `exp_tracking`.
+    pub grind_tracker: GrindTrackerWindow,
     /// The title of the game window to look for: "MapleStory", or one the player
     /// picked by hand.
     pub game_window_title: String,
@@ -227,7 +234,8 @@ pub enum Request {
 }
 
 /// Something the player can do with a hotkey or with the matching icon at the top of
-/// the panel. Either way it goes through [`Compass::press`].
+/// the panel, or with an icon at the top of the Grind Tracker's window (which have no
+/// hotkeys). Either way it goes through [`Compass::press`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PanelControl {
@@ -243,8 +251,13 @@ pub enum PanelControl {
     ChooseCandidate,
     /// Open the search view.
     Search,
-    /// Start the Session afresh, back to waiting for an EXP change.
+    /// Open the Grind Tracker's window, or close it.
+    ToggleGrindTracker,
+    /// The Grind Tracker window's reset icon: start the Session afresh, back to waiting
+    /// for an EXP change.
     ResetSession,
+    /// The Grind Tracker window's ×: close it.
+    CloseGrindTracker,
 }
 
 /// The game window's title, unless the player picked another by hand.
@@ -253,6 +266,10 @@ pub const GAME_WINDOW_TITLE: &str = "MapleStory";
 /// How long to wait before asking for the map index again after a failure. MeowDB is
 /// asked politely (ADR 0003): never on every frame.
 const INDEX_RETRY_MS: u64 = 60_000;
+
+/// The world crawl's progress reaches the panel no more often than this (capture time),
+/// unless the crawl is done: each change re-renders the panel.
+const PROGRESS_EVERY_MS: u64 = 1_000;
 
 /// The compass core: feed it frames, render its [`PanelState`].
 pub struct Compass {
@@ -265,6 +282,8 @@ pub struct Compass {
     exp_bar: Option<ExpBar>,
     /// The Session measured from the EXP bar's readings.
     session: Session,
+    /// The Grind Tracker's window.
+    grind_tracker: GrindTracker,
     source: Box<dyn MapDataSource + Send>,
     matcher: Option<Matcher>,
     /// When asking for the map index last failed (frame time).
@@ -273,6 +292,14 @@ pub struct Compass {
     shown_map: ShownMap,
     /// The world crawl, from when the map index arrives.
     crawl: Option<Crawl>,
+    /// What an earlier launch's crawl learned, for the crawl to start from.
+    saved_world: SavedWorld,
+    /// The shell is loading the saved world: the crawl holds until it arrives.
+    world_awaited: bool,
+    /// When the crawl's progress last reached the panel (capture time).
+    progress_shown_at: Option<u64>,
+    /// The wall clock (ms since the Unix epoch), as the shell last told it.
+    wall_clock: Option<u64>,
     /// The listed mobs' pages and images, for their Mob Cards.
     mob_cards: MobCards,
     /// MeowDB's pace, kept by the crawl and the Mob Cards' pages together.
@@ -295,12 +322,17 @@ impl Compass {
             exp_bar_reader: None,
             exp_bar: None,
             session: Session::default(),
+            grind_tracker: GrindTracker::default(),
             source: Box::new(source),
             matcher: None,
             index_failed_at: None,
             tracker: Tracker::default(),
             shown_map: ShownMap::default(),
             crawl: None,
+            saved_world: SavedWorld::default(),
+            world_awaited: false,
+            progress_shown_at: None,
+            wall_clock: None,
             mob_cards: MobCards::default(),
             meowdb_pace: Pace::default(),
             search: MobSearch::default(),
@@ -430,6 +462,12 @@ impl Compass {
         self.sync_panel()
     }
 
+    /// The Grind Tracker window's size, in physical px for the current display.
+    pub fn set_grind_tracker_size(&mut self, size: Size) -> &PanelState {
+        self.grind_tracker.size = size;
+        self.sync_panel()
+    }
+
     /// Apply something the player did.
     pub fn act(&mut self, action: Action) -> &PanelState {
         match action {
@@ -466,7 +504,12 @@ impl Compass {
                 }
             }
             Action::CancelSelection => self.setup.cancel_selection(),
-            Action::FinishSetup => self.setup.finish(),
+            Action::FinishSetup => {
+                // A newly marked EXP bar: the player wants to see what it measures.
+                if self.setup.finish() {
+                    self.grind_tracker.open = true;
+                }
+            }
             Action::RequestSetup => self.setup.request(),
             Action::LaunchedAgain => {
                 if self.setup.state().window_open {
@@ -482,6 +525,13 @@ impl Compass {
                 self.setup.cancel();
             }
             Action::ResetSession => self.session.reset(),
+            Action::ToggleGrindTracker => self.grind_tracker.open = !self.grind_tracker.open,
+            Action::CloseGrindTracker => self.grind_tracker.open = false,
+            Action::GrindTrackerMoved { x, y } => {
+                if let Some(game) = &self.panel.game {
+                    self.grind_tracker.moved_to(x, y, game);
+                }
+            }
             Action::OpenSearch => {
                 // The search view is on the expanded panel.
                 self.panel.expanded = true;
@@ -565,8 +615,8 @@ impl Compass {
             PanelControl::ChooseCandidate
         } else if is(&hotkeys.search) {
             PanelControl::Search
-        } else if is(&hotkeys.reset_session) {
-            PanelControl::ResetSession
+        } else if is(&hotkeys.grind_tracker) {
+            PanelControl::ToggleGrindTracker
         } else if is(&hotkeys.open_meowdb_page) {
             PanelControl::OpenMeowdbPage
         } else {
@@ -583,7 +633,9 @@ impl Compass {
             PanelControl::CyclePlacement => Action::CyclePlacement,
             PanelControl::Setup => Action::RequestSetup,
             PanelControl::ChooseCandidate => Action::ChooseCandidate,
+            PanelControl::ToggleGrindTracker => Action::ToggleGrindTracker,
             PanelControl::ResetSession => Action::ResetSession,
+            PanelControl::CloseGrindTracker => Action::CloseGrindTracker,
             // An open search view stays as it is; the shell brings the overlay in front on
             // opening it.
             PanelControl::Search if self.search.is_open() => return Some(Request::RaiseOverlay),
@@ -635,6 +687,8 @@ impl Compass {
         self.panel.resized_to(settings.panel_width.unwrap_or(DEFAULT_PANEL_WIDTH));
         self.setup.saved = settings.title_region;
         self.setup.saved_exp_bar = settings.exp_bar_region;
+        self.grind_tracker.open = settings.grind_tracker_open;
+        self.grind_tracker.at = settings.grind_tracker_at;
         self.settings = settings;
         // The travel toggles change Distances.
         self.sync_search();
@@ -658,8 +712,47 @@ impl Compass {
             panel_width: (self.panel.width != DEFAULT_PANEL_WIDTH).then_some(self.panel.width),
             title_region: self.setup.saved,
             exp_bar_region: self.setup.saved_exp_bar,
+            grind_tracker_open: self.grind_tracker.open,
+            grind_tracker_at: self.grind_tracker.at,
             ..self.settings.clone()
         }
+    }
+
+    /// The wall clock now, in ms since the Unix epoch: what dates the world crawl's maps,
+    /// and tells which are stale. The shell tells it as time passes.
+    pub fn on_wall_clock(&mut self, now_unix_ms: u64) {
+        self.wall_clock = Some(now_unix_ms);
+    }
+
+    /// The shell is loading the world an earlier launch saved: the crawl holds until
+    /// [`Compass::restore_world`], so it doesn't ask MeowDB for maps already known.
+    pub fn await_world(&mut self) {
+        self.world_awaited = true;
+    }
+
+    /// Pick up the world an earlier launch's crawl learned ([`SavedWorld::default`] when
+    /// none was saved), and let the crawl go on. One saved in another shape is left. A
+    /// map the crawl knows already is kept unless the saved one is newer.
+    pub fn restore_world(&mut self, world: SavedWorld) -> &PanelState {
+        self.world_awaited = false;
+        if world.version == WORLD_VERSION {
+            if let Some(crawl) = &mut self.crawl {
+                crawl.restore(&world);
+            }
+            self.saved_world = world;
+        }
+        self.sync_search();
+        self.sync_panel()
+    }
+
+    /// Every map the world crawl knows, for the shell to save.
+    pub fn world(&self) -> SavedWorld {
+        self.crawl.as_ref().map_or_else(|| self.saved_world.clone(), Crawl::saved)
+    }
+
+    /// Changes whenever what [`Compass::world`] holds does, so the shell saves it only then.
+    pub fn world_revision(&self) -> u64 {
+        self.crawl.as_ref().map_or(0, Crawl::revision)
     }
 
     /// Time passed: check on fetches in flight, move the world crawl on, and let the
@@ -677,10 +770,15 @@ impl Compass {
             self.state.mob_cards = self.mob_cards.cards();
         }
         // After the shown map, which never waits for the crawl, and its listed mobs' pages.
-        if let Some(crawl) = self.crawl.as_mut().filter(|_| !self.mob_cards.wants_meowdb(at_ms)) {
-            crawl.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
-            // Search covers the maps known so far: redone as the crawl learns more.
-            if crawl.progress() != self.state.search.crawl {
+        let crawling = !self.world_awaited && !self.mob_cards.wants_meowdb(at_ms);
+        if let Some(crawl) = self.crawl.as_mut().filter(|_| crawling) {
+            crawl.poll(&mut *self.source, &mut self.meowdb_pace, at_ms, self.wall_clock);
+            // Search covers the maps known so far: redone as the crawl learns more, but
+            // no more than once a second while it goes on.
+            let progress = crawl.progress();
+            let due = self.progress_shown_at.is_none_or(|t| at_ms.saturating_sub(t) >= PROGRESS_EVERY_MS);
+            if progress != self.state.search.crawl && (due || progress.done) {
+                self.progress_shown_at = Some(at_ms);
                 self.sync_search();
             }
         }
@@ -714,7 +812,7 @@ impl Compass {
                 return;
             }
         };
-        self.crawl = Some(Crawl::new(index.clone()));
+        self.crawl = Some(Crawl::new(index.clone(), &self.saved_world));
         self.matcher = Some(Matcher::new(index));
         self.sync_search();
     }
@@ -735,6 +833,7 @@ impl Compass {
         self.state.placement = self.panel.placement();
         self.state.layer = self.panel.layer();
         self.state.draggable = self.panel.draggable();
+        self.sync_grind_tracker();
         self.state.hotkeys = self.settings.hotkeys.clone();
         self.state.game_window_title =
             self.settings.game_window_title.clone().unwrap_or_else(|| GAME_WINDOW_TITLE.into());
@@ -756,6 +855,17 @@ impl Compass {
         } else {
             ExpTracking::default()
         };
+    }
+
+    /// The Grind Tracker's window shows while the player wants it and there is something
+    /// to track, but not while setup is open (it may be marking the EXP bar).
+    fn sync_grind_tracker(&mut self) {
+        let shows = self.grind_tracker.open && self.tracking_on() && !self.state.setup.window_open;
+        let placement = match (&self.panel.game, self.panel.expanded_placement()) {
+            (Some(game), Some(panel)) if shows => Some(self.grind_tracker.placement(game, panel, &self.panel.avoid)),
+            _ => None,
+        };
+        self.state.grind_tracker = GrindTrackerWindow { open: self.grind_tracker.open, placement };
     }
 
     /// Whether EXP tracking is on: there is an EXP Bar Region to read, kept and fitting

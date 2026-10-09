@@ -240,27 +240,30 @@ impl Setup {
     /// - the marked EXP Bar Region if its figures read whole, or with none being marked,
     ///   the kept one if it still fits (one marked at another resolution is dropped).
     ///
-    /// Nothing changes while either mark's test read hasn't succeeded.
-    pub fn finish(&mut self) {
+    /// Nothing changes while either mark's test read hasn't succeeded. Returns whether
+    /// it kept a newly marked EXP Bar Region.
+    pub fn finish(&mut self) -> bool {
         let title = match &self.marking {
             Some((region, TestRead::Recognised { .. })) => *region,
-            Some(_) => return,
+            Some(_) => return false,
             None => match self.saved {
                 Some(saved) if self.fits(saved.client) => saved,
-                _ => return,
+                _ => return false,
             },
         };
         let exp_bar = match &self.marking_exp_bar {
             Some((region, ExpBarTestRead::Read { .. })) => Some(*region),
-            Some(_) => return,
+            Some(_) => return false,
             None => self.saved_exp_bar.filter(|r| self.fits(r.client)),
         };
+        let marked_exp_bar = self.marking_exp_bar.is_some();
         self.saved = Some(title);
         self.saved_exp_bar = exp_bar;
         self.marking = None;
         self.marking_exp_bar = None;
         self.selection = None;
         self.requested = false;
+        marked_exp_bar
     }
 
     /// The re-setup hotkey: open setup, even if it was needed before and closed.

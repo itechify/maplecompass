@@ -49,7 +49,7 @@ pub struct Outline {
 }
 
 /// A range of mob levels, both ends included.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LevelRange {
     pub lowest: u32,
