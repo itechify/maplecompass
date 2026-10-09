@@ -1,12 +1,12 @@
 //! Personal Bests (GLOSSARY): the best Rolling Rate the player has had on each map, kept
 //! Visit by Visit.
 //!
-//! - A Visit's best on a map is the highest Last 5 min EXP/h the Grind Tracker showed at
-//!   a refresh whose window was a full 5 minutes of active play, all on the map, with the
-//!   EXP bar read: the Session decides what counts. Only while the map is certain and has
-//!   a Map Summary: the core says which map that is. Maps that share a title but would
-//!   show the same count as certain, as the first of them, which the panel shows: their
-//!   bests are kept under its ID.
+//! - A Visit's best on a map is the highest Rolling Rate, in EXP/h, the Grind Tracker
+//!   showed at a refresh whose window was a full 5 minutes of active play, all on the map,
+//!   with the EXP bar read: the Session decides what counts. Only while the map is
+//!   certain and has a Map Summary: the core says which map that is. Maps that share a
+//!   title but would show the same count as certain, as the first of them, which the
+//!   panel shows: their bests are kept under its ID.
 //! - A map's Personal Best is the best of its Visits'. During a Visit the rate is
 //!   compared with the earlier Visits' best, which can't change until the Visit ends:
 //!   this Visit's best joins them then. No rate is capped or rejected.
@@ -68,7 +68,7 @@ pub struct MapBests {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VisitBest {
-    /// The Last 5 min EXP/h shown, over a full 5 minutes of active play on the map.
+    /// The Rolling Rate's EXP/h shown, over a full 5 minutes of active play on the map.
     pub exp_per_hour: u64,
     /// When it was first shown, by the wall clock (ms since the Unix epoch); `None` if
     /// the shell hadn't told the wall clock by then.
@@ -145,7 +145,7 @@ struct Forgotten {
 }
 
 impl Bests {
-    /// Last 5 min was shown afresh with the player certain to be on `map`, at
+    /// The Rolling Rate was shown afresh with the player certain to be on `map`, at
     /// `now_unix_ms` by the wall clock. `rate` is its EXP/h if it counts towards this
     /// Visit's best there: over a full 5 minutes of active play all on the map, with the
     /// EXP bar read. A best is set when it is first shown: the same rate again keeps it.
