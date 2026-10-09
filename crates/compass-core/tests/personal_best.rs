@@ -245,6 +245,34 @@ fn nothing_is_recorded_on_a_map_without_a_map_summary() {
     assert_eq!(player.hunt(5 * MIN, 10).exp_tracking.personal_best, first_best(3600));
 }
 
+#[test]
+fn the_five_minutes_count_from_arriving_even_when_the_maps_page_comes_later() {
+    let page_in = Arc::new(AtomicBool::new(false));
+    let mut player = Player::new(tracking_with(sunset_sky_held_back(&page_in)));
+    // 10,800 EXP/h on the Construction Site for 6 minutes, then on to Sunset Sky, whose
+    // page hasn't come.
+    player.arrive(CONSTRUCTION_SITE);
+    player.hunt(6 * MIN, 30);
+    assert_eq!(player.arrive(SUNSET).data.solo_exp_ceiling(), None);
+
+    // 3,600 EXP/h there, the bar read all along; the page comes 2 minutes in.
+    player.hunt(2 * MIN, 10);
+    page_in.store(true, Ordering::SeqCst);
+    let paged = player.compass.tick(player.at).clone();
+    assert_eq!(paged.data.solo_exp_ceiling(), Some(223_928));
+    assert_eq!(paged.exp_tracking.personal_best, None);
+
+    // Under 5 minutes from arriving, Last 5 min still counts some of the Construction
+    // Site's play: nothing yet.
+    let under = player.hunt(2 * MIN + 30 * S, 10);
+    assert_eq!(under.exp_tracking.personal_best, None);
+
+    // 5 minutes from arriving, though only 3 from the page: Sunset Sky's first best.
+    let five = player.hunt(30 * S, 10);
+    assert_eq!(rolling(&five), Some(3600));
+    assert_eq!(five.exp_tracking.personal_best, first_best(3600));
+}
+
 fn shown_map(state: &PanelState) -> Option<&str> {
     state.map.as_ref().map(|m| m.id.as_str())
 }
