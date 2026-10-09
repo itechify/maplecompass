@@ -269,8 +269,9 @@ pub(crate) struct Session {
 /// A Visit (GLOSSARY): from the panel confirming a map until it confirms another.
 #[derive(Debug, Default, Clone, Copy)]
 struct Visit {
-    /// Which it is: one more with each map the panel confirms, none before the first.
-    count: u64,
+    /// Which Visit it is, to tell it from the others: one more with each map the panel
+    /// confirms, 0 before the first.
+    id: u64,
     /// When it started: the latest capture time seen then.
     at: u64,
 }
@@ -282,7 +283,7 @@ struct Undo {
     largest_gain_hundredths: u32,
     level_ups: u32,
     character_switched: bool,
-    /// The Visit then: on another map since, the share counts from arriving there.
+    /// The Visit then (its id): on another map since, the share counts from arriving there.
     visit: u64,
 }
 
@@ -566,7 +567,7 @@ impl Session {
                 largest_gain_hundredths: self.largest_gain_hundredths,
                 level_ups: self.level_ups,
                 character_switched: self.character_switched,
-                visit: self.visit.count,
+                visit: self.visit.id,
             }),
             None => self.undo.take(),
         };
@@ -579,7 +580,7 @@ impl Session {
     pub fn undo_reset(&mut self) {
         let Some(undo) = self.undo.take() else { return };
         let mut figures = undo.figures;
-        if undo.visit != self.visit.count {
+        if undo.visit != self.visit.id {
             // Reset on another map: the EXP hasn't changed since, so the time from then
             // to arriving here counts as it would have.
             figures.visit_from = figures.active(self.visit.at);
@@ -624,7 +625,7 @@ impl Session {
     /// The share of the map's ceiling counts only the play since.
     pub fn arrive(&mut self) {
         let now = self.now;
-        self.visit = Visit { count: self.visit.count + 1, at: now };
+        self.visit = Visit { id: self.visit.id + 1, at: now };
         self.bests.end_visit();
         if let Some(figures) = &mut self.figures {
             figures.visit_from = figures.active(now);
@@ -690,7 +691,7 @@ impl Session {
         // they were, unless the player arrives on another map or the share would be of
         // another ceiling or best (the map's page come, or another Candidate chosen).
         let unreadable = fresh.state == TrackingState::Unreadable;
-        let visit = self.visit.count;
+        let visit = self.visit.id;
         let holds = self.shown.as_ref().is_some_and(|shown| {
             shown.visit == visit
                 && shown.ceiling == ceiling
@@ -718,7 +719,7 @@ impl Session {
                     let here = self.figures.as_ref().map(|f| f.rolling_since(self.now, f.best_from));
                     let full = here.filter(|h| h.over_ms >= ROLLING_MS && h.exp > 0);
                     let counted = full.filter(|_| !unreadable).map(|here| here.per_hour(1, 1) as u64);
-                    self.bests.shown(map, counted, now_unix_ms);
+                    self.bests.on_shown(map, counted, now_unix_ms);
                     let share = |best| full.map(|here| here.per_hour(u64::from(HUNDRED_PERCENT), best));
                     fresh.personal_best = self.bests.line(map, share);
                 }

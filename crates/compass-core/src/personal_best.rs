@@ -149,11 +149,11 @@ impl Bests {
     /// `now_unix_ms` by the wall clock. `rate` is its EXP/h if it counts towards this
     /// Visit's best there: over a full 5 minutes of active play all on the map, with the
     /// EXP bar read. A best is set when it is first shown: the same rate again keeps it.
-    pub fn shown(&mut self, map: &str, rate: Option<u64>, now_unix_ms: Option<u64>) {
+    pub fn on_shown(&mut self, map: &str, rate: Option<u64>, now_unix_ms: Option<u64>) {
         self.changing(|bests| bests.record(map, rate, now_unix_ms));
     }
 
-    /// As [`Bests::shown`], leaving the revision to it.
+    /// As [`Bests::on_shown`], leaving the revision to it.
     fn record(&mut self, map: &str, rate: Option<u64>, now_unix_ms: Option<u64>) {
         // A Candidate shown with nothing to count doesn't take the Visit's best.
         let Some(rate) = rate else { return };
