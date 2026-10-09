@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { ExpRate, ExpTracking, PersonalBestLine } from "./exp-tracking";
+import type { ExpRate, ExpTracking, PersonalBestLine, VisitBest } from "./exp-tracking";
 
 /** What the shell sends: the figures, and whether the window shows at all. */
 type TrackerView = { shown: boolean; tracking: ExpTracking };
@@ -25,6 +25,13 @@ const sessionPercent = byId("session-percent");
 const best = byId("tracking-best");
 const bestText = byId("tracking-best-text");
 const bestTag = byId("tracking-best-tag");
+const bestOpen = byId("tracking-best-open");
+const bestEarlier = byId("best-earlier");
+const bestEarlierExp = byId("best-earlier-exp");
+const bestEarlierWhen = byId("best-earlier-when");
+const bestVisit = byId("best-visit");
+const bestVisitExp = byId("best-visit-exp");
+const bestVisitWhen = byId("best-visit-when");
 const share = byId("tracking-share");
 const deaths = byId("tracking-deaths");
 const exp = byId("tracking-exp");
@@ -67,6 +74,47 @@ function personalBest(line: PersonalBestLine) {
   const of = line.shareHundredths;
   if (of === null) return `Your best EXP/h here: ${named}`;
   return `${percent(of, of < 1000 ? 1 : 0)} of your best EXP/h here (${named})`;
+}
+
+/** The months as dates are written here: "3 Oct". Not the locale's, which may say "Sept". */
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Whether two moments fall on the same day in the player's local time. */
+const sameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+/** When a best was set, by the calendar in the player's local time: "set today", "set
+ *  yesterday", "set 3 Oct", and "set 3 Oct 2025" in another year. */
+function setOn(unixMs: number, now = new Date()) {
+  const set = new Date(unixMs);
+  if (sameDay(set, now)) return "set today";
+  if (sameDay(set, new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))) return "set yesterday";
+  const day = `${set.getDate()} ${MONTHS[set.getMonth()]}`;
+  return set.getFullYear() === now.getFullYear() ? `set ${day}` : `set ${day} ${set.getFullYear()}`;
+}
+
+/** One best in the opened line: its figure as Last 5 min showed it, and when it was set. */
+function showBest(row: HTMLElement, exp: HTMLElement, when: HTMLElement, best: VisitBest | null) {
+  row.hidden = !best;
+  if (!best) return;
+  exp.textContent = rate(best.expPerHour);
+  when.textContent = best.setAtUnixMs === null ? "" : setOn(best.setAtUnixMs);
+}
+
+/** The pointer is on the Personal Best line: it shows opened. */
+let bestHovered = false;
+/** The Personal Best line last rendered, for the hover to open. */
+let bestLine: PersonalBestLine | null = null;
+
+/** The Personal Best line opened in place while the pointer is on it: the best it names
+ *  and when it was set, and this Visit's best once it has beaten it; on a first Visit,
+ *  this Visit's. Dated afresh each time, as days pass. */
+function renderBestOpen() {
+  const line = bestLine;
+  bestOpen.hidden = !bestHovered || !line;
+  if (!line || bestOpen.hidden) return;
+  showBest(bestEarlier, bestEarlierExp, bestEarlierWhen, line.first ? null : line);
+  showBest(bestVisit, bestVisitExp, bestVisitWhen, line.first ? line : line.newBest);
 }
 
 /** Why there is no Time to Level, in words: never a bare dash beside the label. */
@@ -112,12 +160,16 @@ function render({ shown, tracking: t }: TrackerView) {
   sessionExp.textContent = expPerHour(t.sessionAverage);
   sessionPercent.textContent = percentPerHour(t.sessionAverage);
 
-  // Just above the ceiling's line, in its style; the tag as the headline's.
+  // Just above the ceiling's line, in its style; the tag as the headline's. Gone from
+  // under the pointer (another map, or the window hidden), it closes.
   best.hidden = !t.personalBest;
+  bestLine = t.personalBest;
+  if (!bestLine || !shown) bestHovered = false;
   if (t.personalBest) {
     bestText.textContent = personalBest(t.personalBest);
     bestTag.hidden = !t.personalBest.newBest;
   }
+  renderBestOpen();
   const shareOf = t.ceilingShareHundredths;
   share.hidden = shareOf === null || t.soloExpCeiling === null;
   if (shareOf !== null && t.soloExpCeiling !== null) {
@@ -165,6 +217,17 @@ document.addEventListener("mousedown", (e) => {
   const onHeader = !!target?.closest(".drag-handle") && !target?.closest("button");
   if (e.button === 0 && onHeader) getCurrentWindow().startDragging();
 });
+
+// The pointer on the Personal Best line opens it in place, and the window grows to fit;
+// moving off closes it. The line and what it opens are one target, so the pointer stays
+// on it as it opens, even where the window moves up to keep on the monitor.
+function hoverBest(on: boolean) {
+  bestHovered = on;
+  renderBestOpen();
+  reportHeight();
+}
+best.addEventListener("mouseenter", () => hoverBest(true));
+best.addEventListener("mouseleave", () => hoverBest(false));
 
 // Close, reset and undo, through the core like the panel's icons.
 panelEl.addEventListener("click", (e) => {
