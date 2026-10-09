@@ -376,33 +376,112 @@ h2 {
    Hidden Portals, a mob dot for Mobs. */
 .portals h2,
 .map-mobs h2 {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   margin-bottom: 5px;
 }
 
-.portals h2::before,
-.map-mobs h2::before {
+/* The heading is the section's toggle: a click anywhere on it collapses the section to
+   the heading, or opens it again. The game's small light button at its right says which:
+   a dash while open, a plus while collapsed. */
+.section-toggle {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  cursor: default;
+}
+
+.section-toggle::before {
   content: "";
   flex: none;
   box-sizing: border-box;
   border-radius: 50%;
 }
 
-.portals h2::before {
+.portals .section-toggle::before {
   width: 10px;
   height: 10px;
   border: 2.5px solid var(--portal);
   background: var(--portal-fill);
 }
 
-.map-mobs h2::before {
+.map-mobs .section-toggle::before {
   width: 8px;
   height: 8px;
   margin: 0 1px;
   background: var(--mob);
   box-shadow: 0 0 0 1px var(--mob-edge);
+}
+
+/* Collapsed, the heading says how many the section holds. */
+.section-count {
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+.fold {
+  flex: none;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 19px;
+  height: 19px;
+  margin-left: auto;
+  border: 1px solid var(--window-edge);
+  border-radius: 2px;
+  background: var(--button-light);
+  box-shadow: inset 0 1px 0 #fff;
+  color: var(--ink);
+}
+
+.fold svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.fold .post {
+  display: none;
+}
+
+.collapsed .fold .post {
+  display: inline;
+}
+
+.section-toggle:hover .fold {
+  background: var(--button-light-hover);
+}
+
+.section-toggle:active .fold {
+  background: var(--button-light);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
+}
+
+.panel .section-toggle:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Nothing to list, nothing to collapse: the heading is plain. */
+.section-toggle:disabled .fold {
+  display: none;
+}
+
+/* Collapsed: the heading alone. */
+.portals.collapsed > :not(h2),
+.map-mobs.collapsed > :not(h2) {
+  display: none !important;
+}
+
+.portals.collapsed > h2,
+.map-mobs.collapsed > h2 {
+  margin-bottom: 0;
 }
 
 /* Nothing to list: the heading and "None on this map" on one line. */
