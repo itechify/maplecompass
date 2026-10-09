@@ -8,7 +8,7 @@ mod common;
 
 use common::{FakeSource, arrive};
 use compass_core::{
-    Compass, ExpBar, ExpBarReading, ExpBarRegion, ExpTracking, Foreground, GameWindow, Hotkeys, PanelControl,
+    Compass, ExpBar, ExpBarReading, ExpBarRegion, Foreground, GameWindow, Hotkeys, PanelControl,
     PlacementMode, Rect, Request, ScreenRect, Settings, SetupReason, Size, TitleRegion, TrackingState,
 };
 
@@ -326,10 +326,6 @@ fn start_session(compass: &mut Compass) {
     assert_eq!(compass.panel_state().exp_tracking.state, TrackingState::WarmingUp);
 }
 
-fn waiting() -> ExpTracking {
-    ExpTracking { state: TrackingState::Waiting, ..ExpTracking::default() }
-}
-
 #[test]
 fn ctrl_shift_r_no_longer_resets_the_session() {
     let mut compass = tracking_with(Hotkeys::default());
@@ -350,7 +346,10 @@ fn the_reset_icon_on_the_grind_tracker_window_resets_the_session() {
 
     assert_eq!(compass.press(PanelControl::ResetSession), None);
 
-    assert_eq!(compass.panel_state().exp_tracking, waiting());
+    let tracking = &compass.panel_state().exp_tracking;
+    assert_eq!(tracking.state, TrackingState::Waiting);
+    assert_eq!(tracking.rolling, None);
+    assert!(tracking.reset_undoable);
 }
 
 /// Settings saved before the Grind Tracker hotkey existed, with a hotkey the player
