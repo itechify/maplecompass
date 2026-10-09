@@ -154,3 +154,38 @@ fn coming_back_shows_the_best_until_five_minutes_there_then_the_rate_as_a_share_
     assert_eq!(rolling(&five), Some(3600));
     assert_eq!(five.exp_tracking.personal_best, best(7200, Some(5000), false));
 }
+
+#[test]
+fn beating_the_best_shows_the_share_past_100_percent_and_a_new_best_tag_for_the_rest_of_the_visit() {
+    let (mut player, _) = back_on_sunset_sky_after_a_best_of_7200();
+
+    // 10,800 EXP/h for 5 minutes: 150% of 7,200, a new best.
+    let beaten = player.hunt(5 * MIN, 30);
+    assert_eq!(rolling(&beaten), Some(10_800));
+    assert_eq!(beaten.exp_tracking.personal_best, best(7200, Some(15_000), true));
+
+    // Back down to 3,600 EXP/h, 50%: still a new best this Visit.
+    let slower = player.hunt(5 * MIN, 10);
+    assert_eq!(rolling(&slower), Some(3600));
+    assert_eq!(slower.exp_tracking.personal_best, best(7200, Some(5000), true));
+}
+
+#[test]
+fn the_best_compared_with_is_fixed_on_arrival_and_a_new_one_counts_from_the_next_visit() {
+    let (mut player, _) = back_on_sunset_sky_after_a_best_of_7200();
+
+    // 10,800 EXP/h, then 9,000: both measured against 7,200 all Visit, never against
+    // the 10,800 set in it.
+    player.hunt(5 * MIN, 30);
+    let after = player.hunt(5 * MIN, 25);
+    assert_eq!(rolling(&after), Some(9000));
+    assert_eq!(after.exp_tracking.personal_best, best(7200, Some(12_500), true));
+
+    // The next Visit is measured against it: 9,000 EXP/h is 83.33% of 10,800.
+    player.arrive(CONSTRUCTION_SITE);
+    player.hunt(MIN, 30);
+    let next = player.arrive(SUNSET);
+    assert_eq!(next.exp_tracking.personal_best, best(10_800, None, false));
+    let five = player.hunt(5 * MIN, 25);
+    assert_eq!(five.exp_tracking.personal_best, best(10_800, Some(8333), false));
+}
