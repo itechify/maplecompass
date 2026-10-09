@@ -591,6 +591,16 @@ impl Session {
         }
     }
 
+    /// Every map's Personal Bests.
+    pub fn bests(&self) -> &Bests {
+        &self.bests
+    }
+
+    /// Every map's Personal Bests, to restore.
+    pub fn bests_mut(&mut self) -> &mut Bests {
+        &mut self.bests
+    }
+
     /// Time passed without a reading.
     pub fn tick(&mut self, at_ms: u64) {
         self.now = self.now.max(at_ms);

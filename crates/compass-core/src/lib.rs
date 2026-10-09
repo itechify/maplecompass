@@ -851,6 +851,18 @@ impl Compass {
         self.crawl.as_ref().map_or(0, Crawl::revision)
     }
 
+    /// Pick up the Personal Bests an earlier launch saved ([`SavedBests::default`] when
+    /// none were). The shell restores them at startup, before any reading.
+    pub fn restore_bests(&mut self, bests: SavedBests) -> &PanelState {
+        self.session.bests_mut().restore(bests);
+        self.sync_panel()
+    }
+
+    /// Every map's Personal Bests, for the shell to save.
+    pub fn bests(&self) -> SavedBests {
+        self.session.bests().saved()
+    }
+
     /// Time passed: check on fetches in flight, move the world crawl on, and let the
     /// Session pause. The shell
     /// calls this many times a second (`at_ms` on the same clock as frames), so nothing
