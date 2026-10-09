@@ -8,7 +8,7 @@
 //! relays the player's typing, keys and clicks.
 
 use crate::Command;
-use compass_core::{Action, PanelControl};
+use compass_core::{Action, PanelControl, Section};
 use std::sync::mpsc::Sender;
 use tauri::{State, WebviewWindow};
 
@@ -122,4 +122,10 @@ pub fn search_toggle_taxis(commands: State<'_, Sender<Command>>) {
 #[tauri::command]
 pub fn search_toggle_teleport_scrolls(commands: State<'_, Sender<Command>>) {
     act(&commands, Action::ToggleTeleportScrolls);
+}
+
+/// A click on the Hidden Portals or Mobs heading: collapse that section, or open it.
+#[tauri::command]
+pub fn panel_toggle_section(section: Section, commands: State<'_, Sender<Command>>) {
+    act(&commands, Action::ToggleSection(section));
 }

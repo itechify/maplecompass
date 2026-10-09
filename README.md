@@ -49,13 +49,15 @@ The search view takes over the whole panel and takes your typing until it closes
 
 They are ordinary registered hotkeys (no keyboard hook), registered only while the game or one of MapleCompass's windows is in front, so other apps keep their own shortcuts, but the game never sees these combinations. If one clashes with a key you bind in the game, change it under `hotkeys` in the settings file (below). If another app already has one, or one isn't a key combination, the panel and the setup window say which. Win+Alt hotkeys saved by an earlier version are moved to these.
 
+Click the Hidden Portals or Mobs heading to collapse that section to its heading, which then says how many it holds; click it again to open the section. A collapsed section stays collapsed from map to map and the next time you start MapleCompass.
+
 A few maps share a title, such as the two Maple Road / Mushroom Town maps. If they would show the same Map Summary, mobs and hidden portals anyway, the panel just shows them. Otherwise it picks the one connected to the map you came from, and failing that it shows the first and lists them all, each with its first mobs, mob levels and hidden portal count, with the map ID secondary; Ctrl+Shift+N then steps through them, and your pick holds until you change maps.
 
 Many map names differ only in a Roman numeral, such as Rocky Road I, II and III. The recogniser can't read the game font's "II" and "III", so MapleCompass counts their strokes. When a numeral still can't be made out, the panel picks the map the one you came from leads to, if it leads to just one of them; otherwise it says it isn't sure rather than guess.
 
 Inside, the panel keeps the spot you dragged it to relative to the game window. Docked, it follows the game window's outside edge, and goes inside when there is no room on screen. Detached, you can drag it anywhere, such as onto another monitor, and it stays there; it also gets a taskbar entry. Wherever it is placed, it stays just above the game window and never above an app in front of the game, and it disappears while the game is minimised.
 
-Settings, including the placement, the marked title, a hand-picked game window and the hotkeys, are saved in `%APPDATA%\com.itechify.maplecompass\settings.json`.
+Settings, including the placement, collapsed sections, the marked title, a hand-picked game window and the hotkeys, are saved in `%APPDATA%\com.itechify.maplecompass\settings.json`.
 
 ## Credits
 

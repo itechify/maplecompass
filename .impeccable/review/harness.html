@@ -62,7 +62,7 @@
         hotkeysLive: true, expBarRegion: null, expBar: null,
         expTracking: { state: "off", timeToLevelS: null, timeToLevelBadge: null, rolling: null, sessionAverage: null, ceilingShareHundredths: null, deaths: { count: 0, expLost: 0, percentLostHundredths: 0 } },
         search: { view: null, query: "", suggestions: [], highlighted: null, picked: null, results: [], onlyOnEventMaps: false, highlightedResult: null, nearest: null, credit: null, crawl: { known: 0, total: 0, done: true }, travel: { taxis: false, teleportScrolls: false }, hunting: null },
-        unavailableHotkeys: [], invalidHotkeys: [], gameWindowTitle: "MapleStory", mobCards: [], ...over,
+        unavailableHotkeys: [], invalidHotkeys: [], gameWindowTitle: "MapleStory", mobCards: [], collapsedSections: { hiddenPortals: false, mobs: false }, ...over,
       });
       const mushroomTown = {
         status: "ready", summary: { mobsPerHour: { solo: 412, fullParty: 1860 }, expPerHour: { solo: 6180, fullParty: 27900 } },
@@ -121,6 +121,11 @@
         searchmobs: base({
           search: { view: "mobs", query: "sn", suggestions: [ { id: "100100", name: "Snail", level: 1 }, { id: "100101", name: "Blue Snail", level: 2 }, { id: "130101", name: "Red Snail", level: 4 } ], highlighted: 1, picked: null, onlyOnEventMaps: false, highlightedResult: null, nearest: null, credit: "NiaMeowDB (meowdb.com)", crawl: { known: 312, total: 422, done: false }, travel: { taxis: false, teleportScrolls: false }, hunting: null, results: [] } }),
         town: base({ map: { id: "010003000", streetName: "Victoria Road", mapName: "Kerning City", url: "" }, data: { status: "ready", summary: null, mobs: [], listedMobs: [], moreMobs: null, hiddenPortals: [] } }),
+        // Both sections collapsed to their headings; then Mobs alone.
+        folded: base({ collapsedSections: { hiddenPortals: true, mobs: true } }),
+        foldedmobs: base({ collapsedSections: { hiddenPortals: false, mobs: true } }),
+        // Collapsed, but this map has nothing to list: the headings are plain.
+        foldedtown: base({ map: { id: "010003000", streetName: "Victoria Road", mapName: "Kerning City", url: "" }, data: { status: "ready", summary: null, mobs: [], listedMobs: [], moreMobs: null, hiddenPortals: [] }, collapsedSections: { hiddenPortals: true, mobs: true } }),
         // The Grind Tracker on, before the first EXP gain.
         waiting: base({ map: { id: "010003000", streetName: "Victoria Road", mapName: "Kerning City", url: "" }, data: { status: "ready", summary: null, mobs: [], listedMobs: [], moreMobs: null, hiddenPortals: [] }, expTracking: { state: "waiting", timeToLevelS: null, timeToLevelBadge: null, rolling: null, sessionAverage: null, ceilingShareHundredths: null, deaths: { count: 0, expLost: 0, percentLostHundredths: 0 } } }),
       };
