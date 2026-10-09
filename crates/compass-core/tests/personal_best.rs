@@ -602,6 +602,37 @@ fn forgetting_this_visits_best_once_it_beat_the_best_counts_only_windows_that_st
 }
 
 #[test]
+fn forgetting_a_maps_only_best_from_an_earlier_visit_reads_as_a_first_visit() {
+    let (mut player, _) = back_on_sunset_sky_after_a_best_of_7200();
+    let under = player.hunt(4 * MIN, 10);
+    assert_eq!(under.exp_tracking.personal_best, best(7200, None, None));
+
+    // Forget takes the 7,200, Sunset Sky's only best: under 5 minutes here, a first
+    // Visit has nothing to show...
+    let forgot = player.press(PanelControl::ForgetBest);
+    assert_eq!(forgot.exp_tracking.personal_best, None);
+
+    // ...and from 5 minutes, its best so far.
+    let five = player.hunt(MIN, 10);
+    assert_eq!(five.exp_tracking.personal_best, first_best(3600));
+}
+
+#[test]
+fn forgetting_a_first_visits_best_leaves_the_map_none_until_a_window_after_the_forget() {
+    let mut player = Player::new(tracking());
+    player.arrive(SUNSET);
+    assert_eq!(player.hunt(6 * MIN, 30).exp_tracking.personal_best, first_best(10_800));
+
+    // Forget takes the 10,800, the map's only best.
+    let forgot = player.press(PanelControl::ForgetBest);
+    assert_eq!(forgot.exp_tracking.personal_best, None);
+
+    // 3,600 EXP/h: nothing until 5 minutes since the Forget, then this Visit's best anew.
+    assert_eq!(player.hunt(4 * MIN + 30 * S, 10).exp_tracking.personal_best, None);
+    assert_eq!(player.hunt(30 * S, 10).exp_tracking.personal_best, first_best(3600));
+}
+
+#[test]
 fn a_forgotten_best_is_not_recorded_again_from_a_session_whose_reset_is_undone() {
     let (mut player, _) = back_on_sunset_sky_after_a_best_of_7200();
     player.hunt(5 * MIN, 100);
