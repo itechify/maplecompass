@@ -14,35 +14,53 @@
         <header class="window-bar drag-handle">
           <img class="window-icon" src="/assets/grind-tracker.png" alt="" draggable="false" />
           <p class="window-name">Grind Tracker</p>
-          <div class="toolbar" id="toolbar" role="toolbar" aria-label="Grind Tracker">
-            <button type="button" class="icon-button" id="reset-session" data-control="resetSession" aria-label="Reset the Session: measure EXP afresh" title="Reset the Session: measure EXP afresh" hidden>
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.3 6.2A5 5 0 1 1 3 9.5M2.8 2.8v3.6h3.6" /></svg>
-            </button>
-            <button type="button" class="icon-button" id="close" data-control="closeGrindTracker" aria-label="Close the Grind Tracker" title="Close the Grind Tracker">
+          <div class="toolbar" role="toolbar" aria-label="Grind Tracker window">
+            <button type="button" class="icon-button" data-control="closeGrindTracker" aria-label="Close the Grind Tracker" title="Close the Grind Tracker (the Session carries on)">
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>
             </button>
           </div>
         </header>
-        <section class="tracking" id="tracking" aria-label="Grind Tracker">
-          <p class="note switched" id="tracking-switched" role="status" hidden>New Session: switched character</p>
-          <p class="waiting" id="tracking-waiting">Waiting for EXP</p>
-          <div id="tracking-figures" hidden>
-            <p class="headline">
+        <section class="tracking" id="tracking" aria-label="Session">
+          <div class="notes" aria-live="polite">
+            <p class="note problem" id="tracking-unreadable" hidden>Can't read the EXP bar. Move whatever covers it, or mark it again from Help &amp; setup.</p>
+            <p class="note" id="tracking-switched" hidden>You switched character, so this is a new Session.</p>
+            <p class="note reset" id="tracking-reset" hidden>
+              <span>Session reset.</span>
+              <button type="button" class="text-button" data-control="undoReset">Undo</button>
+            </p>
+            <p class="note" id="tracking-waiting">Waiting for EXP: the Session starts at your next gain.</p>
+          </div>
+          <div class="figures" id="tracking-figures" hidden>
+            <div class="headline">
               <span class="label">Time to Level</span>
               <span class="time-to-level" id="time-to-level"></span>
               <span class="tag" id="tracking-tag" hidden></span>
-            </p>
-            <table class="rates">
-              <thead>
-                <tr><th></th><th>Rolling 5 min</th><th>Session</th></tr>
-              </thead>
-              <!-- Meso and item rows come later, from the Pickup Log. -->
-              <tbody>
-                <tr><th>EXP/h</th><td id="rolling-exp"></td><td id="session-exp"></td></tr>
-                <tr><th>%/h</th><td id="rolling-percent"></td><td id="session-percent"></td></tr>
-              </tbody>
-            </table>
-            <p class="extra" id="tracking-extra" hidden></p>
+              <button type="button" class="icon-button light" data-control="resetSession" aria-label="Reset the Session" title="Reset the Session: measure EXP afresh from your next gain">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.3 6.2A5 5 0 1 1 3 9.5M2.8 2.8v3.6h3.6" /></svg>
+              </button>
+            </div>
+            <!-- Meso and item rows come later, from the Pickup Log. -->
+            <div class="rates">
+              <div class="row">
+                <span class="period">Last 5 min</span>
+                <span class="value" id="rolling-exp"></span><span class="unit">EXP/h</span>
+                <span class="value" id="rolling-percent"></span><span class="unit per">/h</span>
+              </div>
+              <div class="row" id="session-row" hidden>
+                <span class="period">Session <span class="length" id="session-length"></span></span>
+                <span class="value" id="session-exp"></span><span class="unit">EXP/h</span>
+                <span class="value" id="session-percent"></span><span class="unit per">/h</span>
+              </div>
+            </div>
+            <p class="line" id="tracking-share" hidden></p>
+            <p class="line" id="tracking-deaths" hidden></p>
+          </div>
+          <!-- The game's own EXP gauge, as its status bar draws it: the last reading. -->
+          <div class="exp" id="tracking-exp" hidden>
+            <p class="exp-figures"><b>EXP</b> <span id="exp-figures"></span></p>
+            <div class="exp-gauge" id="exp-gauge" role="progressbar" aria-label="EXP this level" aria-valuemin="0" aria-valuemax="100">
+              <div class="exp-gauge-fill" id="exp-gauge-fill"></div>
+            </div>
           </div>
         </section>
       </div>

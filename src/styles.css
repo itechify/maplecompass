@@ -287,6 +287,31 @@ body {
   box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
 }
 
+/* The same light button with a word on it, where an icon couldn't say it: Undo. */
+.text-button {
+  flex: none;
+  box-sizing: border-box;
+  height: 19px;
+  padding: 0 7px;
+  border: 1px solid var(--window-edge);
+  border-radius: 2px;
+  background: var(--button-light);
+  box-shadow: inset 0 1px 0 #fff;
+  color: var(--ink);
+  font: 700 12px/17px var(--font);
+  text-shadow: none;
+  cursor: default;
+}
+
+.text-button:hover {
+  background: var(--button-light-hover);
+}
+
+.text-button:active {
+  background: var(--button-light);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
+}
+
 /* The expanded panel's bottom corners: drag one sideways to resize the panel (its height
    follows its content). A few dots, like a window's grip, in the corner's triangle. */
 .grip {
@@ -585,43 +610,8 @@ h2 {
   color: var(--ink-2);
 }
 
-/* The Grind Tracker: Time to Level over the rates, one line per figure, so the panel's
-   height only changes when a line comes or goes. */
-.tracking {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-#tracking-figures {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.tracking .waiting {
-  font-size: 13px;
-  color: var(--ink-2);
-}
-
-.tracking .headline {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.tracking .label {
-  font-size: 12px;
-  line-height: 15px;
-  color: var(--ink-2);
-}
-
-.tracking .time-to-level {
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 23px;
-}
-
+/* A tag beside a destination, a mob's element or the Grind Tracker's state: the game's
+   small label, untracked. */
 .tracking .tag,
 .portals .tag,
 .mob-card .tag,
@@ -635,32 +625,6 @@ h2 {
   font-size: 11px;
   font-weight: 700;
   line-height: 15px;
-}
-
-/* Paused, the figures are held: a state to notice, in the problem palette. */
-.tracking .tag.paused {
-  border-color: var(--problem-edge);
-  background: var(--problem-bg);
-  color: var(--problem-ink);
-}
-
-/* Rates still settling, or held while paused: the figures show, quieter. */
-.tracking:has(.tag.warmingUp) .time-to-level,
-.tracking:has(.tag.warmingUp) .rates td,
-.tracking:has(.tag.paused) .time-to-level,
-.tracking:has(.tag.paused) .rates td {
-  color: var(--ink-2);
-}
-
-.rates td {
-  font-weight: 700;
-  min-width: 72px;
-}
-
-.tracking .extra {
-  font-size: 12px;
-  line-height: 15px;
-  color: var(--ink-2);
 }
 
 /* The maps sharing the title, each led by what sets it apart; the shown one selected. */
@@ -1627,6 +1591,12 @@ body:has(#badge:not([hidden])) .icon .count {
   display: block;
 }
 
+/* Still settling, or held: a step back, as in the Grind Tracker. */
+.badge.held {
+  font-weight: 400;
+  background: var(--ink-2);
+}
+
 /* Draggable (inside the game, or detached): the title bar, or the collapsed icon, moves
    the panel. */
 .draggable .icon,
@@ -1684,6 +1654,4 @@ body:has(#badge:not([hidden])) .icon .count {
   .portals, .map-mobs { flex-wrap: wrap; row-gap: 2px; }
   .portals > h2, .map-mobs > h2 { flex: none; }
   .portals > .none, .map-mobs > .none { flex: none; max-width: 100%; }
-  /* The ceiling share and deaths wrap rather than lose the deaths. */
-  .panel .tracking .extra { white-space: normal; text-wrap: pretty; line-height: 16px; }
 }

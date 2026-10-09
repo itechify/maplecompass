@@ -91,6 +91,10 @@
           data: { status: "ready", summary: { mobsPerHour: { solo: 9120, fullParty: 14200 }, expPerHour: { solo: 1820400, fullParty: 2711000 } }, mobs: manyMobs, listedMobs: manyMobs.slice(0, 5), moreMobs: { count: 15, levels: { lowest: 35, highest: 77 } }, hiddenPortals: [] },
         }),
         collapsed: base({ expanded: false, notSure: true }),
+        // Collapsed while grinding: Time to Level on the badge; held, and with the EXP bar
+        // unread (the alert dot shows).
+        collapsedTracking: base({ expanded: false, expTracking: { state: "active", timeToLevelS: 2820, timeToLevelBadge: "47m", rolling: null, sessionAverage: null, ceilingShareHundredths: null, deaths: { count: 0, expLost: 0, percentLostHundredths: 0 } } }),
+        collapsedUnreadable: base({ expanded: false, expTracking: { state: "unreadable", timeToLevelS: 2820, timeToLevelBadge: "47m", rolling: null, sessionAverage: null, ceilingShareHundredths: null, deaths: { count: 0, expLost: 0, percentLostHundredths: 0 } } }),
         chosen: base({
           map: { id: "000000010", streetName: "Maple Road", mapName: "Mushroom Town", url: "" }, candidates: candidates(true, 0),
           data: { ...mushroomTown, hiddenPortals: [...mushroomTown.hiddenPortals, { name: "x", toMapId: "020000098", toMapName: "Orbis Tower <8th Floor>", toStreetName: "Orbis", toHiddenStreet: false, quest: false, position: "position unknown", spot: null }] },

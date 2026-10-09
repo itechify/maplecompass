@@ -1,6 +1,7 @@
 //! The Grind Tracker has a window of its own, beside the panel. It opens once the EXP
-//! bar is set, just below the panel, and follows the panel there until the player drags
-//! it somewhere; then it keeps that spot relative to the game window. The player closes
+//! bar is set, beside the panel with the tops level, and follows the panel there until
+//! the player drags it somewhere; then it keeps that spot relative to the game window,
+//! until they drag it back beside the panel. The player closes
 //! it with its × and opens it again from the panel (or Ctrl+Shift+G); closed, it stays
 //! closed across restarts, while the Session carries on underneath.
 //!
@@ -72,45 +73,53 @@ fn without_an_exp_bar_there_is_no_grind_tracker_window() {
 }
 
 #[test]
-fn with_the_exp_bar_set_it_opens_just_below_the_panel() {
+fn with_the_exp_bar_set_it_opens_beside_the_panel_tops_level() {
     let compass = started(tracking_settings());
     let state = compass.panel_state();
 
     assert!(state.grind_tracker.open);
-    // Right edges in line (2716), 8 px below the panel's bottom (582).
-    assert_eq!(tracker(state), Some(rect(2416, 590, 300, 150)));
+    // The panel is in the game's right half: the window goes towards its middle, 8 px
+    // left of the panel (2376), its top level with the panel's (510).
+    assert_eq!(tracker(state), Some(rect(2068, 510, 300, 150)));
 }
 
 #[test]
-fn until_dragged_it_follows_the_expanded_panel() {
+fn until_dragged_it_stays_beside_the_panel_s_top_however_tall_the_panel_grows() {
     let mut compass = started(tracking_settings());
 
-    // The panel grows with a map's data: the window moves down with its bottom.
+    // The panel grows with a map's data, down from its top, which stays: so does the
+    // window.
     let state = compass.set_panel_sizes(sizes(450));
-    assert_eq!(tracker(state), Some(rect(2416, 968, 300, 150)));
+    assert_eq!(state.placement, Some(rect(2376, 510, 340, 450)));
+    assert_eq!(tracker(state), Some(rect(2068, 510, 300, 150)));
 
-    // Collapsing the panel leaves it where the expanded panel would end.
+    // Collapsed, it goes beside the icon (2672,510).
     let state = compass.press_and_state(PanelControl::TogglePanel);
     assert!(!state.expanded);
-    assert_eq!(tracker(&state), Some(rect(2416, 968, 300, 150)));
+    assert_eq!(state.placement, Some(rect(2672, 510, 44, 44)));
+    assert_eq!(tracker(&state), Some(rect(2364, 510, 300, 150)));
 
-    // Docked, it goes below the docked panel, outside the game.
+    // Docked, it goes beside the docked panel (2733,110), away from the game.
     compass.press(PanelControl::TogglePanel);
     let state = compass.press_and_state(PanelControl::CyclePlacement);
-    let panel = state.placement.unwrap();
-    assert_eq!(tracker(&state), Some(rect(panel.x + 40, panel.y + 458, 300, 150)));
+    assert_eq!(state.placement, Some(rect(2733, 110, 340, 450)));
+    assert_eq!(tracker(&state), Some(rect(3081, 110, 300, 150)));
 }
 
 #[test]
-fn below_a_panel_reaching_the_screen_s_bottom_it_goes_above_it() {
+fn without_room_on_its_side_of_the_panel_it_goes_on_the_other() {
     let mut compass = started(tracking_settings());
+    // Docked left of a game window near the screen's left edge: the panel at (9,110),
+    // and no room left of it for the window, which goes right of it, over the game. There
+    // it would cover the Title Region (420..550, 150..198), so it moves the shortest way
+    // off it: down.
+    let near_the_edge = rect(350, 110, 1920, 1200);
+    compass.on_game_window(game(near_the_edge));
+    compass.press(PanelControl::CyclePlacement);
+    let state = compass.press_and_state(PanelControl::CyclePlacement);
 
-    // Too tall to fit below its spot, the panel moves up to (2376,410), down to 1310.
-    let state = compass.set_panel_sizes(sizes(900));
-    assert_eq!(state.placement, Some(rect(2376, 410, 340, 900)));
-
-    // 150 px more below that would reach past the screen (1440).
-    assert_eq!(tracker(state), Some(rect(2416, 252, 300, 150)));
+    assert_eq!(state.placement, Some(rect(9, 110, 340, 72)));
+    assert_eq!(tracker(&state), Some(rect(357, 198, 300, 150)));
 }
 
 #[test]
@@ -130,6 +139,25 @@ fn dragged_it_keeps_its_spot_relative_to_the_game_window() {
     assert_eq!(compass.settings().grind_tracker_at, Some(ClientOffset { x: 188, y: 190 }));
     let restarted = restart(&compass);
     assert_eq!(tracker(restarted.panel_state()), Some(rect(1000, 300, 300, 150)));
+}
+
+#[test]
+fn dragged_back_beside_the_panel_it_follows_the_panel_again() {
+    let mut compass = started(tracking_settings());
+    compass.act(Action::GrindTrackerMoved { x: 1000, y: 300 });
+
+    // Let go within an eighth of its width (37 px) of its spot beside the panel
+    // (2068,510): it goes there, and follows the panel from then on.
+    let state = compass.act(Action::GrindTrackerMoved { x: 2068 + 30, y: 510 - 20 });
+    assert_eq!(tracker(state), Some(rect(2068, 510, 300, 150)));
+    assert_eq!(compass.settings().grind_tracker_at, None);
+    compass.press(PanelControl::TogglePanel);
+    assert_eq!(tracker(compass.panel_state()), Some(rect(2364, 510, 300, 150)));
+
+    // A little further, it stays where it was let go.
+    compass.press(PanelControl::TogglePanel);
+    let state = compass.act(Action::GrindTrackerMoved { x: 2068 + 40, y: 510 });
+    assert_eq!(tracker(state), Some(rect(2108, 510, 300, 150)));
 }
 
 #[test]
@@ -172,7 +200,7 @@ fn the_panel_s_grind_tracker_button_and_ctrl_shift_g_open_and_close_it() {
     compass.press(PanelControl::CloseGrindTracker);
 
     assert_eq!(compass.press(PanelControl::ToggleGrindTracker), None);
-    assert_eq!(tracker(compass.panel_state()), Some(rect(2416, 590, 300, 150)));
+    assert_eq!(tracker(compass.panel_state()), Some(rect(2068, 510, 300, 150)));
 
     assert_eq!(compass.on_hotkey("ctrl+shift+g"), None);
     assert_eq!(tracker(compass.panel_state()), None);
@@ -209,7 +237,7 @@ fn it_hides_without_the_game_window_and_while_setup_is_open() {
     assert!(compass.panel_state().setup.window_open);
     assert_eq!(tracker(compass.panel_state()), None);
     compass.act(Action::CancelSetup);
-    assert_eq!(tracker(compass.panel_state()), Some(rect(2416, 590, 300, 150)));
+    assert_eq!(tracker(compass.panel_state()), Some(rect(2068, 510, 300, 150)));
 }
 
 #[test]

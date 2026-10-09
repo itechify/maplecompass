@@ -5,18 +5,189 @@
   padding-bottom: 10px;
 }
 
-/* Why the figures started afresh by themselves: quieter than the figures, as background
-   progress is in the panel. */
-.panel .tracking .switched {
+/* Notes on the glass, then the Session's figures set into the body, then the EXP bar's
+   last reading at the foot, where the game keeps its own. */
+.tracking {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tracking .notes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tracking .notes:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+/* Until the Session starts the notes are all there is to read, on the glass over any
+   scene: in the main ink, not the panel's quieter note ink. */
+.panel .tracking .note:not(.problem) {
+  color: var(--ink);
+}
+
+/* A reset can be undone until the next EXP gain: its note carries the button. */
+.panel .tracking .note.reset {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The window's densest reading, over the busiest scenes: set into the body on the
+   near-opaque lavender, as the panel's route and search results are. */
+.tracking .figures {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px 8px 6px 9px;
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--body);
+}
+
+/* Time to Level leads, with the button that starts the Session afresh at the far end:
+   away from the window's ×, and light, as buttons in a window's body are. */
+.tracking .headline {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.tracking .headline > * {
+  flex: none;
+  white-space: nowrap;
+}
+
+.tracking .headline .label {
   font-size: 12px;
-  line-height: 16px;
+  line-height: 15px;
+  color: var(--ink-2);
+}
+
+.tracking .time-to-level {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 23px;
+}
+
+/* No figure yet, or none to give: why, in words, not a dash. */
+.tracking .time-to-level.words {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 17px;
+  color: var(--ink-2);
+}
+
+.tracking .headline .icon-button {
+  align-self: center;
+  margin-left: auto;
+}
+
+/* Paused, the figures are held: a state to notice, in the problem palette. */
+.tracking .tag.paused {
+  border-color: var(--problem-edge);
+  background: var(--problem-bg);
+  color: var(--problem-ink);
+}
+
+/* The rates over the last 5 minutes and the whole Session, the panel's summary in
+   miniature: each figure beside its unit, the figures right-aligned in their columns. */
+.rates {
+  display: grid;
+  grid-template-columns: auto auto auto auto auto;
+  justify-content: start;
+  align-items: baseline;
+  row-gap: 1px;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--ink-2);
+}
+
+.rates .row {
+  display: contents;
+}
+
+.rates .period {
+  padding-right: 8px;
+  white-space: nowrap;
+}
+
+.rates .length {
   color: var(--ink-3);
 }
 
-/* The window is as narrow as the panel gets with a larger text scale: the ceiling share
-   and deaths wrap rather than lose the deaths. */
-.panel .tracking .extra {
+.rates .value {
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.rates .unit {
+  padding: 0 10px 0 4px;
+}
+
+/* "12.9%/h" reads as one: the unit sits against its figure. */
+.rates .unit.per {
+  padding: 0 0 0 1px;
+}
+
+.panel .tracking .line {
   white-space: normal;
   text-wrap: pretty;
+  font-size: 12px;
   line-height: 16px;
+  color: var(--ink-2);
+}
+
+/* Rates still settling, held while paused, or held while the bar can't be read (the note
+   above says why): the figures show in the light weight, a step back from the bold they
+   stand in when they move. Never faded: they stay as legible as ever. */
+.tracking.held .time-to-level,
+.tracking.held .rates .value {
+  font-weight: 400;
+}
+
+/* The EXP bar's last reading as the game's status bar draws it: "EXP" and its figures over
+   the lime gauge on a light grey track. It changes with every reading and never eases,
+   as the game's doesn't: no motion. */
+.exp {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.panel .exp-figures {
+  font-size: 12px;
+  line-height: 15px;
+  color: var(--ink);
+}
+
+.exp-figures b {
+  margin-right: 2px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.exp-gauge {
+  position: relative;
+  box-sizing: border-box;
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid var(--exp-frame);
+  border-radius: 2px;
+  background: var(--exp-track);
+  box-shadow: inset 0 1px 0 #fff;
+}
+
+.exp-gauge-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--exp-fill);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transform: scaleX(var(--filled, 0));
+  transform-origin: left center;
 }

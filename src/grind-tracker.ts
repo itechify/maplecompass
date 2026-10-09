@@ -8,79 +8,117 @@ type TrackerView = { shown: boolean; tracking: ExpTracking };
 
 const byId = (id: string) => document.getElementById(id)!;
 const panelEl = byId("panel");
-const toolbar = byId("toolbar");
-const resetSession = byId("reset-session");
-const trackingSwitched = byId("tracking-switched");
-const trackingWaiting = byId("tracking-waiting");
-const trackingFigures = byId("tracking-figures");
+const tracking = byId("tracking");
+const unreadable = byId("tracking-unreadable");
+const switched = byId("tracking-switched");
+const resetNote = byId("tracking-reset");
+const waiting = byId("tracking-waiting");
+const figures = byId("tracking-figures");
 const timeToLevel = byId("time-to-level");
-const trackingTag = byId("tracking-tag");
+const tag = byId("tracking-tag");
 const rollingExp = byId("rolling-exp");
-const sessionExp = byId("session-exp");
 const rollingPercent = byId("rolling-percent");
+const sessionRow = byId("session-row");
+const sessionLength = byId("session-length");
+const sessionExp = byId("session-exp");
 const sessionPercent = byId("session-percent");
-const trackingExtra = byId("tracking-extra");
+const share = byId("tracking-share");
+const deaths = byId("tracking-deaths");
+const exp = byId("tracking-exp");
+const expFigures = byId("exp-figures");
+const expGauge = byId("exp-gauge");
+const expGaugeFill = byId("exp-gauge-fill");
 
-/** "−" (U+2212) for a negative figure, as the deaths counter writes it. */
+/** "−" (U+2212) for a negative figure. */
 const signed = (text: string) => text.replace(/^-/, "−");
 
+/** A whole number as the game writes it: 8,435. */
+const whole = (n: number) => signed(n.toLocaleString("en-US"));
+
 /** 1234 hundredths -> "12.3%" with one decimal, "12%" with none: no finer than the
- *  figure can be trusted, so it doesn't flicker. */
-const percent = (hundredths: number, decimals = 1) =>
+ *  figure can be trusted, so it doesn't flicker. From 100% on, whole percents. */
+const percent = (hundredths: number, decimals = Math.abs(hundredths) >= 10_000 ? 0 : 1) =>
   signed(`${(hundredths / 100).toFixed(decimals)}%`);
 
-/** An EXP rate to 3 significant figures: 840, 6,120, 61.2k, 1.23M. */
-function compact(n: number): string {
-  const abs = Math.abs(n);
-  if (abs < 10_000) return signed(Number(n.toPrecision(3)).toLocaleString("en-US"));
-  // 999,999 rounds to 1,000k: write it 1M.
-  const [value, unit] = Number((abs / 1_000).toPrecision(3)) < 1_000 ? [n / 1_000, "k"] : [n / 1_000_000, "M"];
-  return signed(`${Number(value.toPrecision(3))}${unit}`);
+/** An EXP rate to 3 significant figures, written out as the panel writes its rates:
+ *  840, 6,120, 61,200, 1,230,000. */
+const rate = (n: number) => whole(Number(n.toPrecision(3)));
+
+/** A Session's length: "7m", "1h 12m". */
+function length(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const [h, m] = [Math.floor(minutes / 60), minutes % 60];
+  return h === 0 ? `${m}m` : m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
-const TRACKING_TAGS: Partial<Record<ExpTracking["state"], string>> = {
+const TAGS: Partial<Record<ExpTracking["state"], string>> = {
   warmingUp: "warming up",
   paused: "paused",
 };
 
-/** The Grind Tracker: a quiet line until the Session starts, then Time to Level, the
- *  rates, and the ceiling and deaths when the state carries them. "—" for any figure not
- *  there yet. Above them, when the Session started afresh by itself, why. */
-function render({ shown, tracking }: TrackerView) {
+/** Why there is no Time to Level, in words: never a bare dash beside the label. */
+function noTimeToLevel(rolling: ExpRate | null) {
+  if (rolling && rolling.expPerHour < 0) return "losing EXP";
+  if (rolling && rolling.expPerHour === 0) return "no gain yet";
+  return "not yet";
+}
+
+/** The Grind Tracker: a line until the Session starts, then Time to Level over the rates
+ *  and what else the Session carries; the EXP bar's last reading at the foot, from the
+ *  first reading on. Above them, why the figures went or can't move. */
+function render({ shown, tracking: t }: TrackerView) {
   // Not showing, the window draws nothing (the shell lets clicks through it).
   document.body.classList.toggle("hidden", !shown);
-  const waiting = tracking.state === "waiting" || tracking.state === "off";
-  trackingWaiting.hidden = !waiting;
-  trackingFigures.hidden = waiting;
-  trackingSwitched.hidden = !tracking.characterSwitched;
-  // The reset icon, while there is a Session to reset.
-  resetSession.hidden = waiting;
+  const started = t.rolling !== null || t.state === "warmingUp" || t.state === "active" || t.state === "paused";
+  tracking.dataset.state = t.state;
+  // Rates still settling, held while paused, or the bar out of sight: the figures step back.
+  tracking.classList.toggle("held", t.state !== "active");
 
-  timeToLevel.textContent = tracking.timeToLevelBadge ?? "—";
-  const tag = TRACKING_TAGS[tracking.state];
-  trackingTag.hidden = !tag;
-  trackingTag.textContent = tag ?? "";
-  trackingTag.className = `tag ${tracking.state}`;
+  unreadable.hidden = t.state !== "unreadable";
+  switched.hidden = !t.characterSwitched;
+  resetNote.hidden = !t.resetUndoable;
+  waiting.hidden = started || t.state === "unreadable";
 
-  const exp = (rate: ExpRate | null) => (rate ? compact(rate.expPerHour) : "—");
-  const share = (rate: ExpRate | null) =>
-    rate?.percentPerHourHundredths != null ? percent(rate.percentPerHourHundredths) : "—";
-  rollingExp.textContent = exp(tracking.rolling);
-  sessionExp.textContent = exp(tracking.sessionAverage);
-  rollingPercent.textContent = share(tracking.rolling);
-  sessionPercent.textContent = share(tracking.sessionAverage);
+  figures.hidden = !started;
+  timeToLevel.textContent = t.timeToLevelBadge ?? noTimeToLevel(t.rolling);
+  timeToLevel.classList.toggle("words", !t.timeToLevelBadge);
+  const label = TAGS[t.state];
+  tag.hidden = !label;
+  tag.textContent = label ?? "";
+  tag.className = `tag ${t.state}`;
 
-  const extra = [];
-  if (tracking.ceilingShareHundredths !== null) {
-    extra.push(`${percent(tracking.ceilingShareHundredths, 0)} of the map's solo ceiling`);
+  const expPerHour = (r: ExpRate | null) => (r ? rate(r.expPerHour) : "–");
+  const percentPerHour = (r: ExpRate | null) =>
+    r?.percentPerHourHundredths != null ? percent(r.percentPerHourHundredths) : "–";
+  rollingExp.textContent = expPerHour(t.rolling);
+  rollingPercent.textContent = percentPerHour(t.rolling);
+  // Only once the Session is longer than the Rolling Rate's window does its average say
+  // something else.
+  sessionRow.hidden = t.activeS <= t.rollingS;
+  sessionLength.textContent = length(t.activeS);
+  sessionExp.textContent = expPerHour(t.sessionAverage);
+  sessionPercent.textContent = percentPerHour(t.sessionAverage);
+
+  const shareOf = t.ceilingShareHundredths;
+  share.hidden = shareOf === null || t.soloExpCeiling === null;
+  if (shareOf !== null && t.soloExpCeiling !== null) {
+    share.textContent = `${percent(shareOf, shareOf < 1000 ? 1 : 0)} of this map's solo EXP/h (${whole(t.soloExpCeiling)})`;
   }
-  const { deaths } = tracking;
-  if (deaths.count > 0) {
-    // No-break spaces: where the line wraps, the deaths read as one.
-    extra.push(`deaths: ${deaths.count} (${percent(-deaths.percentLostHundredths)})`);
+  const died = t.deaths.count;
+  deaths.hidden = died === 0;
+  // No-break spaces: where the line wraps, the loss reads as one.
+  const lost = percent(-t.deaths.percentLostHundredths);
+  deaths.textContent = `${died} ${died === 1 ? "death" : "deaths"} (${lost} of the level)`;
+
+  exp.hidden = !t.bar;
+  if (t.bar) {
+    // As the bar writes it: "8,435 [41.72%]".
+    const reading = `${whole(t.bar.exp)} [${(t.bar.percentHundredths / 100).toFixed(2)}%]`;
+    expFigures.textContent = reading;
+    expGauge.setAttribute("aria-valuenow", String(t.bar.percentHundredths / 100));
+    expGauge.setAttribute("aria-valuetext", `EXP ${reading}`);
+    expGaugeFill.style.setProperty("--filled", String(Math.min(t.bar.percentHundredths, 10_000) / 10_000));
   }
-  trackingExtra.textContent = extra.join(" · ");
-  trackingExtra.hidden = extra.length === 0;
   reportHeight();
 }
 
@@ -109,8 +147,8 @@ document.addEventListener("mousedown", (e) => {
   if (e.button === 0 && onHeader) getCurrentWindow().startDragging();
 });
 
-// Reset and close, through the core like the panel's icons.
-toolbar.addEventListener("click", (e) => {
+// Close, reset and undo, through the core like the panel's icons.
+panelEl.addEventListener("click", (e) => {
   const button = e.target instanceof Element ? e.target.closest<HTMLButtonElement>("button[data-control]") : null;
   if (button) invoke("panel_press", { control: button.dataset.control });
 });
