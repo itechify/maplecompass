@@ -16,9 +16,9 @@ mod common;
 
 use common::{FakeSource, saved_search};
 use compass_core::{
-    Action, Compass, ExpBarRegion, GameWindow, ItemChoice, ItemHit, ItemLookup, ItemTooltip, ItemTooltipReading,
-    OurWindow, PanelSizes, PanelState, Rect, Request, ScreenRect, Settings, Size, SourceError, TitleRegion,
-    meowdb,
+    Action, Compass, ExpBarRegion, Foreground, GameWindow, ItemChoice, ItemHit, ItemLookup, ItemTooltip,
+    ItemTooltipReading, OurWindow, PanelSizes, PanelState, Rect, Request, ScreenRect, Settings, Size, SourceError,
+    TitleRegion, meowdb,
 };
 
 const GAME: ScreenRect = ScreenRect { x: 812, y: 110, width: 1920, height: 1200 };
@@ -477,6 +477,21 @@ fn there_is_no_alert_before_a_lookup_or_once_its_line_goes() {
 
     assert!(compass.tick(6_999).item_lookup_placement.is_some());
     assert_eq!(compass.tick(7_000).item_lookup_placement, None);
+}
+
+#[test]
+fn the_alert_hides_while_another_app_is_in_front_of_the_game_and_shows_again_until_it_goes() {
+    let mut compass = started();
+    let shown = look_up(&mut compass, "Zqxv Nothing", 1_000).item_lookup_placement;
+    assert!(shown.is_some());
+
+    // The browser, say, with the page an Item Lookup opened.
+    assert_eq!(compass.on_foreground(Foreground::OtherApp).item_lookup_placement, None);
+
+    assert_eq!(compass.on_foreground(Foreground::Game).item_lookup_placement, shown);
+    compass.on_foreground(Foreground::OtherApp);
+    assert_eq!(compass.on_foreground(Foreground::MapleCompass).item_lookup_placement, shown);
+    assert_eq!(compass.tick(7_000).item_lookup_placement, None, "it goes when it would have");
 }
 
 #[test]

@@ -1,6 +1,7 @@
-//! The Grind Tracker's window: borderless like the overlay, kept just above the game in
-//! the z-order the same way, clickable but never activated by a click (`focusable:
-//! false` in `tauri.conf.json`, ADR 0001). Like the overlay it is declared in
+//! The Grind Tracker's window: borderless like the overlay, and like it on top of
+//! everything while it shows (only while the game or one of our windows is in front),
+//! clickable but never activated by a click (`focusable: false` in `tauri.conf.json`,
+//! ADR 0001). Like the overlay it is declared in
 //! `tauri.conf.json` (creating windows inside commands can deadlock on Windows) and is
 //! never hidden: while the core says it doesn't show, the page draws nothing and every
 //! click goes through. (Showing a hidden window again either activates it, taking the
@@ -11,7 +12,7 @@
 
 use crate::sizemove::{self, Gesture, SizeMove};
 use crate::view::{LastView, ViewSender};
-use crate::{Command, LOOP_START_GRACE, keep_just_above_game, physical, place};
+use crate::{Command, LOOP_START_GRACE, keep_on_top, physical, place};
 use compass_core::{ExpTracking, PanelState, Size};
 use serde::Serialize;
 use std::sync::Arc;
@@ -54,8 +55,9 @@ pub struct GrindTrackerWindow {
     app: AppHandle,
     window: WebviewWindow,
     shown: bool,
-    /// Tells its z-order keeper to hold it just above the game.
-    above_game: Arc<AtomicBool>,
+    /// Tells its watcher the core shows it, so it keeps it on top while the game or one
+    /// of our windows is in front.
+    shows_on_top: Arc<AtomicBool>,
     /// Its content's height in CSS px, as the page last reported it.
     height: f64,
     drag: Option<Drag>,
@@ -67,17 +69,17 @@ impl GrindTrackerWindow {
         let window = app.get_webview_window(GRIND_TRACKER).expect("grind-tracker window in tauri.conf.json");
         app.manage(GrindTrackerView::default());
         // Without it the player's drags don't stick, but the window works.
-        if let Err(e) = sizemove::watch(&window, commands, Command::GrindTrackerSizeMove, None) {
+        if let Err(e) = sizemove::watch(&window, commands.clone(), Command::GrindTrackerSizeMove, None) {
             eprintln!("{e}");
         }
-        let above_game = keep_just_above_game(&window, "z-order-grind-tracker");
+        let shows_on_top = keep_on_top(&window, "on-top-grind-tracker", commands);
         // Clicks pass through until it shows.
         let _ = window.set_ignore_cursor_events(true);
         Self {
             app: app.clone(),
             window,
             shown: false,
-            above_game,
+            shows_on_top,
             height: DEFAULT_HEIGHT,
             drag: None,
             view: ViewSender::new(GRIND_TRACKER, "grind-tracker-state"),
@@ -131,7 +133,7 @@ impl GrindTrackerWindow {
         let placement = state.grind_tracker.placement;
         let view = TrackerView { shown: placement.is_some(), tracking: &state.exp_tracking };
         self.view.send(&self.app, &view, &self.app.state::<GrindTrackerView>().0);
-        self.above_game.store(placement.is_some(), Ordering::Relaxed);
+        self.shows_on_top.store(placement.is_some(), Ordering::Relaxed);
         let dragging = self.under_way();
         if let Some(placement) = placement {
             // While the player drags it the position is theirs; once they let go it goes

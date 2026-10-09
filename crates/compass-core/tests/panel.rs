@@ -13,7 +13,7 @@ mod common;
 use common::FakeSource;
 use common::world::SEARCH;
 use compass_core::{
-    Action, Compass, DEFAULT_PANEL_WIDTH, ExpBarRegion, GameWindow, Layer, MIN_PANEL_WIDTH, PanelSizes,
+    Action, Compass, DEFAULT_PANEL_WIDTH, ExpBarRegion, Foreground, GameWindow, Layer, MIN_PANEL_WIDTH, PanelSizes,
     PlacementMode, Rect, ScreenRect,
     Settings, Size, TitleRegion,
 };
@@ -322,9 +322,73 @@ fn the_chosen_placement_survives_a_restart() {
     assert_eq!(state.placement, Some(rect(2733, 110, 340, 72)));
 }
 
-// Z-order and the mouse. Wherever it is placed, the overlay belongs to the game: it sits
-// just above it, so whatever covers the game covers the overlay too, and it disappears
-// with the game.
+// Z-order and the mouse. Wherever it is placed, the overlay belongs to the game: it shows
+// on top of everything, but only while the game or one of MapleCompass's own windows is
+// in front, and it disappears with the game or behind another app.
+
+#[test]
+fn with_another_app_in_front_of_the_game_the_overlay_hides() {
+    let mut compass = compass();
+    compass.on_game_window(game(GAME));
+
+    let state = compass.on_foreground(Foreground::OtherApp);
+
+    assert_eq!(state.layer, Layer::Hidden);
+    assert!(!state.draggable);
+}
+
+#[test]
+fn a_detached_panel_hides_with_another_app_in_front_too_wherever_it_is() {
+    let mut compass = compass();
+    compass.on_game_window(game(GAME));
+    detach(&mut compass);
+    // On a monitor of its own, say.
+    compass.act(Action::PanelMoved { x: 3000, y: 100 });
+
+    let state = compass.on_foreground(Foreground::OtherApp);
+
+    assert_eq!(state.layer, Layer::Hidden);
+    assert_eq!(state.placement, Some(rect(3000, 100, 340, 72)), "it keeps its spot");
+}
+
+#[test]
+fn with_the_game_or_maplecompass_back_in_front_the_overlay_shows_again_where_it_was() {
+    let mut compass = compass();
+    let shown = compass.on_game_window(game(GAME)).clone();
+
+    for foreground in [Foreground::Game, Foreground::MapleCompass] {
+        compass.on_foreground(Foreground::OtherApp);
+        let state = compass.on_foreground(foreground);
+
+        assert_eq!(state.layer, Layer::AboveGame, "{foreground:?}");
+        assert!(state.draggable, "{foreground:?}");
+        assert_eq!(state.placement, shown.placement, "{foreground:?}");
+    }
+}
+
+#[test]
+fn without_the_game_the_overlay_hides_whatever_is_in_front() {
+    let mut compass = compass();
+    compass.on_game_window(game(GAME));
+    detach(&mut compass);
+    compass.on_game_window(None);
+
+    for foreground in [Foreground::Game, Foreground::MapleCompass, Foreground::OtherApp] {
+        let state = compass.on_foreground(foreground);
+
+        assert_eq!(state.layer, Layer::Hidden, "detached, {foreground:?}");
+        assert!(!state.draggable, "{foreground:?}");
+    }
+}
+
+#[test]
+fn until_the_shell_says_what_is_in_front_the_overlay_shows_with_the_game() {
+    let mut compass = compass();
+
+    let state = compass.on_game_window(game(GAME));
+
+    assert_eq!(state.layer, Layer::AboveGame, "no hidden flash at launch");
+}
 
 #[test]
 fn inside_or_docked_the_overlay_sits_above_the_game_and_disappears_without_it() {

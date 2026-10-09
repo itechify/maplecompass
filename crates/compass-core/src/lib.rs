@@ -192,7 +192,8 @@ pub struct PanelState {
     /// the panel is detached. Inside the game it never covers `title_region` or
     /// `exp_bar_region`: the overlay shows in screen captures, ours included.
     pub placement: Option<ScreenRect>,
-    /// Where the overlay sits in the z-order, or hidden.
+    /// Whether the overlay shows, on top of everything, or is hidden: it shows only with
+    /// the game, while the game or one of our windows is in front.
     pub layer: Layer,
     /// The player can drag the panel by its header (inside or detached). The overlay is
     /// clickable whenever it shows, and never takes the keyboard on a click (ADR 0001).
@@ -232,7 +233,8 @@ pub struct PanelState {
     /// What the latest Item Lookup came to, for a few seconds; `None` once it has gone.
     pub item_lookup: Option<ItemLookupLine>,
     /// Where its alert goes on screen: at the top centre of the game window, clear of the
-    /// captured regions; `None` while there is none or no game window.
+    /// captured regions; `None` while there is none, no game window, or another app in
+    /// front (see [`Layer`]).
     pub item_lookup_placement: Option<ScreenRect>,
 }
 
@@ -563,7 +565,9 @@ impl Compass {
             Action::LaunchedAgain => {
                 if self.setup.state().window_open {
                     // Setup shows already.
-                } else if self.panel.layer() != Layer::Hidden {
+                } else if self.panel.game.is_some() {
+                    // It shows with the game, even if the app the player started it from
+                    // is in front for now.
                     self.panel.expanded = true;
                 } else {
                     self.setup.request();
@@ -760,10 +764,12 @@ impl Compass {
         self.requests.pop_front()
     }
 
-    /// Another window came to the front. The hotkeys are live while the game or one of
-    /// our windows is in front, and nowhere else.
+    /// Another window came to the front. The hotkeys are live, and the overlay, the Grind
+    /// Tracker's window and the Item Lookup alert show (with the game), while the game or
+    /// one of our windows is in front, and nowhere else (see [`Layer`]).
     pub fn on_foreground(&mut self, foreground: Foreground) -> &PanelState {
         self.state.hotkeys_live = foreground != Foreground::OtherApp;
+        self.panel.foreground = Some(foreground);
         self.sync_panel()
     }
 
@@ -968,11 +974,14 @@ impl Compass {
     }
 
     /// The Item Lookup's alert, at the top centre of the game window while it has one,
-    /// clear of the captured regions.
+    /// clear of the captured regions; only while the overlay can show (see [`Layer`]).
     fn sync_item_lookup(&mut self) {
         let line = self.item_lookups.line();
+        let shows = self.panel.layer() != Layer::Hidden;
         self.state.item_lookup_placement = match (&line, &self.panel.game) {
-            (Some(_), Some(game)) => Some(item_lookup::alert_placement(game, self.item_lookup_size, &self.panel.avoid)),
+            (Some(_), Some(game)) if shows => {
+                Some(item_lookup::alert_placement(game, self.item_lookup_size, &self.panel.avoid))
+            }
             _ => None,
         };
         self.state.item_lookup = line;
@@ -997,9 +1006,13 @@ impl Compass {
     }
 
     /// The Grind Tracker's window shows while the player wants it and there is something
-    /// to track, but not while setup is open (it may be marking the EXP bar).
+    /// to track, but not while setup is open (it may be marking the EXP bar), and only
+    /// while the overlay can show (see [`Layer`]).
     fn sync_grind_tracker(&mut self) {
-        let shows = self.grind_tracker.open && self.tracking_on() && !self.state.setup.window_open;
+        let shows = self.grind_tracker.open
+            && self.tracking_on()
+            && !self.state.setup.window_open
+            && self.panel.layer() != Layer::Hidden;
         let placement = match (&self.panel.game, self.panel.placement()) {
             (Some(game), Some(panel)) if shows => {
                 Some(self.grind_tracker.placement(game, panel, self.panel.mode, &self.panel.avoid))
