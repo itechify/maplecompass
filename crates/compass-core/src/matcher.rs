@@ -177,7 +177,7 @@ fn read_numeral(reading: &[char], stem: &[char]) -> Option<Vec<char>> {
 /// RoadI") and punctuation carries little signal. Glyphs the game font draws as one
 /// upright stroke (I, l, 1, |, !) are folded together, on both sides of a match, and
 /// an unknown glyph is kept, so a misread numeral counts as misread rather than absent.
-fn key(s: &str) -> Vec<char> {
+pub(crate) fn key(s: &str) -> Vec<char> {
     s.chars()
         .flat_map(char::to_lowercase)
         .filter_map(|c| match c {
@@ -196,7 +196,7 @@ fn score(street: &[char], map: &[char], known: &KnownMap) -> f32 {
     if len == 0 { 0.0 } else { 1.0 - edits as f32 / len as f32 }
 }
 
-fn levenshtein(a: &[char], b: &[char]) -> usize {
+pub(crate) fn levenshtein(a: &[char], b: &[char]) -> usize {
     let mut prev: Vec<usize> = (0..=b.len()).collect();
     let mut cur = vec![0; b.len() + 1];
     for (i, ca) in a.iter().enumerate() {

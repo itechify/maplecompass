@@ -115,6 +115,22 @@ type Candidates = {
 /** Mirror of `compass_core::ExpBar`. */
 type ExpBar = { exp: number; percentHundredths: number };
 
+/** Mirror of `compass_core::ItemChoice`: one of several MeowDB items sharing a name. */
+type ItemChoice = { id: string; name: string; category: string | null; url: string };
+
+/** Mirror of `compass_core::ItemLookupLine`: what the latest Item Lookup came to. */
+type ItemLookupLine = { lookup: number } & (
+  | { status: "lookingUp"; read: string }
+  | { status: "opened"; name: string; url: string }
+  | { status: "choose"; read: string; items: ItemChoice[] }
+  | { status: "noTooltip" }
+  | { status: "unreadable" }
+  | { status: "covered"; by: "panel" | "grindTracker" }
+  | { status: "notFound"; read: string }
+  | { status: "unreachable" }
+  | { status: "formatChanged" }
+);
+
 /** Mirror of `compass_core::PanelState`. */
 type PanelState = {
   recognition: Recognition;
@@ -148,6 +164,8 @@ type PanelState = {
   /** Mirror of `compass_core::GrindTrackerWindow`: the player wants it open. */
   grindTracker: { open: boolean };
   search: SearchState;
+  /** The latest Item Lookup's line, for a few seconds. */
+  itemLookup: ItemLookupLine | null;
 };
 
 const byId = (id: string) => document.getElementById(id)!;
@@ -168,6 +186,9 @@ const portalRows = byId("portal-rows");
 const footer = byId("footer");
 const credit = byId("credit");
 const hotkeyProblem = byId("hotkey-problem");
+const itemLookupEl = byId("item-lookup");
+const itemLookupLine = byId("item-lookup-line");
+const itemChoices = byId("item-choices");
 const grindTracker = byId("grind-tracker");
 const badge = byId("badge");
 const mapMobs = byId("map-mobs");
@@ -881,6 +902,83 @@ mobRows.addEventListener("click", (e) => {
   hoverMob(null);
 });
 
+/** How long the core keeps an Item Lookup's line (ms): the line fades out over its last second. */
+const ITEM_LOOKUP_LINE_MS = 6_000;
+const ITEM_CHOICES_MS = 30_000;
+
+/** What the latest Item Lookup came to, in a sentence; and whether it's a problem. */
+function itemLookupText(line: ItemLookupLine, key: string): [string, boolean] {
+  switch (line.status) {
+    case "lookingUp":
+      return [`Looking up ${line.read} on MeowDB…`, false];
+    case "opened":
+      return [`Opened ${line.name} on MeowDB.`, false];
+    case "choose":
+      return [`${line.items.length} MeowDB items are named ${line.read}. Pick yours:`, false];
+    case "noTooltip":
+      return [`No item tooltip by the pointer. Hover an item until its tooltip shows, then press ${key}.`, true];
+    case "unreadable":
+      return [`Couldn't read the item's name. Press ${key} again with its tooltip in clear view.`, true];
+    case "covered":
+      return [
+        `The ${line.by === "panel" ? "panel" : "Grind Tracker"} is covering the item's name. Move one of them, then press ${key} again.`,
+        true,
+      ];
+    case "notFound":
+      return [`No MeowDB item is named “${line.read}”.`, true];
+    case "unreachable":
+      return ["MeowDB can't be reached right now.", true];
+    case "formatChanged":
+      return ["Item lookup is unavailable: MeowDB's search has changed.", true];
+  }
+}
+
+/** One of the items sharing the name read: a link to its MeowDB page, with its category. */
+function itemChoiceRow(item: ItemChoice, label: string): HTMLLIElement {
+  const row = document.createElement("li");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "item-choice";
+  button.dataset.id = item.id;
+  button.title = `Open ${item.name} on MeowDB`;
+  button.append(span("item-choice-name", item.name), span("item-choice-category", label));
+  row.append(button);
+  return row;
+}
+
+/**
+ * Item Lookup's line under the title: shown afresh for each lookup, it fades out as the
+ * core lets it go. With several items sharing the name, they're listed to pick from.
+ */
+function renderItemLookup(panel: PanelState) {
+  const line = panel.itemLookup;
+  if (!changed("itemLookup", line, panel.hotkeys.itemLookup)) return;
+  itemLookupEl.hidden = !line;
+  if (!line) return;
+  const [text, problem] = itemLookupText(line, keyLabel(panel.hotkeys.itemLookup));
+  itemLookupLine.textContent = text;
+  itemLookupLine.classList.toggle("problem", problem);
+  const items = line.status === "choose" ? line.items : [];
+  // Items sharing a category too (a male and a female version) are told apart by number.
+  const label = (item: ItemChoice) => item.category ?? "Item";
+  const shared = (item: ItemChoice) => items.filter((other) => label(other) === label(item)).length > 1;
+  itemChoices.replaceChildren(
+    ...items.map((item) => itemChoiceRow(item, shared(item) ? `${label(item)} · No. ${item.id}` : label(item))),
+  );
+  itemChoices.hidden = items.length === 0;
+  // Waiting on MeowDB, it stays; otherwise it fades out over its last second.
+  itemLookupEl.classList.toggle("stays", line.status === "lookingUp");
+  itemLookupEl.style.setProperty("--item-lookup-ms", `${line.status === "choose" ? ITEM_CHOICES_MS : ITEM_LOOKUP_LINE_MS}ms`);
+  itemLookupEl.style.animation = "none";
+  void itemLookupEl.offsetWidth;
+  itemLookupEl.style.animation = "";
+}
+
+itemChoices.addEventListener("click", (e) => {
+  const button = e.target instanceof Element ? e.target.closest<HTMLElement>(".item-choice") : null;
+  if (button?.dataset.id) invoke("pick_item", { id: button.dataset.id });
+});
+
 /** The collapsed icon: the shown map's Hidden Portal count, and a dot when something needs a look. */
 function renderIcon(panel: PanelState) {
   const data = panel.data.status === "ready" || panel.data.status === "savedCopy" ? panel.data : null;
@@ -951,6 +1049,7 @@ function render(panel: PanelState) {
       : "Close the other app, or edit %APPDATA%\com.itechify.maplecompass\settings.json, then restart MapleCompass."
   }`;
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
+  renderItemLookup(panel);
   // The world crawl, while it runs, with or without a search: "Mapping the world: 312
   // of 422 maps known". Search can only find mobs on the maps known so far.
   renderCrawl(crawlProgress, panel.search, panel.gameFound);
