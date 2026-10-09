@@ -355,6 +355,10 @@ struct Figures {
     /// Active time when the Visit under way started: the share of the map's ceiling
     /// counts only the play since.
     visit_from: u64,
+    /// Active time from which Last 5 min counts towards the Visit's Personal Best, and is
+    /// measured against the best: when the Visit started, or when the player last forgot
+    /// the Visit's best since.
+    best_from: u64,
 }
 
 impl Figures {
@@ -368,6 +372,7 @@ impl Figures {
             deaths: Deaths::default(),
             warmed_up: false,
             visit_from: 0,
+            best_from: 0,
         }
     }
 
@@ -571,6 +576,7 @@ impl Session {
             // Reset on another map: the EXP hasn't changed since, so the time from then
             // to arriving here counts as it would have.
             figures.visit_from = figures.active(self.visit.at);
+            figures.best_from = figures.visit_from;
         }
         self.figures = Some(figures);
         self.largest_gain_hundredths = undo.largest_gain_hundredths;
@@ -581,9 +587,17 @@ impl Session {
     }
 
     /// The player forgot the higher of `map`'s Personal Best and this Visit's best there:
-    /// the line shows at once what is left.
+    /// the line shows at once what is left. After forgetting this Visit's, only windows
+    /// that start from now count, here and in the Session a reset set aside: the one
+    /// forgotten may still be in Last 5 min.
     pub fn forget_best(&mut self, map: &str) {
-        self.bests.forget(map);
+        if self.bests.forget(map) {
+            let now = self.now;
+            let set_aside = self.undo.as_mut().map(|undo| &mut undo.figures);
+            for figures in [self.figures.as_mut(), set_aside].into_iter().flatten() {
+                figures.best_from = figures.active(now);
+            }
+        }
         self.shown = None;
     }
 
@@ -595,6 +609,7 @@ impl Session {
         self.bests.end_visit();
         if let Some(figures) = &mut self.figures {
             figures.visit_from = figures.active(now);
+            figures.best_from = figures.visit_from;
         }
     }
 
@@ -668,9 +683,10 @@ impl Session {
             Some(shown) if holds => shown.tracking.state = fresh.state,
             _ => {
                 if let Some(map) = map {
-                    // Last 5 min shown over a full 5 minutes of active play here counts
-                    // towards this Visit's best, unless nothing is known of the EXP.
-                    let here = self.figures.as_ref().map(|f| f.rolling_since(self.now, f.visit_from));
+                    // Last 5 min shown over a full 5 minutes of active play here (since the
+                    // player last forgot this Visit's best, if they did) counts towards
+                    // this Visit's best, unless nothing is known of the EXP.
+                    let here = self.figures.as_ref().map(|f| f.rolling_since(self.now, f.best_from));
                     let full = here.filter(|h| h.over_ms >= ROLLING_MS && h.exp > 0);
                     let counted = full.filter(|_| !unreadable).map(|here| here.per_hour(1, 1) as u64);
                     self.bests.shown(map, counted, now_unix_ms);

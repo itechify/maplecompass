@@ -129,14 +129,30 @@ impl Bests {
         visits.insert(below, best);
     }
 
-    /// Forget the higher of `map`'s Personal Best and this Visit's best there: the next-best
-    /// Visit's takes over.
-    pub fn forget(&mut self, map: &str) {
-        let maps = &mut self.earlier.maps;
-        let Some(at) = maps.iter().position(|m| m.id == map) else { return };
-        maps[at].visits.remove(0);
-        if maps[at].visits.is_empty() {
-            maps.remove(at);
+    /// Forget the higher of `map`'s Personal Best and this Visit's best there, as the line
+    /// shows them: this Visit's once it has beaten the other (or there is no other), the
+    /// other otherwise. The next-best Visit's takes over. Whether it was this Visit's.
+    pub fn forget(&mut self, map: &str) -> bool {
+        let this = self.visit.iter().position(|(id, _)| id == map);
+        let earlier = self.earlier.maps.iter().position(|m| m.id == map);
+        let top = earlier.and_then(|at| self.earlier.maps[at].visits.first());
+        match this {
+            Some(at) if top.is_none_or(|top| self.visit[at].1.exp_per_hour > top.exp_per_hour) => {
+                self.visit.remove(at);
+                true
+            }
+            _ => {
+                if let Some(at) = earlier {
+                    let visits = &mut self.earlier.maps[at].visits;
+                    if !visits.is_empty() {
+                        visits.remove(0);
+                    }
+                    if visits.is_empty() {
+                        self.earlier.maps.remove(at);
+                    }
+                }
+                false
+            }
         }
     }
 

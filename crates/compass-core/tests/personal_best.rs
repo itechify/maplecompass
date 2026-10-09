@@ -566,3 +566,51 @@ fn forgetting_the_best_this_visit_has_not_beaten_leaves_the_next_best_visit_to_c
     let forgot = player.press(PanelControl::ForgetBest);
     assert_eq!(forgot.exp_tracking.personal_best, best(7200, Some(5000), None));
 }
+
+#[test]
+fn forgetting_this_visits_best_once_it_beat_the_best_counts_only_windows_that_start_after() {
+    let (mut player, _) = back_on_sunset_sky_after_a_best_of_7200();
+
+    // A bad jump: 36,000 EXP/h for 5 minutes, 500% of 7,200, a new best.
+    let jump = player.hunt(5 * MIN, 100);
+    assert_eq!(jump.exp_tracking.personal_best, best(7200, Some(50_000), Some(36_000)));
+
+    // Forget takes this Visit's 36,000: the 7,200 is left, and the window starts over.
+    let forgot = player.press(PanelControl::ForgetBest);
+    assert_eq!(forgot.exp_tracking.personal_best, best(7200, None, None));
+
+    // 3,600 EXP/h for 2 minutes: Last 5 min still has 3 minutes of the jump, 23,040 EXP/h,
+    // and it isn't recorded again.
+    let after = player.hunt(2 * MIN, 10);
+    assert_eq!(rolling(&after), Some(23_040));
+    assert_eq!(after.exp_tracking.personal_best, best(7200, None, None));
+
+    // 5 minutes since the Forget: Last 5 min's 3,600 EXP/h is 50% of 7,200.
+    let five = player.hunt(3 * MIN, 10);
+    assert_eq!(rolling(&five), Some(3600));
+    assert_eq!(five.exp_tracking.personal_best, best(7200, Some(5000), None));
+
+    // 10,800 EXP/h for 5 minutes beats it: a new best since the Forget.
+    let beaten = player.hunt(5 * MIN, 30);
+    assert_eq!(beaten.exp_tracking.personal_best, best(7200, Some(15_000), Some(10_800)));
+
+    // That is this Visit's best when it ends: the 36,000 never joins Sunset Sky's.
+    player.arrive(CONSTRUCTION_SITE);
+    player.hunt(MIN, 30);
+    let next = player.arrive(SUNSET);
+    assert_eq!(next.exp_tracking.personal_best, best(10_800, None, None));
+}
+
+#[test]
+fn a_forgotten_best_is_not_recorded_again_from_a_session_whose_reset_is_undone() {
+    let (mut player, _) = back_on_sunset_sky_after_a_best_of_7200();
+    player.hunt(5 * MIN, 100);
+
+    // The player resets the Session, forgets this Visit's 36,000, then undoes the reset:
+    // Last 5 min is the jump again, but it started before the Forget.
+    player.press(PanelControl::ResetSession);
+    player.press(PanelControl::ForgetBest);
+    let undone = player.press(PanelControl::UndoReset);
+    assert_eq!(rolling(&undone), Some(36_000));
+    assert_eq!(undone.exp_tracking.personal_best, best(7200, None, None));
+}
