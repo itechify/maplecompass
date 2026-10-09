@@ -49,7 +49,7 @@ pub use panel::{
     PlacementMode, ScreenPoint,
     ScreenRect, Section, Size,
 };
-pub use personal_best::{BESTS_VERSION, BestNamed, MapBests, PersonalBestLine, SavedBests, VisitBest};
+pub use personal_best::{BESTS_VERSION, MapBests, SavedBests, VisitBest};
 pub use saved_world::{SavedMap, SavedMapData, SavedWorld, WORLD_VERSION};
 pub use search::{DensityTier, HuntingTarget, MobChoice, RouteStop, SearchResult, SearchState, SearchView, Trip};
 pub use session::{Deaths, ExpRate, ExpTracking, TrackingState};
@@ -277,9 +277,9 @@ pub enum PanelControl {
     ResetSession,
     /// The Grind Tracker window's Undo, after a reset: bring the old Session back.
     UndoReset,
-    /// The Forget in the Grind Tracker's Personal Best line, opened under the pointer:
-    /// remove the map's Personal Best from its history, the earlier Visits' best.
-    ForgetBest,
+    /// The × on the Grind Tracker's Best row: remove the shown map's Personal Best from
+    /// its history, the best of the earlier Visits.
+    RemoveBest,
     /// The Grind Tracker window's ×: close it.
     CloseGrindTracker,
 }
@@ -575,7 +575,7 @@ impl Compass {
             }
             Action::ResetSession => self.session.reset_by_player(),
             Action::UndoReset => self.session.undo_reset(),
-            Action::ForgetBest => {
+            Action::RemoveBest => {
                 if let Some(map) = bests_map(&self.state) {
                     self.session.remove_best(map);
                 }
@@ -696,7 +696,7 @@ impl Compass {
             PanelControl::ToggleGrindTracker => Action::ToggleGrindTracker,
             PanelControl::ResetSession => Action::ResetSession,
             PanelControl::UndoReset => Action::UndoReset,
-            PanelControl::ForgetBest => Action::ForgetBest,
+            PanelControl::RemoveBest => Action::RemoveBest,
             PanelControl::CloseGrindTracker => Action::CloseGrindTracker,
             // An open search view stays as it is; the shell brings the overlay in front on
             // opening it.

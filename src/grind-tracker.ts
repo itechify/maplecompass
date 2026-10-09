@@ -1,8 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { dayText } from "./dates";
-import type { ExpRate, ExpTracking, PersonalBestLine, VisitBest } from "./exp-tracking";
+import type { ExpRate, ExpTracking } from "./exp-tracking";
 
 /** What the shell sends: the figures, and whether the window shows at all. */
 type TrackerView = { shown: boolean; tracking: ExpTracking };
@@ -19,21 +18,13 @@ const timeToLevel = byId("time-to-level");
 const tag = byId("tracking-tag");
 const rollingExp = byId("rolling-exp");
 const rollingPercent = byId("rolling-percent");
+const rollingStar = byId("rolling-star");
 const sessionRow = byId("session-row");
 const sessionLength = byId("session-length");
 const sessionExp = byId("session-exp");
 const sessionPercent = byId("session-percent");
-const best = byId("tracking-best");
-const bestText = byId("tracking-best-text");
-const bestTag = byId("tracking-best-tag");
-const bestOpen = byId("tracking-best-open");
-const bestEarlier = byId("best-earlier");
-const bestEarlierExp = byId("best-earlier-exp");
-const bestEarlierWhen = byId("best-earlier-when");
-const bestVisit = byId("best-visit");
-const bestVisitExp = byId("best-visit-exp");
-const bestVisitWhen = byId("best-visit-when");
-const bestForget = byId("best-forget");
+const bestRow = byId("best-row");
+const bestExp = byId("best-exp");
 const share = byId("tracking-share");
 const deaths = byId("tracking-deaths");
 const exp = byId("tracking-exp");
@@ -52,8 +43,8 @@ const whole = (n: number) => signed(n.toLocaleString("en-US"));
 const percent = (hundredths: number, decimals = Math.abs(hundredths) >= 10_000 ? 0 : 1) =>
   signed(`${(hundredths / 100).toFixed(decimals)}%`);
 
-/** A share of a rate (a map's solo ceiling, a Personal Best): "73%", and "7.3%" under
- *  10%, where one decimal still says something. */
+/** A share of a rate (a map's solo ceiling): "73%", and "7.3%" under 10%, where one
+ *  decimal still says something. */
 const sharePercent = (hundredths: number) => percent(hundredths, hundredths < 1000 ? 1 : 0);
 
 /** An EXP rate to 3 significant figures, written out as the panel writes its rates:
@@ -71,59 +62,6 @@ const TAGS: Partial<Record<ExpTracking["state"], string>> = {
   warmingUp: "warming up",
   paused: "paused",
 };
-
-/** The Personal Best line: the best named as the Rolling Rate's row shows its rates, so
- *  it reads as the figure the player saw there. A no-break space keeps the figure with the
- *  words before it where the line wraps. */
-function personalBest(line: PersonalBestLine) {
-  const named = rate(line.best.expPerHour);
-  if (line.kind === "firstVisit") return `Your first best EXP/h here: ${named}`;
-  const of = line.shareHundredths;
-  if (of === null) return `Your best EXP/h here: ${named}`;
-  return `${sharePercent(of)} of your best EXP/h here (${named})`;
-}
-
-/** Whether two moments fall on the same day in the player's local time. */
-const sameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-
-/** When a best was set, by the calendar in the player's local time: "set today", "set
- *  yesterday", "set 3 Oct", and "set 3 Oct 2025" in another year. */
-function setOn(unixMs: number, now = new Date()) {
-  const set = new Date(unixMs);
-  if (sameDay(set, now)) return "set today";
-  if (sameDay(set, new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))) return "set yesterday";
-  return `set ${dayText(set, set.getFullYear() !== now.getFullYear())}`;
-}
-
-/** One best in the opened line: its figure as the Rolling Rate showed it, and when it was
- *  set. */
-function showBest(row: HTMLElement, figure: HTMLElement, date: HTMLElement, visitBest: VisitBest | null) {
-  row.hidden = !visitBest;
-  if (!visitBest) return;
-  figure.textContent = rate(visitBest.expPerHour);
-  date.textContent = visitBest.setAtUnixMs === null ? "" : setOn(visitBest.setAtUnixMs);
-}
-
-/** The pointer is on the Personal Best line: it shows opened. */
-let bestHovered = false;
-/** The Personal Best line last rendered, for the hover to open. */
-let bestLine: PersonalBestLine | null = null;
-
-/** The Personal Best line opened in place while the pointer is on it: the best it names
- *  and when it was set, and this Visit's best once it has beaten it; on a first Visit,
- *  this Visit's. Dated afresh each time, as days pass. Under them, Forget, which takes
- *  the best from earlier Visits: this Visit's isn't one of them until the Visit ends. */
-function renderBestOpen() {
-  const line = bestLine;
-  bestOpen.hidden = !bestHovered || !line;
-  best.classList.toggle("open", !bestOpen.hidden);
-  if (!line || bestOpen.hidden) return;
-  const [earlier, thisVisit] = line.kind === "earlierVisits" ? [line.best, line.newBest] : [null, line.best];
-  showBest(bestEarlier, bestEarlierExp, bestEarlierWhen, earlier);
-  showBest(bestVisit, bestVisitExp, bestVisitWhen, thisVisit);
-  bestForget.hidden = !earlier;
-}
 
 /** Why there is no Time to Level, in words: never a bare dash beside the label. */
 function noTimeToLevel(rolling: ExpRate | null) {
@@ -161,23 +99,19 @@ function render({ shown, tracking: t }: TrackerView) {
     r?.percentPerHourHundredths != null ? percent(r.percentPerHourHundredths) : "–";
   rollingExp.textContent = expPerHour(t.rolling);
   rollingPercent.textContent = percentPerHour(t.rolling);
+  // The core says when Last 5 min is a new best on the map. The star keeps its room in
+  // the row while it's off, so the figures don't shift as it comes and goes.
+  rollingStar.classList.toggle("on", t.newBest);
   // Only once the Session is longer than the Rolling Rate's window does its average say
   // something else.
   sessionRow.hidden = t.activeS <= t.rollingS;
   sessionLength.textContent = length(t.activeS);
   sessionExp.textContent = expPerHour(t.sessionAverage);
   sessionPercent.textContent = percentPerHour(t.sessionAverage);
+  // The map's best from its history, written as the rates are, with its ×.
+  bestRow.hidden = t.personalBest === null;
+  bestExp.textContent = t.personalBest === null ? "" : rate(t.personalBest);
 
-  // Just above the ceiling's line, in its style; the tag as the headline's. Gone from
-  // under the pointer (another map, or the window hidden), it closes.
-  best.hidden = !t.personalBest;
-  bestLine = t.personalBest;
-  if (!bestLine || !shown) bestHovered = false;
-  if (t.personalBest) {
-    bestText.textContent = personalBest(t.personalBest);
-    bestTag.hidden = t.personalBest.kind !== "earlierVisits" || !t.personalBest.newBest;
-  }
-  renderBestOpen();
   const shareOf = t.ceilingShareHundredths;
   share.hidden = shareOf === null || t.soloExpCeiling === null;
   if (shareOf !== null && t.soloExpCeiling !== null) {
@@ -226,18 +160,8 @@ document.addEventListener("mousedown", (e) => {
   if (e.button === 0 && onHeader) getCurrentWindow().startDragging();
 });
 
-// The pointer on the Personal Best line opens it in place, and the window grows to fit;
-// moving off closes it. The line and what it opens are one target, so the pointer stays
-// on it as it opens, even where the window moves up to keep on the monitor.
-function hoverBest(on: boolean) {
-  bestHovered = on;
-  renderBestOpen();
-  reportHeight();
-}
-best.addEventListener("mouseenter", () => hoverBest(true));
-best.addEventListener("mouseleave", () => hoverBest(false));
-
-// Close, reset, Forget and their undos, through the core like the panel's icons.
+// Close, reset and its Undo, and removing the best, through the core like the panel's
+// icons.
 panelEl.addEventListener("click", (e) => {
   const button = e.target instanceof Element ? e.target.closest<HTMLButtonElement>("button[data-control]") : null;
   if (button) invoke("panel_press", { control: button.dataset.control });
