@@ -242,6 +242,9 @@ pub(crate) struct Session {
     undo: Option<Undo>,
     /// The shown map's solo EXP/h ceiling, as last measured against.
     ceiling: Option<u64>,
+    /// Which Visit is under way: one more with each map the panel confirms, none before
+    /// the first.
+    visit: u64,
 }
 
 /// What the player's reset set aside, to bring back if they undo it.
@@ -261,6 +264,8 @@ struct Undo {
 struct Shown {
     /// Which stretch of capture time they were measured in.
     stretch: u64,
+    /// The Visit they were measured on.
+    visit: u64,
     /// The solo ceiling they were measured against.
     ceiling: Option<u64>,
     /// The Session's level-ups by then.
@@ -324,9 +329,9 @@ struct Figures {
     /// The Session has had [`WARM_UP_MS`] of active time at some point. A break later
     /// takes active time back, but not this.
     warmed_up: bool,
-    /// Active time when the shown map's ceiling last changed: the share of it counts
-    /// only the play since.
-    ceiling_from: u64,
+    /// Active time when the Visit under way started: the share of the map's ceiling
+    /// counts only the play since.
+    visit_from: u64,
 }
 
 impl Figures {
@@ -339,7 +344,7 @@ impl Figures {
             marks: vec![Mark { active: 0, gained: 0 }],
             deaths: Deaths::default(),
             warmed_up: false,
-            ceiling_from: 0,
+            visit_from: 0,
         }
     }
 
@@ -540,7 +545,7 @@ impl Session {
         let Some(undo) = self.undo.take() else { return };
         let mut figures = undo.figures;
         if undo.ceiling != self.ceiling {
-            figures.ceiling_from = figures.active(self.now);
+            figures.visit_from = figures.active(self.now);
         }
         self.figures = Some(figures);
         self.largest_gain_hundredths = undo.largest_gain_hundredths;
@@ -548,6 +553,16 @@ impl Session {
         self.character_switched = undo.character_switched;
         self.misfits = None;
         self.shown = None;
+    }
+
+    /// The panel confirmed another map: a new Visit starts, as of the latest time seen.
+    /// The share of the map's ceiling counts only the play since.
+    pub fn arrive(&mut self) {
+        self.visit += 1;
+        let now = self.now;
+        if let Some(figures) = &mut self.figures {
+            figures.visit_from = figures.active(now);
+        }
     }
 
     /// Time passed without a reading.
@@ -595,7 +610,7 @@ impl Session {
             self.ceiling = ceiling;
             let now = self.now;
             if let Some(figures) = &mut self.figures {
-                figures.ceiling_from = figures.active(now);
+                figures.visit_from = figures.active(now);
             }
         }
         let fresh = self.measure(ceiling);
@@ -604,7 +619,8 @@ impl Session {
         // they were, unless the map changes.
         let unreadable = fresh.state == TrackingState::Unreadable;
         let holds = self.shown.as_ref().is_some_and(|shown| {
-            shown.ceiling == ceiling
+            shown.visit == self.visit
+                && shown.ceiling == ceiling
                 && (unreadable
                     || shown.stretch == stretch
                         && shown.level_ups == self.level_ups
@@ -620,7 +636,10 @@ impl Session {
         });
         match &mut self.shown {
             Some(shown) if holds => shown.tracking.state = fresh.state,
-            _ => self.shown = Some(Shown { stretch, ceiling, level_ups: self.level_ups, tracking: fresh }),
+            _ => {
+                self.shown =
+                    Some(Shown { stretch, visit: self.visit, ceiling, level_ups: self.level_ups, tracking: fresh });
+            }
         }
         let held = self.shown.as_ref().map(|shown| shown.tracking.clone()).unwrap_or_default();
         ExpTracking { bar: self.last, ..held }
@@ -660,7 +679,7 @@ impl Session {
             _ => None,
         };
         // The share counts only the play on the shown map, once there is enough of it.
-        let here = figures.rolling_since(now, figures.ceiling_from);
+        let here = figures.rolling_since(now, figures.visit_from);
         let ceiling = ceiling.filter(|&c| c > 0 && here.exp > 0 && here.over_ms >= WARM_UP_MS);
         let average = figures.average(now);
         ExpTracking {

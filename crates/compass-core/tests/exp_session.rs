@@ -9,11 +9,12 @@
 
 mod common;
 
-use common::{FakeSource, arrive};
+use common::{FakeSource, arrive, saved_page};
 use std::path::Path;
+use std::task::Poll;
 use compass_core::{
     Action, Compass, Deaths, ExpBar, ExpBarReading, ExpBarRegion, ExpRate, ExpTracking, GameWindow, PanelControl, PanelState, Rect,
-    ScreenRect, Settings, Size, TitleRegion, TrackingState,
+    ScreenRect, Settings, Size, SourceError, TitleRegion, TrackingState, meowdb,
 };
 
 const S: u64 = 1000;
@@ -21,8 +22,13 @@ const MIN: u64 = 60 * S;
 
 /// A core with EXP tracking on: both regions kept, on a 1920x1200 game window.
 fn tracking() -> Compass {
+    tracking_with(FakeSource::meowdb())
+}
+
+/// As [`tracking`], with maps and their pages from `source`.
+fn tracking_with(source: FakeSource) -> Compass {
     let client = Size { width: 1920, height: 1200 };
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(source);
     compass.restore(Settings {
         title_region: Some(TitleRegion { marked: Rect { x: 70, y: 40, width: 130, height: 48 }, client }),
         exp_bar_region: Some(ExpBarRegion { marked: Rect { x: 1005, y: 1144, width: 240, height: 32 }, client }),
@@ -621,6 +627,45 @@ fn the_rate_on_a_map_is_compared_with_its_solo_ceiling_after_a_minute_of_play_th
     let on = read(&mut compass, 150 * S, 410, 976);
     assert_eq!(on.exp_tracking.state, TrackingState::Active);
     assert_eq!(exp_per_hour(&on), (Some(3703), Some(3703)), "144 EXP in 140 s");
+}
+
+const SUNSET_SKY_ID: &str = "010003070";
+const CONSTRUCTION_SITE_ID: &str = "010003080";
+
+/// MeowDB's saved index and pages, but for each `(map, stand_in)` the map's page is the
+/// stand-in's: to give two maps the same solo ceiling, or a ceiling of choice.
+fn standing_in(source: FakeSource, stand_ins: &[(&'static str, &'static str)]) -> FakeSource {
+    let stand_ins = stand_ins.to_vec();
+    source.with_pages(move |id| {
+        let page = stand_ins.iter().find(|(map, _)| *map == id).map_or(id, |&(_, stand_in)| stand_in);
+        Poll::Ready(match saved_page(page) {
+            Some(html) => meowdb::read_map_page(&html, page),
+            None => Err(SourceError::Unreachable(format!("no saved page for {id}"))),
+        })
+    })
+}
+
+#[test]
+fn on_the_second_of_two_maps_with_the_same_ceiling_the_share_counts_only_play_since_arriving() {
+    // The Construction Site with Sunset Sky's page: the same 223,928 solo ceiling.
+    let mut compass = tracking_with(standing_in(FakeSource::meowdb(), &[(CONSTRUCTION_SITE_ID, SUNSET_SKY_ID)]));
+    arrive(&mut compass, SUNSET, 0);
+    read(&mut compass, 0, 160, 381);
+    read(&mut compass, 10 * S, 266, 633);
+    let sunset = read(&mut compass, 70 * S, 335, 798);
+    assert_eq!(sunset.exp_tracking.ceiling_share_hundredths, Some(185), "4,140 EXP/h of 223,928");
+
+    // Straight on to the Construction Site: nothing has been earned there yet, though its
+    // ceiling is the same. Sunset Sky's minute is never measured against it.
+    let site = arrive(&mut compass, CONSTRUCTION_SITE, 70 * S);
+    assert_eq!(site.exp_tracking.ceiling_share_hundredths, None);
+    assert_eq!(site.exp_tracking.solo_exp_ceiling, None);
+    assert_eq!(read(&mut compass, 100 * S, 360, 857).exp_tracking.ceiling_share_hundredths, None);
+
+    // A minute there, 65 EXP: 3,900 EXP/h of 223,928, 1.74%.
+    let there = read(&mut compass, 130 * S, 400, 952);
+    assert_eq!(there.exp_tracking.ceiling_share_hundredths, Some(174));
+    assert_eq!(there.exp_tracking.solo_exp_ceiling, Some(223_928));
 }
 
 #[test]
