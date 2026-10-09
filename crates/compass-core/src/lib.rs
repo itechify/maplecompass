@@ -17,6 +17,7 @@ pub mod meowdb;
 mod mob_card;
 mod pace;
 mod panel;
+mod personal_best;
 mod portal_overrides;
 mod portals;
 mod prep;
@@ -48,6 +49,7 @@ pub use panel::{
     PlacementMode, ScreenPoint,
     ScreenRect, Section, Size,
 };
+pub use personal_best::{BESTS_VERSION, MapBests, PersonalBestLine, SavedBests, VisitBest};
 pub use saved_world::{SavedMap, SavedMapData, SavedWorld, WORLD_VERSION};
 pub use search::{DensityTier, HuntingTarget, MobChoice, RouteStop, SearchResult, SearchState, SearchView, Trip};
 pub use session::{Deaths, ExpRate, ExpTracking, TrackingState};
@@ -960,7 +962,13 @@ impl Compass {
         self.state.exp_bar = self.exp_bar;
         // Off while there is no region to read; the Session itself carries on.
         self.state.exp_tracking = if self.tracking_on() {
-            self.session.tracking(self.state.data.solo_exp_ceiling())
+            let ceiling = self.state.data.solo_exp_ceiling();
+            // Personal Bests are kept only where the map is certain (one map has the title,
+            // the map the player came from settled it, or the player chose it), and has a
+            // Map Summary: in a town, quest turn-ins would set one.
+            let certain = self.state.candidates.as_ref().is_none_or(|c| c.chosen);
+            let map = self.state.map.as_ref().filter(|_| certain && ceiling.is_some());
+            self.session.tracking(ceiling, map.map(|m| m.id.as_str()))
         } else {
             ExpTracking::default()
         };
