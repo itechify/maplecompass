@@ -337,15 +337,106 @@ fn a_switch_to_another_character_starts_a_new_session() {
     assert_eq!(second.exp_tracking.deaths, old.deaths);
     assert_eq!(second.exp_tracking.state, TrackingState::Active);
 
-    // ...but three that fit a level of their own are another character.
+    // ...but three that fit a level of their own are another character. The panel says
+    // why its figures went.
     let switched = read(&mut compass, 82 * S, 157, 94);
-    assert_eq!(switched.exp_tracking, ExpTracking { state: TrackingState::Waiting, ..ExpTracking::default() });
+    assert_eq!(
+        switched.exp_tracking,
+        ExpTracking { state: TrackingState::Waiting, character_switched: true, ..ExpTracking::default() }
+    );
 
     let started = read(&mut compass, 90 * S, 169, 101);
     assert_eq!(started.exp_tracking.state, TrackingState::WarmingUp);
+    assert!(started.exp_tracking.character_switched, "said until the new Session warms up");
     let on = read(&mut compass, 100 * S, 175, 105);
     assert_eq!(exp_per_hour(&on), (Some(2160), Some(2160)), "6 EXP in 10 s");
     assert_eq!(on.exp_tracking.deaths, Deaths::default());
+
+    let warmed_up = read(&mut compass, 150 * S, 200, percent_lv15(200));
+    assert_eq!(warmed_up.exp_tracking.state, TrackingState::Active);
+    assert!(!warmed_up.exp_tracking.character_switched);
+}
+
+#[test]
+fn a_switch_to_a_character_of_a_similar_level_is_a_switch_when_the_bar_jumps() {
+    let mut compass = tracking();
+    for (k, exp) in [149, 157, 165].into_iter().enumerate() {
+        read(&mut compass, k as u64 * 10 * S, exp, percent_lv15(exp));
+    }
+
+    // A character on a level of 17,500 EXP, not 5% more than the ~16,682 learned, but
+    // at 40%: the bar can't have jumped 39 points from 0.99%.
+    for at in [30, 31, 32] {
+        read(&mut compass, at * S, 7000, 4000);
+    }
+
+    let state = compass.panel_state();
+    assert_eq!(state.exp_tracking.state, TrackingState::Waiting);
+    assert!(state.exp_tracking.character_switched);
+}
+
+#[test]
+fn a_misread_that_fits_the_level_and_misleads_it_keeps_the_session() {
+    // On the recording's ~16,682 EXP level, 8 EXP every 10 s up to 165 [0.99%] at 20 s,
+    // then 100 every 10 s, read right...
+    let exp = |k: u64| if k <= 2 { 149 + 8 * k } else { 165 + 100 * (k - 2) };
+    let right: Vec<(u64, u64, u32)> = (0..=11).map(|k| (k * 10, exp(k), percent_lv15(exp(k)))).collect();
+    let mut clean = tracking();
+    for &(at, exp, percent) in &right {
+        read(&mut clean, at * S, exp, percent);
+    }
+
+    // ...and with 165 [0.99%] misread as 165 [0.98%] at 20 s. That fits the level read
+    // so far (16,649 to 16,791 EXP), so it is taken, and it puts the level at 16,752 or
+    // more. Low in a level each reading allows a wide range of totals, so later misreads
+    // could hide it, but the true readings narrow as the bar fills: from 265 [1.59%] at
+    // 30 s none fits. Three in a row that carry on from the last one taken are the same
+    // level after all, learned anew, and the Session goes on.
+    let mut misread = tracking();
+    for &(at, exp, percent) in &right {
+        let percent = if at == 20 { 98 } else { percent };
+        let state = read(&mut misread, at * S, exp, percent);
+        // The Session starts at 10 s, on the first change.
+        assert_eq!(state.exp_tracking.state == TrackingState::Waiting, at == 0, "at {at} s");
+        assert!(!state.exp_tracking.character_switched, "at {at} s");
+    }
+
+    // The first moment of a new half minute, so the figures are measured afresh.
+    let clean = clean.tick(120 * S).clone();
+    let misread = misread.tick(120 * S).clone();
+    assert_eq!(misread.exp_tracking, clean.exp_tracking);
+    assert_eq!(misread.exp_tracking.state, TrackingState::Active);
+    assert_eq!(exp_per_hour(&misread), (Some(29_716), Some(29_716)), "908 EXP in 110 s");
+}
+
+#[test]
+fn once_warmed_up_a_session_never_warms_up_again() {
+    let mut compass = tracking();
+    read(&mut compass, 0, 160, 381);
+    read(&mut compass, 10 * S, 266, 633);
+    read(&mut compass, 20 * S, 335, 798);
+
+    // 10 s of gains, then a minute without a change: still a gap in play, so 70 s of
+    // active time, warmed up.
+    assert_eq!(compass.tick(80 * S).exp_tracking.state, TrackingState::Active);
+    // Two minutes without a change is a break, which counts for nothing: back to 10 s.
+    assert_eq!(compass.tick(10 * MIN).exp_tracking.state, TrackingState::Paused);
+
+    // The figures were warmed up once, and stay so.
+    let resumed = read(&mut compass, 10 * MIN + 10 * S, 360, 857);
+    assert_eq!(resumed.exp_tracking.state, TrackingState::Active);
+}
+
+#[test]
+fn a_reset_by_the_player_is_not_a_character_switch() {
+    let mut compass = a_minute_in();
+    read(&mut compass, 80 * S, 149, 89);
+    read(&mut compass, 81 * S, 157, 94);
+    read(&mut compass, 82 * S, 157, 94);
+    assert!(compass.panel_state().exp_tracking.character_switched);
+
+    let reset = compass.act(Action::ResetSession);
+    assert_eq!(reset.exp_tracking, ExpTracking { state: TrackingState::Waiting, ..ExpTracking::default() });
 }
 
 #[test]
@@ -402,6 +493,7 @@ fn the_overlay_gets_tracking_as_the_panel_renders_it() {
             "sessionAverage": null,
             "ceilingShareHundredths": null,
             "deaths": { "count": 0, "expLost": 0, "percentLostHundredths": 0 },
+            "characterSwitched": false,
         })
     );
 
@@ -419,6 +511,7 @@ fn the_overlay_gets_tracking_as_the_panel_renders_it() {
             "sessionAverage": rate,
             "ceilingShareHundredths": 185,
             "deaths": { "count": 0, "expLost": 0, "percentLostHundredths": 0 },
+            "characterSwitched": false,
         })
     );
     let died = serde_json::to_value(read(&mut compass, 75 * S, 266, 633)).unwrap();

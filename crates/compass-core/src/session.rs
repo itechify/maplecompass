@@ -8,13 +8,18 @@
 //! - A reading that fits the range is the same level: less EXP than before is a death.
 //!   One that doesn't fit is a level-up if it allows only bigger totals and the bar was
 //!   near 100%, a misread otherwise, unless [`SWITCH_READINGS`] in a row fit another
-//!   level: a character switch, which starts a new Session. A reading barely into the
-//!   next level may fit the range too (2 [0.01%] allows a wide range of totals); when
-//!   the bar went from near 100% to as near 0%, it is a level-up all the same.
+//!   level. If they carry on from the last reading taken, and their level is within
+//!   [`RELEARN_PERCENT`] of the one learned, the level was learned wrong (a misread that
+//!   fitted it narrowed the range past the true total): it is learned anew from them,
+//!   and the Session goes on. Otherwise it is a character switch, which starts a new
+//!   Session. A reading barely into the next level may fit the range too (2 [0.01%]
+//!   allows a wide range of totals); when the bar went from near 100% to as near 0%, it
+//!   is a level-up all the same.
 //! - The Session starts on the first EXP change, from the EXP the bar shows then.
 //! - Active time runs while the EXP keeps changing. A gap of up to [`IDLE_MS`] between
 //!   changes counts; a longer one is a break, which pauses the Session and counts for
-//!   nothing, from the last change to the next, so the rates hold while paused.
+//!   nothing, from the last change to the next, so the rates hold while paused. Once
+//!   the Session has warmed up it stays so, breaks or not.
 //! - The figures shown hold still for each [`REFRESH_MS`] of capture time, rather than
 //!   jumping with every kill. Events show at once: the state changing (the Session
 //!   starting, warming up, pausing or resuming), the first figures there are, a death, a
@@ -49,6 +54,10 @@ pub struct ExpTracking {
     pub ceiling_share_hundredths: Option<i64>,
     /// Deaths this Session and what they cost: "deaths: 2 (−1.4%)".
     pub deaths: Deaths,
+    /// The Session started afresh by itself, on a switch to another character, and
+    /// hasn't warmed up since: the panel says why the figures went. Never after a reset
+    /// the player made.
+    pub character_switched: bool,
 }
 
 /// The deaths in a Session: drops in EXP within the level.
@@ -85,7 +94,7 @@ pub enum TrackingState {
     Waiting,
     /// The first [`WARM_UP_MS`] of active time: the rates are still jumpy.
     WarmingUp,
-    /// Warmed up, and the EXP changed within the last [`IDLE_MS`].
+    /// Warmed up (once is enough), and the EXP changed within the last [`IDLE_MS`].
     Active,
     /// No EXP change for more than [`IDLE_MS`]: the rates hold until the next change.
     Paused,
@@ -102,8 +111,15 @@ const HOUR_MS: u64 = 3_600_000;
 /// 100% in hundredths of a percent, the unit of the bar and of every share here.
 const HUNDRED_PERCENT: u32 = 10_000;
 /// Readings in a row that fit a level of their own, and not the one learned, that make
-/// a character switch. A misread has been seen to repeat on two frames.
+/// a character switch (or show the level was learned wrong). A misread has been seen to
+/// repeat on two frames.
 const SWITCH_READINGS: u32 = 3;
+/// Readings that fit a level of their own, carrying on from the last reading taken,
+/// are the same level learned anew if their level is within this many percent of the
+/// one learned. A misread narrows the range by far less, and another character's level
+/// is apart by more unless it is the next one up or down; at that, its bar would have
+/// to be where the last reading left off.
+const RELEARN_PERCENT: u128 = 10;
 /// A level-up needs the bar within at least this many hundredths of 100% before it.
 const NEAR_LEVEL_UP_HUNDREDTHS: u32 = 1000;
 /// The figures shown are measured afresh once in each stretch of this much capture time
@@ -142,6 +158,13 @@ impl Total {
     fn doubled_midpoint(self) -> Option<u64> {
         (self.hi != u64::MAX).then(|| self.lo + self.hi)
     }
+
+    /// Whether `other`, which shares no total with this, is within [`RELEARN_PERCENT`]
+    /// of it.
+    fn close_to(self, other: Total) -> bool {
+        let (lower, upper) = if other.lo > self.hi { (self, other) } else { (other, self) };
+        u128::from(upper.lo) * 100 <= u128::from(lower.hi) * (100 + RELEARN_PERCENT)
+    }
 }
 
 /// Readings in a row that don't fit the level learned.
@@ -172,6 +195,8 @@ pub(crate) struct Session {
     figures: Option<Figures>,
     /// Level-ups this Session.
     level_ups: u32,
+    /// This Session started on a character switch, not the player's reset.
+    character_switched: bool,
     /// What the panel shows, and what it was measured for; `None` until it is first
     /// measured, and after a reset.
     shown: Option<Shown>,
@@ -243,6 +268,9 @@ struct Figures {
     marks: Vec<Mark>,
     /// The deaths so far.
     deaths: Deaths,
+    /// The Session has had [`WARM_UP_MS`] of active time at some point. A break later
+    /// takes active time back, but not this.
+    warmed_up: bool,
 }
 
 impl Figures {
@@ -254,7 +282,13 @@ impl Figures {
             gained: 0,
             marks: vec![Mark { active: 0, gained: 0 }],
             deaths: Deaths::default(),
+            warmed_up: false,
         }
+    }
+
+    /// Whether the Session has warmed up by `now`.
+    fn warm(&self, now: u64) -> bool {
+        self.warmed_up || self.active(now) >= WARM_UP_MS
     }
 
     /// How long the EXP has gone unchanged at `now`.
@@ -311,20 +345,7 @@ impl Session {
         };
         let wrapped = self.wrapped(total, last, bar, allowed);
         if !wrapped && let Some(narrowed) = total.meet(allowed) {
-            self.accept(narrowed, bar);
-            if bar.percent_hundredths > last.percent_hundredths {
-                let gain = bar.percent_hundredths - last.percent_hundredths;
-                self.largest_gain_hundredths = self.largest_gain_hundredths.max(gain);
-            }
-            if let Some(figures) = self.change(bar.exp as i64 - last.exp as i64, at_ms)
-                && bar.exp < last.exp
-            {
-                // Less EXP in the same level: a death.
-                figures.deaths.count += 1;
-                figures.deaths.exp_lost += last.exp - bar.exp;
-                figures.deaths.percent_lost_hundredths +=
-                    last.percent_hundredths.saturating_sub(bar.percent_hundredths);
-            }
+            self.same_level(narrowed, last, bar, at_ms);
         } else if let Some(doubled_total) = total.doubled_midpoint()
             && (wrapped || self.levelled_up(total, last, allowed))
         {
@@ -341,10 +362,34 @@ impl Session {
             let more = self.misfits.and_then(|m| Some(Misfits { total: m.total.meet(allowed)?, count: m.count + 1 }));
             let misfits = more.unwrap_or(Misfits { total: allowed, count: 1 });
             self.misfits = Some(misfits);
-            if misfits.count >= SWITCH_READINGS {
+            if misfits.count < SWITCH_READINGS {
+                // Not yet.
+            } else if total.close_to(misfits.total) && carries_on(last, bar, self.near()) {
+                // The level was learned wrong: the Session goes on.
+                self.same_level(misfits.total, last, bar, at_ms);
+            } else {
                 self.accept(misfits.total, bar);
                 self.reset();
+                self.character_switched = true;
             }
+        }
+    }
+
+    /// Take `bar`, a reading after `last` in the same level, whose total it narrows to
+    /// `total`: a gain, or with less EXP, a death.
+    fn same_level(&mut self, total: Total, last: ExpBar, bar: ExpBar, at_ms: u64) {
+        self.accept(total, bar);
+        if bar.percent_hundredths > last.percent_hundredths {
+            let gain = bar.percent_hundredths - last.percent_hundredths;
+            self.largest_gain_hundredths = self.largest_gain_hundredths.max(gain);
+        }
+        if let Some(figures) = self.change(bar.exp as i64 - last.exp as i64, at_ms)
+            && bar.exp < last.exp
+        {
+            // Less EXP in the same level: a death.
+            figures.deaths.count += 1;
+            figures.deaths.exp_lost += last.exp - bar.exp;
+            figures.deaths.percent_lost_hundredths += last.percent_hundredths.saturating_sub(bar.percent_hundredths);
         }
     }
 
@@ -388,12 +433,16 @@ impl Session {
         self.misfits = None;
         self.largest_gain_hundredths = 0;
         self.level_ups = 0;
+        self.character_switched = false;
         self.shown = None;
     }
 
     /// Time passed without a reading.
     pub fn tick(&mut self, at_ms: u64) {
         self.now = self.now.max(at_ms);
+        if let Some(figures) = &mut self.figures {
+            figures.warmed_up = figures.warm(self.now);
+        }
     }
 
     /// The EXP changed by `gain` at `at`: the Session starts (from the EXP the bar shows
@@ -421,6 +470,7 @@ impl Session {
                 && shown.level_ups == self.level_ups
                 && shown.tracking.state == fresh.state
                 && shown.tracking.deaths == fresh.deaths
+                && shown.tracking.character_switched == fresh.character_switched
                 // The first figures show as soon as there are any.
                 && shown.tracking.rolling.is_some() == fresh.rolling.is_some()
         });
@@ -433,15 +483,20 @@ impl Session {
     /// The figures as they stand now.
     fn measure(&self, ceiling: Option<u64>) -> ExpTracking {
         let Some(figures) = &self.figures else {
-            return ExpTracking { state: TrackingState::Waiting, ..ExpTracking::default() };
+            return ExpTracking {
+                state: TrackingState::Waiting,
+                character_switched: self.character_switched,
+                ..ExpTracking::default()
+            };
         };
         let now = self.now;
+        let warm = figures.warm(now);
         let state = if figures.paused(now) {
             TrackingState::Paused
-        } else if figures.active(now) < WARM_UP_MS {
-            TrackingState::WarmingUp
-        } else {
+        } else if warm {
             TrackingState::Active
+        } else {
+            TrackingState::WarmingUp
         };
         let doubled_total = self.total.and_then(Total::doubled_midpoint);
         let rolling = figures.rolling(now);
@@ -464,8 +519,17 @@ impl Session {
                 .filter(|&c| c > 0 && gaining)
                 .map(|c| rolling.per_hour(u64::from(HUNDRED_PERCENT), c)),
             deaths: figures.deaths,
+            character_switched: self.character_switched && !warm,
         }
     }
+}
+
+/// Whether `bar` carries on from `last` as the same level could: the percentage moved
+/// no more than `near` points, and the same way as the EXP (or one of them stayed).
+fn carries_on(last: ExpBar, bar: ExpBar, near: u32) -> bool {
+    use std::cmp::Ordering::{Greater, Less};
+    let ways = (bar.exp.cmp(&last.exp), bar.percent_hundredths.cmp(&last.percent_hundredths));
+    bar.percent_hundredths.abs_diff(last.percent_hundredths) <= near && !matches!(ways, (Greater, Less) | (Less, Greater))
 }
 
 /// Time to Level rounded no finer than it can be trusted: to the minute under an hour,
