@@ -278,9 +278,10 @@ pub enum PanelControl {
     /// The Grind Tracker window's Undo, after a reset: bring the old Session back.
     UndoReset,
     /// The Forget in the Grind Tracker's Personal Best line, opened under the pointer:
-    /// forget the higher of the map's Personal Best and this Visit's best there.
+    /// forget the higher of the map's Personal Best and this Visit's best there. This
+    /// Visit's goes on every Candidate at once, since all of them come from before it.
     ForgetBest,
-    /// The Grind Tracker window's Undo, after a Forget: bring the best back.
+    /// The Grind Tracker window's Undo, after a Forget: bring back what it forgot.
     UndoForget,
     /// The Grind Tracker window's ×: close it.
     CloseGrindTracker,

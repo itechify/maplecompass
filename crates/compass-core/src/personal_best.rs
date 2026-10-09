@@ -128,8 +128,9 @@ pub enum Whose {
 pub(crate) struct Bests {
     /// The best of each Visit that has ended.
     earlier: SavedBests,
-    /// The Visit under way's best on each map it was certain on with a rate to count: one,
-    /// unless the player chose among Candidates. Only `on`'s is the Visit's best.
+    /// The Visit under way's best on each map it was certain on with a rate to count since
+    /// the player last forgot this Visit's best (that Forget takes them all): one, unless
+    /// the player chose among Candidates. Only `on`'s is the Visit's best.
     visit: Vec<(String, VisitBest)>,
     /// The map the Visit under way was last certain on with a rate to count: the one its
     /// best is for, and the only one whose line, Forget and [`Bests::saved`] see a best
@@ -325,12 +326,14 @@ impl Bests {
         self.changing(|bests| bests.earlier = saved);
     }
 
-    /// Changes whenever what [`Bests::saved`] hands out does, and only then: an earlier
+    /// Changes whenever what [`Bests::saved`] hands out does: an earlier
     /// Visit's best forgotten or brought back; the Visit under way's best set, raised,
     /// moved to a Candidate chosen that counts a rate, forgotten, or brought back above
     /// any set since, where it makes its map's [`VISITS_KEPT`]; bests restored. A Visit
     /// ending changes nothing handed out, nor does bringing back a Candidate's best from
-    /// this Visit while the Visit's best is another map's.
+    /// this Visit while the Visit's best is another map's. One press can move it twice and
+    /// leave the bests as they were (an Undo, then the refresh it asks for), so the shell
+    /// may now and then write the same bests again; it never misses a change.
     pub fn revision(&self) -> u64 {
         self.revision
     }
