@@ -2,7 +2,7 @@
 //! It shows the Session's figures beside the panel, in a window of its own that the
 //! player drags anywhere and closes with its ×.
 
-use crate::panel::{GameWindow, ScreenPoint, ScreenRect, Size, clear_of, contains, holds};
+use crate::panel::{GameWindow, PlacementMode, ScreenPoint, ScreenRect, Size, clear_of, contains, holds};
 use serde::{Deserialize, Serialize};
 
 /// A window's top-left corner relative to the game client's top-left corner (physical
@@ -25,13 +25,14 @@ pub struct GrindTrackerWindow {
     pub placement: Option<ScreenRect>,
 }
 
-/// The gap between the panel and the Grind Tracker's window below (or above) it.
+/// The gap between the panel and the Grind Tracker's window beside it.
 const GAP: i32 = 8;
 
 #[derive(Debug, Clone)]
 pub(crate) struct GrindTracker {
     pub open: bool,
-    /// Where the player dragged it; `None` until they do: it follows the panel.
+    /// Where the player dragged it; `None` until they do, and again once they drag it
+    /// back beside the panel: it follows the panel.
     pub at: Option<ClientOffset>,
     /// Its size in physical px for the current display, as the shell measures it.
     pub size: Size,
@@ -45,27 +46,25 @@ impl Default for GrindTracker {
 
 impl GrindTracker {
     /// The player dragged the window so its top-left corner is at (x, y), physical
-    /// screen px: it keeps that spot relative to the `game` window.
-    pub fn moved_to(&mut self, x: i32, y: i32, game: &GameWindow) {
-        self.at = Some(ClientOffset { x: x - game.client.x, y: y - game.client.y });
+    /// screen px: it keeps that spot relative to the `game` window. Let go within an
+    /// eighth of its width of its spot beside the panel, it goes back to following the
+    /// panel (placed at `panel` in `mode`).
+    pub fn moved_to(&mut self, x: i32, y: i32, game: &GameWindow, panel: ScreenRect, mode: PlacementMode, avoid: &[ScreenRect]) {
+        let home = Self { at: None, ..self.clone() }.placement(game, panel, mode, avoid);
+        let snap = self.size.width / 8;
+        let near = home.x.abs_diff(x) <= snap && home.y.abs_diff(y) <= snap;
+        self.at = (!near).then_some(ClientOffset { x: x - game.client.x, y: y - game.client.y });
     }
 
-    /// Where the window goes beside the `game`, with the expanded panel at `panel`:
-    /// where the player dragged it, or else just below the panel (above it when there is
-    /// no room below), its right edge in line with the panel's. Always wholly on a
-    /// monitor, and moved the shortest way off any of `avoid`.
-    pub fn placement(&self, game: &GameWindow, panel: ScreenRect, avoid: &[ScreenRect]) -> ScreenRect {
+    /// Where the window goes beside the `game`, with the panel (expanded or collapsed) at
+    /// `panel` in `mode`: where the player dragged it, or else beside the panel. Always
+    /// wholly on a monitor, and moved the shortest way off any of `avoid`.
+    pub fn placement(&self, game: &GameWindow, panel: ScreenRect, mode: PlacementMode, avoid: &[ScreenRect]) -> ScreenRect {
         let Size { width, height } = self.size;
         let (w, h) = (width as i32, height as i32);
         let spot = match self.at {
             Some(at) => ScreenRect { x: game.client.x + at.x, y: game.client.y + at.y, width, height },
-            None => {
-                let x = panel.x + panel.width as i32 - w;
-                let below = ScreenRect { x, y: panel.y + panel.height as i32 + GAP, width, height };
-                let above = ScreenRect { y: panel.y - GAP - h, ..below };
-                let screen = screen_at(game, panel.x, panel.y);
-                [below, above].into_iter().find(|spot| contains(screen, *spot)).unwrap_or(below)
-            }
+            None => self.beside(game, panel, mode),
         };
         let screen = screen_at(game, spot.x, spot.y);
         let spot = ScreenRect {
@@ -75,6 +74,25 @@ impl GrindTracker {
         };
         let within = if contains(game.client, spot) { game.client } else { screen };
         clear_of(spot, avoid, within)
+    }
+
+    /// Beside the panel, the tops level: the panel's top stays put as it grows and
+    /// shrinks with each map, so this does too. Docked, on the side away from the game;
+    /// otherwise on the side towards the middle of the game. The other side if that one
+    /// leaves the panel's monitor.
+    fn beside(&self, game: &GameWindow, panel: ScreenRect, mode: PlacementMode) -> ScreenRect {
+        let Size { width, height } = self.size;
+        let left = ScreenRect { x: panel.x - GAP - width as i32, y: panel.y, width, height };
+        let right = ScreenRect { x: panel.x + panel.width as i32 + GAP, ..left };
+        let middle = |r: ScreenRect| 2 * i64::from(r.x) + i64::from(r.width);
+        let leftwards = match mode {
+            PlacementMode::DockedLeft => true,
+            PlacementMode::DockedRight => false,
+            PlacementMode::Inside | PlacementMode::Detached => middle(panel) >= middle(game.client),
+        };
+        let (first, second) = if leftwards { (left, right) } else { (right, left) };
+        let screen = screen_at(game, panel.x, panel.y);
+        [first, second].into_iter().find(|spot| contains(screen, *spot)).unwrap_or(first)
     }
 }
 

@@ -92,4 +92,9 @@
   --game-button-hover: linear-gradient(180deg, #45c2ff 0%, #66d0ff 55%, #8ae0ff 100%);
   --game-button-pressed: linear-gradient(180deg, #1c9be0 0%, #2eb1f2 100%);
   --game-button-edge: #2f7595;
+  /* The game's EXP gauge, sampled from its status bar: a lime fill on a light grey track
+     under a dark grey frame. For the EXP bar's reading only. */
+  --exp-fill: linear-gradient(180deg, #effb76 0%, #e5f916 28%, #dcf200 55%, #cfe400 100%);
+  --exp-track: linear-gradient(180deg, #e2e2e2 0%, #cfcfcf 25%, #d6d6d6 45%, #c3c3c3 70%, #bcbcbc 100%);
+  --exp-frame: #676d70;
 }
