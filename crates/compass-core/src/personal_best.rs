@@ -14,6 +14,11 @@
 //!   hover to say when it was set. The UI words the date, in the player's local time.
 //! - Bests are per map (MeowDB map ID), for every character: nothing about the Session
 //!   touches them.
+//! - The player can forget a best that came from a bug: the higher of the two the line's
+//!   hover shows, this Visit's once it has beaten the earlier Visits', theirs otherwise.
+//!   The map's next-best Visit's takes over. After forgetting this Visit's, only windows
+//!   that start after the Forget count: the Session sees to that. Undo brings the best
+//!   back until the Visit ends.
 
 use serde::{Deserialize, Serialize};
 
