@@ -49,7 +49,7 @@ pub use panel::{
     PlacementMode, ScreenPoint,
     ScreenRect, Section, Size,
 };
-pub use personal_best::{BESTS_VERSION, MapBests, PersonalBestLine, SavedBests, VisitBest};
+pub use personal_best::{BESTS_VERSION, BestNamed, MapBests, PersonalBestLine, SavedBests, VisitBest, Whose};
 pub use saved_world::{SavedMap, SavedMapData, SavedWorld, WORLD_VERSION};
 pub use search::{DensityTier, HuntingTarget, MobChoice, RouteStop, SearchResult, SearchState, SearchView, Trip};
 pub use session::{Deaths, ExpRate, ExpTracking, TrackingState};

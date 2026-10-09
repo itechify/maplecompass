@@ -7,7 +7,9 @@ mod common;
 
 use common::player::Player;
 use common::{CONSTRUCTION_SITE_ID, FakeSource, SUNSET_SKY_ID, saved_map_page, sharing_a_title, tracking, tracking_with};
-use compass_core::{ExpBar, ExpBarReading, PanelControl, PanelState, PersonalBestLine, TrackingState, VisitBest};
+use compass_core::{
+    BestNamed, ExpBar, ExpBarReading, PanelControl, PanelState, PersonalBestLine, TrackingState, VisitBest, Whose,
+};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::Poll;
@@ -32,9 +34,10 @@ fn first_best(exp_per_hour: u64) -> Option<PersonalBestLine> {
 }
 
 /// The line on a first Visit to a map, its best set at `set_at_unix_ms` by the wall
-/// clock.
+/// clock. Forget would take that best.
 fn first_best_set(exp_per_hour: u64, set_at_unix_ms: Option<u64>) -> Option<PersonalBestLine> {
-    Some(PersonalBestLine { exp_per_hour, set_at_unix_ms, first: true, share_hundredths: None, new_best: None })
+    let best = VisitBest { exp_per_hour, set_at_unix_ms };
+    Some(PersonalBestLine { named: BestNamed::FirstVisit { best }, forgets: Whose::ThisVisit })
 }
 
 #[test]
@@ -94,12 +97,19 @@ fn a_first_visit_shows_its_best_so_far_once_there_have_been_five_minutes_of_play
     assert_eq!(slower.exp_tracking.personal_best, first_best(7200));
 }
 
-/// The line once earlier Visits had a best here: "Your best EXP/h here: …", or with a
+/// The line once earlier Visits had `best` here: "Your best EXP/h here: …", or with a
 /// share, "N% of your best EXP/h here (…)"; with this Visit's best once it has beaten
-/// it, and the "new best" tag. No wall clock dates them.
+/// it, and the "new best" tag. Forget would take the higher of the two: this Visit's
+/// once it has beaten the earlier Visits'.
+fn earlier_best(best: VisitBest, share_hundredths: Option<i64>, new_best: Option<VisitBest>) -> Option<PersonalBestLine> {
+    let forgets = if new_best.is_some() { Whose::ThisVisit } else { Whose::EarlierVisits };
+    Some(PersonalBestLine { named: BestNamed::EarlierVisits { best, share_hundredths, new_best }, forgets })
+}
+
+/// As [`earlier_best`], with no wall clock to date the bests.
 fn best(exp_per_hour: u64, share_hundredths: Option<i64>, new_best: Option<u64>) -> Option<PersonalBestLine> {
-    let new_best = new_best.map(|exp_per_hour| VisitBest { exp_per_hour, set_at_unix_ms: None });
-    Some(PersonalBestLine { exp_per_hour, set_at_unix_ms: None, first: false, share_hundredths, new_best })
+    let undated = |exp_per_hour| VisitBest { exp_per_hour, set_at_unix_ms: None };
+    earlier_best(undated(exp_per_hour), share_hundredths, new_best.map(undated))
 }
 
 /// A first Visit to Sunset Sky at 7,200 EXP/h for 6 minutes, then 2 minutes on the
@@ -126,9 +136,7 @@ fn back_after_a_best_of_7200(mut player: Player) -> (Player, PanelState, Option<
 #[test]
 fn the_best_from_earlier_visits_keeps_when_it_was_set() {
     let (mut player, back, set) = back_after_a_best_of_7200(Player::clocked(tracking()));
-    let earlier = |share_hundredths| {
-        Some(PersonalBestLine { exp_per_hour: 7200, set_at_unix_ms: set, first: false, share_hundredths, new_best: None })
-    };
+    let earlier = |share_hundredths| earlier_best(VisitBest { exp_per_hour: 7200, set_at_unix_ms: set }, share_hundredths, None);
     assert!(set.is_some());
     assert_eq!(back.exp_tracking.personal_best, earlier(None));
 
@@ -141,7 +149,7 @@ fn the_best_from_earlier_visits_keeps_when_it_was_set() {
 fn once_this_visit_beats_the_best_the_line_carries_this_visits_best_and_when_it_was_set() {
     let (mut player, _, set) = back_after_a_best_of_7200(Player::clocked(tracking()));
     let line = |share_hundredths, new_best| {
-        Some(PersonalBestLine { exp_per_hour: 7200, set_at_unix_ms: set, first: false, share_hundredths, new_best })
+        earlier_best(VisitBest { exp_per_hour: 7200, set_at_unix_ms: set }, share_hundredths, new_best)
     };
 
     // 3,600 EXP/h for 5 minutes: this Visit's best so far is under 7,200, so the line
@@ -423,20 +431,41 @@ fn with_the_bar_unreadable_or_paused_the_line_holds_like_the_other_figures() {
 }
 
 #[test]
-fn the_overlay_gets_the_line_as_the_grind_tracker_renders_it() {
+fn the_overlay_gets_the_line_as_the_grind_tracker_renders_it_with_whose_best_forget_takes() {
+    // A first Visit's best so far: Forget would take it.
+    let mut first = Player::clocked(tracking());
+    first.arrive(SUNSET);
+    let five = serde_json::to_value(first.hunt(5 * MIN, 10)).unwrap();
+    assert_eq!(
+        five["expTracking"]["personalBest"],
+        serde_json::json!({
+            "kind": "firstVisit", "best": { "expPerHour": 3600, "setAtUnixMs": first.wall_clock() },
+            "forgets": "thisVisit",
+        })
+    );
+
+    // Earlier Visits' 7,200 beaten: Forget would take this Visit's 10,800...
     let (mut player, _, set) = back_after_a_best_of_7200(Player::clocked(tracking()));
     let beaten = serde_json::to_value(player.hunt(5 * MIN, 30)).unwrap();
     let beaten_at = player.wall_clock();
     assert_eq!(
         beaten["expTracking"]["personalBest"],
         serde_json::json!({
-            "expPerHour": 7200, "setAtUnixMs": set, "first": false, "shareHundredths": 15_000,
-            "newBest": { "expPerHour": 10_800, "setAtUnixMs": beaten_at },
+            "kind": "earlierVisits", "best": { "expPerHour": 7200, "setAtUnixMs": set }, "shareHundredths": 15_000,
+            "newBest": { "expPerHour": 10_800, "setAtUnixMs": beaten_at }, "forgets": "thisVisit",
         })
     );
     assert_eq!(beaten["expTracking"]["forgetUndoable"], false);
-    player.compass.press(PanelControl::ForgetBest);
-    let forgot = serde_json::to_value(player.compass.panel_state()).unwrap();
+
+    // ...and with it forgotten, the 7,200, the Forget undoable.
+    let forgot = serde_json::to_value(player.press(PanelControl::ForgetBest)).unwrap();
+    assert_eq!(
+        forgot["expTracking"]["personalBest"],
+        serde_json::json!({
+            "kind": "earlierVisits", "best": { "expPerHour": 7200, "setAtUnixMs": set }, "shareHundredths": null,
+            "newBest": null, "forgets": "earlierVisits",
+        })
+    );
     assert_eq!(forgot["expTracking"]["forgetUndoable"], true);
 }
 

@@ -6,7 +6,9 @@ mod common;
 
 use common::player::{Player, WALL_AT_START};
 use common::{CONSTRUCTION_SITE_ID, SUNSET_SKY_ID, sharing_a_title, tracking, tracking_with};
-use compass_core::{BESTS_VERSION, Compass, PanelControl, PanelState, PersonalBestLine, SavedBests};
+use compass_core::{
+    BESTS_VERSION, BestNamed, Compass, PanelControl, PanelState, PersonalBestLine, SavedBests, VisitBest, Whose,
+};
 
 const S: u64 = 1000;
 const MIN: u64 = 60 * S;
@@ -42,16 +44,19 @@ fn line(state: &PanelState) -> Option<PersonalBestLine> {
 }
 
 /// The line once earlier Visits had a best of `exp_per_hour` here, set at `set_at` by
-/// the wall clock: "Your best EXP/h here: …", or with a share, "N% of your best EXP/h
-/// here (…)".
+/// the wall clock, and this Visit hasn't beaten it: "Your best EXP/h here: …", or with
+/// a share, "N% of your best EXP/h here (…)". Forget would take it.
 fn earlier(exp_per_hour: u64, set_at: Option<u64>, share_hundredths: Option<i64>) -> Option<PersonalBestLine> {
-    Some(PersonalBestLine {
-        exp_per_hour,
-        set_at_unix_ms: set_at,
-        first: false,
-        share_hundredths,
-        new_best: None,
-    })
+    let best = VisitBest { exp_per_hour, set_at_unix_ms: set_at };
+    let named = BestNamed::EarlierVisits { best, share_hundredths, new_best: None };
+    Some(PersonalBestLine { named, forgets: Whose::EarlierVisits })
+}
+
+/// The line on a first Visit to a map, its best so far set at `set_at` by the wall clock:
+/// "Your first best EXP/h here: …". Forget would take it.
+fn first_visit(exp_per_hour: u64, set_at: Option<u64>) -> Option<PersonalBestLine> {
+    let best = VisitBest { exp_per_hour, set_at_unix_ms: set_at };
+    Some(PersonalBestLine { named: BestNamed::FirstVisit { best }, forgets: Whose::ThisVisit })
 }
 
 #[test]
@@ -116,13 +121,7 @@ fn bests_saved_in_another_shape_are_left_and_the_app_starts_with_none() {
     assert_eq!(line(&next.arrive(SUNSET)), None);
     // 5 minutes at 3,600 EXP/h: a first Visit's best.
     let five = next.hunt(5 * MIN, 10);
-    assert_eq!(line(&five).map(|l| (l.exp_per_hour, l.first)), Some((3600, true)));
-}
-
-/// The line on a first Visit to a map, its best so far set at `set_at` by the wall clock:
-/// "Your first best EXP/h here: …".
-fn first_visit(exp_per_hour: u64, set_at: Option<u64>) -> Option<PersonalBestLine> {
-    Some(PersonalBestLine { exp_per_hour, set_at_unix_ms: set_at, first: true, share_hundredths: None, new_best: None })
+    assert_eq!(line(&five), first_visit(3600, next.wall_clock()));
 }
 
 #[test]

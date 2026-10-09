@@ -71,8 +71,8 @@ const TAGS: Partial<Record<ExpTracking["state"], string>> = {
 /** The Personal Best line: the best named as Last 5 min shows its rates, so it reads as
  *  the figure the player saw there. */
 function personalBest(line: PersonalBestLine) {
-  const named = rate(line.expPerHour);
-  if (line.first) return `Your first best EXP/h here: ${named}`;
+  const named = rate(line.best.expPerHour);
+  if (line.kind === "firstVisit") return `Your first best EXP/h here: ${named}`;
   const of = line.shareHundredths;
   if (of === null) return `Your best EXP/h here: ${named}`;
   return `${percent(of, of < 1000 ? 1 : 0)} of your best EXP/h here (${named})`;
@@ -110,17 +110,18 @@ let bestLine: PersonalBestLine | null = null;
 
 /** The Personal Best line opened in place while the pointer is on it: the best it names
  *  and when it was set, and this Visit's best once it has beaten it; on a first Visit,
- *  this Visit's. Dated afresh each time, as days pass. Under them, Forget, which removes
- *  the higher: this Visit's whenever it shows. */
+ *  this Visit's. Dated afresh each time, as days pass. Under them, Forget, named for the
+ *  best the core says it takes: the higher of the two. */
 function renderBestOpen() {
   const line = bestLine;
   bestOpen.hidden = !bestHovered || !line;
   if (!line || bestOpen.hidden) return;
-  showBest(bestEarlier, bestEarlierExp, bestEarlierWhen, line.first ? null : line);
-  showBest(bestVisit, bestVisitExp, bestVisitWhen, line.first ? line : line.newBest);
-  const thisVisit = line.first || line.newBest !== null;
-  bestForget.setAttribute("aria-label", thisVisit ? "Forget this Visit's best" : "Forget your best here");
-  bestForget.title = thisVisit
+  const [earlier, thisVisit] = line.kind === "earlierVisits" ? [line.best, line.newBest] : [null, line.best];
+  showBest(bestEarlier, bestEarlierExp, bestEarlierWhen, earlier);
+  showBest(bestVisit, bestVisitExp, bestVisitWhen, thisVisit);
+  const forgetsThisVisit = line.forgets === "thisVisit";
+  bestForget.setAttribute("aria-label", forgetsThisVisit ? "Forget this Visit's best" : "Forget your best here");
+  bestForget.title = forgetsThisVisit
     ? "Forget this Visit's best: only play from now on counts towards it"
     : "Forget your best here: your next-best Visit takes over";
 }
@@ -176,7 +177,7 @@ function render({ shown, tracking: t }: TrackerView) {
   if (!bestLine || !shown) bestHovered = false;
   if (t.personalBest) {
     bestText.textContent = personalBest(t.personalBest);
-    bestTag.hidden = !t.personalBest.newBest;
+    bestTag.hidden = t.personalBest.kind !== "earlierVisits" || !t.personalBest.newBest;
   }
   renderBestOpen();
   const shareOf = t.ceilingShareHundredths;
