@@ -10,7 +10,7 @@ use common::{
     tracking_with,
 };
 use compass_core::{
-    BESTS_VERSION, BestNamed, Compass, PanelControl, PanelState, PersonalBestLine, SavedBests, VisitBest, Whose,
+    BESTS_VERSION, BestNamed, Compass, PanelControl, PanelState, PersonalBestLine, SavedBests, VisitBest,
 };
 
 const S: u64 = 1000;
@@ -48,18 +48,17 @@ fn line(state: &PanelState) -> Option<PersonalBestLine> {
 
 /// The line once earlier Visits had a best of `exp_per_hour` here, set at `set_at` by
 /// the wall clock, and this Visit hasn't beaten it: "Your best EXP/h here: …", or with
-/// a share, "N% of your best EXP/h here (…)". Forget would take it.
+/// a share, "N% of your best EXP/h here (…)".
 fn earlier(exp_per_hour: u64, set_at: Option<u64>, share_hundredths: Option<i64>) -> Option<PersonalBestLine> {
     let best = VisitBest { exp_per_hour, set_at_unix_ms: set_at };
-    let named = BestNamed::EarlierVisits { best, share_hundredths, new_best: None };
-    Some(PersonalBestLine { named, forgets: Whose::EarlierVisits })
+    Some(PersonalBestLine { named: BestNamed::EarlierVisits { best, share_hundredths, new_best: None } })
 }
 
 /// The line on a first Visit to a map, its best so far set at `set_at` by the wall clock:
-/// "Your first best EXP/h here: …". Forget would take it.
+/// "Your first best EXP/h here: …".
 fn first_visit(exp_per_hour: u64, set_at: Option<u64>) -> Option<PersonalBestLine> {
     let best = VisitBest { exp_per_hour, set_at_unix_ms: set_at };
-    Some(PersonalBestLine { named: BestNamed::FirstVisit { best }, forgets: Whose::ThisVisit })
+    Some(PersonalBestLine { named: BestNamed::FirstVisit { best } })
 }
 
 #[test]
@@ -288,7 +287,6 @@ fn a_candidate_chosen_again_with_no_rate_shows_and_forgets_no_best_but_the_one_s
     // ...and Forget there takes nothing, from the line or from what the shell saves.
     let forgot = player.press(PanelControl::ForgetBest);
     assert_eq!(line(&forgot), None);
-    assert!(!forgot.exp_tracking.forget_undoable);
     assert_eq!(player.saves(), saves);
     assert_eq!((sunset_rates(&player), site_rates(&player)), (vec![], vec![3600]));
 
@@ -347,140 +345,39 @@ fn the_hotkey_passing_a_candidate_that_had_a_best_this_visit_leaves_the_visits_b
 }
 
 #[test]
-fn a_forget_and_its_undo_change_the_bests_the_shell_saves() {
+fn removing_a_best_from_the_history_changes_the_bests_the_shell_saves() {
     let mut player = Player::saved_by_the_shell(tracking());
     let sunset_rates = |player: &Player| saved_rates(&player.compass.bests(), SUNSET_SKY_ID);
-    let saving = |player: &mut Player, control| {
-        let saves = player.saves();
-        player.press(control);
-        assert_eq!(player.saves(), saves + 1, "{control:?} saved");
-        sunset_rates(player)
-    };
 
-    // A first Visit's only best, forgotten: Sunset Sky has none to save. Undo brings it
-    // back.
+    // A first Visit's best at 7,200 EXP/h isn't in the history yet: removing takes
+    // nothing, and there is nothing to save.
     player.arrive(SUNSET);
     player.hunt(5 * MIN, 20);
     let set = player.wall_clock();
     player.hunt(MIN, 20);
-    assert_eq!(sunset_rates(&player), [7200]);
-    assert_eq!(saving(&mut player, PanelControl::ForgetBest), [] as [u64; 0]);
-    assert_eq!(saving(&mut player, PanelControl::UndoForget), [7200]);
-
-    // Back after the Construction Site: forgetting the earlier Visit's best, Sunset Sky's
-    // only one, leaves it none to save. Undo brings it back.
-    player.arrive(CONSTRUCTION_SITE);
-    player.hunt(MIN, 30);
-    player.arrive(SUNSET);
-    assert_eq!(saving(&mut player, PanelControl::ForgetBest), [] as [u64; 0]);
-    assert!(player.compass.bests().maps.iter().all(|m| m.id != SUNSET_SKY_ID));
-    assert_eq!(saving(&mut player, PanelControl::UndoForget), [7200]);
-
-    // At 3,600 EXP/h: forgetting the earlier Visit's best leaves this Visit's. Undo brings
-    // it back.
-    player.hunt(5 * MIN, 10);
-    assert_eq!(sunset_rates(&player), [7200, 3600]);
-    assert_eq!(saving(&mut player, PanelControl::ForgetBest), [3600]);
-    assert_eq!(saving(&mut player, PanelControl::UndoForget), [7200, 3600]);
-
-    // 10,800 EXP/h beats it: forgetting this Visit's best leaves the earlier one.
-    player.hunt(5 * MIN, 30);
-    assert_eq!(sunset_rates(&player), [10_800, 7200]);
-    assert_eq!(saving(&mut player, PanelControl::ForgetBest), [7200]);
-    assert_eq!(saving(&mut player, PanelControl::UndoForget), [10_800, 7200]);
-
-    // Forgotten when MapleCompass closes, it stays forgotten: the 7,200 is the best, set
-    // when it was.
+    let saves = player.saves();
     player.press(PanelControl::ForgetBest);
+    assert_eq!((player.saves(), sunset_rates(&player)), (saves, vec![7200]));
+
+    // A second Visit at 10,800 EXP/h, then back a third time: removing the 10,800 leaves
+    // the 7,200, and the shell saves that.
+    player.arrive(CONSTRUCTION_SITE);
+    player.arrive(SUNSET);
+    player.hunt(6 * MIN, 30);
+    player.arrive(CONSTRUCTION_SITE);
+    player.arrive(SUNSET);
+    assert_eq!(sunset_rates(&player), [10_800, 7200]);
+    let saves = player.saves();
+    player.press(PanelControl::ForgetBest);
+    assert_eq!((player.saves(), sunset_rates(&player)), (saves + 1, vec![7200]));
+
+    // The next launch has it gone: the 7,200 is the best, set when it was.
     let mut next = relaunch(handed_out(&player.compass), WALL_AT_START + DAY);
     assert_eq!(line(&next.arrive(SUNSET)), earlier(7200, set, None));
-}
 
-/// Where Sunset Sky and the Construction Site share a title, the player chooses Sunset
-/// Sky and hunts 6 minutes at 36,000 EXP/h, a bad jump that is this Visit's best there,
-/// then goes on to the Construction Site with the hotkey, whose window still holds the
-/// jump: its 36,000 is the Visit's best, which they forget. When the jump was set on
-/// Sunset Sky, and when on the Construction Site.
-fn a_jump_forgotten_on_the_construction_site_after_sunset_sky(player: &mut Player) -> (Option<u64>, Option<u64>) {
-    player.arrive(KERNING);
-    assert_eq!(shown_map(&player.choose_next()), Some(SUNSET_SKY_ID));
-    player.hunt(5 * MIN, 100);
-    let sunset_set = player.wall_clock();
-    assert_eq!(line(&player.hunt(MIN, 100)), first_visit(36_000, sunset_set));
-
-    let site = player.choose_next();
-    let site_set = player.wall_clock();
-    assert_eq!(shown_map(&site), Some(CONSTRUCTION_SITE_ID));
-    assert_eq!(line(&site), first_visit(36_000, site_set));
-    assert_eq!(line(&player.press(PanelControl::ForgetBest)), None);
-    (sunset_set, site_set)
-}
-
-#[test]
-fn forgetting_this_visits_best_forgets_every_candidates_so_the_jump_is_not_counted_again_on_another() {
-    let mut player = Player::saved_by_the_shell(tracking_with(sharing_a_title()));
-    let rates = |player: &Player| {
-        let bests = player.compass.bests();
-        (saved_rates(&bests, SUNSET_SKY_ID), saved_rates(&bests, CONSTRUCTION_SITE_ID))
-    };
-    a_jump_forgotten_on_the_construction_site_after_sunset_sky(&mut player);
-    assert_eq!(rates(&player), (vec![], vec![]));
-
-    // 3,600 EXP/h for 6 minutes on the Construction Site: its best since the Forget.
-    player.hunt(5 * MIN, 10);
-    let site_set = player.wall_clock();
-    assert_eq!(line(&player.hunt(MIN, 10)), first_visit(3600, site_set));
-    assert_eq!(rates(&player), (vec![], vec![3600]));
-
-    // Back on Sunset Sky, the Visit's best is its rate since the Forget: the jump there
-    // was forgotten with the Construction Site's.
-    let sunset = player.choose_next();
-    assert_eq!(shown_map(&sunset), Some(SUNSET_SKY_ID));
-    assert_eq!(line(&sunset), first_visit(3600, player.wall_clock()));
-    assert_eq!(rates(&player), (vec![3600], vec![]));
-
-    // The Visit ends with that 3,600 joining Sunset Sky's bests.
-    player.arrive(ROCKY_ROAD);
-    assert_eq!(rates(&player), (vec![3600], vec![]));
-}
-
-#[test]
-fn back_on_a_candidate_right_after_forgetting_this_visits_best_only_windows_after_the_forget_count() {
-    let mut player = Player::saved_by_the_shell(tracking_with(sharing_a_title()));
-    a_jump_forgotten_on_the_construction_site_after_sunset_sky(&mut player);
-
-    // Straight back to Sunset Sky: nothing since the Forget to count...
-    let sunset = player.choose_next();
-    assert_eq!(shown_map(&sunset), Some(SUNSET_SKY_ID));
-    assert_eq!(line(&sunset), None);
-
-    // ...and at 3,600 EXP/h, nothing until 5 minutes since it, then that, not the jump.
-    assert_eq!(line(&player.hunt(4 * MIN + 30 * S, 10)), None);
-    let five = player.hunt(30 * S, 10);
-    assert_eq!(line(&five), first_visit(3600, player.wall_clock()));
-    assert_eq!(saved_rates(&player.compass.bests(), SUNSET_SKY_ID), [3600]);
-}
-
-#[test]
-fn undoing_a_forget_of_this_visits_best_brings_back_every_candidates() {
-    let mut player = Player::saved_by_the_shell(tracking_with(sharing_a_title()));
-    let (sunset_jump, site_jump) = a_jump_forgotten_on_the_construction_site_after_sunset_sky(&mut player);
-
-    // 3,600 EXP/h for 6 minutes on the Construction Site, then back on Sunset Sky: its
-    // best is that 3,600.
-    player.hunt(6 * MIN, 10);
-    assert_eq!(line(&player.choose_next()), first_visit(3600, player.wall_clock()));
-
-    // Undo: Sunset Sky's jump is back, above the 3,600 set since, as if never forgotten...
-    let undone = player.press(PanelControl::UndoForget);
-    assert_eq!(line(&undone), first_visit(36_000, sunset_jump));
-    assert_eq!(saved_rates(&player.compass.bests(), SUNSET_SKY_ID), [36_000]);
-
-    // ...and so is the Construction Site's.
-    player.hunt(MIN, 10);
-    let site = player.choose_next();
-    assert_eq!(shown_map(&site), Some(CONSTRUCTION_SITE_ID));
-    assert_eq!(line(&site), first_visit(36_000, site_jump));
+    // Removing the map's only best leaves it none to save.
+    next.press(PanelControl::ForgetBest);
+    assert!(next.compass.bests().maps.iter().all(|m| m.id != SUNSET_SKY_ID));
 }
 
 #[test]
