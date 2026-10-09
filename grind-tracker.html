@@ -54,9 +54,28 @@
                 <span class="value" id="session-percent"></span><span class="unit per">/h</span>
               </div>
             </div>
-            <p class="line" id="tracking-best" hidden>
-              <span id="tracking-best-text"></span><span class="tag" id="tracking-best-tag" hidden>new best</span>
-            </p>
+            <!-- Under the pointer the Personal Best line opens in place, and the window grows
+                 to fit: the best and when it was set, and this Visit's once it beat it. -->
+            <div class="best" id="tracking-best" hidden>
+              <p class="line">
+                <span id="tracking-best-text"></span><span class="tag" id="tracking-best-tag" hidden>new best</span>
+              </p>
+              <div class="best-open" id="tracking-best-open" hidden>
+                <div class="best-rows">
+                  <div class="row" id="best-earlier">
+                    <span class="period">Your best</span>
+                    <span class="value" id="best-earlier-exp"></span>
+                    <span class="when" id="best-earlier-when"></span>
+                  </div>
+                  <div class="row" id="best-visit">
+                    <span class="period">This Visit</span>
+                    <span class="value" id="best-visit-exp"></span>
+                    <span class="when" id="best-visit-when"></span>
+                  </div>
+                </div>
+                <!-- Forget goes here, under the bests: it removes the higher of the two. -->
+              </div>
+            </div>
             <p class="line" id="tracking-share" hidden></p>
             <p class="line" id="tracking-deaths" hidden></p>
           </div>
