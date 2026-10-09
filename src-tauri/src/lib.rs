@@ -946,6 +946,9 @@ fn keep_on_top_while_in_front(window: isize, shows: Arc<AtomicBool>, commands: S
     use compass_core::Foreground;
     let window = windows::Win32::Foundation::HWND(window as *mut _);
     let mut last_error = None;
+    // On top or out of sight, as this watcher last set it: the window's style alone can't
+    // be trusted to say (see `gamewin::set_on_top`).
+    let mut set_before = None;
     loop {
         std::thread::sleep(WINDOW_TICK);
         let shows = shows.load(Ordering::Relaxed);
@@ -954,7 +957,10 @@ fn keep_on_top_while_in_front(window: isize, shows: Arc<AtomicBool>, commands: S
             gamewin::find_game().is_some_and(|game| gamewin::foreground(Some(game.handle)) != Foreground::OtherApp)
         };
         let on_top = shows && in_front();
-        let moved = gamewin::set_on_top(window, on_top);
+        let moved = gamewin::set_on_top(window, on_top, set_before);
+        if moved.is_ok() {
+            set_before = Some(on_top);
+        }
         // The core still shows it, over another app: the compass loop is behind.
         if shows && !on_top && matches!(moved, Ok(true)) && commands.send(Command::CheckForeground).is_err() {
             return;
