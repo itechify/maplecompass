@@ -191,8 +191,8 @@ pub fn run() {
             compass.restore(settings::load(&settings_path));
             // The Personal Bests earlier launches set, beside the settings: a small file,
             // read before anything is captured, so no best is set before they are back.
-            let bests_path = bests::path(app.handle())?;
-            compass.restore_bests(bests::load(&bests_path));
+            let (bests_file, saved_bests) = bests::BestsFile::load(bests::path(app.handle())?);
+            compass.restore_bests(saved_bests);
             let (commands, commands_rx) = mpsc::channel();
             // What the crawl learned at earlier launches: read (or built from the cached
             // pages) on a thread of its own, while the crawl holds for it.
@@ -248,7 +248,7 @@ pub fn run() {
             let channels = Channels { commands: commands_rx, picks: picks_rx };
             let windows = Windows { overlay, setup: setup_windows, grind_tracker, item_lookup, hotkeys };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
-                let files = Files { settings: settings_path, bests: bests_path, cache };
+                let files = Files { settings: settings_path, bests: bests_file, cache };
                 compass_loop(handle, windows, compass, reader, channels, files)
             })?;
             Ok(())
@@ -302,20 +302,21 @@ struct Windows {
 /// crawl learned.
 struct Files {
     settings: PathBuf,
-    bests: PathBuf,
+    bests: bests::BestsFile,
     cache: PathBuf,
 }
 
 /// Save the Personal Bests if the core's bests revision moved on from `saved` (the one
 /// last saved, or restored at startup). At once, not once they settle: the Visit under
-/// way's best is kept as it changes, so however MapleCompass closes, it keeps it.
-fn save_bests(compass: &Compass, path: &std::path::Path, saved: &mut u64) {
+/// way's best is kept as it changes, so however MapleCompass closes, it keeps it. Never
+/// over a file that didn't read at startup and couldn't be set aside.
+fn save_bests(compass: &Compass, file: &bests::BestsFile, saved: &mut u64) {
     let revision = compass.bests_revision();
     if *saved == revision {
         return;
     }
     *saved = revision;
-    if let Err(e) = bests::save(path, &compass.bests()) {
+    if let Err(e) = file.save(&compass.bests()) {
         eprintln!("saving personal bests failed: {e}");
     }
 }
