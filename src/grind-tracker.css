@@ -167,6 +167,51 @@
   white-space: nowrap;
 }
 
+/* The Personal Best line opened in place under the pointer: the best and when it was set,
+   and this Visit's once it beat it, set out as the rates are, figures right-aligned. The
+   line above names the unit, so "set 3 Oct 2025" keeps to one line beside the figure. The
+   window grows to fit: nothing floats over the figures. No motion: it is there or not.
+   Records rather than figures that move, so they stay bold while the figures are held. */
+.tracking .best-open {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.best-rows {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  justify-content: start;
+  align-items: baseline;
+  row-gap: 1px;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--ink-2);
+}
+
+.best-rows .row {
+  display: contents;
+}
+
+.best-rows .period {
+  padding-right: 8px;
+  white-space: nowrap;
+}
+
+.best-rows .value {
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* Where a figure in the millions leaves "set 3 Oct 2025" no room, it wraps under itself. */
+.best-rows .when {
+  padding-left: 8px;
+  color: var(--ink-3);
+}
+
 /* Rates still settling, held while paused, or held while the bar can't be read (the note
    above says why): the figures show in the light weight, a step back from the bold they
    stand in when they move. Never faded: they stay as legible as ever. */
