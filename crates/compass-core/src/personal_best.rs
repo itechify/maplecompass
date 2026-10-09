@@ -158,9 +158,12 @@ impl Bests {
         saved
     }
 
-    /// Take back the bests an earlier launch saved, in place of any there are.
+    /// Take back the bests an earlier launch saved, in place of any there are. Bests
+    /// saved in another shape are left.
     pub fn restore(&mut self, saved: SavedBests) {
-        self.earlier = saved;
+        if saved.version == BESTS_VERSION {
+            self.earlier = saved;
+        }
     }
 }
 
