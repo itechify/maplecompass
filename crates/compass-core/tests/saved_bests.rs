@@ -242,13 +242,15 @@ fn the_shell_saves_the_bests_whenever_they_change_and_only_then() {
     let site_rates = |player: &Player| saved_rates(&player.compass.bests(), CONSTRUCTION_SITE_ID);
     assert_eq!(site_rates(&player), [14_400, 7200]);
 
-    // With no rate since a reset, choosing Sunset Sky gives it no best of its own, but
-    // the Visit's best goes with the choice; choosing the Construction Site brings it back.
+    // With no rate since a reset, choosing Sunset Sky gives it no best of its own: the
+    // Visit's best stays the Construction Site's, so closing MapleCompass now keeps it,
+    // and it joins the Construction Site's others when the Visit ends there.
     player.press(PanelControl::ResetSession);
-    player.choose_next();
-    assert_eq!((player.saves(), site_rates(&player)), (joined + 1, vec![14_400]));
-    player.choose_next();
-    assert_eq!((player.saves(), site_rates(&player)), (joined + 2, vec![14_400, 7200]));
+    let sunset = player.choose_next();
+    assert_eq!(sunset.map.map(|m| m.id), Some(SUNSET_SKY_ID.to_string()));
+    assert_eq!((player.saves(), site_rates(&player)), (joined, vec![14_400, 7200]));
+    player.arrive(ROCKY_ROAD);
+    assert_eq!((player.saves(), site_rates(&player)), (joined, vec![14_400, 7200]));
 }
 
 #[test]

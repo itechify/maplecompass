@@ -8,8 +8,10 @@
 //! - A map's Personal Best is the best of its Visits'. During a Visit the rate is
 //!   compared with the earlier Visits' best, which can't change until the Visit ends:
 //!   this Visit's best joins them then. No rate is capped or rejected.
-//! - A Visit's best is for the map it was last certain on: the player may choose among
-//!   Candidates, and the hotkey goes past the others on the way.
+//! - A Visit's best is for the map it was last certain on with a rate to count: the
+//!   player may choose among Candidates, and the hotkey goes past the others on the way.
+//!   One shown with nothing to count yet (just after a reset, say) doesn't take it, so
+//!   closing MapleCompass then keeps it for the map it came from.
 //! - A best is dated by the wall clock at the refresh that first showed it, for the line's
 //!   hover to say when it was set. The UI words the date, in the player's local time.
 //! - Bests are per map (MeowDB map ID), for every character: nothing about the Session
@@ -102,8 +104,9 @@ pub(crate) struct Bests {
     /// The Visit under way's best on each map it was certain on: one, unless the player
     /// chose among Candidates.
     visit: Vec<(String, VisitBest)>,
-    /// The map the Visit under way was last certain on: the one its best is for. The
-    /// hotkey goes past the other Candidates on the way to the one the player chooses.
+    /// The map the Visit under way was last certain on with a rate to count: the one its
+    /// best is for. The hotkey goes past the other Candidates on the way to the one the
+    /// player chooses; one it shows with nothing to count doesn't take the best.
     on: Option<String>,
     /// Changes whenever what [`Bests::saved`] hands out does.
     revision: u64,
@@ -132,10 +135,11 @@ impl Bests {
 
     /// As [`Bests::shown`], leaving the revision to it.
     fn record(&mut self, map: &str, rate: Option<u64>, now_unix_ms: Option<u64>) {
+        // A Candidate shown with nothing to count doesn't take the Visit's best.
+        let Some(rate) = rate else { return };
         if self.on.as_deref() != Some(map) {
             self.on = Some(map.to_string());
         }
-        let Some(rate) = rate else { return };
         let shown = VisitBest { exp_per_hour: rate, set_at_unix_ms: now_unix_ms };
         match self.visit.iter_mut().find(|(id, _)| id == map) {
             Some((_, best)) if best.exp_per_hour >= rate => {}
@@ -152,7 +156,7 @@ impl Bests {
         join(&mut self.earlier, map, best);
     }
 
-    /// The Visit under way's best on the map it was last certain on, if it has one.
+    /// The Visit under way's best on the map it is for, if it has one.
     fn this_visit(&self) -> Option<(&String, VisitBest)> {
         let on = self.on.as_ref()?;
         self.visit.iter().find(|(id, _)| id == on).map(|(id, best)| (id, *best))
@@ -278,9 +282,9 @@ impl Bests {
     }
 
     /// Changes whenever what [`Bests::saved`] hands out does, and only then: the Visit
-    /// under way's best set, raised, or moved to the Candidate chosen, where it makes its
-    /// map's [`VISITS_KEPT`]; a best forgotten or brought back; bests restored. A Visit
-    /// ending changes nothing handed out.
+    /// under way's best set, raised, or moved to a Candidate chosen that counts a rate,
+    /// where it makes its map's [`VISITS_KEPT`]; a best forgotten or brought back; bests
+    /// restored. A Visit ending changes nothing handed out.
     pub fn revision(&self) -> u64 {
         self.revision
     }
