@@ -158,6 +158,15 @@
   color: var(--ink-2);
 }
 
+/* "new best" after the Personal Best line, the game's small label as "warming up" is
+   beside Time to Level; it goes under the line whole where it doesn't fit. */
+.tracking .line .tag {
+  display: inline-block;
+  margin-left: 6px;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+
 /* Rates still settling, held while paused, or held while the bar can't be read (the note
    above says why): the figures show in the light weight, a step back from the bold they
    stand in when they move. Never faded: they stay as legible as ever. */
