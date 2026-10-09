@@ -39,6 +39,7 @@
 //!   Visit, and a map with another ceiling. The bar's last reading shows as it comes.
 
 use crate::ExpBar;
+use crate::personal_best::{Bests, PersonalBestLine};
 use serde::Serialize;
 
 /// What EXP tracking shows: everything the panel's tracking section and the collapsed
@@ -89,6 +90,9 @@ pub struct ExpTracking {
     /// reading rather than holding with the figures, so the player sees it being read.
     /// `None` until one is.
     pub bar: Option<ExpBar>,
+    /// How Last 5 min compares with the Personal Best on the shown map, while it is
+    /// certain and has a Map Summary; `None` there until there is a best to name.
+    pub personal_best: Option<PersonalBestLine>,
 }
 
 /// The deaths in a Session: drops in EXP within the level.
@@ -247,6 +251,8 @@ pub(crate) struct Session {
     /// The Visit under way. It outlasts Sessions: a reset or a character switch doesn't
     /// move the player.
     visit: Visit,
+    /// Every map's Personal Bests, which outlast Sessions too.
+    bests: Bests,
 }
 
 /// A Visit (GLOSSARY): from the panel confirming a map until it confirms another.
@@ -279,6 +285,8 @@ struct Shown {
     visit: u64,
     /// The solo ceiling they were measured against.
     ceiling: Option<u64>,
+    /// The map whose Personal Best they were measured against.
+    map: Option<String>,
     /// The Session's level-ups by then.
     level_ups: u32,
     tracking: ExpTracking,
@@ -573,6 +581,7 @@ impl Session {
     pub fn arrive(&mut self) {
         let now = self.now;
         self.visit = Visit { count: self.visit.count + 1, at: now };
+        self.bests.end_visit();
         if let Some(figures) = &mut self.figures {
             figures.visit_from = figures.active(now);
         }
@@ -615,19 +624,21 @@ impl Session {
     }
 
     /// What the panel shows, with tracking on, on a map whose solo EXP/h ceiling is
-    /// `ceiling` (if it is known): the figures measured earlier in this [`REFRESH_MS`]
-    /// stretch, unless an event since asks for them afresh; and the bar's last reading.
-    pub fn tracking(&mut self, ceiling: Option<u64>) -> ExpTracking {
-        let fresh = self.measure(ceiling);
+    /// `ceiling` (if it is known), and which is `map` (its MeowDB ID) if Personal Bests
+    /// are kept there: the figures measured earlier in this [`REFRESH_MS`] stretch, unless
+    /// an event since asks for them afresh; and the bar's last reading.
+    pub fn tracking(&mut self, ceiling: Option<u64>, map: Option<&str>) -> ExpTracking {
+        let mut fresh = self.measure(ceiling);
         let stretch = self.now / REFRESH_MS;
         // While the bar can't be read nothing new is known: the figures shown stay as
         // they were, unless the player arrives on another map or the share would be of
-        // another ceiling (the map's page come, or another Candidate chosen).
+        // another ceiling or best (the map's page come, or another Candidate chosen).
         let unreadable = fresh.state == TrackingState::Unreadable;
         let visit = self.visit.count;
         let holds = self.shown.as_ref().is_some_and(|shown| {
             shown.visit == visit
                 && shown.ceiling == ceiling
+                && shown.map.as_deref() == map
                 && (unreadable
                     || shown.stretch == stretch
                         && shown.level_ups == self.level_ups
@@ -644,7 +655,19 @@ impl Session {
         match &mut self.shown {
             Some(shown) if holds => shown.tracking.state = fresh.state,
             _ => {
-                self.shown = Some(Shown { stretch, visit, ceiling, level_ups: self.level_ups, tracking: fresh });
+                if let Some(map) = map {
+                    // Last 5 min shown over a full 5 minutes of active play here counts
+                    // towards this Visit's best.
+                    let here = self.figures.as_ref().map(|f| f.rolling_since(self.now, f.visit_from));
+                    let full = here.filter(|h| h.over_ms >= ROLLING_MS && h.exp > 0);
+                    if let Some(here) = full {
+                        self.bests.record(map, here.per_hour(1, 1) as u64);
+                    }
+                    let share = |best| full.map(|here| here.per_hour(u64::from(HUNDRED_PERCENT), best));
+                    fresh.personal_best = self.bests.line(map, share);
+                }
+                let map = map.map(String::from);
+                self.shown = Some(Shown { stretch, visit, ceiling, map, level_ups: self.level_ups, tracking: fresh });
             }
         }
         let held = self.shown.as_ref().map(|shown| shown.tracking.clone()).unwrap_or_default();
@@ -702,6 +725,7 @@ impl Session {
             rolling_s: rolling.over_ms / 1000,
             reset_undoable: false,
             bar: None,
+            personal_best: None,
         }
     }
 }
