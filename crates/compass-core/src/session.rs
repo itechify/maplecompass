@@ -374,6 +374,9 @@ struct Figures {
     /// and is measured against the best: when the Visit started, or when the player last
     /// forgot the Visit's best since.
     best_from: u64,
+    /// What `best_from` was before the player last forgot the Visit's best: undoing that
+    /// Forget puts it back, so a best forgotten before it stays out.
+    best_from_before_forget: u64,
 }
 
 impl Figures {
@@ -388,6 +391,7 @@ impl Figures {
             warmed_up: false,
             visit_from: 0,
             best_from: 0,
+            best_from_before_forget: 0,
         }
     }
 
@@ -608,26 +612,30 @@ impl Session {
     pub fn forget_best(&mut self, map: &str) {
         if self.bests.forget(map) == Some(Whose::ThisVisit) {
             let now = self.now;
-            self.count_bests_from(|figures| figures.active(now));
+            self.count_bests_from(|figures| {
+                figures.best_from_before_forget = figures.best_from;
+                figures.best_from = figures.active(now);
+            });
         }
         self.shown = None;
     }
 
     /// Bring back the best the player last forgot, if they haven't left the map since: as
-    /// though they never forgot it, unless a higher best was set since.
+    /// though they never forgot it, unless a higher best was set since. Windows count from
+    /// where they did before that Forget, so a best forgotten before it stays out.
     pub fn undo_forget_best(&mut self) {
         if self.bests.undo_forget() == Some(Whose::ThisVisit) {
-            self.count_bests_from(|figures| figures.visit_from);
+            self.count_bests_from(|figures| figures.best_from = figures.best_from_before_forget);
         }
         self.shown = None;
     }
 
-    /// The Rolling Rate counts towards the Visit's best from the active time `from` gives,
-    /// in the Session's figures and in those a reset set aside.
-    fn count_bests_from(&mut self, from: impl Fn(&Figures) -> u64) {
+    /// Move where the Rolling Rate counts towards the Visit's best from, with `change`, in
+    /// the Session's figures and in those a reset set aside.
+    fn count_bests_from(&mut self, change: impl Fn(&mut Figures)) {
         let set_aside = self.undo.as_mut().map(|undo| &mut undo.figures);
         for figures in [self.figures.as_mut(), set_aside].into_iter().flatten() {
-            figures.best_from = from(figures);
+            change(figures);
         }
     }
 

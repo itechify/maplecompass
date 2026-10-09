@@ -613,6 +613,42 @@ fn undo_keeps_a_higher_best_set_since_the_forget() {
 }
 
 #[test]
+fn undo_counts_windows_from_where_they_counted_before_the_forget_not_from_arriving() {
+    let mut player = Player::new(tracking_with(sharing_a_title()));
+    player.arrive(KERNING);
+
+    // Sunset Sky chosen: 3,600 EXP/h, its first best this Visit.
+    player.choose_next();
+    assert_eq!(player.hunt(6 * MIN, 10).exp_tracking.personal_best, first_best(3600));
+
+    // On to the Construction Site, and a bad jump: 36,000 EXP/h, forgotten.
+    player.choose_next();
+    assert_eq!(player.hunt(5 * MIN, 100).exp_tracking.personal_best, first_best(36_000));
+    assert_eq!(player.press(PanelControl::ForgetBest).exp_tracking.personal_best, None);
+    let after = player.hunt(30 * S, 10);
+    assert_eq!(rolling(&after), Some(32_760));
+    assert_eq!(after.exp_tracking.personal_best, None);
+
+    // Back on Sunset Sky, its 3,600 forgotten and brought back: the jump, still in the
+    // Rolling Rate's window, started before the first Forget, and isn't recorded.
+    let sunset = player.choose_next();
+    assert_eq!(shown_map(&sunset), Some(SUNSET_SKY_ID));
+    assert_eq!(sunset.exp_tracking.personal_best, first_best(3600));
+    player.press(PanelControl::ForgetBest);
+    let undone = player.press(PanelControl::UndoForget);
+    assert_eq!(undone.exp_tracking.personal_best, first_best(3600));
+    // 4 minutes more at 3,600 EXP/h: the jump is still in the window, and still out.
+    let later = player.hunt(4 * MIN, 10);
+    assert_eq!(rolling(&later), Some(6840));
+    assert_eq!(later.exp_tracking.personal_best, first_best(3600));
+
+    // The Visit's best handed out to save is Sunset Sky's 3,600.
+    let saved = player.compass.bests();
+    let saved: Vec<_> = saved.maps.iter().map(|m| (m.id.as_str(), m.visits[0].exp_per_hour)).collect();
+    assert_eq!(saved, [(SUNSET_SKY_ID, 3600)]);
+}
+
+#[test]
 fn leaving_the_map_ends_the_undo_and_the_forget_stands() {
     let (mut player, _) = back_on_sunset_sky_after_bests_of_10800_and_7200();
     player.hunt(5 * MIN, 10);
