@@ -264,11 +264,17 @@ impl Bests {
     }
 
     /// Take back the bests an earlier launch saved, in place of any there are. Bests
-    /// saved in another shape are left.
-    pub fn restore(&mut self, saved: SavedBests) {
-        if saved.version == BESTS_VERSION {
-            self.changing(|bests| bests.earlier = saved);
+    /// saved in another shape are left, and so is a best of no EXP, which no Visit sets
+    /// (the file was edited): nothing is measured against it.
+    pub fn restore(&mut self, mut saved: SavedBests) {
+        if saved.version != BESTS_VERSION {
+            return;
         }
+        for map in &mut saved.maps {
+            map.visits.retain(|best| best.exp_per_hour > 0);
+        }
+        saved.maps.retain(|map| !map.visits.is_empty());
+        self.changing(|bests| bests.earlier = saved);
     }
 
     /// Changes whenever what [`Bests::saved`] hands out does, and only then: the Visit

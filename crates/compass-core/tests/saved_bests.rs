@@ -119,6 +119,44 @@ fn bests_saved_in_another_shape_are_left_and_the_app_starts_with_none() {
     assert_eq!(line(&five).map(|l| (l.exp_per_hour, l.first)), Some((3600, true)));
 }
 
+/// The line on a first Visit to a map, its best so far set at `set_at` by the wall clock:
+/// "Your first best EXP/h here: …".
+fn first_visit(exp_per_hour: u64, set_at: Option<u64>) -> Option<PersonalBestLine> {
+    Some(PersonalBestLine { exp_per_hour, set_at_unix_ms: set_at, first: true, share_hundredths: None, new_best: None })
+}
+
+#[test]
+fn bests_of_no_exp_in_a_hand_edited_file_are_left_out() {
+    // The file edited by hand: Sunset Sky's only best, and the Construction Site's
+    // second, are 0 EXP/h.
+    let edited = format!(
+        r#"{{"version": {BESTS_VERSION}, "maps": [
+            {{"id": "{SUNSET_SKY_ID}", "visits": [{{"expPerHour": 0, "setAtUnixMs": null}}]}},
+            {{"id": "{CONSTRUCTION_SITE_ID}", "visits": [
+                {{"expPerHour": 7200, "setAtUnixMs": {WALL_AT_START}}},
+                {{"expPerHour": 0, "setAtUnixMs": {WALL_AT_START}}}
+            ]}}
+        ]}}"#
+    );
+    let mut next = relaunch(serde_json::from_str(&edited).unwrap(), WALL_AT_START + DAY);
+    let handed = handed_out(&next.compass);
+    assert!(handed.maps.iter().all(|m| m.id != SUNSET_SKY_ID));
+    assert_eq!(saved_rates(&handed, CONSTRUCTION_SITE_ID), [7200]);
+
+    // Sunset Sky has no best: a first Visit, with its own best from 5 minutes there.
+    assert_eq!(line(&next.arrive(SUNSET)), None);
+    let five = next.hunt(5 * MIN, 10);
+    assert_eq!(line(&five), first_visit(3600, next.wall_clock()));
+
+    // On the Construction Site, 3,600 EXP/h is 50% of the 7,200; forgetting it leaves no
+    // best from earlier Visits, and the line reads as on a first Visit.
+    next.arrive(CONSTRUCTION_SITE);
+    let five = next.hunt(5 * MIN, 10);
+    let set = next.wall_clock();
+    assert_eq!(line(&five), earlier(7200, Some(WALL_AT_START), Some(5000)));
+    assert_eq!(line(&next.press(PanelControl::ForgetBest)), first_visit(3600, set));
+}
+
 /// The EXP/h of each Visit's best a map's saved bests hold, in their order.
 fn saved_rates(bests: &SavedBests, map: &str) -> Vec<u64> {
     let map = bests.maps.iter().find(|m| m.id == map);
