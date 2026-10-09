@@ -6,8 +6,8 @@
 mod common;
 
 use compass_core::{
-    Compass, ExpBar, ExpBarReading, ExpBarRegion, GameWindow, MapData, PanelState, PersonalBestLine, Rect,
-    ScreenRect, Settings, Size, SourceError, TitleRegion, TrackingState, meowdb,
+    Compass, ExpBar, ExpBarReading, ExpBarRegion, GameWindow, MapData, PanelControl, PanelState, PersonalBestLine,
+    Rect, ScreenRect, Settings, Size, SourceError, TitleRegion, TrackingState, meowdb,
 };
 use common::{FakeSource, index_with_title, saved_page};
 use std::sync::Arc;
@@ -333,4 +333,90 @@ fn nothing_is_recorded_while_the_exp_bar_cannot_be_read() {
     player.hunt(MIN, 10);
     let back = player.arrive(SUNSET);
     assert_eq!(back.exp_tracking.personal_best, None);
+}
+
+#[test]
+fn a_best_is_last_5_min_as_shown_at_a_refresh_never_a_peak_between() {
+    let mut player = Player::new(tracking());
+    player.arrive(SUNSET);
+    assert_eq!(player.hunt(6 * MIN, 10).exp_tracking.personal_best, first_best(3600));
+
+    // 10 s into a half minute, a burst of 310 EXP: Last 5 min would read 7,200 EXP/h
+    // (600 EXP in 5 minutes), but the figures shown hold till the half minute is out.
+    let burst = player.hunt(10 * S, 310);
+    assert_eq!(rolling(&burst), Some(3600));
+    assert_eq!(burst.exp_tracking.personal_best, first_best(3600));
+
+    // Nothing more till then: Last 5 min shows 6,960 EXP/h (580 EXP), and that is the
+    // best, as long as the burst counts in it.
+    let shown = player.hunt(20 * S, 0);
+    assert_eq!(rolling(&shown), Some(6960));
+    assert_eq!(shown.exp_tracking.personal_best, first_best(6960));
+    let later = player.hunt(5 * MIN, 10);
+    assert_eq!(rolling(&later), Some(3600));
+    assert_eq!(later.exp_tracking.personal_best, first_best(6960));
+}
+
+#[test]
+fn a_session_reset_or_a_character_switch_leaves_the_bests_as_they_were() {
+    let (mut player, _) = back_on_sunset_sky_after_a_best_of_7200();
+    // A new best this Visit: 10,800 EXP/h.
+    player.hunt(5 * MIN, 30);
+
+    // The player starts the Session afresh: the best and this Visit's new one stay.
+    player.compass.press(PanelControl::ResetSession);
+    let reset = player.compass.panel_state().clone();
+    assert_eq!(reset.exp_tracking.state, TrackingState::Waiting);
+    assert_eq!(reset.exp_tracking.personal_best, best(7200, None, true));
+    // The new Session's 5 minutes are on this map too: 3,600 EXP/h is 50% of 7,200.
+    player.hunt(5 * MIN + 10 * S, 10);
+    assert_eq!(player.hunt(20 * S, 10).exp_tracking.personal_best, best(7200, Some(5000), true));
+
+    // Another character's bar, 157 [0.94%], read three times: a Session of their own.
+    for _ in 0..3 {
+        player.at += 10 * S;
+        let bar = Some(ExpBar { exp: 157, percent_hundredths: 94 });
+        player.compass.on_exp_bar_reading(ExpBarReading { bar, at_ms: player.at });
+    }
+    let switched = player.compass.panel_state().clone();
+    assert!(switched.exp_tracking.character_switched);
+    assert_eq!(switched.exp_tracking.personal_best, best(7200, None, true));
+
+    // This Visit's best joins Sunset Sky's when it ends, whoever plays.
+    player.arrive(CONSTRUCTION_SITE);
+    let back = player.arrive(SUNSET);
+    assert_eq!(back.exp_tracking.personal_best, best(10_800, None, false));
+}
+
+#[test]
+fn with_the_bar_unreadable_or_paused_the_line_holds_like_the_other_figures() {
+    let (mut player, _) = back_on_sunset_sky_after_a_best_of_7200();
+    let held = best(7200, Some(5000), false);
+    assert_eq!(player.hunt(5 * MIN, 10).exp_tracking.personal_best, held);
+
+    // The bar can't be read for 10 minutes: everything shown holds.
+    let unreadable = player.unread(10 * MIN);
+    assert_eq!(unreadable.exp_tracking.state, TrackingState::Unreadable);
+    assert_eq!(rolling(&unreadable), Some(3600));
+    assert_eq!(unreadable.exp_tracking.personal_best, held);
+
+    // It reads again, unchanged: the Session is paused at Last 5 min's 3,600 EXP/h, and
+    // the line with it, however long the break.
+    let paused = player.hunt(10 * S, 0);
+    assert_eq!(paused.exp_tracking.state, TrackingState::Paused);
+    assert_eq!(rolling(&paused), Some(3600));
+    assert_eq!(paused.exp_tracking.personal_best, held);
+    let later = player.hunt(10 * MIN, 0);
+    assert_eq!(later.exp_tracking.state, TrackingState::Paused);
+    assert_eq!(later.exp_tracking.personal_best, held);
+}
+
+#[test]
+fn the_overlay_gets_the_line_as_the_grind_tracker_renders_it() {
+    let (mut player, _) = back_on_sunset_sky_after_a_best_of_7200();
+    let beaten = serde_json::to_value(player.hunt(5 * MIN, 30)).unwrap();
+    assert_eq!(
+        beaten["expTracking"]["personalBest"],
+        serde_json::json!({ "expPerHour": 7200, "first": false, "shareHundredths": 15_000, "newBest": true })
+    );
 }
