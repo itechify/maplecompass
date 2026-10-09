@@ -307,7 +307,7 @@ The overlay is one more of the game's windows laid over the screen, built from t
 
 It is light because the game's windows are light, see-through because the game's windows over the screen are, and dense because it is read in glances between attacks. Every state is drawn in the same window. Doubt and problems get the game's orange, and nothing else does. The confirmed rejection is the generic dark dev-tools card with a stats table on top, which this world replaced. Setup is a window on the desktop rather than over the game: it keeps an opaque lavender body, navy ink and steel buttons under the same grey window bar, and shows a recognised map exactly as the overlay's title panel will. The title-marking window's hint is a small translucent lavender window.
 
-Every window takes the pointer. The overlay is always clickable, but a click never takes the keyboard from the game except in the search view, where the query field needs it. The panel is dragged by its window bar or title panel when it sits inside the game or is detached, and resized by its sides or bottom corners, width only. Its buttons and setup's buttons carry the game's hover, pressed and keyboard-focus states; list rows in the search view take a faint hover tint. Its height follows its content. Nothing in any window moves: there is no transition or animation anywhere.
+Every window takes the pointer. The overlay is always clickable, but a click never takes the keyboard from the game except in the search view, where the query field needs it. The panel is dragged by its window bar or title panel when it sits inside the game or is detached, and resized by its sides or bottom corners, width only. Its buttons and setup's buttons carry the game's hover, pressed and keyboard-focus states; list rows in the search view take a faint hover tint. Its height follows its content. Nothing in any window moves but the world crawl's gauge: its fill eases to each new count, and a sheen runs along it while the crawl goes on. There is no other transition or animation anywhere.
 
 **Key Characteristics:**
 - The Mini Map's light grey window bar and sky-blue title panel over the Quest Helper's see-through periwinkle body, in a 4px-cornered frame.
@@ -316,7 +316,7 @@ Every window takes the pointer. The overlay is always clickable, but a click nev
 - Near-black ink with a faint light edge on the see-through body; navy ink on setup's opaque lavender.
 - Game orange appears only for doubt and problems.
 - NEXON's Maplestory typeface throughout, Light and Bold; numeric columns right-aligned.
-- Buttons in every window have the game's hover, pressed and focus states. No motion anywhere.
+- Buttons in every window have the game's hover, pressed and focus states. No motion anywhere but the crawl gauge.
 
 ## Colors
 
@@ -396,7 +396,7 @@ A single column, 380px wide until the player drags a side or bottom corner (neve
 
 The window bar runs full width (at least 22px tall, padding 2px 3px 2px 5px, 5px gaps): the 16px compass, the window's name, and at the right the toolbar (2px between buttons). The title panel runs full width, flush beneath it (padding 6px 10px 8px 11px, 1px between lines): the Street Name, then the Map Name with the doubt chip at its right. The body below is a vertical stack with 11px side insets and 16px at the bottom, clear of the corner grips: 9px between top-level items (11px under a window bar with no title panel, as in the search view), 10px between sections, 6px between portal rows and 2px between candidate rows. The rhythm is tuned pixel by pixel to the game's windows, not taken from a modular scale.
 
-Order is fixed: window bar, title panel, then any recovery or hotkey notes, then candidates when several maps share a title, then the status note, then Hidden Portals, then Mobs (a two-row summary grid of EXP/h and Mobs/h, solo and 6+ party, then the top five mobs in a fixed-layout table and a "+N more" line), then the Hunting Target below a Panel Rule, then the crawl note, then a footer with the credit below a Panel Rule. A portal row is a two-column grid: the 47px mini-minimap, then the destination with its tags over the position in words. When a section has nothing to list, its heading and its "None on this map" line share one line. Empty containers collapse rather than leave strips.
+Order is fixed: window bar, title panel, then any recovery or hotkey notes, then candidates when several maps share a title, then the status note, then Hidden Portals, then Mobs (a two-row summary grid of EXP/h and Mobs/h, solo and 6+ party, then the top five mobs in a fixed-layout table and a "+N more" line), then the Hunting Target below a Panel Rule, then the crawl note over its gauge, then a footer with the credit below a Panel Rule. A portal row is a two-column grid: the 47px mini-minimap, then the destination with its tags over the position in words. When a section has nothing to list, its heading and its "None on this map" line share one line. Empty containers collapse rather than leave strips.
 
 The Grind Tracker has a window of its own, built like the panel without a title panel or corner grips: 280px wide, as tall as its content. Its window bar holds the compass, "Grind Tracker", and at the right the reset button (while there is a Session) and a × that closes it. Its body, inset 11px with 10px at the bottom, stacks 4px apart: a Body Small note in Panel Ink Slate when the Session started afresh on a character switch, then "Waiting for EXP" or Time to Level, a rates table of Rolling 5 min and Session, and an extra line for the ceiling share and deaths, which wraps. Until the player drags it, it sits 8px below the expanded panel, right edges in line (above the panel when there is no room below); the panel's toolbar has a button that shows and hides it, pressed while it shows.
 
@@ -483,6 +483,9 @@ When several maps share a title, each row leads with what sets the map apart ("1
 - **Crawl note:** "Mapping the world: N of M maps known" while the world list loads, 12px Panel Ink Slate, quieter than a note.
 - **Problem note:** Problem Cream, a 1px Problem Amber border, a 4px radius, Problem Brown text, and an 8px orange dot at the left. The state is carried by the dot, the box and the words, not by colour alone. In setup the same note is padded 7px 12px 8px 28px with the dot 11px in, for hotkey problems and failed actions alike.
 
+### Crawl Gauge
+While the world crawl maps maps never seen, the crawl note ("Mapping the world: 312 of 422 maps known") sits 4px above a gauge drawn like the game's HP, MP and EXP gauges: a full-width 8px bar framed in game-button-edge with a 2px radius, its track sunk dark (navy at 42% with an inner shadow and a 1px light lip below), and its fill the Game Button Blue gradient with the button bevel. Game Button Blue, not Portal Blue: the minimap's legend colours keep their meaning. The fill eases to each new count over 700ms (`cubic-bezier(0.16, 1, 0.3, 1)`, through the registered `--known` property). A soft white sheen, kept to the filled part, sweeps along it every 2.6s. With reduced motion the fill jumps and there is no sheen. It is a `progressbar` with the count as its value text.
+
 ### Grind Tracker
 In its own window. A quiet "Waiting for EXP" note until a Session starts, and above everything a 12px Panel Ink Slate "New Session: switched character" when the Session started afresh by itself, until it warms up. Then a headline row: "Time to Level" (12px Panel Ink Steel), the figure (18px bold) and an optional tag; a rates table with bold values at least 72px wide under Rolling 5 min and Session; and a 12px Panel Ink Steel line for the ceiling share and deaths. While warming up or paused, the figures fall to Panel Ink Steel. "—" stands for any figure not there yet.
 
@@ -548,6 +551,6 @@ A transparent window over the game client, its whole surface the Navy Veil with 
 - **Don't** use orange, or the outlined title lettering, for anything other than their single roles.
 - **Don't** add small labels or kickers above content beyond the Street Name in the title panel; a label belongs only to the field or figure it names.
 - **Don't** let a click on the overlay take the keyboard from the game outside the search view.
-- **Don't** add motion (transitions or animations) to any window.
+- **Don't** add motion (transitions or animations) to any window. The crawl gauge is the one exception, because its motion is the progress itself; it stops when the gauge hides and under reduced motion.
 - **Don't** float any window on a blurred drop shadow; depth is highlights, bevels and hairlines.
 - **Don't** introduce a second typeface or icon fonts.

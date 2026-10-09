@@ -121,7 +121,10 @@
           </div>
           <p class="search-credit" id="hunting-credit" hidden></p>
         </section>
-        <p class="note crawl" id="crawl-progress" role="status" hidden></p>
+        <div class="crawl" id="crawl-progress" role="status" hidden>
+          <p class="note crawl-text"></p>
+          <div class="gauge" role="progressbar" aria-label="Maps known" aria-valuemin="0"><span class="gauge-fill"></span></div>
+        </div>
         <footer id="footer" hidden>
           <span id="credit"></span>
         </footer>
@@ -169,7 +172,10 @@
           </fieldset>
           <p class="keys">↑ ↓ choose a map · Enter or a click makes it your Hunting Target · Esc goes back</p>
         </div>
-        <p class="note crawl" id="search-crawl" role="status" hidden></p>
+        <div class="crawl" id="search-crawl" role="status" hidden>
+          <p class="note crawl-text"></p>
+          <div class="gauge" role="progressbar" aria-label="Maps known" aria-valuemin="0"><span class="gauge-fill"></span></div>
+        </div>
         <p class="search-credit" id="search-credit" hidden></p>
       </section>
       <div class="grip left" data-resize="West" title="Drag to resize" aria-hidden="true"></div>
