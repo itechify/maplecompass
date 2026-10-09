@@ -423,7 +423,11 @@ impl Compass {
         let tracked = self.tracker.update(snap);
         let titled = tracked.current.map_or_else(Vec::new, |i| matcher.same_title_as(i));
         let maps = titled.into_iter().map(current_map).collect();
-        self.shown_map.show(maps, &mut *self.source);
+        // Another title confirmed is another map: a new Visit. Losing the title, or choosing
+        // among the maps sharing it, is not.
+        if self.shown_map.show(maps, &mut *self.source) {
+            self.session.arrive();
+        }
         self.sync_shown_map();
         self.state.confidence = (tracked.confidence * 100.0).round() as u8;
         self.state.not_sure = tracked.not_sure;
