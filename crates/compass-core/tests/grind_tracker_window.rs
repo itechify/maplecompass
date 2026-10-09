@@ -14,8 +14,8 @@ mod common;
 
 use common::FakeSource;
 use compass_core::{
-    Action, ClientOffset, Compass, ExpBarRegion, GameWindow, PanelControl, PanelSizes, PanelState, Rect, ScreenRect,
-    Settings, Size, TitleRegion,
+    Action, ClientOffset, Compass, ExpBarRegion, Foreground, GameWindow, PanelControl, PanelSizes, PanelState, Rect,
+    ScreenRect, Settings, Size, TitleRegion,
 };
 
 const GAME: ScreenRect = ScreenRect { x: 812, y: 110, width: 1920, height: 1200 };
@@ -238,6 +238,20 @@ fn it_hides_without_the_game_window_and_while_setup_is_open() {
     assert_eq!(tracker(compass.panel_state()), None);
     compass.act(Action::CancelSetup);
     assert_eq!(tracker(compass.panel_state()), Some(rect(2068, 510, 300, 150)));
+}
+
+#[test]
+fn it_hides_while_another_app_is_in_front_of_the_game() {
+    let mut compass = started(tracking_settings());
+    let shown = tracker(compass.panel_state());
+    assert!(shown.is_some());
+
+    assert_eq!(tracker(compass.on_foreground(Foreground::OtherApp)), None);
+    assert!(compass.panel_state().grind_tracker.open, "hidden, not closed");
+
+    assert_eq!(tracker(compass.on_foreground(Foreground::Game)), shown);
+    compass.on_foreground(Foreground::OtherApp);
+    assert_eq!(tracker(compass.on_foreground(Foreground::MapleCompass)), shown);
 }
 
 #[test]
