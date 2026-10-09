@@ -9,7 +9,7 @@
 
 mod common;
 
-use common::{FakeSource, arrive, black_frame, saved_page};
+use common::{FakeSource, arrive, black_frame, index_with_title, saved_page};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -704,6 +704,29 @@ fn a_map_whose_page_arrives_after_the_player_counts_play_from_arriving() {
     // A minute after arriving, not after the page: 65 EXP, 3,900 EXP/h of 223,928.
     let there = read(&mut compass, 130 * S, 400, 952);
     assert_eq!(there.exp_tracking.ceiling_share_hundredths, Some(174));
+}
+
+#[test]
+fn choosing_among_candidates_with_the_hotkey_counts_play_since_arriving_for_the_map_chosen() {
+    // The Construction Site and Sunset Sky share the Kerning City sample's title here.
+    // The first in the map index, the Construction Site, shows first.
+    let index = index_with_title("Victoria Road", "Kerning City", &[CONSTRUCTION_SITE_ID, SUNSET_SKY_ID]);
+    let mut compass = tracking_with(FakeSource::with_index(index));
+    arrive(&mut compass, KERNING, 0);
+    read(&mut compass, 0, 160, 381);
+    read(&mut compass, 10 * S, 266, 633);
+    let first = read(&mut compass, 70 * S, 335, 798);
+    assert_eq!(first.map.map(|m| m.id).as_deref(), Some(CONSTRUCTION_SITE_ID));
+    assert_eq!(first.exp_tracking.ceiling_share_hundredths, Some(139), "4,140 EXP/h of 297,499");
+
+    // The player hasn't moved: the play since arriving counts for the map they choose.
+    // 69 EXP in 70 s is 3,549 EXP/h, of Sunset Sky's 223,928.
+    compass.tick(80 * S);
+    compass.on_hotkey("ctrl+shift+n");
+    let chosen = compass.panel_state();
+    assert_eq!(chosen.map.as_ref().map(|m| m.id.as_str()), Some(SUNSET_SKY_ID));
+    assert_eq!(chosen.exp_tracking.ceiling_share_hundredths, Some(158));
+    assert_eq!(chosen.exp_tracking.solo_exp_ceiling, Some(223_928));
 }
 
 #[test]
