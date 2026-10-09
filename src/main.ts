@@ -1022,6 +1022,8 @@ function reportHeight() {
   }
 }
 window.addEventListener("resize", reportHeight);
+// The panel's height depends on its font: measure again once it has loaded.
+document.fonts.ready.then(reportHeight);
 
 // The panel is dragged by its header, or collapsed by its icon (inside the game, or
 // detached), never by its buttons. A click anywhere leaves the keyboard with the game:
