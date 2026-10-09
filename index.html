@@ -76,12 +76,28 @@
           <p class="note" id="note" role="status"></p>
           <div class="facts" id="facts">
             <section class="portals" id="portals">
-              <h2>Hidden Portals</h2>
+              <h2>
+                <button type="button" class="section-toggle" id="portals-toggle" data-section="hiddenPortals" aria-expanded="true">
+                  <span class="section-name">Hidden Portals</span>
+                  <span class="section-count" id="portals-toggle-count" hidden></span>
+                  <span class="fold" aria-hidden="true">
+                    <svg viewBox="0 0 16 16"><path class="bar" d="M4 8h8" /><path class="post" d="M8 4v8" /></svg>
+                  </span>
+                </button>
+              </h2>
               <p class="none" id="no-portals">None on this map</p>
               <ul id="portal-rows"></ul>
             </section>
             <section class="map-mobs" id="map-mobs">
-              <h2>Mobs</h2>
+              <h2>
+                <button type="button" class="section-toggle" id="mobs-toggle" data-section="mobs" aria-expanded="true">
+                  <span class="section-name">Mobs</span>
+                  <span class="section-count" id="mobs-toggle-count" hidden></span>
+                  <span class="fold" aria-hidden="true">
+                    <svg viewBox="0 0 16 16"><path class="bar" d="M4 8h8" /><path class="post" d="M8 4v8" /></svg>
+                  </span>
+                </button>
+              </h2>
               <p class="none" id="no-mobs">No mobs on this map</p>
               <div class="summary" id="summary">
                 <span class="label">EXP/h</span>

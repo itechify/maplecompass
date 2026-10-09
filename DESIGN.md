@@ -465,6 +465,8 @@ The game's window buttons, solid and pressable, in setup.
 ### Section Heading with Legend Mark
 A 14px/18px bold heading (Section Heading) led by a CSS minimap glyph: a 10px ring (2.5px portal border on portal-fill) for Hidden Portals, or an 8px red dot with a mob-edge ring for Mobs.
 
+The whole heading row is the section's toggle: a click anywhere on it collapses the section to the heading, or opens it again. At its right sits the game's small light button (19px, Light Steel, Window Edge border, solid white top highlight) with a 13px line icon: a dash while open, a plus while collapsed. Hovering anywhere on the row lightens the button, pressing sinks it, and keyboard focus rings the row. Collapsed, the heading adds how many the section holds in regular Panel Ink Steel ("Hidden Portals 2", "Mobs 6") and everything under it goes. A section with nothing to list has nothing to collapse: its heading drops the button and stays beside "None on this map", whatever was collapsed. Collapsed sections are a setting: the same on every map, and kept between sessions.
+
 ### Portal Row (signature)
 Each Hidden Portal is drawn on a miniature minimap: a 47x29px SVG of the minimap's 5x3 grid (9-unit cells). It is drawn in this order: the Minimap Paper field, the portal's cell lit in minimap-cell, the grid lines, then the unfilled minimap-frame border on top so no edge cell covers it, and last the game's hollow ring (portal stroke, 1.7 wide) with a solid portal core. When the spot is unknown, the frame is dashed and no cell is lit. Beside it: the destination (13px bold, truncating), any tags, and the position in words (12px Panel Ink Steel, first letter capitalised).
 
