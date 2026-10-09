@@ -371,3 +371,45 @@ fn the_shell_saves_the_bests_whenever_they_change_and_only_then() {
     player.choose_next();
     assert_eq!((player.saves(), site_rates(&player)), (joined + 2, vec![14_400, 7200]));
 }
+
+#[test]
+fn a_forget_and_its_undo_change_the_bests_the_shell_saves() {
+    let mut player = Player::saved_by_the_shell(tracking());
+    let sunset_rates = |player: &Player| saved_rates(&player.compass.bests(), SUNSET_SKY_ID);
+    let saving = |player: &mut Player, control| {
+        let saves = player.saves();
+        player.press(control);
+        assert_eq!(player.saves(), saves + 1, "{control:?} saved");
+        sunset_rates(player)
+    };
+
+    // A first Visit's only best, forgotten: Sunset Sky has none to save. Undo brings it
+    // back.
+    player.arrive(SUNSET);
+    player.hunt(6 * MIN, 20);
+    assert_eq!(sunset_rates(&player), [7200]);
+    assert_eq!(saving(&mut player, PanelControl::ForgetBest), [] as [u64; 0]);
+    assert_eq!(saving(&mut player, PanelControl::UndoForget), [7200]);
+
+    // Back after the Construction Site, at 3,600 EXP/h: forgetting the earlier Visit's
+    // best leaves this Visit's. Undo brings it back.
+    player.arrive(CONSTRUCTION_SITE);
+    player.hunt(MIN, 30);
+    player.arrive(SUNSET);
+    player.hunt(5 * MIN, 10);
+    assert_eq!(sunset_rates(&player), [7200, 3600]);
+    assert_eq!(saving(&mut player, PanelControl::ForgetBest), [3600]);
+    assert_eq!(saving(&mut player, PanelControl::UndoForget), [7200, 3600]);
+
+    // 10,800 EXP/h beats it: forgetting this Visit's best leaves the earlier one.
+    player.hunt(5 * MIN, 30);
+    assert_eq!(sunset_rates(&player), [10_800, 7200]);
+    assert_eq!(saving(&mut player, PanelControl::ForgetBest), [7200]);
+    assert_eq!(saving(&mut player, PanelControl::UndoForget), [10_800, 7200]);
+
+    // Forgotten when MapleCompass closes, it stays forgotten.
+    player.press(PanelControl::ForgetBest);
+    let set = player.compass.bests().maps[0].visits[0].set_at_unix_ms.unwrap();
+    let mut next = relaunch(handed_out(&player.compass), WALL_AT_START + DAY);
+    assert_eq!(line(&next.arrive(SUNSET)), earlier(7200, set, None));
+}

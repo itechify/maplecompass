@@ -127,23 +127,20 @@ impl Bests {
     /// Visit's best there: over a full 5 minutes of active play all on the map, with the
     /// EXP bar read. A best is set when it is first shown: the same rate again keeps it.
     pub fn shown(&mut self, map: &str, rate: Option<u64>, now_unix_ms: Option<u64>) {
+        self.changing(|bests| bests.record(map, rate, now_unix_ms));
+    }
+
+    /// As [`Bests::shown`], leaving the revision to it.
+    fn record(&mut self, map: &str, rate: Option<u64>, now_unix_ms: Option<u64>) {
         if self.on.as_deref() != Some(map) {
-            // The best handed out moves with it, if either map has one this Visit.
-            let left = self.handed_out();
             self.on = Some(map.to_string());
-            if left || self.handed_out() {
-                self.revision += 1;
-            }
         }
         let Some(rate) = rate else { return };
         let shown = VisitBest { exp_per_hour: rate, set_at_unix_ms: now_unix_ms };
         match self.visit.iter_mut().find(|(id, _)| id == map) {
-            Some((_, best)) if best.exp_per_hour >= rate => return,
+            Some((_, best)) if best.exp_per_hour >= rate => {}
             Some((_, best)) => *best = shown,
             None => self.visit.push((map.to_string(), shown)),
-        }
-        if self.handed_out() {
-            self.revision += 1;
         }
     }
 
@@ -161,13 +158,14 @@ impl Bests {
         self.visit.iter().find(|(id, _)| id == on).map(|(id, best)| (id, *best))
     }
 
-    /// Whether [`Bests::saved`] hands out the Visit under way's best: it has one, and it
-    /// makes its map's [`VISITS_KEPT`].
-    fn handed_out(&self) -> bool {
-        self.this_visit().is_some_and(|(map, best)| {
-            let visits = self.earlier.maps.iter().find(|m| &m.id == map).map_or(&[][..], |m| &m.visits);
-            visits.get(VISITS_KEPT - 1).is_none_or(|last| best.exp_per_hour > last.exp_per_hour)
-        })
+    /// Do `change`, moving the revision on if it changed what [`Bests::saved`] hands out.
+    fn changing<T>(&mut self, change: impl FnOnce(&mut Self) -> T) -> T {
+        let before = self.saved();
+        let changed = change(self);
+        if self.saved() != before {
+            self.revision += 1;
+        }
+        changed
     }
 
     /// Forget the higher of `map`'s Personal Best and this Visit's best there, as the line
@@ -175,6 +173,11 @@ impl Bests {
     /// other otherwise. The next-best Visit's takes over. It can be undone until the Visit
     /// ends, or the next Forget. Whether it was this Visit's.
     pub fn forget(&mut self, map: &str) -> bool {
+        self.changing(|bests| bests.forget_higher(map))
+    }
+
+    /// As [`Bests::forget`], leaving the revision to it.
+    fn forget_higher(&mut self, map: &str) -> bool {
         let this = self.visit.iter().position(|(id, _)| id == map);
         let earlier = self.earlier.maps.iter().position(|m| m.id == map);
         let top = earlier.and_then(|at| self.earlier.maps[at].visits.first()).map(|best| best.exp_per_hour);
@@ -201,6 +204,11 @@ impl Bests {
     /// earlier Visit's in front again, this Visit's unless a higher one was set since.
     /// Whether it was this Visit's.
     pub fn undo_forget(&mut self) -> bool {
+        self.changing(Self::bring_back)
+    }
+
+    /// As [`Bests::undo_forget`], leaving the revision to it.
+    fn bring_back(&mut self) -> bool {
         let Some(Forgotten { map, best, this_visit }) = self.forgotten.take() else { return false };
         if this_visit {
             match self.visit.iter_mut().find(|(id, _)| *id == map) {
@@ -259,14 +267,14 @@ impl Bests {
     /// saved in another shape are left.
     pub fn restore(&mut self, saved: SavedBests) {
         if saved.version == BESTS_VERSION {
-            self.earlier = saved;
-            self.revision += 1;
+            self.changing(|bests| bests.earlier = saved);
         }
     }
 
     /// Changes whenever what [`Bests::saved`] hands out does, and only then: the Visit
     /// under way's best set, raised, or moved to the Candidate chosen, where it makes its
-    /// map's [`VISITS_KEPT`], or bests restored. A Visit ending changes nothing handed out.
+    /// map's [`VISITS_KEPT`]; a best forgotten or brought back; bests restored. A Visit
+    /// ending changes nothing handed out.
     pub fn revision(&self) -> u64 {
         self.revision
     }
