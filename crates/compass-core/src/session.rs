@@ -657,12 +657,11 @@ impl Session {
             _ => {
                 if let Some(map) = map {
                     // Last 5 min shown over a full 5 minutes of active play here counts
-                    // towards this Visit's best.
+                    // towards this Visit's best, unless nothing is known of the EXP.
                     let here = self.figures.as_ref().map(|f| f.rolling_since(self.now, f.visit_from));
                     let full = here.filter(|h| h.over_ms >= ROLLING_MS && h.exp > 0);
-                    if let Some(here) = full {
-                        self.bests.record(map, here.per_hour(1, 1) as u64);
-                    }
+                    let counted = full.filter(|_| !unreadable).map(|here| here.per_hour(1, 1) as u64);
+                    self.bests.shown(map, counted);
                     let share = |best| full.map(|here| here.per_hour(u64::from(HUNDRED_PERCENT), best));
                     fresh.personal_best = self.bests.line(map, share);
                 }
