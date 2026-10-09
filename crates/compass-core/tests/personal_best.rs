@@ -7,7 +7,7 @@ mod common;
 
 use compass_core::{
     Compass, ExpBar, ExpBarReading, ExpBarRegion, GameWindow, MapData, PanelControl, PanelState, PersonalBestLine,
-    Rect, ScreenRect, Settings, Size, SourceError, TitleRegion, TrackingState, meowdb,
+    Rect, ScreenRect, Settings, Size, SourceError, TitleRegion, TrackingState, VisitBest, meowdb,
 };
 use common::{FakeSource, index_with_title, saved_page};
 use std::sync::Arc;
@@ -143,7 +143,7 @@ fn first_best(exp_per_hour: u64) -> Option<PersonalBestLine> {
 /// The line on a first Visit to a map, its best set at `set_at_unix_ms` by the wall
 /// clock.
 fn first_best_set(exp_per_hour: u64, set_at_unix_ms: Option<u64>) -> Option<PersonalBestLine> {
-    Some(PersonalBestLine { exp_per_hour, set_at_unix_ms, first: true, share_hundredths: None, new_best: false })
+    Some(PersonalBestLine { exp_per_hour, set_at_unix_ms, first: true, share_hundredths: None, new_best: None })
 }
 
 #[test]
@@ -204,8 +204,10 @@ fn a_first_visit_shows_its_best_so_far_once_there_have_been_five_minutes_of_play
 }
 
 /// The line once earlier Visits had a best here: "Your best EXP/h here: …", or with a
-/// share, "N% of your best EXP/h here (…)".
-fn best(exp_per_hour: u64, share_hundredths: Option<i64>, new_best: bool) -> Option<PersonalBestLine> {
+/// share, "N% of your best EXP/h here (…)"; with this Visit's best once it has beaten
+/// it, and the "new best" tag. No wall clock dates them.
+fn best(exp_per_hour: u64, share_hundredths: Option<i64>, new_best: Option<u64>) -> Option<PersonalBestLine> {
+    let new_best = new_best.map(|exp_per_hour| VisitBest { exp_per_hour, set_at_unix_ms: None });
     Some(PersonalBestLine { exp_per_hour, set_at_unix_ms: None, first: false, share_hundredths, new_best })
 }
 
@@ -234,7 +236,7 @@ fn back_after_a_best_of_7200(mut player: Player) -> (Player, PanelState, Option<
 fn the_best_from_earlier_visits_keeps_when_it_was_set() {
     let (mut player, back, set) = back_after_a_best_of_7200(Player::clocked(tracking()));
     let earlier = |share_hundredths| {
-        Some(PersonalBestLine { exp_per_hour: 7200, set_at_unix_ms: set, first: false, share_hundredths, new_best: false })
+        Some(PersonalBestLine { exp_per_hour: 7200, set_at_unix_ms: set, first: false, share_hundredths, new_best: None })
     };
     assert!(set.is_some());
     assert_eq!(back.exp_tracking.personal_best, earlier(None));
@@ -245,18 +247,42 @@ fn the_best_from_earlier_visits_keeps_when_it_was_set() {
 }
 
 #[test]
+fn once_this_visit_beats_the_best_the_line_carries_this_visits_best_and_when_it_was_set() {
+    let (mut player, _, set) = back_after_a_best_of_7200(Player::clocked(tracking()));
+    let line = |share_hundredths, new_best| {
+        Some(PersonalBestLine { exp_per_hour: 7200, set_at_unix_ms: set, first: false, share_hundredths, new_best })
+    };
+
+    // 3,600 EXP/h for 5 minutes: this Visit's best so far is under 7,200, so the line
+    // carries only the earlier one.
+    let under = player.hunt(5 * MIN, 10);
+    assert_eq!(under.exp_tracking.personal_best, line(Some(5000), None));
+
+    // 10,800 EXP/h for 5 minutes beats it: this Visit's best is the 10,800 the last
+    // refresh showed, and set then.
+    let beaten = player.hunt(5 * MIN, 30);
+    let this_visit = Some(VisitBest { exp_per_hour: 10_800, set_at_unix_ms: player.wall_clock() });
+    assert_eq!(rolling(&beaten), Some(10_800));
+    assert_eq!(beaten.exp_tracking.personal_best, line(Some(15_000), this_visit));
+
+    // Back down to 3,600 EXP/h: it stays as it was, and when, for the rest of the Visit.
+    let slower = player.hunt(5 * MIN, 10);
+    assert_eq!(slower.exp_tracking.personal_best, line(Some(5000), this_visit));
+}
+
+#[test]
 fn coming_back_shows_the_best_until_five_minutes_there_then_the_rate_as_a_share_of_it() {
     let (mut player, back) = back_on_sunset_sky_after_a_best_of_7200();
-    assert_eq!(back.exp_tracking.personal_best, best(7200, None, false));
+    assert_eq!(back.exp_tracking.personal_best, best(7200, None, None));
 
     // 3,600 EXP/h: under 5 minutes, Last 5 min isn't all Sunset Sky's yet.
     let under = player.hunt(4 * MIN + 30 * S, 10);
-    assert_eq!(under.exp_tracking.personal_best, best(7200, None, false));
+    assert_eq!(under.exp_tracking.personal_best, best(7200, None, None));
 
     // 5 minutes there: Last 5 min's 3,600 EXP/h is 50% of 7,200.
     let five = player.hunt(30 * S, 10);
     assert_eq!(rolling(&five), Some(3600));
-    assert_eq!(five.exp_tracking.personal_best, best(7200, Some(5000), false));
+    assert_eq!(five.exp_tracking.personal_best, best(7200, Some(5000), None));
 }
 
 #[test]
@@ -266,12 +292,12 @@ fn beating_the_best_shows_the_share_past_100_percent_and_a_new_best_tag_for_the_
     // 10,800 EXP/h for 5 minutes: 150% of 7,200, a new best.
     let beaten = player.hunt(5 * MIN, 30);
     assert_eq!(rolling(&beaten), Some(10_800));
-    assert_eq!(beaten.exp_tracking.personal_best, best(7200, Some(15_000), true));
+    assert_eq!(beaten.exp_tracking.personal_best, best(7200, Some(15_000), Some(10_800)));
 
     // Back down to 3,600 EXP/h, 50%: still a new best this Visit.
     let slower = player.hunt(5 * MIN, 10);
     assert_eq!(rolling(&slower), Some(3600));
-    assert_eq!(slower.exp_tracking.personal_best, best(7200, Some(5000), true));
+    assert_eq!(slower.exp_tracking.personal_best, best(7200, Some(5000), Some(10_800)));
 }
 
 #[test]
@@ -283,15 +309,15 @@ fn the_best_compared_with_is_fixed_on_arrival_and_a_new_one_counts_from_the_next
     player.hunt(5 * MIN, 30);
     let after = player.hunt(5 * MIN, 25);
     assert_eq!(rolling(&after), Some(9000));
-    assert_eq!(after.exp_tracking.personal_best, best(7200, Some(12_500), true));
+    assert_eq!(after.exp_tracking.personal_best, best(7200, Some(12_500), Some(10_800)));
 
     // The next Visit is measured against it: 9,000 EXP/h is 83.33% of 10,800.
     player.arrive(CONSTRUCTION_SITE);
     player.hunt(MIN, 30);
     let next = player.arrive(SUNSET);
-    assert_eq!(next.exp_tracking.personal_best, best(10_800, None, false));
+    assert_eq!(next.exp_tracking.personal_best, best(10_800, None, None));
     let five = player.hunt(5 * MIN, 25);
-    assert_eq!(five.exp_tracking.personal_best, best(10_800, Some(8333), false));
+    assert_eq!(five.exp_tracking.personal_best, best(10_800, Some(8333), None));
 }
 
 /// Map `id`'s saved MeowDB page, read; unreachable without one.
@@ -389,7 +415,7 @@ fn choosing_a_candidate_past_another_keeps_this_visits_best_for_the_one_chosen()
     // ...and the Construction Site has the Visit's.
     let site = player.choose_next();
     assert_eq!(shown_map(&site), Some(CONSTRUCTION_SITE_ID));
-    assert_eq!(site.exp_tracking.personal_best, best(3600, None, false));
+    assert_eq!(site.exp_tracking.personal_best, best(3600, None, None));
 }
 
 #[test]
@@ -447,10 +473,10 @@ fn a_session_reset_or_a_character_switch_leaves_the_bests_as_they_were() {
     player.compass.press(PanelControl::ResetSession);
     let reset = player.compass.panel_state().clone();
     assert_eq!(reset.exp_tracking.state, TrackingState::Waiting);
-    assert_eq!(reset.exp_tracking.personal_best, best(7200, None, true));
+    assert_eq!(reset.exp_tracking.personal_best, best(7200, None, Some(10_800)));
     // The new Session's 5 minutes are on this map too: 3,600 EXP/h is 50% of 7,200.
     player.hunt(5 * MIN + 10 * S, 10);
-    assert_eq!(player.hunt(20 * S, 10).exp_tracking.personal_best, best(7200, Some(5000), true));
+    assert_eq!(player.hunt(20 * S, 10).exp_tracking.personal_best, best(7200, Some(5000), Some(10_800)));
 
     // Another character's bar, 157 [0.94%], read three times: a Session of their own.
     for _ in 0..3 {
@@ -460,18 +486,18 @@ fn a_session_reset_or_a_character_switch_leaves_the_bests_as_they_were() {
     }
     let switched = player.compass.panel_state().clone();
     assert!(switched.exp_tracking.character_switched);
-    assert_eq!(switched.exp_tracking.personal_best, best(7200, None, true));
+    assert_eq!(switched.exp_tracking.personal_best, best(7200, None, Some(10_800)));
 
     // This Visit's best joins Sunset Sky's when it ends, whoever plays.
     player.arrive(CONSTRUCTION_SITE);
     let back = player.arrive(SUNSET);
-    assert_eq!(back.exp_tracking.personal_best, best(10_800, None, false));
+    assert_eq!(back.exp_tracking.personal_best, best(10_800, None, None));
 }
 
 #[test]
 fn with_the_bar_unreadable_or_paused_the_line_holds_like_the_other_figures() {
     let (mut player, _) = back_on_sunset_sky_after_a_best_of_7200();
-    let held = best(7200, Some(5000), false);
+    let held = best(7200, Some(5000), None);
     assert_eq!(player.hunt(5 * MIN, 10).exp_tracking.personal_best, held);
 
     // The bar can't be read for 10 minutes: everything shown holds.
@@ -495,10 +521,12 @@ fn with_the_bar_unreadable_or_paused_the_line_holds_like_the_other_figures() {
 fn the_overlay_gets_the_line_as_the_grind_tracker_renders_it() {
     let (mut player, _, set) = back_after_a_best_of_7200(Player::clocked(tracking()));
     let beaten = serde_json::to_value(player.hunt(5 * MIN, 30)).unwrap();
+    let beaten_at = player.wall_clock();
     assert_eq!(
         beaten["expTracking"]["personalBest"],
         serde_json::json!({
-            "expPerHour": 7200, "setAtUnixMs": set, "first": false, "shareHundredths": 15_000, "newBest": true,
+            "expPerHour": 7200, "setAtUnixMs": set, "first": false, "shareHundredths": 15_000,
+            "newBest": { "expPerHour": 10_800, "setAtUnixMs": beaten_at },
         })
     );
 }
