@@ -53,21 +53,11 @@
         sessionAverage: { expPerHour: 58400, percentPerHourHundredths: 1230 },
         ceilingShareHundredths: 2050, soloExpCeiling: 297499,
         deaths: { count: 1, expLost: 120, percentLostHundredths: 210 },
-        characterSwitched: false, activeS: 4320, rollingS: 300, resetUndoable: false, bar, personalBest: null, forgetUndoable: false, ...over,
+        characterSwitched: false, activeS: 4320, rollingS: 300, resetUndoable: false, bar, personalBest: null, newBest: false, ...over,
       });
-      // A moment `back` days ago (and `years` back), in local time, as the core dates bests.
-      const daysAgo = (back, years = 0) => {
-        const now = new Date();
-        return new Date(now.getFullYear() - years, now.getMonth(), now.getDate() - back, 14, 20).getTime();
-      };
-      // The Personal Best line: a first Visit's best so far, or an earlier Visit's 66,500,
-      // set 6 days ago, which Forget takes; this Visit's 74,500 once it beat it, set today,
-      // which Forget takes then.
-      const visitBest = (expPerHour, setAtUnixMs) => ({ expPerHour, setAtUnixMs });
-      const best = (over = {}) => ({ kind: "earlierVisits", best: visitBest(66523, daysAgo(6)), shareHundredths: null, newBest: null, forgets: "earlierVisits", ...over });
-      const thisVisit = visitBest(74512, daysAgo(0));
-      const beaten = (over = {}) => best({ newBest: thisVisit, forgets: "thisVisit", ...over });
-      const first = { kind: "firstVisit", best: visitBest(61200, daysAgo(0)), forgets: "thisVisit" };
+      // The map's best from its history, 66,500 as written; Last 5 min at 74,500 beats it.
+      const best = { personalBest: 66523 };
+      const beaten = { rolling: { expPerHour: 74500, percentPerHourHundredths: 1570 }, personalBest: 66523, newBest: true };
       const empty = {
         timeToLevelS: null, timeToLevelBadge: null, rolling: null, sessionAverage: null,
         ceilingShareHundredths: null, soloExpCeiling: null, deaths: none, activeS: 0, rollingS: 0,
@@ -90,34 +80,23 @@
         switched: tracking({ state: "waiting", ...empty, characterSwitched: true, bar: { exp: 157, percentHundredths: 94 } }),
         switchedWarmingUp: tracking({ state: "warmingUp", ...early, activeS: 30, rollingS: 30, timeToLevelBadge: null, rolling: { expPerHour: 2160, percentPerHourHundredths: null }, characterSwitched: true, bar: { exp: 175, percentHundredths: 105 } }),
         losing: tracking({ timeToLevelS: null, timeToLevelBadge: null, rolling: { expPerHour: -3400, percentPerHourHundredths: -72 }, ceilingShareHundredths: null, soloExpCeiling: null, deaths: { count: 3, expLost: 9000, percentLostHundredths: 1930 } }),
-        bestFirst: tracking({ personalBest: first }),
-        bestEarly: tracking({ ...early, personalBest: best() }),
-        bestShare: tracking({ personalBest: best({ shareHundredths: 9200 }) }),
-        newBest: tracking({ rolling: { expPerHour: 74500, percentPerHourHundredths: 1570 }, personalBest: beaten({ shareHundredths: 11200 }) }),
-        newBestBelow: tracking({ state: "paused", personalBest: beaten({ shareHundredths: 9200 }) }),
-        // The pointer on the Personal Best line: it opens in place, the window grown to fit.
-        hoverFirst: tracking({ personalBest: first }),
-        hoverBest: tracking({ personalBest: best({ shareHundredths: 9200 }) }),
-        hoverYesterday: tracking({ ...early, personalBest: best({ best: visitBest(66523, daysAgo(1)) }) }),
-        hoverLastYear: tracking({ personalBest: best({ shareHundredths: 9200, best: visitBest(66523, daysAgo(6, 1)) }) }),
-        hoverNewBest: tracking({ rolling: { expPerHour: 74500, percentPerHourHundredths: 1570 }, personalBest: beaten({ shareHundredths: 11200 }) }),
-        hoverNewBestPaused: tracking({ state: "paused", personalBest: beaten({ shareHundredths: 9200 }) }),
-        hoverExtreme: tracking({ ...extreme, personalBest: beaten({ best: visitBest(1104000, daysAgo(6, 1)), shareHundredths: 11180, newBest: visitBest(1234567, daysAgo(1)) }) }),
-        // Forget pressed: the note at the top carries the Undo. This Visit's best forgotten,
-        // the earlier one is left, with no share until 5 minutes after; the map's only best
-        // forgotten, there is no line; a reset and a Forget both waiting on an Undo.
-        forgotten: tracking({ forgetUndoable: true, personalBest: best() }),
-        forgottenOnly: tracking({ forgetUndoable: true }),
-        forgottenReset: tracking({ state: "waiting", ...empty, resetUndoable: true, forgetUndoable: true }),
+        // The Personal Best: a first Visit has no history, so no Best row; back on the map,
+        // the Best row from arriving, under Session (or right under Last 5 min, early on);
+        // the star while Last 5 min beats it, held with the figures while paused.
+        firstVisit: tracking(),
+        best: tracking(best),
+        bestEarly: tracking({ ...early, ...best }),
+        bestStar: tracking(beaten),
+        bestStarPaused: tracking({ state: "paused", ...beaten }),
+        bestStarWarmingUp: tracking({ state: "warmingUp", ...early, ...beaten }),
         extreme: tracking(extreme),
+        bestExtreme: tracking({ ...extreme, personalBest: 1104000, newBest: true }),
       };
       const params = new URLSearchParams(location.search);
       document.documentElement.classList.toggle("dark", params.get("bg") === "dark");
       const s = params.get("s") ?? "active";
-      // The hover states open the Personal Best line as the pointer would; the rest close it.
       window.__show = (name) => {
         window.__handlers["grind-tracker-state"]({ event: "grind-tracker-state", id: 1, payload: { shown: true, tracking: states[name] } });
-        document.getElementById("tracking-best").dispatchEvent(new MouseEvent(name.startsWith("hover") ? "mouseenter" : "mouseleave"));
       };
       if (s === "all") {
         // A contact sheet: every state at once, each a still copy of the rendered window.

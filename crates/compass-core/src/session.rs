@@ -45,7 +45,7 @@
 //!   first of them, the one the panel shows. Bests outlast Sessions, as Visits do.
 
 use crate::ExpBar;
-use crate::personal_best::{Bests, PersonalBestLine, SavedBests};
+use crate::personal_best::{Bests, SavedBests};
 use serde::Serialize;
 
 /// What EXP tracking shows: everything the panel's tracking section and the collapsed
@@ -96,9 +96,16 @@ pub struct ExpTracking {
     /// reading rather than holding with the figures, so the player sees it being read.
     /// `None` until one is.
     pub bar: Option<ExpBar>,
-    /// How the Rolling Rate compares with the Personal Best on the shown map, while it is
-    /// certain and has a Map Summary; `None` there until there is a best to name.
-    pub personal_best: Option<PersonalBestLine>,
+    /// The Best row: the shown map's Personal Best from its history, the best of the
+    /// earlier Visits, in EXP/h, from arriving. `None` on a first Visit there, and where no
+    /// bests are kept: a map without a Map Summary, or Candidates waiting for a choice.
+    pub personal_best: Option<u64>,
+    /// The star on the Rolling Rate's row: its EXP/h is higher than `personal_best`'s, as
+    /// the Grind Tracker writes both (3 significant figures), over a full 5 minutes of
+    /// active play on the map with the bar read, as a best counts. It goes as soon as the
+    /// rate drops back. It is of the Rolling Rate shown, so it holds with it between
+    /// refreshes.
+    pub new_best: bool,
 }
 
 /// The deaths in a Session: drops in EXP within the level.
@@ -302,7 +309,7 @@ struct Against {
     visit: u64,
     /// The shown map's solo ceiling.
     ceiling: Option<u64>,
-    /// The map whose Personal Best the line compares with.
+    /// The map whose Personal Best the Best row shows.
     map: Option<String>,
 }
 
@@ -692,8 +699,12 @@ impl Session {
                     let full = here.filter(|h| h.over_ms >= ROLLING_MS && h.exp > 0);
                     let counted = full.filter(|_| !unreadable).map(|here| here.per_hour(1, 1) as u64);
                     self.bests.on_shown(map, counted, now_unix_ms);
-                    let share = |best| full.map(|here| here.per_hour(u64::from(HUNDRED_PERCENT), best));
-                    fresh.personal_best = self.bests.line(map, share);
+                    // Over a full 5 minutes here, the Rolling Rate shown is the one counted.
+                    let best = self.bests.history_best(map).map(|best| best.exp_per_hour);
+                    fresh.personal_best = best;
+                    fresh.new_best = counted
+                        .zip(best)
+                        .is_some_and(|(rate, best)| three_figures(rate) > three_figures(best));
                 }
                 self.shown = Some(Shown { stretch, against, level_ups: self.level_ups, tracking: fresh });
             }
@@ -754,8 +765,19 @@ impl Session {
             reset_undoable: false,
             bar: None,
             personal_best: None,
+            new_best: false,
         }
     }
+}
+
+/// An EXP rate as the Grind Tracker writes it, to 3 significant figures, halves up:
+/// 66,523 is 66,500, and 66,550 is 66,600.
+fn three_figures(exp_per_hour: u64) -> u64 {
+    let mut step = 1;
+    while exp_per_hour / step >= 1000 {
+        step *= 10;
+    }
+    (exp_per_hour + step / 2) / step * step
 }
 
 /// Whether `bar` carries on from `last` as the same level could: the percentage moved

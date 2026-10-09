@@ -9,9 +9,7 @@ use common::{
     CONSTRUCTION_SITE_ID, NORTHERN_TOP_ID, SUNSET_SKY_ID, sharing_a_title, three_sharing_a_title, tracking,
     tracking_with,
 };
-use compass_core::{
-    BESTS_VERSION, BestNamed, Compass, PanelControl, PanelState, PersonalBestLine, SavedBests, VisitBest,
-};
+use compass_core::{BESTS_VERSION, Compass, PanelControl, PanelState, SavedBests, VisitBest};
 
 const S: u64 = 1000;
 const MIN: u64 = 60 * S;
@@ -42,27 +40,23 @@ fn relaunch(bests: SavedBests, wall_at_start: u64) -> Player {
     Player::clocked_at(compass, wall_at_start)
 }
 
-fn line(state: &PanelState) -> Option<PersonalBestLine> {
+/// The Best row's EXP/h: the map's Personal Best from earlier Visits.
+fn best_row(state: &PanelState) -> Option<u64> {
     state.exp_tracking.personal_best
 }
 
-/// The line once earlier Visits had a best of `exp_per_hour` here, set at `set_at` by
-/// the wall clock, and this Visit hasn't beaten it: "Your best EXP/h here: …", or with
-/// a share, "N% of your best EXP/h here (…)".
-fn earlier(exp_per_hour: u64, set_at: Option<u64>, share_hundredths: Option<i64>) -> Option<PersonalBestLine> {
-    let best = VisitBest { exp_per_hour, set_at_unix_ms: set_at };
-    Some(PersonalBestLine { named: BestNamed::EarlierVisits { best, share_hundredths, new_best: None } })
+/// `map`'s Visit bests in what `compass` hands out, highest first.
+fn saved(compass: &Compass, map: &str) -> Vec<VisitBest> {
+    handed_out(compass).maps.into_iter().find(|m| m.id == map).map_or_else(Vec::new, |m| m.visits)
 }
 
-/// The line on a first Visit to a map, its best so far set at `set_at` by the wall clock:
-/// "Your first best EXP/h here: …".
-fn first_visit(exp_per_hour: u64, set_at: Option<u64>) -> Option<PersonalBestLine> {
-    let best = VisitBest { exp_per_hour, set_at_unix_ms: set_at };
-    Some(PersonalBestLine { named: BestNamed::FirstVisit { best } })
+/// A best of `exp_per_hour`, set at `set_at` by the wall clock.
+fn best(exp_per_hour: u64, set_at: Option<u64>) -> VisitBest {
+    VisitBest { exp_per_hour, set_at_unix_ms: set_at }
 }
 
 #[test]
-fn bests_handed_out_by_one_launch_show_the_same_line_and_hover_in_the_next() {
+fn bests_handed_out_by_one_launch_show_the_same_best_row_and_star_in_the_next() {
     // A first Visit to Sunset Sky at 7,200 EXP/h, its best set 5 minutes in; 2 minutes on
     // the Construction Site, and back.
     let mut first = first_launch();
@@ -73,16 +67,18 @@ fn bests_handed_out_by_one_launch_show_the_same_line_and_hover_in_the_next() {
     first.arrive(CONSTRUCTION_SITE);
     first.hunt(2 * MIN, 30);
     let back = first.arrive(SUNSET);
-    assert_eq!(line(&back), earlier(7200, set, None));
-    let saved = handed_out(&first.compass);
-    // 5 minutes at 3,600 EXP/h: 50% of it.
-    let five = first.hunt(5 * MIN, 10);
-    assert_eq!(line(&five), earlier(7200, set, Some(5000)));
+    assert_eq!(best_row(&back), Some(7200));
+    let saved_then = handed_out(&first.compass);
+    // 5 minutes at 10,800 EXP/h: a new best on it.
+    let five = first.hunt(5 * MIN, 30);
+    assert!(five.exp_tracking.new_best);
 
-    // A day later, the next launch shows the same, set when it was.
-    let mut next = relaunch(saved, WALL_AT_START + DAY);
-    assert_eq!(line(&next.arrive(SUNSET)), line(&back));
-    assert_eq!(line(&next.hunt(5 * MIN, 10)), line(&five));
+    // A day later, the next launch shows the same, and keeps when the best was set.
+    let mut next = relaunch(saved_then, WALL_AT_START + DAY);
+    assert_eq!(best_row(&next.arrive(SUNSET)), best_row(&back));
+    let next_five = next.hunt(5 * MIN, 30);
+    assert_eq!((best_row(&next_five), next_five.exp_tracking.new_best), (Some(7200), true));
+    assert_eq!(saved(&next.compass, SUNSET_SKY_ID)[1], best(7200, set));
 }
 
 #[test]
@@ -97,13 +93,15 @@ fn a_visit_cut_short_by_closing_maplecompass_keeps_its_best() {
 
     // Closing ended the Visit: the next launch has its best as the earlier Visits'.
     let mut next = relaunch(handed_out(&first.compass), WALL_AT_START + DAY);
-    assert_eq!(line(&next.arrive(SUNSET)), earlier(7200, set, None));
+    assert_eq!(best_row(&next.arrive(SUNSET)), Some(7200));
+    assert_eq!(saved(&next.compass, SUNSET_SKY_ID), [best(7200, set)]);
 
     // 10,800 EXP/h beats it, and that Visit is closed in turn: it is the best after.
     next.hunt(5 * MIN, 30);
     let beaten = next.wall_clock();
     let mut third = relaunch(handed_out(&next.compass), WALL_AT_START + 2 * DAY);
-    assert_eq!(line(&third.arrive(SUNSET)), earlier(10_800, beaten, None));
+    assert_eq!(best_row(&third.arrive(SUNSET)), Some(10_800));
+    assert_eq!(saved(&third.compass, SUNSET_SKY_ID), [best(10_800, beaten), best(7200, set)]);
 }
 
 /// A first Visit to Sunset Sky at 7,200 EXP/h for 6 minutes, closed then: the bests the
@@ -117,13 +115,13 @@ fn a_best_of_7200_on_sunset_sky() -> SavedBests {
 
 #[test]
 fn bests_saved_in_another_shape_are_left_and_the_app_starts_with_none() {
-    let saved = SavedBests { version: BESTS_VERSION + 1, ..a_best_of_7200_on_sunset_sky() };
+    let other_shape = SavedBests { version: BESTS_VERSION + 1, ..a_best_of_7200_on_sunset_sky() };
 
-    let mut next = relaunch(saved, WALL_AT_START + DAY);
-    assert_eq!(line(&next.arrive(SUNSET)), None);
+    let mut next = relaunch(other_shape, WALL_AT_START + DAY);
+    assert_eq!(best_row(&next.arrive(SUNSET)), None);
     // 5 minutes at 3,600 EXP/h: a first Visit's best.
-    let five = next.hunt(5 * MIN, 10);
-    assert_eq!(line(&five), first_visit(3600, next.wall_clock()));
+    next.hunt(5 * MIN, 10);
+    assert_eq!(saved(&next.compass, SUNSET_SKY_ID), [best(3600, next.wall_clock())]);
 }
 
 #[test]
@@ -145,17 +143,17 @@ fn bests_of_no_exp_in_a_hand_edited_file_are_left_out() {
     assert_eq!(saved_rates(&handed, CONSTRUCTION_SITE_ID), [7200]);
 
     // Sunset Sky has no best: a first Visit, with its own best from 5 minutes there.
-    assert_eq!(line(&next.arrive(SUNSET)), None);
-    let five = next.hunt(5 * MIN, 10);
-    assert_eq!(line(&five), first_visit(3600, next.wall_clock()));
+    assert_eq!(best_row(&next.arrive(SUNSET)), None);
+    next.hunt(5 * MIN, 10);
+    assert_eq!(saved(&next.compass, SUNSET_SKY_ID), [best(3600, next.wall_clock())]);
 
-    // On the Construction Site, 3,600 EXP/h is 50% of the 7,200; forgetting it leaves no
-    // best from earlier Visits, and the line reads as on a first Visit.
-    next.arrive(CONSTRUCTION_SITE);
-    let five = next.hunt(5 * MIN, 10);
+    // The Construction Site's best is the 7,200; removing it leaves the map no history,
+    // and this Visit's 3,600 to save.
+    assert_eq!(best_row(&next.arrive(CONSTRUCTION_SITE)), Some(7200));
+    next.hunt(5 * MIN, 10);
     let set = next.wall_clock();
-    assert_eq!(line(&five), earlier(7200, Some(WALL_AT_START), Some(5000)));
-    assert_eq!(line(&next.press(PanelControl::ForgetBest)), first_visit(3600, set));
+    assert_eq!(best_row(&next.press(PanelControl::RemoveBest)), None);
+    assert_eq!(saved(&next.compass, CONSTRUCTION_SITE_ID), [best(3600, set)]);
 }
 
 /// The EXP/h of each Visit's best a map's saved bests hold, in their order.
@@ -197,7 +195,7 @@ fn each_map_keeps_only_its_10_best_visits() {
 #[test]
 fn with_no_bests_saved_the_app_starts_with_none() {
     let mut next = relaunch(SavedBests::default(), WALL_AT_START + DAY);
-    assert_eq!(line(&next.arrive(SUNSET)), None);
+    assert_eq!(best_row(&next.arrive(SUNSET)), None);
 }
 
 #[test]
@@ -259,7 +257,7 @@ fn shown_map(state: &PanelState) -> Option<&str> {
 }
 
 #[test]
-fn a_candidate_chosen_again_with_no_rate_shows_and_forgets_no_best_but_the_one_saved() {
+fn a_candidate_chosen_again_with_no_rate_removes_nothing_and_leaves_the_visits_best_where_it_counted() {
     let mut player = Player::saved_by_the_shell(tracking_with(sharing_a_title()));
     let site_rates = |player: &Player| saved_rates(&player.compass.bests(), CONSTRUCTION_SITE_ID);
     let sunset_rates = |player: &Player| saved_rates(&player.compass.bests(), SUNSET_SKY_ID);
@@ -276,24 +274,23 @@ fn a_candidate_chosen_again_with_no_rate_shows_and_forgets_no_best_but_the_one_s
     assert_eq!((sunset_rates(&player), site_rates(&player)), (vec![], vec![3600]));
 
     // With no rate since a reset, back on Sunset Sky: it had a best this Visit, but the
-    // Visit's best stays the Construction Site's, so Sunset Sky's line shows none...
+    // Visit's best stays the Construction Site's, and Sunset Sky has no history to show...
     player.press(PanelControl::ResetSession);
     let saves = player.saves();
     let sunset = player.choose_next();
     assert_eq!(shown_map(&sunset), Some(SUNSET_SKY_ID));
-    assert_eq!(line(&sunset), None);
+    assert_eq!(best_row(&sunset), None);
     assert_eq!((sunset_rates(&player), site_rates(&player)), (vec![], vec![3600]));
 
-    // ...and Forget there takes nothing, from the line or from what the shell saves.
-    let forgot = player.press(PanelControl::ForgetBest);
-    assert_eq!(line(&forgot), None);
+    // ...and removing there takes nothing from what the shell saves.
+    player.press(PanelControl::RemoveBest);
     assert_eq!(player.saves(), saves);
     assert_eq!((sunset_rates(&player), site_rates(&player)), (vec![], vec![3600]));
 
-    // Back on the Construction Site, its line shows the Visit's best: the one saved.
-    let site = player.choose_next();
-    assert_eq!(shown_map(&site), Some(CONSTRUCTION_SITE_ID));
-    assert_eq!(line(&site), first_visit(3600, set));
+    // The Visit ends with the Construction Site's 3,600 joining its bests, as it was set.
+    player.arrive(ROCKY_ROAD);
+    assert_eq!(saved(&player.compass, CONSTRUCTION_SITE_ID), [best(3600, set)]);
+    assert_eq!(player.saves(), saves);
 }
 
 #[test]
@@ -323,17 +320,14 @@ fn the_hotkey_passing_a_candidate_that_had_a_best_this_visit_leaves_the_visits_b
     assert_eq!((rates(&player, CONSTRUCTION_SITE_ID), rates(&player, SUNSET_SKY_ID)), (vec![21_600], vec![]));
 
     // After another reset, the hotkey passes Sunset Sky, with no rate since, on its way to
-    // the Northern Top: the Visit's best stays the Construction Site's 21,600, and Sunset
-    // Sky's line shows no best from this Visit.
+    // the Northern Top: the Visit's best stays the Construction Site's 21,600.
     player.press(PanelControl::ResetSession);
     let saves = player.saves();
     let sunset = player.choose_next();
     assert_eq!(shown_map(&sunset), Some(SUNSET_SKY_ID));
     assert_eq!((rates(&player, CONSTRUCTION_SITE_ID), rates(&player, SUNSET_SKY_ID)), (vec![21_600], vec![]));
-    assert_eq!(line(&sunset), None);
     let top = player.choose_next();
     assert_eq!(shown_map(&top), Some(NORTHERN_TOP_ID));
-    assert_eq!(line(&top), None);
     assert_eq!(player.saves(), saves);
     assert_eq!((rates(&player, CONSTRUCTION_SITE_ID), rates(&player, SUNSET_SKY_ID)), (vec![21_600], vec![]));
 
@@ -356,7 +350,7 @@ fn removing_a_best_from_the_history_changes_the_bests_the_shell_saves() {
     let set = player.wall_clock();
     player.hunt(MIN, 20);
     let saves = player.saves();
-    player.press(PanelControl::ForgetBest);
+    player.press(PanelControl::RemoveBest);
     assert_eq!((player.saves(), sunset_rates(&player)), (saves, vec![7200]));
 
     // A second Visit at 10,800 EXP/h, then back a third time: removing the 10,800 leaves
@@ -368,20 +362,21 @@ fn removing_a_best_from_the_history_changes_the_bests_the_shell_saves() {
     player.arrive(SUNSET);
     assert_eq!(sunset_rates(&player), [10_800, 7200]);
     let saves = player.saves();
-    player.press(PanelControl::ForgetBest);
+    player.press(PanelControl::RemoveBest);
     assert_eq!((player.saves(), sunset_rates(&player)), (saves + 1, vec![7200]));
 
     // The next launch has it gone: the 7,200 is the best, set when it was.
     let mut next = relaunch(handed_out(&player.compass), WALL_AT_START + DAY);
-    assert_eq!(line(&next.arrive(SUNSET)), earlier(7200, set, None));
+    assert_eq!(best_row(&next.arrive(SUNSET)), Some(7200));
+    assert_eq!(saved(&next.compass, SUNSET_SKY_ID), [best(7200, set)]);
 
     // Removing the map's only best leaves it none to save.
-    next.press(PanelControl::ForgetBest);
+    next.press(PanelControl::RemoveBest);
     assert!(next.compass.bests().maps.iter().all(|m| m.id != SUNSET_SKY_ID));
 }
 
 #[test]
-fn forgetting_the_earlier_visits_best_leaves_every_candidates_best_from_this_visit() {
+fn removing_the_best_from_the_history_leaves_every_candidates_best_from_this_visit() {
     let mut player = Player::saved_by_the_shell(tracking_with(sharing_a_title()));
 
     // An earlier Visit's best on Sunset Sky: 72,000 EXP/h.
@@ -402,13 +397,17 @@ fn forgetting_the_earlier_visits_best_leaves_every_candidates_best_from_this_vis
     player.hunt(MIN, 100);
     let site = player.choose_next();
     let site_set = player.wall_clock();
-    assert_eq!(line(&site), first_visit(36_000, site_set));
+    assert_eq!(best_row(&site), None);
     player.hunt(MIN, 100);
-    assert_eq!(line(&player.choose_next()), earlier(72_000, earlier_set, Some(5000)));
+    assert_eq!(best_row(&player.choose_next()), Some(72_000));
+    assert_eq!(saved(&player.compass, SUNSET_SKY_ID), [best(72_000, earlier_set), best(36_000, sunset_set)]);
 
-    // Forget takes the 72,000: Sunset Sky's best from this Visit is left as it was set,
-    // and so is the Construction Site's.
-    assert_eq!(line(&player.press(PanelControl::ForgetBest)), first_visit(36_000, sunset_set));
+    // Removing takes the 72,000: Sunset Sky's best from this Visit is left as it was
+    // set...
+    assert_eq!(best_row(&player.press(PanelControl::RemoveBest)), None);
+    assert_eq!(saved(&player.compass, SUNSET_SKY_ID), [best(36_000, sunset_set)]);
+    // ...and so is the Construction Site's, the Visit's once it shows again.
     player.hunt(MIN, 100);
-    assert_eq!(line(&player.choose_next()), first_visit(36_000, site_set));
+    player.choose_next();
+    assert_eq!(saved(&player.compass, CONSTRUCTION_SITE_ID), [best(36_000, site_set)]);
 }

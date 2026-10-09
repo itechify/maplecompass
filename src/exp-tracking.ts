@@ -4,32 +4,6 @@ export type ExpRate = { expPerHour: number; percentPerHourHundredths: number | n
 /** Mirror of `compass_core::ExpBar`: the EXP bar's figures, "EXP 160 [3.81%]". */
 export type ExpBar = { exp: number; percentHundredths: number };
 
-/** Mirror of `compass_core::VisitBest`: the best one Visit had on a map. */
-export type VisitBest = {
-  expPerHour: number;
-  /** When it was first shown (ms since the Unix epoch), if the wall clock was known. */
-  setAtUnixMs: number | null;
-};
-
-/** Mirror of `compass_core::PersonalBestLine`: how the Rolling Rate compares with the best
- *  on the map the player is on, by the best the line names (`compass_core::BestNamed`). */
-export type PersonalBestLine =
-  | {
-      /** No earlier Visit had a best here: "Your first best EXP/h here", this Visit's. */
-      kind: "firstVisit";
-      best: VisitBest;
-    }
-  | {
-      /** The earlier Visits' best, fixed on arrival. */
-      kind: "earlierVisits";
-      best: VisitBest;
-      /** The Rolling Rate's share of it, once it is 5 minutes of play here. */
-      shareHundredths: number | null;
-      /** This Visit's best, once it beat the earlier one: the "new best" tag, for the
-       *  rest of the Visit. */
-      newBest: VisitBest | null;
-    };
-
 /** Mirror of `compass_core::ExpTracking`. */
 export type ExpTracking = {
   state: "off" | "waiting" | "warmingUp" | "active" | "paused" | "unreadable";
@@ -50,6 +24,10 @@ export type ExpTracking = {
   resetUndoable: boolean;
   /** The last EXP bar reading, which moves with every reading. */
   bar: ExpBar | null;
-  /** The Personal Best line, on a certain map with a Map Summary that has a best to name. */
-  personalBest: PersonalBestLine | null;
+  /** The Best row: the shown map's Personal Best from its history (EXP/h), from arriving;
+   *  none on a first Visit, or where no bests are kept. */
+  personalBest: number | null;
+  /** The star on the Last 5 min row: the core says when the Rolling Rate beats the Best
+   *  row's figure as both are written. */
+  newBest: boolean;
 };
