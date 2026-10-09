@@ -70,6 +70,13 @@ pub fn open_mob_page(id: String, commands: State<'_, Sender<Command>>) {
     let _ = commands.send(Command::OpenMobPage(id));
 }
 
+/// A click on one of the items an Item Lookup found sharing the name it read (its
+/// MeowDB ID): open its MeowDB page.
+#[tauri::command]
+pub fn pick_item(id: String, commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::PickItem(id));
+}
+
 /// The query box now holds `query`.
 #[tauri::command]
 pub fn search_query(query: String, commands: State<'_, Sender<Command>>) {

@@ -8,6 +8,8 @@
 mod crawl;
 mod exp_bar;
 mod grind_tracker;
+mod item_lookup;
+mod item_tooltip;
 mod map_data;
 mod map_index;
 mod matcher;
@@ -32,6 +34,8 @@ mod world;
 pub use crawl::CrawlProgress;
 pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use grind_tracker::{ClientOffset, GrindTrackerWindow};
+pub use item_lookup::{ItemChoice, ItemHit, ItemLookup, ItemLookupLine, OurWindow};
+pub use item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReader, ItemTooltipReading};
 pub use map_data::{
     HiddenPortal, LISTED_MOBS, MapData, MapDataStatus, MapSpot, MapSummary, Mob, MoreMobs, PerParty,
     Portal, PortalKind,
@@ -57,6 +61,7 @@ pub use world::{Distance, Step, Travel};
 
 use crawl::Crawl;
 use grind_tracker::GrindTracker;
+use item_lookup::ItemLookups;
 use search::{MobSearch, Searched};
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
@@ -69,9 +74,11 @@ pub use recogniser::{TitleLines, TitleReader, TitleReading};
 use tracker::Tracker;
 use world::Here;
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::task::Poll;
 
-/// A captured Title Region or EXP Bar Region image: tightly packed RGBA, top-down rows.
+/// A captured Title Region or EXP Bar Region image, or the game's whole client area for
+/// Item Lookup: tightly packed RGBA, top-down rows.
 #[derive(Debug, Clone)]
 pub struct Frame {
     pub width: u32,
@@ -220,6 +227,11 @@ pub struct PanelState {
     pub quit: bool,
     /// Mob search, and how far the world crawl behind it has got.
     pub search: SearchState,
+    /// What the latest Item Lookup came to, for a few seconds; `None` once it has gone.
+    pub item_lookup: Option<ItemLookupLine>,
+    /// Where its alert goes on screen: at the top centre of the game window, clear of the
+    /// captured regions; `None` while there is none or no game window.
+    pub item_lookup_placement: Option<ScreenRect>,
 }
 
 /// What a hotkey asks the shell to do at once, beyond rendering the panel state.
@@ -231,6 +243,11 @@ pub enum Request {
     /// Bring the overlay, with the search view already open, back in front (the search
     /// hotkey): the game may have come in front of it. Our own window only (ADR 0001).
     RaiseOverlay,
+    /// Item Lookup (ADR 0007): read the pointer's position and capture the game's whole
+    /// client area now, while the Item Tooltip shows, for [`Compass::on_item_capture`]
+    /// (or [`Compass::on_item_tooltip_reading`] with what an [`ItemTooltipReader`] reads
+    /// in it, or `None` if the capture failed).
+    CaptureItemTooltip,
 }
 
 /// Something the player can do with a hotkey or with the matching icon at the top of
@@ -308,6 +325,15 @@ pub struct Compass {
     meowdb_pace: Pace,
     /// What the player typed, highlighted and picked in mob search.
     search: MobSearch,
+    /// Reads captures fed to [`Compass::on_item_capture`]; loaded on the first one.
+    item_reader: Option<ItemTooltipReader>,
+    /// The latest Item Lookup.
+    item_lookups: ItemLookups,
+    /// The Item Lookup alert's size, in physical px for the current display.
+    item_lookup_size: Size,
+    /// What the shell must do that came of time passing (a page MeowDB's answer settled),
+    /// for [`Compass::take_request`].
+    requests: VecDeque<Request>,
     panel: Panel,
     setup: Setup,
     /// The last settings restored; the panel's own fields live in `panel`.
@@ -338,6 +364,10 @@ impl Compass {
             mob_cards: MobCards::default(),
             meowdb_pace: Pace::default(),
             search: MobSearch::default(),
+            item_reader: None,
+            item_lookups: ItemLookups::default(),
+            item_lookup_size: Size { width: 0, height: 0 },
+            requests: VecDeque::new(),
             panel: Panel::default(),
             setup: Setup::default(),
             settings: Settings::default(),
@@ -463,6 +493,12 @@ impl Compass {
     /// The overlay's expanded and collapsed sizes, in physical px for the current display.
     pub fn set_panel_sizes(&mut self, sizes: PanelSizes) -> &PanelState {
         self.panel.sizes = sizes;
+        self.sync_panel()
+    }
+
+    /// The Item Lookup alert's size, in physical px for the current display.
+    pub fn set_item_lookup_size(&mut self, size: Size) -> &PanelState {
+        self.item_lookup_size = size;
         self.sync_panel()
     }
 
@@ -610,6 +646,11 @@ impl Compass {
     pub fn on_hotkey(&mut self, pressed: &str) -> Option<Request> {
         let hotkeys = &self.settings.hotkeys;
         let is = |hotkey: &str| same_hotkey(hotkey, pressed);
+        if is(&hotkeys.item_lookup) {
+            // Only over a game window, and not while the last capture is being read.
+            let capture = self.panel.game.is_some() && self.item_lookups.start();
+            return capture.then_some(Request::CaptureItemTooltip);
+        }
         let control = if is(&hotkeys.toggle_panel) {
             PanelControl::TogglePanel
         } else if is(&hotkeys.cycle_placement) {
@@ -659,6 +700,49 @@ impl Compass {
     pub fn open_mob_page(&self, id: &str) -> Option<Request> {
         let card = self.state.mob_cards.iter().find(|card| card.id == id)?;
         Some(Request::OpenInBrowser { url: card.url.clone() })
+    }
+
+    /// Read an Item Lookup capture ([`Request::CaptureItemTooltip`]) and update the panel
+    /// state: the same as [`Compass::on_item_tooltip_reading`] with what an
+    /// [`ItemTooltipReader`] reads in it, here.
+    pub fn on_item_capture(&mut self, capture: ItemCapture) -> &PanelState {
+        let reading = self.item_reader.get_or_insert_with(ItemTooltipReader::bundled).read(&capture);
+        self.on_item_tooltip_reading(Some(reading))
+    }
+
+    /// Take what an Item Lookup capture read as (read by an [`ItemTooltipReader`], possibly
+    /// on another thread; `None` if the capture failed) and look its name up on MeowDB. A
+    /// page to open comes from [`Compass::take_request`], at once if MeowDB's answer was
+    /// at hand, else once it arrives.
+    pub fn on_item_tooltip_reading(&mut self, reading: Option<ItemTooltipReading>) -> &PanelState {
+        // Our windows show in the capture: one over the name would be read instead.
+        let panel = self.state.placement.filter(|_| self.state.layer != Layer::Hidden);
+        let ours: Vec<(OurWindow, ScreenRect)> = [
+            panel.map(|at| (OurWindow::Panel, at)),
+            self.state.grind_tracker.placement.map(|at| (OurWindow::GrindTracker, at)),
+            self.state.item_lookup_placement.map(|at| (OurWindow::Alert, at)),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        let open = self.item_lookups.read(reading, &ours, &mut *self.source, &mut self.meowdb_pace);
+        self.requests.extend(open.map(|url| Request::OpenInBrowser { url }));
+        self.sync_panel()
+    }
+
+    /// The player picked one of the items an Item Lookup found sharing the name read:
+    /// open its MeowDB page. `None` for an item the panel doesn't list.
+    pub fn pick_item(&mut self, id: &str) -> Option<Request> {
+        let url = self.item_lookups.pick(id)?;
+        self.sync_panel();
+        Some(Request::OpenInBrowser { url })
+    }
+
+    /// What the shell must do that came of time passing or of a reading, rather than of
+    /// the player's press: an Item Lookup's page, once MeowDB has answered. The shell
+    /// takes them after each call, until there are none.
+    pub fn take_request(&mut self) -> Option<Request> {
+        self.requests.pop_front()
     }
 
     /// Another window came to the front. The hotkeys are live while the game or one of
@@ -775,6 +859,9 @@ impl Compass {
             self.mob_cards.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
             self.state.mob_cards = self.mob_cards.cards();
         }
+        // An Item Lookup's search, which the player waits on, before the crawl.
+        let open = self.item_lookups.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
+        self.requests.extend(open.map(|url| Request::OpenInBrowser { url }));
         // After the shown map, which never waits for the crawl, and its listed mobs' pages.
         let crawling = !self.world_awaited && !self.mob_cards.wants_meowdb(at_ms);
         if let Some(crawl) = self.crawl.as_mut().filter(|_| crawling) {
@@ -840,10 +927,22 @@ impl Compass {
         self.state.layer = self.panel.layer();
         self.state.draggable = self.panel.draggable();
         self.sync_grind_tracker();
+        self.sync_item_lookup();
         self.state.hotkeys = self.settings.hotkeys.clone();
         self.state.game_window_title =
             self.settings.game_window_title.clone().unwrap_or_else(|| GAME_WINDOW_TITLE.into());
         &self.state
+    }
+
+    /// The Item Lookup's alert, at the top centre of the game window while it has one,
+    /// clear of the captured regions.
+    fn sync_item_lookup(&mut self) {
+        let line = self.item_lookups.line();
+        self.state.item_lookup_placement = match (&line, &self.panel.game) {
+            (Some(_), Some(game)) => Some(item_lookup::alert_placement(game, self.item_lookup_size, &self.panel.avoid)),
+            _ => None,
+        };
+        self.state.item_lookup = line;
     }
 
     fn sync_setup(&mut self) {

@@ -102,11 +102,14 @@ pub struct Hotkeys {
     pub search: String,
     /// Open the Grind Tracker's window, or close it.
     pub grind_tracker: String,
+    /// Item Lookup: open the MeowDB page of the item whose Item Tooltip shows by the
+    /// pointer. Files from before it get the default.
+    pub item_lookup: String,
 }
 
 impl Hotkeys {
     /// Every hotkey, for the shell to register: one list, so none is forgotten.
-    pub fn all(&self) -> [&str; 7] {
+    pub fn all(&self) -> [&str; 8] {
         [
             &self.toggle_panel,
             &self.cycle_placement,
@@ -114,6 +117,7 @@ impl Hotkeys {
             &self.setup,
             &self.choose_candidate,
             &self.grind_tracker,
+            &self.item_lookup,
             &self.search,
         ]
     }
@@ -129,6 +133,7 @@ impl Default for Hotkeys {
             choose_candidate: "ctrl+shift+n".into(),
             search: "ctrl+shift+f".into(),
             grind_tracker: "ctrl+shift+g".into(),
+            item_lookup: "ctrl+shift+i".into(),
         }
     }
 }

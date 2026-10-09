@@ -33,7 +33,14 @@ pub fn looking_for() -> String {
 }
 
 #[cfg(windows)]
-pub use win::{find_game, foreground, foreground_is_ours, keep_above, monitor_work_areas, window_under_cursor};
+pub use win::{
+    cursor_position, find_game, foreground, foreground_is_ours, keep_above, monitor_work_areas, window_under_cursor,
+};
+
+#[cfg(not(windows))]
+pub fn cursor_position() -> Option<compass_core::ScreenPoint> {
+    None
+}
 
 #[cfg(not(windows))]
 pub fn foreground_is_ours() -> bool {
@@ -103,6 +110,14 @@ mod win {
             found.push(hwnd);
         }
         BOOL(1) // keep enumerating
+    }
+
+    /// Where the mouse pointer is on screen (physical px), for Item Lookup. Only reads
+    /// window-manager state (ADR 0001).
+    pub fn cursor_position() -> Option<compass_core::ScreenPoint> {
+        let mut at = POINT::default();
+        unsafe { GetCursorPos(&mut at) }.ok()?;
+        Some(compass_core::ScreenPoint { x: at.x, y: at.y })
     }
 
     /// The title of the top-level window under the mouse pointer, for picking the game

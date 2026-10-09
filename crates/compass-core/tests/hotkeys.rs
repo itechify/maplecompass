@@ -32,8 +32,33 @@ fn the_hotkeys_are_ctrl_shift_letters() {
             choose_candidate: ctrl_shift("n"),
             search: ctrl_shift("f"),
             grind_tracker: ctrl_shift("g"),
+            item_lookup: ctrl_shift("i"),
         }
     );
+}
+
+#[test]
+fn ctrl_shift_i_is_the_item_lookup_hotkey_even_with_a_settings_file_from_before_it() {
+    let before_item_lookup = r#"{"version":4,"hotkeys":{"togglePanel":"ctrl+shift+x","grindTracker":"ctrl+shift+g"}}"#;
+    let mut compass = Compass::new(FakeSource::meowdb());
+
+    let state = compass.restore(serde_json::from_str(before_item_lookup).unwrap()).clone();
+
+    assert_eq!(state.hotkeys.item_lookup, ctrl_shift("i"));
+    assert_eq!(state.hotkeys.toggle_panel, ctrl_shift("x"), "the player's own bindings are kept");
+    assert_eq!(compass.settings().hotkeys.item_lookup, ctrl_shift("i"), "and saved with the rest");
+}
+
+#[test]
+fn a_rebound_item_lookup_hotkey_is_the_one_that_looks_up() {
+    let mut compass = Compass::new(FakeSource::meowdb());
+    let hotkeys = Hotkeys { item_lookup: "ctrl+shift+k".into(), ..Hotkeys::default() };
+    compass.restore(Settings { hotkeys, ..Settings::default() });
+    let screen = ScreenRect { x: 0, y: 0, width: 1920, height: 1200 };
+    compass.on_game_window(Some(GameWindow { client: screen, frame: screen, screens: vec![screen] }));
+
+    assert_eq!(compass.on_hotkey("ctrl+shift+i"), None);
+    assert_eq!(compass.on_hotkey("ctrl+shift+k"), Some(Request::CaptureItemTooltip));
 }
 
 /// Settings saved by version 2, with its Win+Alt hotkeys.
@@ -258,7 +283,16 @@ fn every_hotkey_the_panel_lists_is_one_to_register_the_search_one_included() {
 
     assert_eq!(
         to_register,
-        ["ctrl+shift+c", "ctrl+shift+p", "ctrl+shift+m", "ctrl+shift+s", "ctrl+shift+n", "ctrl+shift+g", "ctrl+shift+f"]
+        [
+            "ctrl+shift+c",
+            "ctrl+shift+p",
+            "ctrl+shift+m",
+            "ctrl+shift+s",
+            "ctrl+shift+n",
+            "ctrl+shift+g",
+            "ctrl+shift+i",
+            "ctrl+shift+f"
+        ]
     );
 }
 

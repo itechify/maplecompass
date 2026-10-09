@@ -5,8 +5,8 @@
 pub mod world;
 
 use compass_core::{
-    Compass, Fetched, Frame, MapData, MapDataSource, MapEntry, MobDetails, PanelState, Rect, ScreenRect,
-    Size, SourceError, TitleRegion, default_title_region, meowdb,
+    Compass, Fetched, Frame, ItemHit, MapData, MapDataSource, MapEntry, MobDetails, PanelState, Rect,
+    ScreenRect, Size, SourceError, TitleRegion, default_title_region, meowdb,
 };
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -145,6 +145,27 @@ pub fn saved_mob_page(id: &str) -> Option<String> {
     Some(std::fs::read_to_string(file.path()).expect("fixture"))
 }
 
+/// A file-name form of a name, as the probe names samples: lower case, apostrophes
+/// dropped, anything else but letters and digits as one `-` ("Hero's Gladius" ->
+/// "heros-gladius").
+pub fn slug(name: &str) -> String {
+    let mut out = String::new();
+    for c in name.chars().filter(|c| !matches!(c, '\'' | '’')) {
+        if c.is_alphanumeric() {
+            out.extend(c.to_lowercase());
+        } else if !out.is_empty() && !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    out.trim_end_matches('-').to_string()
+}
+
+/// MeowDB's search's answer for `name`, saved on 2026-10-09:
+/// `tests/fixtures/meowdb-search/<slug>.json`.
+pub fn saved_search(name: &str) -> Option<String> {
+    std::fs::read_to_string(fixtures_dir().join("meowdb-search").join(format!("{}.json", slug(name)))).ok()
+}
+
 /// The ID of every saved mob page, in file name order.
 pub fn saved_mob_ids() -> Vec<String> {
     let mut names: Vec<String> = std::fs::read_dir(fixtures_dir().join("meowdb-monsters"))
@@ -160,6 +181,7 @@ type PageAnswer = Poll<Result<MapData, SourceError>>;
 type MobAnswer = Result<MobDetails, SourceError>;
 type ImageAnswer = Result<String, SourceError>;
 type IndexAnswer = Poll<Result<Vec<MapEntry>, SourceError>>;
+type SearchAnswer = Result<Vec<ItemHit>, SourceError>;
 
 /// A map data source that answers from memory and counts index and map data requests.
 pub struct FakeSource {
@@ -198,6 +220,14 @@ pub struct FakeSource {
     /// The mob page fetch in flight, its answer, and how many more polls it takes.
     mob_in_flight: Option<(String, MobAnswer, usize)>,
     image_in_flight: Option<(String, ImageAnswer, usize)>,
+    /// Answers an item search for a name. Defaults to MeowDB's saved answers, read with the
+    /// core's MeowDB reader; a name without a saved answer is unreachable.
+    item_searches: Box<dyn FnMut(&str) -> SearchAnswer + Send>,
+    /// The name of every item search started, in order.
+    pub item_requests: Arc<Mutex<Vec<String>>>,
+    /// How many polls an item search takes, as `mob_polls` for mob pages.
+    item_polls: usize,
+    item_in_flight: Option<(String, SearchAnswer, usize)>,
 }
 
 impl FakeSource {
@@ -218,6 +248,10 @@ impl FakeSource {
             mob_polls: 0,
             mob_in_flight: None,
             image_in_flight: None,
+            item_searches: Box::new(read_saved_search),
+            item_requests: Arc::default(),
+            item_polls: 0,
+            item_in_flight: None,
         }
     }
 
@@ -313,6 +347,18 @@ impl FakeSource {
         Self { mob_polls: polls, ..self }
     }
 
+    /// Answer item searches with `searches` instead of MeowDB's saved answers.
+    pub fn with_item_searches(mut self, searches: impl FnMut(&str) -> SearchAnswer + Send + 'static) -> Self {
+        self.item_searches = Box::new(searches);
+        self
+    }
+
+    /// Item searches come over the network, not from the cache: each arrives on the
+    /// `polls`th poll after it started.
+    pub fn items_taking(self, polls: usize) -> Self {
+        Self { item_polls: polls, ..self }
+    }
+
     pub fn with_index(index: Vec<MapEntry>) -> Self {
         Self::answering(vec![Poll::Ready(Ok(index))])
     }
@@ -394,6 +440,13 @@ fn one_at_a_time<T>(
     Poll::Ready(answer)
 }
 
+fn read_saved_search(name: &str) -> SearchAnswer {
+    match saved_search(name) {
+        Some(json) => meowdb::read_item_search(&json),
+        None => Err(SourceError::Unreachable(format!("no saved search for {name:?}"))),
+    }
+}
+
 fn read_saved_page(id: &str) -> Result<MapData, SourceError> {
     match saved_page(id) {
         Some(html) => meowdb::read_map_page(&html, id),
@@ -445,5 +498,11 @@ impl MapDataSource for FakeSource {
 
     fn mob_image(&mut self, id: &str) -> Poll<Result<String, SourceError>> {
         one_at_a_time(id, &mut self.image_in_flight, &self.image_requests, self.mob_polls, &mut self.images)
+    }
+
+    fn item_search(&mut self, name: &str) -> Poll<Result<Fetched<Vec<ItemHit>>, SourceError>> {
+        let answer =
+            one_at_a_time(name, &mut self.item_in_flight, &self.item_requests, self.item_polls, &mut self.item_searches);
+        self.fetched(answer)
     }
 }
