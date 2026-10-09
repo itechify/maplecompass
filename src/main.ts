@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { ExpTracking } from "./exp-tracking";
 import { hotkeyAvailable, keyLabel, type Hotkeys } from "./hotkeys";
 import {
   TIER_NAMES,
@@ -114,20 +115,6 @@ type Candidates = {
 /** Mirror of `compass_core::ExpBar`. */
 type ExpBar = { exp: number; percentHundredths: number };
 
-/** Mirror of `compass_core::ExpRate`. */
-type ExpRate = { expPerHour: number; percentPerHourHundredths: number | null };
-
-/** Mirror of `compass_core::ExpTracking`. */
-type ExpTracking = {
-  state: "off" | "waiting" | "warmingUp" | "active" | "paused";
-  timeToLevelS: number | null;
-  timeToLevelBadge: string | null;
-  rolling: ExpRate | null;
-  sessionAverage: ExpRate | null;
-  ceilingShareHundredths: number | null;
-  deaths: { count: number; expLost: number; percentLostHundredths: number };
-};
-
 /** Mirror of `compass_core::PanelState`. */
 type PanelState = {
   recognition: Recognition;
@@ -158,6 +145,8 @@ type PanelState = {
   expBarRegion: { x: number; y: number; width: number; height: number } | null;
   expBar: ExpBar | null;
   expTracking: ExpTracking;
+  /** Mirror of `compass_core::GrindTrackerWindow`: the player wants it open. */
+  grindTracker: { open: boolean };
   search: SearchState;
 };
 
@@ -179,17 +168,7 @@ const portalRows = byId("portal-rows");
 const footer = byId("footer");
 const credit = byId("credit");
 const hotkeyProblem = byId("hotkey-problem");
-const trackingEl = byId("tracking");
-const trackingWaiting = byId("tracking-waiting");
-const trackingFigures = byId("tracking-figures");
-const timeToLevel = byId("time-to-level");
-const trackingTag = byId("tracking-tag");
-const rollingExp = byId("rolling-exp");
-const sessionExp = byId("session-exp");
-const rollingPercent = byId("rolling-percent");
-const sessionPercent = byId("session-percent");
-const trackingExtra = byId("tracking-extra");
-const resetSession = byId("reset-session");
+const grindTracker = byId("grind-tracker");
 const badge = byId("badge");
 const mapMobs = byId("map-mobs");
 const noMobs = byId("no-mobs");
@@ -206,7 +185,7 @@ const normalView = byId("normal-view");
 const toolbar = byId("toolbar");
 const icon = document.querySelector<HTMLElement>(".icon")!;
 const nextCandidate = byId("next-candidate");
-const openMeowdb = byId("open-meowdb");
+const titlebar = byId("titlebar");
 const hunting = byId("hunting");
 const huntingTitle = byId("hunting-title");
 const huntingReopen = byId("hunting-reopen");
@@ -236,6 +215,19 @@ const searchCredit = byId("search-credit");
 const resultsHeader = resultsHead();
 resultsTable.append(resultsHeader);
 let draggable = false;
+
+/**
+ * What each part of the panel was last rendered from. The panel state comes again
+ * whenever anything in it changes (the world crawl's progress, say): a part whose own
+ * inputs didn't change keeps its rows, and the scroll and hover on them.
+ */
+const renderedFrom = new Map<string, string>();
+function changed(part: string, ...inputs: unknown[]): boolean {
+  const key = JSON.stringify(inputs);
+  if (renderedFrom.get(part) === key) return false;
+  renderedFrom.set(part, key);
+  return true;
+}
 /** The search view's open step, as last rendered. */
 let step: SearchState["view"] = null;
 
@@ -395,6 +387,8 @@ function renderData(panel: PanelState) {
   dataEl.hidden = !shown;
   footer.hidden = !shown;
   if (!shown) return;
+  const inputs = [data, panel.candidates, panel.collapsedSections, panel.credit, panel.recognition];
+  if (!changed("data", ...inputs, panel.hotkeys, panel.unavailableHotkeys)) return;
 
   const { candidates } = panel;
   candidatesEl.hidden = !candidates;
@@ -497,17 +491,17 @@ function foldSection(section: HTMLElement, toggle: HTMLButtonElement, collapsed:
 const CONTROL_HOTKEYS: Record<string, keyof Hotkeys> = {
   search: "search",
   chooseCandidate: "chooseCandidate",
-  openMeowdbPage: "openMeowdbPage",
   cyclePlacement: "cyclePlacement",
   setup: "setup",
   togglePanel: "togglePanel",
-  resetSession: "resetSession",
+  toggleGrindTracker: "grindTracker",
 };
 
 /**
  * The icons at the top of the panel, one per hotkey action. Each tooltip names its
- * hotkey (unless another app has it). The MeowDB icon shows only while a map is shown,
- * the next-candidate icon only while maps share its title.
+ * hotkey (unless another app has it). The next-candidate icon shows only while maps share
+ * its title, the Grind Tracker's only while
+ * the EXP bar is tracked (pressed while its window is open).
  */
 function renderToolbar(panel: PanelState) {
   for (const button of toolbar.querySelectorAll<HTMLButtonElement>("button[data-control]")) {
@@ -515,8 +509,23 @@ function renderToolbar(panel: PanelState) {
     const hotkey = panel.hotkeys[CONTROL_HOTKEYS[button.dataset.control ?? ""]];
     button.title = hotkey && hotkeyAvailable(hotkey, panel.unavailableHotkeys) ? `${label} (${keyLabel(hotkey)})` : label;
   }
-  openMeowdb.hidden = !panel.map;
+  // The map's title opens its MeowDB page, while a map is shown.
+  titlebar.classList.toggle("linked", !!panel.map);
+  const pageKey = panel.hotkeys.openMeowdbPage;
+  titlebar.title = !panel.map
+    ? ""
+    : hotkeyAvailable(pageKey, panel.unavailableHotkeys)
+      ? `Open this map on MeowDB (${keyLabel(pageKey)})`
+      : "Open this map on MeowDB";
   nextCandidate.hidden = !panel.candidates;
+  grindTracker.hidden = panel.expTracking.state === "off";
+  const open = panel.grindTracker.open;
+  grindTracker.setAttribute("aria-pressed", String(open));
+  grindTracker.setAttribute("aria-label", open ? "Hide the Grind Tracker" : "Show the Grind Tracker");
+  const trackerKey = panel.hotkeys.grindTracker;
+  grindTracker.title = hotkeyAvailable(trackerKey, panel.unavailableHotkeys)
+    ? `${grindTracker.getAttribute("aria-label")} (${keyLabel(trackerKey)})`
+    : grindTracker.getAttribute("aria-label") ?? "";
   icon.title = hotkeyAvailable(panel.hotkeys.togglePanel, panel.unavailableHotkeys)
     ? `Click to expand (${keyLabel(panel.hotkeys.togglePanel)})` : "Click to expand";
 }
@@ -529,7 +538,7 @@ function renderToolbar(panel: PanelState) {
 function renderHunting(panel: PanelState) {
   const target: HuntingTarget | null = panel.search.hunting;
   hunting.hidden = !target;
-  if (!target) return;
+  if (!target || !changed("hunting", target, panel.search.credit, panel.credit)) return;
   const { mob, map } = target;
   // The mob on the first line, the map on the next.
   const mobLine = document.createElement("span");
@@ -587,9 +596,7 @@ function renderSearchView(panel: PanelState) {
   mapsStep.hidden = view !== "maps";
   // Before the lists, which scroll their highlight into what room is left.
   // The world crawl, while it runs: search only knows the mobs on the maps known so far.
-  const crawl = crawlLine(search);
-  searchCrawl.textContent = crawl && `Mapping the world: ${crawl}`;
-  searchCrawl.hidden = !crawl;
+  renderCrawl(searchCrawl, search, true);
   searchCredit.textContent = search.credit ?? "";
   searchCredit.hidden = !search.credit;
   if (view === "mobs") {
@@ -610,6 +617,7 @@ function renderSearchView(panel: PanelState) {
 
 /** The first step: the suggestions (the highlighted one is what Enter picks). */
 function renderMobs(search: SearchState) {
+  if (!changed("suggestions", search.suggestions, search.highlighted, search.query, search.crawl.total)) return;
   suggestions.replaceChildren(
     ...search.suggestions.map((mob, i) => {
       const row = document.createElement("li");
@@ -646,6 +654,7 @@ function renderMaps(search: SearchState) {
   searchNearest.hidden = searchNearest.textContent === "";
   searchNote.textContent = resultsNote(search);
   searchNote.hidden = searchNote.textContent === "";
+  if (!changed("results", search.results, search.highlightedResult)) return;
   const groups = search.results.map((result, i) => {
     const group = resultGroup(result);
     const current = i === search.highlightedResult;
@@ -659,6 +668,24 @@ function renderMaps(search: SearchState) {
   if (current) scrollWithin(resultsBox, current);
 }
 
+/**
+ * The world crawl's line and gauge (`el`), while it runs and `shown`: "Mapping the world:
+ * 312 of 422 maps known" over the game's gauge, filled to the share known. The fill eases
+ * to each new count in CSS, through `--known`.
+ */
+function renderCrawl(el: HTMLElement, search: SearchState, shown: boolean) {
+  const line = crawlLine(search);
+  el.hidden = !shown || !line;
+  if (el.hidden) return;
+  el.querySelector(".crawl-text")!.textContent = `Mapping the world: ${line}`;
+  const { known, total } = search.crawl;
+  const gauge = el.querySelector<HTMLElement>(".gauge")!;
+  gauge.setAttribute("aria-valuenow", String(known));
+  gauge.setAttribute("aria-valuemax", String(total));
+  gauge.setAttribute("aria-valuetext", line);
+  gauge.style.setProperty("--known", String(total > 0 ? known / total : 0));
+}
+
 /** Scroll `box` just enough to show `item`. Not `scrollIntoView`, which would scroll the overlay's page too. */
 function scrollWithin(box: HTMLElement, item: HTMLElement) {
   const outer = box.getBoundingClientRect();
@@ -667,67 +694,6 @@ function scrollWithin(box: HTMLElement, item: HTMLElement) {
   const top = outer.top + (box.querySelector("thead")?.getBoundingClientRect().height ?? 0);
   if (inner.top < top) box.scrollTop -= top - inner.top;
   else if (inner.bottom > outer.bottom) box.scrollTop += inner.bottom - outer.bottom;
-}
-
-/** "−" (U+2212) for a negative figure, as the deaths counter writes it. */
-const signed = (text: string) => text.replace(/^-/, "−");
-
-/** 1234 hundredths -> "12.3%" with one decimal, "12%" with none: no finer than the
- *  figure can be trusted, so it doesn't flicker. */
-const percent = (hundredths: number, decimals = 1) =>
-  signed(`${(hundredths / 100).toFixed(decimals)}%`);
-
-/** An EXP rate to 3 significant figures: 840, 6,120, 61.2k, 1.23M. */
-function compact(n: number): string {
-  const abs = Math.abs(n);
-  if (abs < 10_000) return signed(Number(n.toPrecision(3)).toLocaleString("en-US"));
-  // 999,999 rounds to 1,000k: write it 1M.
-  const [value, unit] = Number((abs / 1_000).toPrecision(3)) < 1_000 ? [n / 1_000, "k"] : [n / 1_000_000, "M"];
-  return signed(`${Number(value.toPrecision(3))}${unit}`);
-}
-
-const TRACKING_TAGS: Partial<Record<ExpTracking["state"], string>> = {
-  warmingUp: "warming up",
-  paused: "paused",
-};
-
-/** The Grind Tracker section: nothing while tracking is off, a quiet line until the
- *  Session starts, then Time to Level, the rates, and the ceiling and deaths when the
- *  state carries them. "—" for any figure not there yet. */
-function renderTracking(panel: PanelState) {
-  const tracking = panel.expTracking;
-  trackingEl.hidden = tracking.state === "off";
-  const waiting = tracking.state === "waiting";
-  trackingWaiting.hidden = !waiting;
-  trackingFigures.hidden = waiting;
-  // The toolbar's reset icon, while there is a Session to reset.
-  resetSession.hidden = tracking.state === "off" || waiting;
-
-  timeToLevel.textContent = tracking.timeToLevelBadge ?? "—";
-  const tag = TRACKING_TAGS[tracking.state];
-  trackingTag.hidden = !tag;
-  trackingTag.textContent = tag ?? "";
-  trackingTag.className = `tag ${tracking.state}`;
-
-  const exp = (rate: ExpRate | null) => (rate ? compact(rate.expPerHour) : "—");
-  const share = (rate: ExpRate | null) =>
-    rate?.percentPerHourHundredths != null ? percent(rate.percentPerHourHundredths) : "—";
-  rollingExp.textContent = exp(tracking.rolling);
-  sessionExp.textContent = exp(tracking.sessionAverage);
-  rollingPercent.textContent = share(tracking.rolling);
-  sessionPercent.textContent = share(tracking.sessionAverage);
-
-  const extra = [];
-  if (tracking.ceilingShareHundredths !== null) {
-    extra.push(`${percent(tracking.ceilingShareHundredths, 0)} of the map's solo ceiling`);
-  }
-  const { deaths } = tracking;
-  if (deaths.count > 0) {
-    // No-break spaces: on a narrow panel, where the line wraps, the deaths read as one.
-    extra.push(`deaths: ${deaths.count} (${percent(-deaths.percentLostHundredths)})`);
-  }
-  trackingExtra.textContent = extra.join(" · ");
-  trackingExtra.hidden = extra.length === 0;
 }
 
 /** Time to Level on the collapsed icon, while there is one. */
@@ -982,12 +948,9 @@ function render(panel: PanelState) {
       : "Close the other app, or edit %APPDATA%\com.itechify.maplecompass\settings.json, then restart MapleCompass."
   }`;
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
-  renderTracking(panel);
   // The world crawl, while it runs, with or without a search: "Mapping the world: 312
   // of 422 maps known". Search can only find mobs on the maps known so far.
-  const crawl = crawlLine(panel.search);
-  crawlProgress.textContent = crawl && `Mapping the world: ${crawl}`;
-  crawlProgress.hidden = !panel.gameFound || !crawl;
+  renderCrawl(crawlProgress, panel.search, panel.gameFound);
   renderData(panel);
   renderHunting(panel);
   renderSearchView(panel);
@@ -1035,7 +998,9 @@ function startDrag() {
 document.addEventListener("mousedown", (e) => {
   const target = e.target instanceof Element ? e.target : null;
   const onHeader = !!target?.closest(".drag-handle") && !target?.closest("button, input");
-  if (draggable && e.button === 0 && onHeader) startDrag();
+  // The map's title is also a link: it drags only once the mouse moves (below).
+  const onLink = !!target?.closest(".titlebar.linked");
+  if (draggable && e.button === 0 && onHeader && !onLink) startDrag();
 });
 
 // The expanded panel's bottom corners resize it, whatever its placement, as its edges
@@ -1048,27 +1013,41 @@ for (const grip of document.querySelectorAll<HTMLElement>(".grip")) {
   });
 }
 
-// The collapsed icon: a click expands the panel again (like the collapse hotkey), and
-// pressing on it and moving the mouse drags it, where the panel can be dragged.
+/** How far the mouse moves, pressed, before a press on something clickable drags. */
 const DRAG_AFTER_PX = 4;
-let iconPress: { x: number; y: number } | null = null;
-icon.addEventListener("mousedown", (e) => {
-  if (e.button === 0) iconPress = { x: e.screenX, y: e.screenY };
-});
-icon.addEventListener("mousemove", (e) => {
-  if (!iconPress || !draggable) return;
-  if (Math.abs(e.screenX - iconPress.x) + Math.abs(e.screenY - iconPress.y) >= DRAG_AFTER_PX) {
-    iconPress = null;
-    startDrag();
-  }
-});
-icon.addEventListener("mouseup", (e) => {
-  if (iconPress && e.button === 0) invoke("panel_press", { control: "togglePanel" });
-  iconPress = null;
-});
-icon.addEventListener("mouseleave", () => {
-  iconPress = null;
-});
+
+/**
+ * `el` is clicked to `press` its control, and dragged to move the panel where it can be:
+ * a press becomes a drag once the mouse moves (and never a click), and a click if it is let
+ * go first. Only
+ * while `clickable` says so; otherwise it is left to the header's own drag.
+ */
+function clickOrDrag(el: HTMLElement, control: string, clickable: () => boolean) {
+  let pressed: { x: number; y: number } | null = null;
+  el.addEventListener("mousedown", (e) => {
+    pressed = e.button === 0 && clickable() ? { x: e.screenX, y: e.screenY } : null;
+  });
+  el.addEventListener("mousemove", (e) => {
+    if (!pressed) return;
+    // Moved: not a click, and a drag where the panel can be dragged.
+    if (Math.abs(e.screenX - pressed.x) + Math.abs(e.screenY - pressed.y) >= DRAG_AFTER_PX) {
+      pressed = null;
+      if (draggable) startDrag();
+    }
+  });
+  el.addEventListener("mouseup", (e) => {
+    if (pressed && e.button === 0) invoke("panel_press", { control });
+    pressed = null;
+  });
+  el.addEventListener("mouseleave", () => {
+    pressed = null;
+  });
+}
+
+// The collapsed icon expands the panel again (like the collapse hotkey); the map's title
+// opens its MeowDB page (like Ctrl+Shift+M).
+clickOrDrag(icon, "togglePanel", () => true);
+clickOrDrag(titlebar, "openMeowdbPage", () => titlebar.classList.contains("linked"));
 
 // Each icon at the top of the panel does what its hotkey does.
 toolbar.addEventListener("click", (e) => {

@@ -31,7 +31,7 @@ fn the_hotkeys_are_ctrl_shift_letters() {
             setup: ctrl_shift("s"),
             choose_candidate: ctrl_shift("n"),
             search: ctrl_shift("f"),
-            reset_session: ctrl_shift("r"),
+            grind_tracker: ctrl_shift("g"),
         }
     );
 }
@@ -258,7 +258,7 @@ fn every_hotkey_the_panel_lists_is_one_to_register_the_search_one_included() {
 
     assert_eq!(
         to_register,
-        ["ctrl+shift+c", "ctrl+shift+p", "ctrl+shift+m", "ctrl+shift+s", "ctrl+shift+n", "ctrl+shift+r", "ctrl+shift+f"]
+        ["ctrl+shift+c", "ctrl+shift+p", "ctrl+shift+m", "ctrl+shift+s", "ctrl+shift+n", "ctrl+shift+g", "ctrl+shift+f"]
     );
 }
 
@@ -331,17 +331,20 @@ fn waiting() -> ExpTracking {
 }
 
 #[test]
-fn ctrl_shift_r_resets_the_session_back_to_waiting() {
+fn ctrl_shift_r_no_longer_resets_the_session() {
     let mut compass = tracking_with(Hotkeys::default());
     start_session(&mut compass);
+    let before = compass.panel_state().exp_tracking.clone();
 
+    // Ctrl attacks in MapleStory: Shift and R pressed while attacking reset the Session
+    // without asking. Only the Grind Tracker window's reset icon does now.
     assert_eq!(compass.on_hotkey("ctrl+shift+r"), None);
 
-    assert_eq!(compass.panel_state().exp_tracking, waiting());
+    assert_eq!(compass.panel_state().exp_tracking, before);
 }
 
 #[test]
-fn the_reset_icon_at_the_top_of_the_panel_resets_the_session_too() {
+fn the_reset_icon_on_the_grind_tracker_window_resets_the_session() {
     let mut compass = tracking_with(Hotkeys::default());
     start_session(&mut compass);
 
@@ -350,8 +353,9 @@ fn the_reset_icon_at_the_top_of_the_panel_resets_the_session_too() {
     assert_eq!(compass.panel_state().exp_tracking, waiting());
 }
 
-/// Settings saved before the reset hotkey existed, with a hotkey the player rebound.
-const SETTINGS_WITHOUT_RESET_SESSION: &str = r#"{
+/// Settings saved before the Grind Tracker hotkey existed, with a hotkey the player
+/// rebound and the reset hotkey there was then, rebound too.
+const SETTINGS_WITH_RESET_SESSION: &str = r#"{
   "version": 4,
   "hotkeys": {
     "togglePanel": "ctrl+shift+x",
@@ -359,30 +363,30 @@ const SETTINGS_WITHOUT_RESET_SESSION: &str = r#"{
     "openMeowdbPage": "ctrl+shift+m",
     "setup": "ctrl+shift+s",
     "chooseCandidate": "ctrl+shift+n",
-    "search": "ctrl+shift+f"
+    "search": "ctrl+shift+f",
+    "resetSession": "ctrl+shift+z"
   }
 }"#;
 
 #[test]
-fn settings_from_before_the_reset_hotkey_get_ctrl_shift_r_and_keep_the_rest() {
+fn settings_from_before_the_grind_tracker_hotkey_get_ctrl_shift_g_and_keep_the_rest() {
     let mut compass = Compass::new(FakeSource::meowdb());
 
-    let state = compass.restore(serde_json::from_str(SETTINGS_WITHOUT_RESET_SESSION).unwrap());
+    let state = compass.restore(serde_json::from_str(SETTINGS_WITH_RESET_SESSION).unwrap());
 
-    assert_eq!(state.hotkeys.reset_session, ctrl_shift("r"));
+    assert_eq!(state.hotkeys.grind_tracker, ctrl_shift("g"));
     assert_eq!(state.hotkeys.toggle_panel, ctrl_shift("x"));
 }
 
 #[test]
-fn a_rebound_reset_hotkey_is_kept_and_is_the_one_that_resets() {
-    let json = SETTINGS_WITHOUT_RESET_SESSION.replace(r#""search""#, r#""resetSession": "ctrl+shift+z", "search""#);
-    let saved: Settings = serde_json::from_str(&json).unwrap();
+fn a_saved_reset_hotkey_is_ignored_and_not_saved_again() {
+    let saved: Settings = serde_json::from_str(SETTINGS_WITH_RESET_SESSION).unwrap();
     let mut compass = tracking_with(saved.hotkeys);
-    assert_eq!(compass.panel_state().hotkeys.reset_session, ctrl_shift("z"));
     start_session(&mut compass);
 
-    compass.on_hotkey("ctrl+shift+r");
+    compass.on_hotkey("ctrl+shift+z");
+
     assert_eq!(compass.panel_state().exp_tracking.state, TrackingState::WarmingUp);
-    compass.on_hotkey("Ctrl+Shift+Z");
-    assert_eq!(compass.panel_state().exp_tracking, waiting());
+    let json = serde_json::to_string(&compass.settings()).unwrap();
+    assert!(!json.contains("resetSession"), "{json}");
 }

@@ -29,6 +29,22 @@
         "contentProtected": false
       },
       {
+        "label": "grind-tracker",
+        "title": "Grind Tracker",
+        "url": "grind-tracker.html",
+        "width": 280,
+        "height": 140,
+        "transparent": true,
+        "decorations": false,
+        "shadow": false,
+        "alwaysOnTop": false,
+        "skipTaskbar": true,
+        "resizable": false,
+        "focus": false,
+        "focusable": false,
+        "contentProtected": false
+      },
+      {
         "label": "setup",
         "title": "MapleCompass Setup",
         "url": "setup.html",

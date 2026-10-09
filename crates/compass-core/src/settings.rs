@@ -1,6 +1,7 @@
 //! What MapleCompass remembers between sessions. Plain data: the shell stores it as
 //! JSON in the app's config directory and hands it back to the core at startup.
 
+use crate::grind_tracker::ClientOffset;
 use crate::panel::{CollapsedSections, InsideOffset, PlacementMode, ScreenPoint};
 use crate::setup::{ExpBarRegion, TitleRegion};
 use crate::world::Travel;
@@ -46,6 +47,12 @@ pub struct Settings {
     /// The sections the player collapsed to their headings; files from before this
     /// have both open.
     pub collapsed_sections: CollapsedSections,
+    /// The player wants the Grind Tracker's window open; files from before it had a
+    /// window have it open.
+    pub grind_tracker_open: bool,
+    /// Where the player dragged the Grind Tracker's window, relative to the game client;
+    /// `None` for just below the panel.
+    pub grind_tracker_at: Option<ClientOffset>,
 }
 
 impl Default for Settings {
@@ -63,6 +70,8 @@ impl Default for Settings {
             game_window_title: None,
             travel: Travel::default(),
             collapsed_sections: CollapsedSections::default(),
+            grind_tracker_open: true,
+            grind_tracker_at: None,
         }
     }
 }
@@ -72,8 +81,9 @@ impl Default for Settings {
 /// They fire while the game has focus and the game never sees them. The defaults use
 /// Ctrl+Shift+letter: Windows and other apps already hold many Win+Alt letters
 /// (Win+Alt+F among them), so a player who binds one of these in the game rebinds it
-/// here instead. Files saved before edit mode was retired also have `editMode`, which
-/// is ignored.
+/// here instead. Files saved before edit mode was retired also have `editMode`, and
+/// files saved before the Grind Tracker had a window have `resetSession` (Ctrl+Shift+R,
+/// too easily pressed while attacking with Ctrl); both are ignored.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Hotkeys {
@@ -90,8 +100,8 @@ pub struct Hotkeys {
     pub choose_candidate: String,
     /// Open the mob search view.
     pub search: String,
-    /// Clear the Session back to waiting for the next EXP change.
-    pub reset_session: String,
+    /// Open the Grind Tracker's window, or close it.
+    pub grind_tracker: String,
 }
 
 impl Hotkeys {
@@ -103,7 +113,7 @@ impl Hotkeys {
             &self.open_meowdb_page,
             &self.setup,
             &self.choose_candidate,
-            &self.reset_session,
+            &self.grind_tracker,
             &self.search,
         ]
     }
@@ -118,7 +128,7 @@ impl Default for Hotkeys {
             setup: "ctrl+shift+s".into(),
             choose_candidate: "ctrl+shift+n".into(),
             search: "ctrl+shift+f".into(),
-            reset_session: "ctrl+shift+r".into(),
+            grind_tracker: "ctrl+shift+g".into(),
         }
     }
 }
