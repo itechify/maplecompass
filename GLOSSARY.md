@@ -108,11 +108,11 @@ The hunting figures for a map as a whole, such as the EXP-per-hour ceiling and m
 ### Tracking
 
 **Grind Tracker**:
-The panel section, turned on at setup by marking the EXP Bar Region, that measures a Session from the EXP bar: Time to Level, the Rolling Rate and Session rates, and deaths.
+The window beside the panel, turned on at setup by marking the EXP Bar Region, that measures a Session from the EXP bar: Time to Level, the Rolling Rate and Session rates, and deaths. The player closes it with its ×, and opens it again from the panel; closing it doesn't stop the Session.
 _Avoid_: EXP tracking, EXP tracker
 
 **Session**:
-The stretch of play MapleCompass measures rates over, from the first EXP gain until the player resets it or switches character. Idle stretches pause it rather than count against it.
+The stretch of play MapleCompass measures rates over, from the first EXP gain until the player resets it or switches character. Idle stretches pause it rather than count against it. A misread that leads MapleCompass to learn the level's total wrong doesn't end it: the total is learned again.
 _Avoid_: run, grind (the Grind Tracker measures a Session; "grind" alone names nothing)
 
 **EXP Bar Region**:
