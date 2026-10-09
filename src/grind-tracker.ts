@@ -71,7 +71,8 @@ function render(tracking: ExpTracking) {
   }
   const { deaths } = tracking;
   if (deaths.count > 0) {
-    extra.push(`deaths: ${deaths.count} (${percent(-deaths.percentLostHundredths)})`);
+    // No-break spaces: where the line wraps, the deaths read as one.
+    extra.push(`deaths: ${deaths.count} (${percent(-deaths.percentLostHundredths)})`);
   }
   trackingExtra.textContent = extra.join(" · ");
   trackingExtra.hidden = extra.length === 0;
