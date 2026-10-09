@@ -134,6 +134,7 @@
       // ?w=: the panel resized to this width (CSS px).
       const w = new URLSearchParams(location.search).get("w");
       if (w) document.body.style.width = `${w}px`;
+      window.__state = states[s];
       window.__handlers["overlay-state"]({ event: "overlay-state", id: 1, payload: states[s] });
     </script>
   </body>

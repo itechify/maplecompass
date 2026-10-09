@@ -10,12 +10,11 @@
 //! serves is cached, even one the core can't read, so a format change costs one
 //! request a day rather than one a minute.
 //!
-//! The core's world crawl (ADR 0004) asks for every map's page in turn, paced to about
-//! one request every 2 seconds. For it a cached page is good for [`CRAWL_FRESH_FOR`]
-//! (a week), and is answered at once so the crawl doesn't wait. Its fetches have their
-//! own slot, so they never abandon or hold up the shown map's. Once a page fetch finds
-//! MeowDB unreachable, the crawl uses older saved copies as they are for a while
-//! ([`OFFLINE_RETRY`]) rather than wait on a failing fetch for each.
+//! The core's world crawl (ADR 0004) keeps what it learns itself (saved between
+//! launches by `world.rs`) and decides when a map's page is due, so its requests always
+//! go to MeowDB, paced to about one every 2 seconds, falling back on the saved copy
+//! when MeowDB can't be reached. Its fetches have their own slot, so they never abandon
+//! or hold up the shown map's.
 //!
 //! Mob Cards (ADR 0006): the core asks for the shown map's listed mobs' MeowDB pages,
 //! one at a time and paced with the crawl, and for their images from maplestory.io. A
@@ -25,21 +24,19 @@
 //! maplestory.io itself.
 //!
 //! Fetches run on the async runtime and never block the caller: the first call starts
-//! one and answers `Pending`, later calls collect it.
+//! one and answers `Pending`, later calls collect it. A map page is read from the cache
+//! there too (a page is a few hundred KB to read): only the map index, read once at
+//! startup, and the few mob pages a map lists are read on the caller's thread.
 
 use compass_core::{Fetched, MapData, MapDataSource, MapEntry, MobDetails, SourceError, meowdb};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::task::Poll;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// How long a cached page is used without asking MeowDB again. MeowDB's figures will
 /// change after the Oct 21 launch, so not much longer than a day.
 const FRESH_FOR: Duration = Duration::from_secs(24 * 60 * 60);
-
-/// How long a cached page is used for the world crawl without asking MeowDB again
-/// (ADR 0004): a week, so the crawl refetches each page at most once a week.
-const CRAWL_FRESH_FOR: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 /// How long a cached mob page is used without asking MeowDB again (ADR 0006).
 const MOB_FRESH_FOR: Duration = Duration::from_secs(7 * 24 * 60 * 60);
@@ -47,10 +44,6 @@ const MOB_FRESH_FOR: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 /// How long a cached mob image is used without asking maplestory.io again: sprites
 /// practically never change.
 const IMAGE_FRESH_FOR: Duration = Duration::from_secs(30 * 24 * 60 * 60);
-
-/// How long after MeowDB was found unreachable the crawl uses older saved copies as
-/// they are, without trying MeowDB for each page first.
-const OFFLINE_RETRY: Duration = Duration::from_secs(5 * 60);
 
 /// Who is asking: name, version, purpose and where to find out more. Never a browser UA.
 const USER_AGENT: &str = concat!(
@@ -74,8 +67,6 @@ pub struct MeowDbSource {
     /// The world crawl's page fetches: their own, so asking for one never abandons the
     /// shown map's fetch.
     crawl_pages: PageFetches,
-    /// When a map page fetch last found MeowDB unreachable; `None` once one got through.
-    unreachable_at: Option<Instant>,
     /// The mob page being fetched for a Mob Card, and where its figures will arrive.
     mob_page_in_flight: Option<(String, Receiver<Answer<MobDetails>>)>,
     /// The mob image being fetched from maplestory.io, and where its address will arrive.
@@ -94,9 +85,8 @@ impl MeowDbSource {
             client,
             cache_dir,
             index_in_flight: None,
-            shown_map_pages: PageFetches::new(FRESH_FOR),
-            crawl_pages: PageFetches::new(CRAWL_FRESH_FOR),
-            unreachable_at: None,
+            shown_map_pages: PageFetches::default(),
+            crawl_pages: PageFetches::default(),
             mob_page_in_flight: None,
             mob_image_in_flight: None,
         })
@@ -106,20 +96,25 @@ impl MeowDbSource {
         self.cache_dir.join(format!("map-{id}.html"))
     }
 
-    /// Start fetching `url` in the background, caching it at `path`; what `read` makes
-    /// of it (or of the saved copy, if MeowDB can't be reached) arrives on the receiver.
+    /// In the background: use the page cached at `path` if it was saved less than
+    /// `fresh_for` ago, or else fetch `url` and cache it there. What `read` makes of it
+    /// (or of the saved copy, if MeowDB can't be reached) arrives on the receiver.
     fn fetch<T: Send + 'static>(
         &self,
         url: String,
         path: PathBuf,
-        saved: Option<SavedCopy>,
+        fresh_for: Option<Duration>,
         read: impl Fn(&str) -> Result<T, SourceError> + Send + 'static,
     ) -> Receiver<Answer<T>> {
         let (tx, rx) = mpsc::channel();
         let client = self.client.clone();
         tauri::async_runtime::spawn(async move {
+            if let Some(page) = fresh_for.and_then(|fresh_for| cached(&path, fresh_for)) {
+                let _ = tx.send(read(&page).map(Fetched::Fresh));
+                return;
+            }
             let fetched = fetch(&client, &url).await;
-            let _ = tx.send(settle(&path, &url, fetched, saved, read));
+            let _ = tx.send(settle(&path, &url, fetched, read));
         });
         rx
     }
@@ -136,14 +131,12 @@ impl MapDataSource for MeowDbSource {
             return Poll::Ready(index);
         }
         let path = self.cache_dir.join(INDEX_FILE);
-        match cached(&path, FRESH_FOR) {
-            Cached::Fresh(page) => Poll::Ready(meowdb::read_map_index(&page).map(Fetched::Fresh)),
-            Cached::Stale(saved) => {
-                let url = meowdb::MAP_INDEX_URL.to_string();
-                self.index_in_flight = Some(self.fetch(url, path, saved, meowdb::read_map_index));
-                Poll::Pending
-            }
+        if let Some(page) = cached(&path, FRESH_FOR) {
+            return Poll::Ready(meowdb::read_map_index(&page).map(Fetched::Fresh));
         }
+        let url = meowdb::MAP_INDEX_URL.to_string();
+        self.index_in_flight = Some(self.fetch(url, path, None, meowdb::read_map_index));
+        Poll::Pending
     }
 
     fn map_data(&mut self, id: &str) -> Poll<Answer<MapData>> {
@@ -166,15 +159,14 @@ impl MapDataSource for MeowDbSource {
             }
         }
         // A new mob: an earlier fetch still in flight finishes into the cache unheard.
+        // Read here, so a cached page is answered at once and doesn't wait out the pace.
         let path = self.cache_dir.join(format!("mob-{id}.html"));
-        match cached(&path, MOB_FRESH_FOR) {
-            Cached::Fresh(page) => Poll::Ready(meowdb::read_mob_page(&page).map(Fetched::Fresh)),
-            Cached::Stale(saved) => {
-                let arriving = self.fetch(meowdb::mob_url(id), path, saved, meowdb::read_mob_page);
-                self.mob_page_in_flight = Some((id.to_string(), arriving));
-                Poll::Pending
-            }
+        if let Some(page) = cached(&path, MOB_FRESH_FOR) {
+            return Poll::Ready(meowdb::read_mob_page(&page).map(Fetched::Fresh));
         }
+        let arriving = self.fetch(meowdb::mob_url(id), path, None, meowdb::read_mob_page);
+        self.mob_page_in_flight = Some((id.to_string(), arriving));
+        Poll::Pending
     }
 
     fn mob_image(&mut self, id: &str) -> Poll<Result<String, SourceError>> {
@@ -296,17 +288,10 @@ enum PageAsker {
 
 /// One asker's map page fetches. Each asker has its own, so the crawl never abandons or
 /// holds up the shown map's fetch.
+#[derive(Default)]
 struct PageFetches {
-    /// How long a cached page is used for this asker without asking MeowDB again.
-    fresh_for: Duration,
     /// The page being fetched in the background, and where its data will arrive.
     in_flight: Option<(String, Receiver<Answer<MapData>>)>,
-}
-
-impl PageFetches {
-    fn new(fresh_for: Duration) -> Self {
-        Self { fresh_for, in_flight: None }
-    }
 }
 
 impl MeowDbSource {
@@ -317,28 +302,15 @@ impl MeowDbSource {
         }
     }
 
-    /// Whether MeowDB couldn't be reached lately: the crawl then takes its saved copies
-    /// as they are, rather than wait on a fetch for each that would likely fail too.
-    fn offline(&self) -> bool {
-        self.unreachable_at.is_some_and(|at| at.elapsed() < OFFLINE_RETRY)
-    }
-
-    /// Map `id`'s data for `asker`: from the cache if it's young enough for them,
-    /// otherwise fetched in the background.
+    /// Map `id`'s data for `asker`, in the background: for the shown map, from the
+    /// cache if it's young enough, otherwise (and always for the crawl, which decides
+    /// for itself when a page is due) from MeowDB.
     fn map_page(&mut self, asker: PageAsker, id: &str) -> Poll<Answer<MapData>> {
         let fetches = self.fetches(asker);
-        let fresh_for = fetches.fresh_for;
         if let Some((asked, arriving)) = &fetches.in_flight {
             if asked == id {
                 let Poll::Ready(data) = collect(arriving) else { return Poll::Pending };
                 fetches.in_flight = None;
-                match &data {
-                    Ok(Fetched::Fresh(_)) => self.unreachable_at = None,
-                    Ok(Fetched::SavedCopy { .. }) | Err(SourceError::Unreachable(_)) => {
-                        self.unreachable_at = Some(Instant::now());
-                    }
-                    Err(SourceError::FormatChanged(_)) => {}
-                }
                 if let Err(e) = &data {
                     eprintln!("map {id}: {e}");
                 }
@@ -346,24 +318,12 @@ impl MeowDbSource {
             }
         }
         // A new map: an earlier fetch still in flight finishes into the cache unheard.
-        let path = self.map_file(id);
-        match cached(&path, fresh_for) {
-            Cached::Fresh(page) => Poll::Ready(meowdb::read_map_page(&page, id).map(Fetched::Fresh)),
-            // Offline, the crawl moves on with the saved copy, and tries MeowDB again
-            // once OFFLINE_RETRY has passed.
-            Cached::Stale(Some(SavedCopy { page, saved_at_unix_ms }))
-                if asker == PageAsker::Crawl && self.offline() =>
-            {
-                Poll::Ready(meowdb::read_map_page(&page, id).map(|data| Fetched::SavedCopy { data, saved_at_unix_ms }))
-            }
-            Cached::Stale(saved) => {
-                let owned = id.to_string();
-                let read = move |page: &str| meowdb::read_map_page(page, &owned);
-                let arriving = self.fetch(meowdb::map_url(id), path, saved, read);
-                self.fetches(asker).in_flight = Some((id.to_string(), arriving));
-                Poll::Pending
-            }
-        }
+        let fresh_for = (asker == PageAsker::ShownMap).then_some(FRESH_FOR);
+        let owned = id.to_string();
+        let read = move |page: &str| meowdb::read_map_page(page, &owned);
+        let arriving = self.fetch(meowdb::map_url(id), self.map_file(id), fresh_for, read);
+        self.fetches(asker).in_flight = Some((id.to_string(), arriving));
+        Poll::Pending
     }
 }
 
@@ -376,33 +336,22 @@ fn collect<T>(arriving: &Receiver<Result<T, SourceError>>) -> Poll<Result<T, Sou
     }
 }
 
-/// A cached page too old to use as it is, and when it was saved.
-struct SavedCopy {
-    page: String,
-    saved_at_unix_ms: u64,
+/// The page cached at `path`, if it was saved less than `fresh_for` ago. Even one that
+/// can't be read: refetching won't fix a format change until MeowDB changes again, so
+/// it waits out its freshness like any page.
+fn cached(path: &Path, fresh_for: Duration) -> Option<String> {
+    let saved_at = std::fs::metadata(path).and_then(|m| m.modified()).ok()?;
+    let age = SystemTime::now().duration_since(saved_at).ok()?;
+    if age < fresh_for { std::fs::read_to_string(path).ok() } else { None }
 }
 
-/// A cached page young enough to use as it is, or an older copy (if any) to fall back
-/// on when MeowDB can't be reached.
-enum Cached {
-    Fresh(String),
-    Stale(Option<SavedCopy>),
-}
-
-/// The page cached at `path`: fresh if it was saved less than `fresh_for` ago.
-fn cached(path: &Path, fresh_for: Duration) -> Cached {
-    let Ok(page) = std::fs::read_to_string(path) else { return Cached::Stale(None) };
+/// The page cached at `path`, however old, and when it was saved (ms since the Unix
+/// epoch): what to fall back on when MeowDB can't be reached.
+fn saved_copy(path: &Path) -> Option<(String, u64)> {
+    let page = std::fs::read_to_string(path).ok()?;
     let saved_at = std::fs::metadata(path).and_then(|m| m.modified()).ok();
-    let age = saved_at.and_then(|t| SystemTime::now().duration_since(t).ok());
-    match (age, saved_at) {
-        // Even when it can't be read: refetching won't fix a format change until
-        // MeowDB changes again, so it waits out its freshness like any page.
-        (Some(age), _) if age < fresh_for => Cached::Fresh(page),
-        (_, saved_at) => {
-            let since_epoch = saved_at.and_then(|t| t.duration_since(UNIX_EPOCH).ok()).unwrap_or_default();
-            Cached::Stale(Some(SavedCopy { page, saved_at_unix_ms: since_epoch.as_millis() as u64 }))
-        }
-    }
+    let since_epoch = saved_at.and_then(|t| t.duration_since(UNIX_EPOCH).ok()).unwrap_or_default();
+    Some((page, since_epoch.as_millis() as u64))
 }
 
 async fn fetch(client: &reqwest::Client, url: &str) -> Result<String, String> {
@@ -415,12 +364,11 @@ async fn fetch(client: &reqwest::Client, url: &str) -> Result<String, String> {
 }
 
 /// After a fetch: cache and read what MeowDB served, or if it couldn't be reached,
-/// read the saved copy if there is one.
+/// read the copy saved at `path` if there is one.
 fn settle<T>(
     path: &Path,
     url: &str,
     fetched: Result<String, String>,
-    saved: Option<SavedCopy>,
     read: impl Fn(&str) -> Result<T, SourceError>,
 ) -> Answer<T> {
     match fetched {
@@ -432,10 +380,8 @@ fn settle<T>(
         }
         Err(e) => {
             eprintln!("MeowDB: {url}: {e}");
-            match saved {
-                Some(SavedCopy { page, saved_at_unix_ms }) => {
-                    read(&page).map(|data| Fetched::SavedCopy { data, saved_at_unix_ms })
-                }
+            match saved_copy(path) {
+                Some((page, saved_at_unix_ms)) => read(&page).map(|data| Fetched::SavedCopy { data, saved_at_unix_ms }),
                 None => Err(SourceError::Unreachable(e)),
             }
         }

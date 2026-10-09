@@ -19,6 +19,7 @@ mod portal_overrides;
 mod portals;
 mod prep;
 mod recogniser;
+mod saved_world;
 mod search;
 mod session;
 mod settings;
@@ -43,6 +44,7 @@ pub use panel::{
     PlacementMode, ScreenPoint,
     ScreenRect, Section, Size,
 };
+pub use saved_world::{SavedMap, SavedMapData, SavedWorld, WORLD_VERSION};
 pub use search::{DensityTier, HuntingTarget, MobChoice, RouteStop, SearchResult, SearchState, SearchView, Trip};
 pub use session::{Deaths, ExpRate, ExpTracking, TrackingState};
 pub use settings::{Hotkeys, Settings};
@@ -265,6 +267,10 @@ pub const GAME_WINDOW_TITLE: &str = "MapleStory";
 /// asked politely (ADR 0003): never on every frame.
 const INDEX_RETRY_MS: u64 = 60_000;
 
+/// The world crawl's progress reaches the panel no more often than this (capture time),
+/// unless the crawl is done: each change re-renders the panel.
+const PROGRESS_EVERY_MS: u64 = 1_000;
+
 /// The compass core: feed it frames, render its [`PanelState`].
 pub struct Compass {
     /// Reads frames fed to [`Compass::on_frame`]; loaded on the first one, so a shell
@@ -286,6 +292,14 @@ pub struct Compass {
     shown_map: ShownMap,
     /// The world crawl, from when the map index arrives.
     crawl: Option<Crawl>,
+    /// What an earlier launch's crawl learned, for the crawl to start from.
+    saved_world: SavedWorld,
+    /// The shell is loading the saved world: the crawl holds until it arrives.
+    world_awaited: bool,
+    /// When the crawl's progress last reached the panel (capture time).
+    progress_shown_at: Option<u64>,
+    /// The wall clock (ms since the Unix epoch), as the shell last told it.
+    wall_clock: Option<u64>,
     /// The listed mobs' pages and images, for their Mob Cards.
     mob_cards: MobCards,
     /// MeowDB's pace, kept by the crawl and the Mob Cards' pages together.
@@ -315,6 +329,10 @@ impl Compass {
             tracker: Tracker::default(),
             shown_map: ShownMap::default(),
             crawl: None,
+            saved_world: SavedWorld::default(),
+            world_awaited: false,
+            progress_shown_at: None,
+            wall_clock: None,
             mob_cards: MobCards::default(),
             meowdb_pace: Pace::default(),
             search: MobSearch::default(),
@@ -700,6 +718,43 @@ impl Compass {
         }
     }
 
+    /// The wall clock now, in ms since the Unix epoch: what dates the world crawl's maps,
+    /// and tells which are stale. The shell tells it as time passes.
+    pub fn on_wall_clock(&mut self, now_unix_ms: u64) {
+        self.wall_clock = Some(now_unix_ms);
+    }
+
+    /// The shell is loading the world an earlier launch saved: the crawl holds until
+    /// [`Compass::restore_world`], so it doesn't ask MeowDB for maps already known.
+    pub fn await_world(&mut self) {
+        self.world_awaited = true;
+    }
+
+    /// Pick up the world an earlier launch's crawl learned ([`SavedWorld::default`] when
+    /// none was saved), and let the crawl go on. One saved in another shape is left. A
+    /// map the crawl knows already is kept unless the saved one is newer.
+    pub fn restore_world(&mut self, world: SavedWorld) -> &PanelState {
+        self.world_awaited = false;
+        if world.version == WORLD_VERSION {
+            if let Some(crawl) = &mut self.crawl {
+                crawl.restore(&world);
+            }
+            self.saved_world = world;
+        }
+        self.sync_search();
+        self.sync_panel()
+    }
+
+    /// Every map the world crawl knows, for the shell to save.
+    pub fn world(&self) -> SavedWorld {
+        self.crawl.as_ref().map_or_else(|| self.saved_world.clone(), Crawl::saved)
+    }
+
+    /// Changes whenever what [`Compass::world`] holds does, so the shell saves it only then.
+    pub fn world_revision(&self) -> u64 {
+        self.crawl.as_ref().map_or(0, Crawl::revision)
+    }
+
     /// Time passed: check on fetches in flight, move the world crawl on, and let the
     /// Session pause. The shell
     /// calls this many times a second (`at_ms` on the same clock as frames), so nothing
@@ -715,10 +770,15 @@ impl Compass {
             self.state.mob_cards = self.mob_cards.cards();
         }
         // After the shown map, which never waits for the crawl, and its listed mobs' pages.
-        if let Some(crawl) = self.crawl.as_mut().filter(|_| !self.mob_cards.wants_meowdb(at_ms)) {
-            crawl.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
-            // Search covers the maps known so far: redone as the crawl learns more.
-            if crawl.progress() != self.state.search.crawl {
+        let crawling = !self.world_awaited && !self.mob_cards.wants_meowdb(at_ms);
+        if let Some(crawl) = self.crawl.as_mut().filter(|_| crawling) {
+            crawl.poll(&mut *self.source, &mut self.meowdb_pace, at_ms, self.wall_clock);
+            // Search covers the maps known so far: redone as the crawl learns more, but
+            // no more than once a second while it goes on.
+            let progress = crawl.progress();
+            let due = self.progress_shown_at.is_none_or(|t| at_ms.saturating_sub(t) >= PROGRESS_EVERY_MS);
+            if progress != self.state.search.crawl && (due || progress.done) {
+                self.progress_shown_at = Some(at_ms);
                 self.sync_search();
             }
         }
@@ -752,7 +812,7 @@ impl Compass {
                 return;
             }
         };
-        self.crawl = Some(Crawl::new(index.clone()));
+        self.crawl = Some(Crawl::new(index.clone(), &self.saved_world));
         self.matcher = Some(Matcher::new(index));
         self.sync_search();
     }
