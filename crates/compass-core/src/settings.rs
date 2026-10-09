@@ -1,7 +1,7 @@
 //! What MapleCompass remembers between sessions. Plain data: the shell stores it as
 //! JSON in the app's config directory and hands it back to the core at startup.
 
-use crate::panel::{InsideOffset, PlacementMode, ScreenPoint};
+use crate::panel::{CollapsedSections, InsideOffset, PlacementMode, ScreenPoint};
 use crate::setup::{ExpBarRegion, TitleRegion};
 use crate::world::Travel;
 use serde::{Deserialize, Serialize};
@@ -43,6 +43,9 @@ pub struct Settings {
     /// checkboxes). Saved as top-level `taxis` and `teleportScrolls`.
     #[serde(flatten)]
     pub travel: Travel,
+    /// The sections the player collapsed to their headings; files from before this
+    /// have both open.
+    pub collapsed_sections: CollapsedSections,
 }
 
 impl Default for Settings {
@@ -59,6 +62,7 @@ impl Default for Settings {
             exp_bar_region: None,
             game_window_title: None,
             travel: Travel::default(),
+            collapsed_sections: CollapsedSections::default(),
         }
     }
 }

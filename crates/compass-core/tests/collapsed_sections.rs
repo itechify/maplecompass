@@ -1,0 +1,90 @@
+//! The Hidden Portals and Mobs sections: a click on a section's heading collapses it to
+//! that heading, and another opens it again. Both start open. A collapsed section stays
+//! collapsed from map to map and between sessions, until the player opens it.
+
+mod common;
+
+use common::arrive;
+use common::world::{crawled, map, orange, world};
+use compass_core::{Action, CollapsedSections, Compass, Section, Settings};
+
+const SUNSET: &str = "victoria-road__sunset-sky--window";
+const KERNING: &str = "victoria-road__kerning-city--window";
+
+#[test]
+fn both_sections_start_open() {
+    let compass = Compass::new(world(vec![]));
+
+    let state = compass.panel_state();
+    assert_eq!(state.collapsed_sections, CollapsedSections { hidden_portals: false, mobs: false });
+    assert_eq!(compass.settings().collapsed_sections, CollapsedSections::default());
+}
+
+#[test]
+fn a_click_collapses_its_section_alone_and_another_opens_it_again() {
+    let mut compass = Compass::new(world(vec![]));
+
+    let state = compass.act(Action::ToggleSection(Section::HiddenPortals)).clone();
+    assert_eq!(state.collapsed_sections, CollapsedSections { hidden_portals: true, mobs: false });
+
+    let state = compass.act(Action::ToggleSection(Section::Mobs)).clone();
+    assert_eq!(state.collapsed_sections, CollapsedSections { hidden_portals: true, mobs: true });
+
+    let state = compass.act(Action::ToggleSection(Section::HiddenPortals)).clone();
+    assert_eq!(state.collapsed_sections, CollapsedSections { hidden_portals: false, mobs: true });
+}
+
+#[test]
+fn a_collapsed_section_stays_collapsed_on_the_next_map() {
+    let mut compass = crawled(vec![
+        map("100", "Sunset Sky", 100, vec![orange(5)]),
+        map("103", "Kerning City", 100, vec![]),
+    ]);
+    arrive(&mut compass, SUNSET, 100);
+    compass.act(Action::ToggleSection(Section::Mobs));
+
+    let state = arrive(&mut compass, KERNING, 2_000);
+
+    assert_eq!(state.map.as_ref().map(|m| m.map_name.as_str()), Some("Kerning City"));
+    assert!(state.collapsed_sections.mobs, "still collapsed after the map changed");
+    assert!(!state.collapsed_sections.hidden_portals);
+}
+
+#[test]
+fn collapsed_sections_are_saved_and_restored_next_session() {
+    let mut compass = Compass::new(world(vec![]));
+    compass.act(Action::ToggleSection(Section::HiddenPortals));
+    let json = serde_json::to_string(&compass.settings()).unwrap();
+    assert!(json.contains(r#""collapsedSections":{"hiddenPortals":true,"mobs":false}"#), "{json}");
+
+    let mut restarted = Compass::new(world(vec![]));
+    let state = restarted.restore(serde_json::from_str::<Settings>(&json).unwrap()).clone();
+
+    assert_eq!(state.collapsed_sections, CollapsedSections { hidden_portals: true, mobs: false });
+    let state = restarted.act(Action::ToggleSection(Section::HiddenPortals));
+    assert!(!state.collapsed_sections.hidden_portals, "opened again");
+    assert!(!restarted.settings().collapsed_sections.hidden_portals);
+}
+
+#[test]
+fn a_settings_file_from_before_collapsing_has_both_sections_open() {
+    let before = r#"{"version":4,"hotkeys":{"togglePanel":"ctrl+shift+x"},"taxis":true}"#;
+    let mut compass = Compass::new(world(vec![]));
+
+    let state = compass.restore(serde_json::from_str(before).unwrap()).clone();
+
+    assert_eq!(state.collapsed_sections, CollapsedSections::default());
+    assert!(state.search.travel.taxis, "the rest of the file still reads");
+}
+
+#[test]
+fn the_overlay_names_the_sections_as_it_sends_them() {
+    let sent: Section = serde_json::from_str(r#""hiddenPortals""#).unwrap();
+    assert_eq!(sent, Section::HiddenPortals);
+    let sent: Section = serde_json::from_str(r#""mobs""#).unwrap();
+    assert_eq!(sent, Section::Mobs);
+
+    let compass = Compass::new(world(vec![]));
+    let json = serde_json::to_value(compass.panel_state()).unwrap();
+    assert_eq!(json["collapsedSections"], serde_json::json!({ "hiddenPortals": false, "mobs": false }));
+}
