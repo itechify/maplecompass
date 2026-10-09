@@ -62,7 +62,7 @@ Many map names differ only in a Roman numeral, such as Rocky Road I, II and III.
 
 Inside, the panel keeps the spot you dragged it to relative to the game window. Docked, it follows the game window's outside edge, and goes inside when there is no room on screen. Detached, you can drag it anywhere, such as onto another monitor, and it stays there; it also gets a taskbar entry. Wherever it is placed, it stays just above the game window and never above an app in front of the game, and it disappears while the game is minimised.
 
-Settings, including the placement, collapsed sections, the marked title, a hand-picked game window and the hotkeys, are saved in `%APPDATA%\com.itechify.maplecompass\settings.json`.
+Settings, including the placement, collapsed sections, the marked title, a hand-picked game window and the hotkeys, are saved in `%APPDATA%\com.itechify.maplecompass\settings.json`. Your Personal Bests, each map's 10 best Visits with when each was set, are saved beside it in `personal-bests.json` as they change, so closing MapleCompass mid-Visit keeps that Visit's best. A file that can't be read is renamed `personal-bests.json.bad` and MapleCompass starts with no bests.
 
 ## Credits
 
