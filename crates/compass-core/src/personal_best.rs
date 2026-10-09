@@ -10,6 +10,8 @@
 //!   this Visit's best joins them then. Nothing is capped or rejected.
 //! - A Visit's best is for the map it was last certain on: the player may choose among
 //!   Candidates, and the hotkey goes past the others on the way.
+//! - A best is dated by the wall clock at the refresh that first showed it, for the line's
+//!   hover to say when it was set. The UI words the date, in the player's local time.
 //! - Bests are per map (MeowDB map ID), for every character: nothing about the Session
 //!   touches them.
 
