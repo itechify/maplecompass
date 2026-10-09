@@ -100,6 +100,13 @@ pub enum Action {
     CancelSetup,
     /// Start measuring afresh: the Session goes back to waiting for an EXP change.
     ResetSession,
+    /// Open the Grind Tracker's window, or close it (the panel's button, or its hotkey).
+    ToggleGrindTracker,
+    /// Close the Grind Tracker's window (its ×). The Session carries on.
+    CloseGrindTracker,
+    /// The player dragged the Grind Tracker's window so its top-left corner is at
+    /// (x, y), physical screen px.
+    GrindTrackerMoved { x: i32, y: i32 },
     /// Open the search view on its mobs, with nothing typed yet (the search hotkey, or
     /// the 🔍 at the top of the panel). A collapsed panel expands to show it.
     OpenSearch,
@@ -338,6 +345,12 @@ impl Panel {
         }
     }
 
+    /// Where the expanded panel goes on screen, collapsed or not: what the Grind
+    /// Tracker's window goes below until the player drags it.
+    pub fn expanded_placement(&self) -> Option<ScreenRect> {
+        Panel { expanded: true, ..self.clone() }.placement()
+    }
+
     /// Against the outside of the game window's frame, level with the client's top.
     fn docked(&self, game: &GameWindow) -> ScreenRect {
         let size = self.size();
@@ -395,7 +408,7 @@ fn bottom(r: ScreenRect) -> i64 {
 }
 
 /// Whether pixel `at` lies inside `rect`.
-fn holds(rect: ScreenRect, at: ScreenPoint) -> bool {
+pub(crate) fn holds(rect: ScreenRect, at: ScreenPoint) -> bool {
     let (x, y) = (at.x as i64, at.y as i64);
     (rect.x as i64) <= x && x < rect.x as i64 + rect.width as i64 && (rect.y as i64) <= y && y < bottom(rect)
 }
@@ -416,7 +429,7 @@ fn tallest_gap(avoid: &[ScreenRect], within: ScreenRect) -> u32 {
 /// `panel`, moved the shortest way (below, above, right or left of one of the `avoid`
 /// rectangles) so it overlaps none of them while staying inside `within`. Left where it
 /// is when it overlaps none, or when no such spot fits.
-fn clear_of(panel: ScreenRect, avoid: &[ScreenRect], within: ScreenRect) -> ScreenRect {
+pub(crate) fn clear_of(panel: ScreenRect, avoid: &[ScreenRect], within: ScreenRect) -> ScreenRect {
     if clear(panel, avoid) {
         return panel;
     }
@@ -448,7 +461,7 @@ fn overlaps(a: ScreenRect, b: ScreenRect) -> bool {
 }
 
 /// Whether `inner` lies wholly inside `outer`.
-fn contains(outer: ScreenRect, inner: ScreenRect) -> bool {
+pub(crate) fn contains(outer: ScreenRect, inner: ScreenRect) -> bool {
     let right = |r: ScreenRect| r.x as i64 + r.width as i64;
     let bottom = |r: ScreenRect| r.y as i64 + r.height as i64;
     inner.x >= outer.x && inner.y >= outer.y && right(inner) <= right(outer) && bottom(inner) <= bottom(outer)

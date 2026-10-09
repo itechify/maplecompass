@@ -69,6 +69,7 @@ fn a_button_and_its_hotkey_land_in_the_same_state() {
         (PanelControl::Setup, "ctrl+shift+s"),
         (PanelControl::ChooseCandidate, "ctrl+shift+n"),
         (PanelControl::Search, "ctrl+shift+f"),
+        (PanelControl::ToggleGrindTracker, "ctrl+shift+g"),
     ];
     for (control, hotkey) in presses {
         let mut clicked = Compass::new(FakeSource::meowdb());
