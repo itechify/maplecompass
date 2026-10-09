@@ -1,13 +1,19 @@
 //! The Grind Tracker's window: borderless like the overlay, kept just above the game in
 //! the z-order the same way, clickable but never activated by a click (`focusable:
-//! false` in `tauri.conf.json`, ADR 0001). It is declared hidden there: creating windows
-//! inside commands can deadlock on Windows. Every decision is the core's; this only shows,
-//! hides and places the window, sends it what it renders, and relays the player's drags.
+//! false` in `tauri.conf.json`, ADR 0001). Like the overlay it is declared in
+//! `tauri.conf.json` (creating windows inside commands can deadlock on Windows) and is
+//! never hidden: while the core says it doesn't show, the page draws nothing and every
+//! click goes through. (Showing a hidden window again either activates it, taking the
+//! keyboard from the game, or, done with `SW_SHOWNOACTIVATE` behind tao's back, leaves
+//! it in the system's title bar and frame.) Every decision is the core's; this only
+//! shows, hides and places the window, sends it what it renders, and relays the
+//! player's drags.
 
 use crate::sizemove::{self, Gesture, SizeMove};
 use crate::view::{LastView, ViewSender};
 use crate::{Command, LOOP_START_GRACE, keep_just_above_game, physical, place};
-use compass_core::{PanelState, Size};
+use compass_core::{ExpTracking, PanelState, Size};
+use serde::Serialize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
@@ -26,6 +32,15 @@ const MAX_HEIGHT: f64 = 400.0;
 /// The view last sent to the Grind Tracker's page, for when it loads after it was sent.
 #[derive(Default)]
 pub struct GrindTrackerView(pub LastView);
+
+/// What the Grind Tracker's page renders.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TrackerView<'a> {
+    /// The window shows: otherwise the page draws nothing.
+    shown: bool,
+    tracking: &'a ExpTracking,
+}
 
 /// The player's drag of the window, from the mouse press until Windows' move loop ends.
 #[derive(Debug, Clone, Copy)]
@@ -56,6 +71,8 @@ impl GrindTrackerWindow {
             eprintln!("{e}");
         }
         let above_game = keep_just_above_game(&window, "z-order-grind-tracker");
+        // Clicks pass through until it shows.
+        let _ = window.set_ignore_cursor_events(true);
         Self {
             app: app.clone(),
             window,
@@ -111,8 +128,9 @@ impl GrindTrackerWindow {
     /// Show the window where the core says, or hide it; and send its page the Grind
     /// Tracker's figures.
     pub fn sync(&mut self, state: &PanelState) {
-        self.view.send(&self.app, &state.exp_tracking, &self.app.state::<GrindTrackerView>().0);
         let placement = state.grind_tracker.placement;
+        let view = TrackerView { shown: placement.is_some(), tracking: &state.exp_tracking };
+        self.view.send(&self.app, &view, &self.app.state::<GrindTrackerView>().0);
         self.above_game.store(placement.is_some(), Ordering::Relaxed);
         let dragging = self.under_way();
         if let Some(placement) = placement {
@@ -120,23 +138,14 @@ impl GrindTrackerWindow {
             // where the core says (on a monitor, clear of the captured regions).
             place(&self.window, placement, dragging);
         }
+        // Hidden, the page draws nothing and clicks pass through.
         if self.shown != placement.is_some() {
             self.shown = placement.is_some();
-            show(&self.window, self.shown);
+            if let Err(e) = self.window.set_ignore_cursor_events(!self.shown) {
+                eprintln!("grind tracker click-through toggle failed: {e}");
+            }
         }
     }
-}
-
-/// Show or hide our window, never activating it: the game keeps the keyboard.
-fn show(window: &WebviewWindow, shown: bool) {
-    #[cfg(windows)]
-    if let Ok(hwnd) = window.hwnd() {
-        use windows::Win32::UI::WindowsAndMessaging::{SW_HIDE, SW_SHOWNOACTIVATE, ShowWindow};
-        // SAFETY: a plain Win32 call on our own window handle.
-        let _ = unsafe { ShowWindow(hwnd, if shown { SW_SHOWNOACTIVATE } else { SW_HIDE }) };
-        return;
-    }
-    let _ = if shown { window.show() } else { window.hide() };
 }
 
 /// The page reports how tall its content is, so the window fits it.
