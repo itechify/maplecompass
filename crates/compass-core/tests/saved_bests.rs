@@ -253,6 +253,38 @@ fn the_shell_saves_the_bests_whenever_they_change_and_only_then() {
 }
 
 #[test]
+fn a_candidate_chosen_again_takes_back_its_best_from_this_visit_and_saves_what_its_line_shows() {
+    let mut player = Player::saved_by_the_shell(tracking_with(sharing_a_title()));
+    let site_rates = |player: &Player| saved_rates(&player.compass.bests(), CONSTRUCTION_SITE_ID);
+    let sunset_rates = |player: &Player| saved_rates(&player.compass.bests(), SUNSET_SKY_ID);
+
+    // 10,800 EXP/h with the Candidates waiting, then the hotkey shows Sunset Sky, which
+    // takes it as this Visit's best.
+    player.arrive(KERNING);
+    player.hunt(6 * MIN, 30);
+    player.choose_next();
+    let set = player.wall_clock();
+    // 3,600 EXP/h, and on to the Construction Site, which takes the Visit's best.
+    player.hunt(5 * MIN, 10);
+    player.choose_next();
+    assert_eq!((sunset_rates(&player), site_rates(&player)), (vec![], vec![3600]));
+
+    // With no rate since a reset, back on Sunset Sky: its line shows the best it had this
+    // Visit, and that is the Visit's best the shell saves.
+    player.press(PanelControl::ResetSession);
+    let sunset = player.choose_next();
+    assert_eq!(sunset.map.as_ref().map(|m| m.id.as_str()), Some(SUNSET_SKY_ID));
+    assert_eq!(line(&sunset), first_visit(10_800, set));
+    assert_eq!((sunset_rates(&player), site_rates(&player)), (vec![10_800], vec![]));
+
+    // Forget takes it, from the line and from what the shell saves.
+    let saves = player.saves();
+    assert_eq!(line(&player.press(PanelControl::ForgetBest)), None);
+    assert_eq!(player.saves(), saves + 1);
+    assert_eq!((sunset_rates(&player), site_rates(&player)), (vec![], vec![]));
+}
+
+#[test]
 fn a_forget_and_its_undo_change_the_bests_the_shell_saves() {
     let mut player = Player::saved_by_the_shell(tracking());
     let sunset_rates = |player: &Player| saved_rates(&player.compass.bests(), SUNSET_SKY_ID);
