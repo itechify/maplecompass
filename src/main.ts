@@ -590,9 +590,7 @@ function renderSearchView(panel: PanelState) {
   mapsStep.hidden = view !== "maps";
   // Before the lists, which scroll their highlight into what room is left.
   // The world crawl, while it runs: search only knows the mobs on the maps known so far.
-  const crawl = crawlLine(search);
-  searchCrawl.textContent = crawl && `Mapping the world: ${crawl}`;
-  searchCrawl.hidden = !crawl;
+  renderCrawl(searchCrawl, search, true);
   searchCredit.textContent = search.credit ?? "";
   searchCredit.hidden = !search.credit;
   if (view === "mobs") {
@@ -662,6 +660,24 @@ function renderMaps(search: SearchState) {
   resultsTable.replaceChildren(resultsHeader, ...groups);
   const current = resultsTable.querySelector<HTMLElement>("tbody.current");
   if (current) scrollWithin(resultsBox, current);
+}
+
+/**
+ * The world crawl's line and gauge (`el`), while it runs and `shown`: "Mapping the world:
+ * 312 of 422 maps known" over the game's gauge, filled to the share known. The fill eases
+ * to each new count in CSS, through `--known`.
+ */
+function renderCrawl(el: HTMLElement, search: SearchState, shown: boolean) {
+  const line = crawlLine(search);
+  el.hidden = !shown || !line;
+  if (el.hidden) return;
+  el.querySelector(".crawl-text")!.textContent = `Mapping the world: ${line}`;
+  const { known, total } = search.crawl;
+  const gauge = el.querySelector<HTMLElement>(".gauge")!;
+  gauge.setAttribute("aria-valuenow", String(known));
+  gauge.setAttribute("aria-valuemax", String(total));
+  gauge.setAttribute("aria-valuetext", line);
+  gauge.style.setProperty("--known", String(total > 0 ? known / total : 0));
 }
 
 /** Scroll `box` just enough to show `item`. Not `scrollIntoView`, which would scroll the overlay's page too. */
@@ -928,9 +944,7 @@ function render(panel: PanelState) {
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
   // The world crawl, while it runs, with or without a search: "Mapping the world: 312
   // of 422 maps known". Search can only find mobs on the maps known so far.
-  const crawl = crawlLine(panel.search);
-  crawlProgress.textContent = crawl && `Mapping the world: ${crawl}`;
-  crawlProgress.hidden = !panel.gameFound || !crawl;
+  renderCrawl(crawlProgress, panel.search, panel.gameFound);
   renderData(panel);
   renderHunting(panel);
   renderSearchView(panel);
