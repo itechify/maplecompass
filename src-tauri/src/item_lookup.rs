@@ -1,14 +1,15 @@
 //! The Item Lookup alert's window (ADR 0007): what the latest lookup came to, at the top
-//! centre of the game window where the core puts it. Borderless like the overlay, kept
-//! just above the game in the z-order the same way, and never activated by a click
-//! (`focusable: false` in `tauri.conf.json`, ADR 0001). Like the Grind Tracker's window
+//! centre of the game window where the core puts it. Borderless like the overlay, and
+//! like it on top of everything while it shows (only while the game or one of our
+//! windows is in front), and never activated by a click (`focusable: false` in
+//! `tauri.conf.json`, ADR 0001). Like the Grind Tracker's window
 //! it is declared in `tauri.conf.json` and never hidden: without an alert its page draws
 //! nothing. Clicks pass through it to the game, except while it lists items to pick
 //! from. Every decision is the core's; this only places the window, sends its page what
 //! it renders, and lets clicks through or not.
 
 use crate::view::{LastView, ViewSender};
-use crate::{Command, keep_just_above_game, physical, place};
+use crate::{Command, keep_on_top, physical, place};
 use compass_core::{ItemLookup, ItemLookupLine, PanelState, Size};
 use serde::Serialize;
 use std::sync::Arc;
@@ -46,25 +47,26 @@ pub struct ItemLookupWindow {
     window: WebviewWindow,
     /// It takes clicks: it lists items to pick from.
     clickable: bool,
-    /// Tells its z-order keeper to hold it just above the game.
-    above_game: Arc<AtomicBool>,
+    /// Tells its watcher the core shows it, so it keeps it on top while the game or one
+    /// of our windows is in front.
+    shows_on_top: Arc<AtomicBool>,
     /// The alert's height in CSS px, as the page last reported it.
     height: f64,
     view: ViewSender,
 }
 
 impl ItemLookupWindow {
-    pub fn new(app: &AppHandle) -> Self {
+    pub fn new(app: &AppHandle, commands: Sender<Command>) -> Self {
         let window = app.get_webview_window(ITEM_LOOKUP).expect("item-lookup window in tauri.conf.json");
         app.manage(ItemLookupView::default());
-        let above_game = keep_just_above_game(&window, "z-order-item-lookup");
+        let shows_on_top = keep_on_top(&window, "on-top-item-lookup", commands);
         // Clicks pass through until it lists items to pick from.
         let _ = window.set_ignore_cursor_events(true);
         Self {
             app: app.clone(),
             window,
             clickable: false,
-            above_game,
+            shows_on_top,
             height: DEFAULT_HEIGHT,
             view: ViewSender::new(ITEM_LOOKUP, "item-lookup-state"),
         }
@@ -88,7 +90,7 @@ impl ItemLookupWindow {
         let line = state.item_lookup.as_ref().filter(|_| placement.is_some());
         let view = AlertView { shown: line.is_some(), line, hotkey: &state.hotkeys.item_lookup };
         self.view.send(&self.app, &view, &self.app.state::<ItemLookupView>().0);
-        self.above_game.store(placement.is_some(), Ordering::Relaxed);
+        self.shows_on_top.store(placement.is_some(), Ordering::Relaxed);
         if let Some(placement) = placement {
             place(&self.window, placement, false);
         }
