@@ -98,8 +98,11 @@ pub enum Action {
     /// The player closed setup without finishing it. On the first run that quits
     /// (`PanelState::quit`): there is nothing to read without a Title Region.
     CancelSetup,
-    /// Start measuring afresh: the Session goes back to waiting for an EXP change.
+    /// Start measuring afresh: the Session goes back to waiting for an EXP change. Until
+    /// the EXP next changes, the reset can be undone.
     ResetSession,
+    /// Bring back the Session the last reset ended, if the EXP hasn't changed since.
+    UndoReset,
     /// Open the Grind Tracker's window, or close it (the panel's button, or its hotkey).
     ToggleGrindTracker,
     /// Close the Grind Tracker's window (its ×). The Session carries on.
@@ -343,12 +346,6 @@ impl Panel {
             }
             _ => Some(self.inside(game.client)),
         }
-    }
-
-    /// Where the expanded panel goes on screen, collapsed or not: what the Grind
-    /// Tracker's window goes below until the player drags it.
-    pub fn expanded_placement(&self) -> Option<ScreenRect> {
-        Panel { expanded: true, ..self.clone() }.placement()
     }
 
     /// Against the outside of the game window's frame, level with the client's top.
