@@ -47,7 +47,7 @@
 //!   Bests outlast Sessions, as Visits do.
 
 use crate::ExpBar;
-use crate::personal_best::{Bests, PersonalBestLine, Whose};
+use crate::personal_best::{Bests, PersonalBestLine, SavedBests, Whose};
 use serde::Serialize;
 
 /// What EXP tracking shows: everything the panel's tracking section and the collapsed
@@ -293,15 +293,22 @@ struct Undo {
 struct Shown {
     /// Which stretch of capture time they were measured in.
     stretch: u64,
-    /// The Visit they were measured on.
-    visit: u64,
-    /// The solo ceiling they were measured against.
-    ceiling: Option<u64>,
-    /// The map whose Personal Best they were measured against.
-    map: Option<String>,
+    against: Against,
     /// The Session's level-ups by then.
     level_ups: u32,
     tracking: ExpTracking,
+}
+
+/// Where figures were measured, and against what: on another Visit, or against another
+/// ceiling or Personal Best, they are measured afresh.
+#[derive(Debug, PartialEq)]
+struct Against {
+    /// The Visit (its id).
+    visit: u64,
+    /// The shown map's solo ceiling.
+    ceiling: Option<u64>,
+    /// The map whose Personal Best the line compares with.
+    map: Option<String>,
 }
 
 /// Where a started Session stood at an EXP change.
@@ -601,10 +608,7 @@ impl Session {
     pub fn forget_best(&mut self, map: &str) {
         if self.bests.forget(map) == Some(Whose::ThisVisit) {
             let now = self.now;
-            let set_aside = self.undo.as_mut().map(|undo| &mut undo.figures);
-            for figures in [self.figures.as_mut(), set_aside].into_iter().flatten() {
-                figures.best_from = figures.active(now);
-            }
+            self.count_bests_from(|figures| figures.active(now));
         }
         self.shown = None;
     }
@@ -613,12 +617,18 @@ impl Session {
     /// though they never forgot it, unless a higher best was set since.
     pub fn undo_forget_best(&mut self) {
         if self.bests.undo_forget() == Some(Whose::ThisVisit) {
-            let set_aside = self.undo.as_mut().map(|undo| &mut undo.figures);
-            for figures in [self.figures.as_mut(), set_aside].into_iter().flatten() {
-                figures.best_from = figures.visit_from;
-            }
+            self.count_bests_from(|figures| figures.visit_from);
         }
         self.shown = None;
+    }
+
+    /// The Rolling Rate counts towards the Visit's best from the active time `from` gives,
+    /// in the Session's figures and in those a reset set aside.
+    fn count_bests_from(&mut self, from: impl Fn(&Figures) -> u64) {
+        let set_aside = self.undo.as_mut().map(|undo| &mut undo.figures);
+        for figures in [self.figures.as_mut(), set_aside].into_iter().flatten() {
+            figures.best_from = from(figures);
+        }
     }
 
     /// The panel confirmed another map: a new Visit starts, as of the latest time seen.
@@ -638,9 +648,9 @@ impl Session {
         &self.bests
     }
 
-    /// Every map's Personal Bests, to restore.
-    pub fn bests_mut(&mut self) -> &mut Bests {
-        &mut self.bests
+    /// Take back the Personal Bests an earlier launch saved.
+    pub fn restore_bests(&mut self, saved: SavedBests) {
+        self.bests.restore(saved);
     }
 
     /// Time passed without a reading.
@@ -691,11 +701,9 @@ impl Session {
         // they were, unless the player arrives on another map or the share would be of
         // another ceiling or best (the map's page come, or another Candidate chosen).
         let unreadable = fresh.state == TrackingState::Unreadable;
-        let visit = self.visit.id;
+        let against = Against { visit: self.visit.id, ceiling, map: map.map(String::from) };
         let holds = self.shown.as_ref().is_some_and(|shown| {
-            shown.visit == visit
-                && shown.ceiling == ceiling
-                && shown.map.as_deref() == map
+            shown.against == against
                 && (unreadable
                     || shown.stretch == stretch
                         && shown.level_ups == self.level_ups
@@ -723,8 +731,7 @@ impl Session {
                     let share = |best| full.map(|here| here.per_hour(u64::from(HUNDRED_PERCENT), best));
                     fresh.personal_best = self.bests.line(map, share);
                 }
-                let map = map.map(String::from);
-                self.shown = Some(Shown { stretch, visit, ceiling, map, level_ups: self.level_ups, tracking: fresh });
+                self.shown = Some(Shown { stretch, against, level_ups: self.level_ups, tracking: fresh });
             }
         }
         let held = self.shown.as_ref().map(|shown| shown.tracking.clone()).unwrap_or_default();
