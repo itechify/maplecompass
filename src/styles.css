@@ -659,8 +659,9 @@ td:first-child {
   overflow: visible;
 }
 
-/* The Map Preview: OSMS's picture of the whole map on the minimap's paper, set into the
-   body as an inset box, fitted and centred within 180px, every portal ringed over it. */
+/* The Map Preview: OSMS's picture of the whole map on the minimap's paper, see-through as
+   the picture is, set into the body as an inset box, fitted and centred within 180px,
+   every portal ringed over it. */
 .map-preview {
   display: flex;
   align-items: center;
