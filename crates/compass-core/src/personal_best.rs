@@ -19,7 +19,7 @@
 //!   earlier in the Visit counts again once it has a rate to count again.
 //! - A best is dated by the wall clock at the refresh that first showed it, and keeps
 //!   the date in the history.
-//! - Bests are per map (MeowDB map ID), for every character: nothing about the Session
+//! - Bests are per map (its 9-digit ID), for every character: nothing about the Session
 //!   touches them.
 //! - Each map's history keeps its 10 best Visits; one that doesn't make them is dropped.
 //! - They outlive the launch, as the saved world does: the core hands them to the shell
@@ -61,7 +61,7 @@ impl Default for SavedBests {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MapBests {
-    /// MeowDB's 9-digit map ID.
+    /// The 9-digit map ID.
     pub id: String,
     /// Highest first: the first is the map's Personal Best.
     pub visits: Vec<VisitBest>,

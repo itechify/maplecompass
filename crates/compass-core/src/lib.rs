@@ -851,19 +851,10 @@ impl Compass {
         None
     }
 
-    /// The Personal Bests page now: every map's best as saved, with what the map list and
-    /// the maps' pages (the shown map's own, else the crawl's) say of the map.
+    /// The Personal Bests page now: every map's best as saved, with what OSMS's file set
+    /// held says of the map.
     fn bests_page(&self) -> BestsPage {
-        let crawl = self.crawl.as_ref();
-        let shown = self.state.map.as_ref().map(|m| m.id.as_str());
-        let map = |id: &str| {
-            let entry = crawl.and_then(|c| c.entry(id));
-            let data = match self.state.data.data() {
-                Some(data) if shown == Some(id) => Some(data),
-                _ => crawl.and_then(|c| c.known().find(|(e, _)| e.id == id).map(|(_, data)| data)),
-            };
-            (entry, data)
-        };
+        let map = |id: &str| self.set.as_ref().and_then(|held| held.maps.maps().find(|(entry, _)| entry.id == id));
         bests_page::page(&self.session.bests().saved(), map, certain_map(&self.state), self.wall_clock)
     }
 
