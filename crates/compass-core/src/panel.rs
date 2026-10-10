@@ -127,9 +127,9 @@ pub enum Action {
     /// Esc or the back arrow in the search view, or focus moving to another window: back
     /// to the normal view, with nothing changed.
     SearchEscape,
-    /// The Hunting section's ×: there is no Hunting Target any more.
+    /// The Navigation section's ×: there is no Hunting Target any more.
     ClearHuntingTarget,
-    /// The Hunting section's 🔍: open the search view on the Hunting Target mob's map
+    /// The Navigation section's 🔍: open the search view on the Hunting Target mob's map
     /// list, to pick another of its maps.
     ReopenMapList,
     /// Turn taxis on or off for Distance (the Taxis checkbox in the map list).
@@ -162,21 +162,28 @@ pub enum Action {
     UndoResetHotkeys,
 }
 
-/// A section of the current map's facts that the player can collapse to its heading.
+/// A section of the normal view that the player can collapse to its heading.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Section {
+    /// The Map section: the Map Preview and the Hidden Portals (named as it was before it
+    /// held the Map Preview, as the settings name it).
     HiddenPortals,
     Mobs,
+    /// The Navigation section: the Hunting Target and the way there.
+    Navigation,
 }
 
-/// Which sections are collapsed to their headings: both open until the player collapses
-/// one, and the same on every map. Saved in the settings as `collapsedSections`.
+/// Which sections are collapsed to their headings: all open until the player collapses
+/// one, and the same on every map. Saved in the settings as `collapsedSections`; a section
+/// a file doesn't name is open.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct CollapsedSections {
+    /// The Map section.
     pub hidden_portals: bool,
     pub mobs: bool,
+    pub navigation: bool,
 }
 
 impl CollapsedSections {
@@ -185,6 +192,7 @@ impl CollapsedSections {
         match section {
             Section::HiddenPortals => Self { hidden_portals: !self.hidden_portals, ..self },
             Section::Mobs => Self { mobs: !self.mobs, ..self },
+            Section::Navigation => Self { navigation: !self.navigation, ..self },
         }
     }
 }
