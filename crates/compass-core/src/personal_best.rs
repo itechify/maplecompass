@@ -134,13 +134,12 @@ impl Bests {
     }
 
     /// Do `change`, moving the revision on if it changed what [`Bests::saved`] hands out.
-    fn changing<T>(&mut self, change: impl FnOnce(&mut Self) -> T) -> T {
+    fn changing(&mut self, change: impl FnOnce(&mut Self)) {
         let before = self.saved();
-        let changed = change(self);
+        change(self);
         if self.saved() != before {
             self.revision += 1;
         }
-        changed
     }
 
     /// `map`'s Personal Best from its history, the best of the earlier Visits, if it has
