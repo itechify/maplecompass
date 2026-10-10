@@ -67,6 +67,8 @@ pub struct PortalMark {
     pub leads: Leads,
     /// What kind of portal it is, by the Hidden Portal rule.
     pub kind: PortalKind,
+    /// The destination's 9-digit ID; within the map, the map's own.
+    pub to_map_id: String,
     /// The destination's name and street; within the map, the map's own. A map not in
     /// the data is named from OSMS's lookups, with no street, or else by its ID.
     pub to_map_name: String,
@@ -76,6 +78,22 @@ pub struct PortalMark {
     /// Its row among the shown map's Hidden Portals (an index into
     /// [`crate::MapData::hidden_portals`]); `None` when it has none.
     pub hidden_portal: Option<usize>,
+    /// It is the Hunting Target's route's next step: the player hasn't reached the target,
+    /// and the route goes on from the shown map through a portal to where this one leads.
+    /// Never a Quest Portal, which no route goes through.
+    pub next_on_route: bool,
+}
+
+impl MapPreview {
+    /// The same preview, with the portals to `next_map` (the next map on the Hunting
+    /// Target's route, when the route goes there through a portal) marked next on the
+    /// route, and no others.
+    pub(crate) fn on_route_to(mut self, next_map: Option<&str>) -> Self {
+        for mark in &mut self.marks {
+            mark.next_on_route = next_map == Some(mark.to_map_id.as_str()) && mark.kind != PortalKind::Quest;
+        }
+        self
+    }
 }
 
 /// Where a portal leads, as OSMS colours its mark.
