@@ -1,5 +1,5 @@
 //! The tray icon: the gold compass in the notification area. Its menu opens setup (like
-//! the panel's Help & setup) and quits MapleCompass, whether or not the game is open,
+//! the panel's Help & Setup) and quits MapleCompass, whether or not the game is open,
 //! the panel shows or the hotkeys are live. Nothing here touches the game (ADR 0001).
 
 use crate::Command;
@@ -12,7 +12,7 @@ use tauri::tray::TrayIconBuilder;
 /// Put the compass in the tray, with its menu on either click; each choice goes to the
 /// compass loop.
 pub fn install(app: &App, commands: Sender<Command>) -> tauri::Result<()> {
-    let setup = MenuItem::with_id(app, "setup", "Help & setup", true, None::<&str>)?;
+    let setup = MenuItem::with_id(app, "setup", "Help & Setup", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit MapleCompass", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&setup, &PredefinedMenuItem::separator(app)?, &quit])?;
     let mut tray = TrayIconBuilder::with_id("maplecompass")
