@@ -132,7 +132,7 @@ type PanelState = {
   collapsedSections: Record<Section, boolean>;
   gameFound: boolean;
   placementMode: PlacementMode;
-  layer: "aboveGame" | "hidden";
+  layer: "onTop" | "hidden";
   /** The player can drag the panel by its header (inside or detached). */
   draggable: boolean;
   setup: { needed: "firstRun" | "resolutionChanged" | "requested" | null };

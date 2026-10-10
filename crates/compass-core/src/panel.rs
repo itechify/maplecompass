@@ -199,7 +199,7 @@ pub enum Layer {
     /// Above every other window on screen (always on top), while the game or one of
     /// ours is in front. When another app comes in front the overlay hides, and bringing
     /// the game back brings the overlay with it.
-    AboveGame,
+    OnTop,
     /// Nothing to show: the game is minimised or gone, or another app is in front. The
     /// overlay draws nothing and lets every click through.
     #[default]
@@ -324,13 +324,13 @@ impl Panel {
 
     pub fn layer(&self) -> Layer {
         let in_front = self.foreground != Some(Foreground::OtherApp);
-        if self.game.is_some() && in_front { Layer::AboveGame } else { Layer::Hidden }
+        if self.game.is_some() && in_front { Layer::OnTop } else { Layer::Hidden }
     }
 
     /// The player can drag the panel by its header: inside or detached, at any time; a
     /// docked or hidden one never.
     pub fn draggable(&self) -> bool {
-        self.layer() == Layer::AboveGame && matches!(self.mode, PlacementMode::Inside | PlacementMode::Detached)
+        self.layer() == Layer::OnTop && matches!(self.mode, PlacementMode::Inside | PlacementMode::Detached)
     }
 
     fn size(&self) -> Size {
