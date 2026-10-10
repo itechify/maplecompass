@@ -4,9 +4,10 @@
 
 use crate::map_data::{MapData, MapSummary, Mob, PerParty};
 use crate::map_index::{MapEntry, SourceError};
+use crate::map_preview::PicturePoint;
 use crate::mob_card::{DamageRange, Elements, HpPerExp, MobDetails};
 use crate::portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
-use crate::portals::{self, Exit, MapFacts};
+use crate::portals::{self, Destination, Exit, MapFacts};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
@@ -134,9 +135,12 @@ fn read_set(files: &OsmsFiles, overrides: &[PortalOverride]) -> Result<MapSet, S
     // else lookups.json, else its ID.
     let looked_up = |id: &str| lookups.map_names.get(id).map(|name| name.trim()).filter(|name| !name.is_empty());
     let name_of = |id: &str| match (names.get(id), looked_up(id)) {
-        (Some(entry), _) => (entry.map_name.clone(), entry.street_name.clone(), true),
-        (None, Some(name)) => (name.to_string(), String::new(), false),
-        (None, None) => (id.to_string(), String::new(), false),
+        (Some(entry), _) => {
+            Destination { map_name: entry.map_name.clone(), street_name: entry.street_name.clone(), known: true }
+        }
+        (None, name) => {
+            Destination { map_name: name.unwrap_or(id).to_string(), street_name: String::new(), known: false }
+        }
     };
 
     let mut set = Vec::new();
@@ -220,7 +224,7 @@ fn map_data(
     map: &OsmsMap,
     portals: Option<&Vec<OsmsPortal>>,
     mobs: &HashMap<u64, &OsmsMob>,
-    name_of: &impl Fn(&str) -> (String, String, bool),
+    name_of: &impl Fn(&str) -> Destination,
     overrides: &[PortalOverride],
 ) -> Result<MapData, String> {
     let (summary, mobs) = spawns(map, mobs)?;
@@ -229,18 +233,17 @@ fn map_data(
         .iter()
         .map(|p| {
             let to_map_id = map_id(p.dest_map.trim().parse().map_err(|_| format!("dest_map {:?}", p.dest_map))?)?;
-            let (to_map_name, to_street_name, to_known) = name_of(&to_map_id);
             Ok(Exit {
                 name: p.name.trim().to_string(),
                 kind: p.kind,
+                to: name_of(&to_map_id),
                 to_map_id,
-                to_map_name,
-                to_street_name,
-                to_known,
                 within_map: p.intra_map,
                 landing: p.dest_portal.trim().to_string(),
-                x: pixel(p.x).ok_or_else(|| format!("portal {} x {}", p.name, p.x))?,
-                y: pixel(p.y).ok_or_else(|| format!("portal {} y {}", p.name, p.y))?,
+                at: PicturePoint {
+                    x: pixel(p.x).ok_or_else(|| format!("portal {} x {}", p.name, p.x))?,
+                    y: pixel(p.y).ok_or_else(|| format!("portal {} y {}", p.name, p.y))?,
+                },
             })
         })
         .collect::<Result<Vec<_>, String>>()?;

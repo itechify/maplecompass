@@ -50,13 +50,20 @@ impl PreviewImage {
     }
 }
 
+/// A point in a map's picture, in its pixels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct PicturePoint {
+    pub x: i32,
+    pub y: i32,
+}
+
 /// A portal marked on the Map Preview.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PortalMark {
-    /// Where it is, in the picture's pixels.
-    pub x: i32,
-    pub y: i32,
+    /// Where it is (`x` and `y` beside the rest for the overlay).
+    #[serde(flatten)]
+    pub at: PicturePoint,
     pub leads: Leads,
     /// What kind of portal it is, by the Hidden Portal rule.
     pub kind: PortalKind,
@@ -83,12 +90,13 @@ pub enum Leads {
     MapNotInTheData,
 }
 
-/// Where a teleport within the map lands, in the picture's pixels.
+/// Where a teleport within the map lands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Landing {
-    pub x: i32,
-    pub y: i32,
+    /// Where it is (`x` and `y` beside the rest for the overlay).
+    #[serde(flatten)]
+    pub at: PicturePoint,
     /// The mark it lands at (an index into [`MapPreview::marks`]), when the portal it
     /// lands at is marked; a spawn point isn't.
     pub mark: Option<usize>,
