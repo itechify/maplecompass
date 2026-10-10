@@ -1,62 +1,15 @@
 //! MeowDB reader: turns MeowDB pages, fetched by the shell, into map and mob data, and its
-//! search's answers into items (ADR 0007). Personal use only until MeowDB grants
-//! permission (ADR 0003); credit "NiaMeowDB (meowdb.com)".
+//! search's answers into items (ADR 0007), and gives the pages' links. The map pages are
+//! read only for the world crawl, until #57, and the mob pages for Mob Cards, until #58;
+//! credit "NiaMeowDB (meowdb.com)".
 
 use crate::item_lookup::ItemHit;
 use crate::map_data::{HiddenPortal, MapData, MapSummary, Mob, PerParty, Portal};
-use crate::map_index::{MapEntry, SourceError};
+use crate::map_index::SourceError;
 use crate::mob_card::{DamageRange, Elements, HpPerExp, MobDetails};
 use crate::portals::{self, Exit, MapFacts};
 use crate::portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 use serde_json::Value;
-
-/// MeowDB's "All Maps A-Z" page: every map, grouped by region and street.
-pub const MAP_INDEX_URL: &str = "https://meowdb.com/msclassic/maps/all";
-
-const MAP_LINK: &str = "href=\"/msclassic/maps/";
-
-/// Read the map index from the "All Maps A-Z" page ([`MAP_INDEX_URL`]).
-///
-/// The page's `<main>` lists, in document order, `<h2>Region</h2>`, then per street
-/// `<h3>Street Name <span>(N)</span></h3>` and a list of
-/// `<a href="/msclassic/maps/<9-digit id>">Map Name[<span> (town)</span>]</a>`.
-/// Names are HTML-decoded and trimmed. A page listing no maps is
-/// [`SourceError::FormatChanged`].
-pub fn read_map_index(html: &str) -> Result<Vec<MapEntry>, SourceError> {
-    let format_changed = |why: &str| SourceError::FormatChanged(format!("map index page: {why}"));
-    let start = html.find("<main").ok_or_else(|| format_changed("no <main>"))?;
-    let end = html[start..].find("</main>").map_or(html.len(), |e| start + e);
-    // React separates adjacent text nodes with empty comments.
-    let main = html[start..end].replace("<!-- -->", "");
-
-    let (mut region, mut street) = (None, None);
-    let mut maps = Vec::new();
-    let mut rest = main.as_str();
-    while let Some(lt) = rest.find('<') {
-        rest = &rest[lt..];
-        let tag_end = rest.find('>').map_or(rest.len(), |e| e + 1);
-        let (tag, after) = rest.split_at(tag_end);
-        if tag.starts_with("<h2") {
-            region = Some(text_before_tag(after));
-        } else if tag.starts_with("<h3") {
-            street = Some(text_before_tag(after));
-        } else if tag.starts_with("<a ") {
-            if let (Some(id), Some(region), Some(street)) = (map_id(tag), &region, &street) {
-                maps.push(MapEntry {
-                    id: id.to_string(),
-                    street_name: street.clone(),
-                    map_name: text_before_tag(after),
-                    region: region.clone(),
-                });
-            }
-        }
-        rest = after;
-    }
-    if maps.is_empty() {
-        return Err(format_changed("no maps listed"));
-    }
-    Ok(maps)
-}
 
 /// The MeowDB page of the map with this 9-digit ID.
 pub fn map_url(id: &str) -> String {
@@ -80,20 +33,7 @@ pub fn map_url(id: &str) -> String {
 /// come from the map's `connectedMaps`, its Mob Rate from `mobRate` and its nearest
 /// town from `returnMap`.
 pub fn read_map_page(html: &str, id: &str) -> Result<MapData, SourceError> {
-    read_map_page_with(html, id, PORTAL_OVERRIDES)
-}
-
-/// [`read_map_page`], with these portal overrides in place of [`PORTAL_OVERRIDES`].
-/// Only for tests of the override list (integration tests can't see test-only items);
-/// the app reads with [`read_map_page`].
-#[doc(hidden)]
-pub fn read_map_page_with(
-    html: &str,
-    id: &str,
-    overrides: &[PortalOverride],
-) -> Result<MapData, SourceError> {
-    read_page(html, id, overrides)
-        .map_err(|why| SourceError::FormatChanged(format!("map page {id}: {why}")))
+    read_page(html, id, PORTAL_OVERRIDES).map_err(|why| SourceError::FormatChanged(format!("map page {id}: {why}")))
 }
 
 fn read_page(html: &str, id: &str, overrides: &[PortalOverride]) -> Result<MapData, String> {
@@ -492,21 +432,6 @@ fn strip_tags(html: &str) -> String {
         }
     }
     text
-}
-
-/// The 9-digit map ID in an `<a … href="/msclassic/maps/<id>">` tag.
-fn map_id(tag: &str) -> Option<&str> {
-    let at = tag.find(MAP_LINK)? + MAP_LINK.len();
-    let rest = &tag[at..];
-    let id = rest.get(..9)?;
-    (id.bytes().all(|b| b.is_ascii_digit()) && rest[9..].starts_with('"')).then_some(id)
-}
-
-/// The text up to the next tag, decoded and trimmed: `"Mushroom Town<span> (town)…"`
-/// gives `"Mushroom Town"`.
-fn text_before_tag(s: &str) -> String {
-    let text = &s[..s.find('<').unwrap_or(s.len())];
-    decode_entities(text).trim().to_string()
 }
 
 fn decode_entities(s: &str) -> String {
