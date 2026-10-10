@@ -32,11 +32,11 @@ pub struct Candidate {
     /// The map's 9-digit ID.
     pub id: String,
     /// What sets it apart from the others.
-    pub outline: Option<Outline>,
+    pub outline: Outline,
 }
 
 /// A map at a glance: enough to tell apart maps that share a title.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Outline {
     /// The lowest and highest mob level; `None` on a map without mobs.
@@ -162,13 +162,11 @@ impl ShownMap {
 
     pub fn candidates(&self, set: &MapSet) -> Option<Candidates> {
         let Settling::Choosing { shown, chosen } = self.settling else { return None };
+        let outline = |id: &str| set.data(id).map(|data| Outline::of(&for_panel(data.clone())));
         let maps = self
             .maps
             .iter()
-            .map(|m| Candidate {
-                id: m.id.clone(),
-                outline: set.data(&m.id).map(|data| Outline::of(&for_panel(data.clone()))),
-            })
+            .map(|m| Candidate { id: m.id.clone(), outline: outline(&m.id).unwrap_or_default() })
             .collect();
         Some(Candidates { maps, shown, chosen })
     }
