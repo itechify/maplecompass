@@ -17,8 +17,9 @@ use std::task::Poll;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// How long a saved set is used without fetching it again: game data changes only on
-/// patch days, and a day is soon enough to catch one.
-const FRESH_FOR: Duration = Duration::from_secs(24 * 60 * 60);
+/// patch days, and a day is soon enough to catch one. An hour short of the core's 24 hours
+/// between asks, so a set saved at one ask is always due at the next, whatever the clocks.
+const FRESH_FOR: Duration = Duration::from_secs(23 * 60 * 60);
 
 /// The saved set's file in the cache.
 const SET_FILE: &str = "osms-set.json";
