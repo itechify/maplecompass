@@ -86,23 +86,6 @@ pub struct HiddenPortal {
     pub to_hidden_street: bool,
     /// A Quest Portal: it only works while the player meets a quest condition.
     pub quest: bool,
-    /// Roughly where the portal is on the map, in words: "far right, lower", or
-    /// "position unknown" when MeowDB has no minimap bounds for the map.
-    pub position: String,
-    /// The same spot as a cell of the minimap, for the panel to draw; `None` when the
-    /// position is unknown.
-    pub spot: Option<MapSpot>,
-}
-
-/// A cell of the minimap cut into 5 columns and 3 rows, counted from its top-left: the
-/// grid [`HiddenPortal::position`] names in words.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MapSpot {
-    /// 0 (far left) to 4 (far right).
-    pub column: u8,
-    /// 0 (upper) to 2 (lower).
-    pub row: u8,
 }
 
 /// The Map Summary: MeowDB's ceiling figures (every mob killed as soon as it spawns),

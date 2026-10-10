@@ -1,43 +1,42 @@
-//! Once the panel has a map's MeowDB page, it lists the map's Hidden Portals: the exits
-//! the player can't see, where each leads and roughly where it is. Pages are the ones
-//! saved on 2026-10-07 (personal-use test data, ADR 0003), served by a fake map data
-//! source.
+//! The panel lists the shown map's Hidden Portals: the exits the player can't see, each
+//! with where it leads, from OSMS's portals. Which portals are hidden follows the Hidden
+//! Portal rule and the portal override list. Where on the map each is goes to the Map
+//! Preview (#60), so the rows hold no position. Served from made-up worlds in OSMS's
+//! shape.
 
 mod common;
 
-use common::{FakeSource, arrive, saved_index, saved_page};
-use compass_core::{
-    Compass, HiddenPortal, MapDataStatus, MapEntry, MapSpot, PanelState, PortalOverride, meowdb,
-};
-use std::task::Poll;
+use common::osms::{self, CONSTRUCTION_SITE, DEAD_END, KERNING_CITY, NORTHERN_TOP, map};
+use common::{FakeSource, arrive, fresh_files};
+use compass_core::osms::OsmsFiles;
+use compass_core::{Compass, HiddenPortal, MapDataStatus, PanelState, PortalOverride, Recognition, TitleLines, TitleReading};
 
-const CONSTRUCTION_SITE: &str = "victoria-road__construction-site-north-of-kerning-city--window";
+const CONSTRUCTION: &str = "victoria-road__construction-site-north-of-kerning-city--window";
 const KERNING: &str = "victoria-road__kerning-city--window";
 const SUNSET: &str = "victoria-road__sunset-sky--window";
-const NORTHERN_TOP: &str = "hidden-street__northern-top-of-construction-site--window";
+const NORTHERN: &str = "hidden-street__northern-top-of-construction-site--window";
 
-const CONSTRUCTION_SITE_ID: &str = "010003080";
-const KERNING_CITY_ID: &str = "010003000";
-const HENESYS_HUNTING_GROUND_I: &str = "010001010";
-const FIELD_EAST_OF_AMHERST: &str = "000001020";
-const THREE_WAY_ROAD_SPLIT: &str = "010000020";
-const ORBIS_TOWER_8F: &str = "020000098";
-const ORBIS_TOWER_HIDDEN_ROOM: &str = "020000099";
+/// A made-up map whose portals the tests give, on a street of its own.
+const FIELD: u64 = 100_000_000;
 
-/// Arrive on map `id`, which has no minimap sample: the index here files the Sunset Sky
-/// title under that ID.
-fn arrive_on(id: &str, source: impl FnOnce(Vec<MapEntry>) -> FakeSource) -> PanelState {
-    let index = saved_index()
-        .into_iter()
-        .map(|m| if m.map_name == "Sunset Sky" { MapEntry { id: id.into(), ..m } } else { m })
-        .collect();
-    let mut compass = Compass::new(source(index));
-    arrive(&mut compass, SUNSET, 0)
+fn read_as(street: &str, map: &str, at_ms: u64) -> TitleReading {
+    TitleReading { lines: Some(TitleLines { street: street.into(), map: map.into() }), at_ms }
 }
 
-/// Where each of the shown Hidden Portals leads, and roughly where it is.
-fn destinations(state: &PanelState) -> Vec<(&str, &str)> {
-    hidden_portals(state).iter().map(|p| (p.to_map_name.as_str(), p.position.as_str())).collect()
+/// The panel on the made-up Field, with the game's maps around it.
+fn on_field(change: impl FnOnce(osms::Map) -> osms::Map) -> PanelState {
+    on_field_with(osms::game(), change, Vec::new())
+}
+
+fn on_field_with(
+    world: osms::World,
+    change: impl FnOnce(osms::Map) -> osms::Map,
+    overrides: Vec<PortalOverride>,
+) -> PanelState {
+    let world = world.with(change(map(FIELD, "Made-up Street", "Field")));
+    let mut compass = Compass::new(FakeSource::with_world(world)).with_portal_overrides(overrides);
+    compass.on_reading(read_as("Made-up Street", "Field", 0));
+    compass.on_reading(read_as("Made-up Street", "Field", 333)).clone()
 }
 
 fn hidden_portals(state: &PanelState) -> &[HiddenPortal] {
@@ -47,11 +46,16 @@ fn hidden_portals(state: &PanelState) -> &[HiddenPortal] {
     }
 }
 
-#[test]
-fn the_construction_site_north_of_kerning_city_has_a_hidden_portal_up_on_the_right_to_a_hidden_street() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+/// Where each Hidden Portal leads, and whether it is a Quest Portal.
+fn destinations(state: &PanelState) -> Vec<(&str, bool)> {
+    hidden_portals(state).iter().map(|p| (p.to_map_name.as_str(), p.quest)).collect()
+}
 
-    let state = arrive(&mut compass, CONSTRUCTION_SITE, 0);
+#[test]
+fn the_construction_sites_invisible_exit_is_a_hidden_portal_up_to_a_hidden_street() {
+    let mut compass = Compass::new(FakeSource::osms());
+
+    let state = arrive(&mut compass, CONSTRUCTION, 0);
 
     assert_eq!(
         hidden_portals(&state),
@@ -62,224 +66,145 @@ fn the_construction_site_north_of_kerning_city_has_a_hidden_portal_up_on_the_rig
             to_street_name: "Hidden Street".into(),
             to_hidden_street: true,
             quest: false,
-            position: "right, upper".into(),
-            spot: Some(MapSpot { column: 3, row: 0 }),
         }]
     );
 }
 
-/// Kerning City has 14 invisible exits (type 1): its building doors and the way down to
-/// The Swamp of Despair. On a Town they are Doors, drawn into the scenery, not hidden.
+/// Kerning City's invisible exits lead into its buildings: on a Town they are Doors,
+/// drawn into the scenery, not hidden.
 #[test]
 fn the_doors_of_a_town_are_not_hidden_portals() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     let state = arrive(&mut compass, KERNING, 0);
 
     assert_eq!(hidden_portals(&state), []);
 }
 
-/// Henesys Hunting Ground I has two visible exits and one walk-into exit (type 3) to
-/// Hunting Ground II, which counts as visible until it's checked in-game. Sunset Sky's
-/// other portals are teleports within the map. Northern Top's only exit is visible.
+/// Sunset Sky's invisible portals are teleports within the map; the Northern Top's only
+/// exit is visible (type 2); a walk-into exit (type 3) counts as visible.
 #[test]
 fn visible_exits_walk_into_exits_and_teleports_within_the_map_are_not_hidden_portals() {
-    let state = arrive_on(HENESYS_HUNTING_GROUND_I, FakeSource::with_index);
-    assert_eq!(hidden_portals(&state), []);
-
-    for sample in [SUNSET, NORTHERN_TOP] {
-        let mut compass = Compass::new(FakeSource::meowdb());
+    for sample in [SUNSET, NORTHERN] {
+        let mut compass = Compass::new(FakeSource::osms());
         let state = arrive(&mut compass, sample, 0);
         assert_eq!(hidden_portals(&state), [], "{sample}");
     }
+
+    let state = on_field(|m| m.portal("east00", 2, KERNING_CITY).portal("in00", 3, CONSTRUCTION_SITE));
+    assert_eq!(hidden_portals(&state), []);
 }
 
 #[test]
-fn each_hidden_portal_has_a_rough_position_on_the_map() {
-    let cases = [
-        (FIELD_EAST_OF_AMHERST, vec![("Tomato Field", "far right, middle")]),
-        (
-            THREE_WAY_ROAD_SPLIT,
-            vec![("The Pig Beach", "left, lower"), ("Beach Hunting Ground", "centre, lower")],
-        ),
-        (ORBIS_TOWER_8F, vec![("Orbis Tower <Hidden Room>", "centre, middle")]),
-    ];
-    for (id, expected) in cases {
-        let state = arrive_on(id, FakeSource::with_index);
-        assert_eq!(destinations(&state), expected, "{id}");
-    }
+fn hidden_portals_of_type_10_and_quest_portals_of_type_11_are_hidden_portals() {
+    let state = on_field(|m| m.portal("hide00", 10, KERNING_CITY).portal("quest00", 11, CONSTRUCTION_SITE));
+
+    assert_eq!(destinations(&state), [("Kerning City", false), ("Construction Site North of Kerning City", true)]);
+}
+
+/// Only invisible exits are Doors: a Town's hidden and Quest Portals are still hidden.
+#[test]
+fn a_towns_hidden_and_quest_portals_are_still_hidden_portals() {
+    let state = on_field(|m| m.town().portal("in00", 1, KERNING_CITY).portal("hide00", 10, NORTHERN_TOP).portal("q00", 11, CONSTRUCTION_SITE));
+
+    assert_eq!(
+        destinations(&state),
+        [("Northern Top of Construction Site", false), ("Construction Site North of Kerning City", true)]
+    );
+}
+
+/// OSMS lists portals into the map itself and to its dead end (spawn points); neither
+/// goes anywhere, whether or not OSMS marks it as within the map. Nor does a hidden
+/// teleport within the map.
+#[test]
+fn an_exit_into_the_same_map_or_to_the_dead_end_or_a_hidden_teleport_is_not_a_hidden_portal() {
+    let state = on_field(|m| m.portal("sp", 1, DEAD_END).portal("back00", 10, FIELD).teleport("hide01", "hide02"));
+
+    assert_eq!(hidden_portals(&state), []);
+
+    let hidden_teleport = on_field(|m| {
+        let mut m = m.teleport("hide01", "hide02");
+        m.portals[0].kind = 10;
+        m
+    });
+    assert_eq!(hidden_portals(&hidden_teleport), []);
 }
 
 #[test]
 fn only_destinations_on_a_hidden_street_are_labelled_hidden_street() {
-    let labelled = |id| {
-        let state = arrive_on(id, FakeSource::with_index);
-        hidden_portals(&state).iter().map(|p| (p.to_map_name.clone(), p.to_hidden_street)).collect::<Vec<_>>()
-    };
+    let state = on_field(|m| m.portal("a", 10, NORTHERN_TOP).portal("b", 10, KERNING_CITY));
 
-    assert_eq!(labelled(FIELD_EAST_OF_AMHERST), [("Tomato Field".into(), false)]);
+    let labelled: Vec<_> = hidden_portals(&state).iter().map(|p| (p.to_map_name.as_str(), p.to_hidden_street)).collect();
+    assert_eq!(labelled, [("Northern Top of Construction Site", true), ("Kerning City", false)]);
+}
+
+/// A destination outside OSMS's map list takes its name from `lookups.json`, with no
+/// street; one that isn't there either is named by its ID.
+#[test]
+fn a_destination_outside_the_map_list_is_named_from_osms_lookups_or_else_by_its_id() {
+    let world = osms::game().naming(88_001_000, "Backalley Semi-Basement");
+
+    let state = on_field_with(world, |m| m.portal("a", 10, 88_001_000).portal("b", 10, 88_000_000), Vec::new());
+
+    let named: Vec<_> = hidden_portals(&state)
+        .iter()
+        .map(|p| (p.to_map_id.as_str(), p.to_map_name.as_str(), p.to_street_name.as_str(), p.to_hidden_street))
+        .collect();
     assert_eq!(
-        labelled(THREE_WAY_ROAD_SPLIT),
-        [("The Pig Beach".into(), true), ("Beach Hunting Ground".into(), true)]
+        named,
+        [("088001000", "Backalley Semi-Basement", "", false), ("088000000", "088000000", "", false)]
     );
-}
-
-/// The Construction Site's page, with `from` changed to `to` in its invisible exit to
-/// the Northern Top.
-fn construction_site_with(from: &str, to: &str) -> String {
-    const HIDDEN_EXIT: &str =
-        r#"\"name\":\"hiden00\",\"type\":1,\"x\":-3415,\"y\":-733,\"toMapId\":\"010003081\""#;
-    let page = saved_page(CONSTRUCTION_SITE_ID).unwrap();
-    assert!(page.contains(HIDDEN_EXIT) && HIDDEN_EXIT.contains(from));
-    page.replace(HIDDEN_EXIT, &HIDDEN_EXIT.replace(from, to))
-}
-
-/// No saved page has a Quest Portal (MeowDB portal type 11), so this one is made up: the
-/// Construction Site's invisible exit, turned into type 11.
-#[test]
-fn a_type_11_portal_is_a_quest_portal() {
-    let page = construction_site_with(r#"\"type\":1,"#, r#"\"type\":11,"#);
-    let mut compass = Compass::new(FakeSource::meowdb().with_page(CONSTRUCTION_SITE_ID, page));
-
-    let state = arrive(&mut compass, CONSTRUCTION_SITE, 0);
-
-    let quest: Vec<_> = hidden_portals(&state).iter().map(|p| (p.to_map_name.as_str(), p.quest)).collect();
-    assert_eq!(quest, [("Northern Top of Construction Site", true)]);
-}
-
-/// Made up, like the Quest Portal: two of Kerning City's Doors turned into a hidden
-/// portal (type 10) and a Quest Portal (type 11). Only invisible exits are Doors.
-#[test]
-fn a_towns_hidden_and_quest_portals_are_still_hidden_portals() {
-    let page = saved_page(KERNING_CITY_ID)
-        .unwrap()
-        .replace(r#"\"name\":\"in05\",\"type\":1,"#, r#"\"name\":\"in05\",\"type\":10,"#)
-        .replace(r#"\"name\":\"in02\",\"type\":1,"#, r#"\"name\":\"in02\",\"type\":11,"#);
-    let mut compass = Compass::new(FakeSource::meowdb().with_page(KERNING_CITY_ID, page));
-
-    let state = arrive(&mut compass, KERNING, 0);
-
-    let shown: Vec<_> = hidden_portals(&state).iter().map(|p| (p.to_map_name.as_str(), p.quest)).collect();
-    assert_eq!(shown, [("Kerning City Pharmacy", true), ("Kerning City Hair Salon", false)]);
-}
-
-/// Made up: no saved page has an exit back into its own map, or to MeowDB's dead end.
-#[test]
-fn an_exit_into_the_same_map_or_to_the_dead_end_is_not_a_hidden_portal() {
-    let own_map = r#"\"toMapId\":\"010003080\""#;
-    let dead_end = r#"\"toMapId\":\"999999999\""#;
-    for to in [own_map, dead_end] {
-        let page = construction_site_with(r#"\"toMapId\":\"010003081\""#, to);
-        let mut compass = Compass::new(FakeSource::meowdb().with_page(CONSTRUCTION_SITE_ID, page));
-
-        let state = arrive(&mut compass, CONSTRUCTION_SITE, 0);
-
-        assert_eq!(hidden_portals(&state), [], "{to}");
-    }
-}
-
-/// A source serving the saved pages read with these portal overrides, in place of the
-/// hand-kept list the app ships.
-fn with_overrides(overrides: Vec<PortalOverride>) -> impl FnOnce(Vec<MapEntry>) -> FakeSource {
-    move |index| {
-        FakeSource::with_index(index).with_pages(move |id| {
-            let page = saved_page(id).expect("saved page");
-            Poll::Ready(meowdb::read_map_page_with(&page, id, &overrides))
-        })
-    }
 }
 
 /// Exceptions found in play go on the override list, keyed by map ID and portal name.
-/// Here 3-Way Road-Split's visible west exit is listed as if it were found hidden; the
-/// Construction Site's override doesn't touch 3-Way's portal of the same name.
+/// Here the Field's visible west exit is listed as if it were found hidden; the
+/// Construction Site's override doesn't touch the Field's portal of the same name.
 #[test]
 fn an_exit_the_override_list_marks_hidden_is_a_hidden_portal() {
     let overrides = vec![
-        PortalOverride { map_id: THREE_WAY_ROAD_SPLIT, portal: "west00", hidden: true },
-        PortalOverride { map_id: CONSTRUCTION_SITE_ID, portal: "east00", hidden: true },
+        PortalOverride { map_id: "100000000", portal: "west00", hidden: true },
+        PortalOverride { map_id: "010003080", portal: "east00", hidden: true },
     ];
 
-    let state = arrive_on(THREE_WAY_ROAD_SPLIT, with_overrides(overrides));
-
-    assert_eq!(
-        destinations(&state),
-        [
-            ("The Pig Beach", "left, lower"),
-            ("Beach Hunting Ground", "centre, lower"),
-            ("Thicket Around the Beach III", "far left, lower"),
-        ]
+    let state = on_field_with(
+        osms::game(),
+        |m| m.portal("west00", 2, KERNING_CITY).portal("east00", 2, CONSTRUCTION_SITE),
+        overrides,
     );
+
+    assert_eq!(destinations(&state), [("Kerning City", false)]);
 }
 
 #[test]
 fn an_exit_the_override_list_marks_not_hidden_is_left_out() {
-    let overrides = vec![PortalOverride { map_id: FIELD_EAST_OF_AMHERST, portal: "in00", hidden: false }];
+    let overrides = vec![PortalOverride { map_id: "100000000", portal: "in00", hidden: false }];
 
-    let state = arrive_on(FIELD_EAST_OF_AMHERST, with_overrides(overrides));
+    let state = on_field_with(osms::game(), |m| m.portal("in00", 10, KERNING_CITY), overrides);
 
     assert_eq!(hidden_portals(&state), []);
 }
 
-/// Never a partial list: if the portals or the minimap bounds aren't where the reader
-/// expects them, the whole page counts as changed.
+/// Never a partial list: portals, or the names they're shown by, that aren't as the
+/// reader expects are a changed format, with no map shown.
 #[test]
-fn a_page_whose_portals_or_minimap_bounds_changed_is_reported_as_a_format_change() {
-    let page = saved_page(CONSTRUCTION_SITE_ID).unwrap();
-    let renamed = |field: &str| page.replace(&format!(r#"\"{field}\""#), r#"\"renamed\""#);
-    let mut altered: Vec<_> = [
-        "portals",
-        "intraPortals",
-        "isTown",
-        "minimapWidth",
-        "minimapHeight",
-        "miniMapCenterX",
-        "miniMapCenterY",
-        "toMapId",
-        "toMapName",
-        "toStreetName",
-    ]
-    .into_iter()
-    .map(|field| (format!("{field} renamed"), renamed(field)))
-    .collect();
-    altered.push((
-        "a portal's type not a number".into(),
-        construction_site_with(r#"\"type\":1,"#, r#"\"type\":\"invisible\","#),
-    ));
-    altered.push((
-        "a portal's position missing".into(),
-        construction_site_with(r#"\"x\":-3415,\"y\":-733,"#, ""),
-    ));
-    for (how, html) in altered {
-        let mut compass = Compass::new(FakeSource::meowdb().with_page(CONSTRUCTION_SITE_ID, html));
-
-        let state = arrive(&mut compass, CONSTRUCTION_SITE, 0);
-
-        assert_eq!(state.data, MapDataStatus::FormatChanged, "{how}");
-    }
-}
-
-/// The Hidden Room has no minimap, so MeowDB gives it no bounds to place its exit by.
-#[test]
-fn on_a_map_without_a_minimap_a_hidden_portals_position_is_unknown() {
-    let state = arrive_on(ORBIS_TOWER_HIDDEN_ROOM, FakeSource::with_index);
-
-    assert_eq!(destinations(&state), [("Orbis Tower <8th Floor>", "position unknown")]);
-}
-
-/// The panel draws each portal on a small minimap, in the cell its position names.
-#[test]
-fn each_hidden_portal_has_the_minimap_cell_its_position_names() {
-    let cases = [
-        (FIELD_EAST_OF_AMHERST, vec![Some(MapSpot { column: 4, row: 1 })]),
-        (
-            THREE_WAY_ROAD_SPLIT,
-            vec![Some(MapSpot { column: 1, row: 2 }), Some(MapSpot { column: 2, row: 2 })],
-        ),
-        (ORBIS_TOWER_HIDDEN_ROOM, vec![None]),
+fn a_file_set_whose_portals_are_not_as_expected_is_a_format_change() {
+    let files = osms::game().files();
+    let altered = [
+        ("portals.json isn't JSON", OsmsFiles { portals: "[".into(), ..files.clone() }),
+        ("a portal's type in words", OsmsFiles { portals: files.portals.replace("\"type\":1,", "\"type\":\"invisible\","), ..files.clone() }),
+        ("a destination renamed", OsmsFiles { portals: files.portals.replace("\"dest_map\"", "\"to_map\""), ..files.clone() }),
+        ("a destination that isn't a map ID", OsmsFiles { portals: files.portals.replace("\"dest_map\":\"10003081\"", "\"dest_map\":\"north\""), ..files.clone() }),
+        ("within the map in words", OsmsFiles { portals: files.portals.replace("\"intra_map\":true", "\"intra_map\":\"yes\""), ..files.clone() }),
+        ("no map names in lookups.json", OsmsFiles { lookups: files.lookups.replace("\"map_names\"", "\"maps\""), ..files.clone() }),
+        ("map_manifest.json isn't a list of pictures", OsmsFiles { map_manifest: "[]".into(), ..files.clone() }),
+        ("a Town flag in words", OsmsFiles { maps: files.maps.replace("\"is_town\":true", "\"is_town\":\"yes\""), ..files.clone() }),
     ];
-    for (id, expected) in cases {
-        let state = arrive_on(id, FakeSource::with_index);
-        let spots: Vec<_> = hidden_portals(&state).iter().map(|p| p.spot).collect();
-        assert_eq!(spots, expected, "{id}");
+    for (how, files) in altered {
+        let mut compass = Compass::new(FakeSource::answering_osms(vec![fresh_files(files)]));
+
+        let state = arrive(&mut compass, KERNING, 0);
+
+        assert_eq!(state.recognition, Recognition::FormatChanged, "{how}");
+        assert_eq!(state.map, None, "{how}");
     }
 }

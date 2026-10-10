@@ -43,7 +43,7 @@ pub use hotkey_settings::{KeyPress, RebindProblem, SettingsNotice, SettingsView}
 pub use item_lookup::{ItemChoice, ItemHit, ItemLookup, ItemLookupLine, OurWindow};
 pub use item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReader, ItemTooltipReading};
 pub use map_data::{
-    HiddenPortal, LISTED_MOBS, MapData, MapDataStatus, MapSpot, MapSummary, Mob, MoreMobs, PerParty,
+    HiddenPortal, LISTED_MOBS, MapData, MapDataStatus, MapSummary, Mob, MoreMobs, PerParty,
     Portal, PortalKind,
 };
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
@@ -360,6 +360,8 @@ pub struct Compass {
     ask_osms_at: u64,
     /// The source is fetching OSMS's file set.
     osms_in_flight: bool,
+    /// What the file set is read with: [`PORTAL_OVERRIDES`], but for tests of the list.
+    portal_overrides: Vec<PortalOverride>,
     /// Built from the map list, once there is one.
     matcher: Option<Matcher>,
     tracker: Tracker,
@@ -412,6 +414,7 @@ impl Compass {
             set: None,
             ask_osms_at: 0,
             osms_in_flight: false,
+            portal_overrides: PORTAL_OVERRIDES.to_vec(),
             matcher: None,
             tracker: Tracker::default(),
             shown_map: ShownMap::default(),
@@ -435,6 +438,15 @@ impl Compass {
         };
         compass.sync_panel();
         compass
+    }
+
+    /// The same core, reading OSMS's file set with these portal overrides in place of
+    /// [`PORTAL_OVERRIDES`]. Only for tests of the override list (integration tests can't
+    /// see test-only items); the app keeps the list it ships.
+    #[doc(hidden)]
+    pub fn with_portal_overrides(mut self, overrides: Vec<PortalOverride>) -> Self {
+        self.portal_overrides = overrides;
+        self
     }
 
     /// Read a captured Title Region frame and update the panel state: the same as
@@ -1062,9 +1074,9 @@ impl Compass {
         self.osms_in_flight = false;
         self.ask_osms_at = at_ms + SET_RECHECK_MS;
         let read = answer.and_then(|fetched| match fetched {
-            Fetched::Fresh(files) => osms::read(&files).map(|maps| (maps, None)),
+            Fetched::Fresh(files) => osms::read_with(&files, &self.portal_overrides).map(|maps| (maps, None)),
             Fetched::SavedCopy { data, saved_at_unix_ms } => {
-                osms::read(&data).map(|maps| (maps, Some(saved_at_unix_ms)))
+                osms::read_with(&data, &self.portal_overrides).map(|maps| (maps, Some(saved_at_unix_ms)))
             }
         });
         match read {

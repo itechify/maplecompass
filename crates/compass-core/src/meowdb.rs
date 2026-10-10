@@ -6,7 +6,7 @@ use crate::item_lookup::ItemHit;
 use crate::map_data::{HiddenPortal, MapData, MapSummary, Mob, PerParty, Portal};
 use crate::map_index::{MapEntry, SourceError};
 use crate::mob_card::{DamageRange, Elements, HpPerExp, MobDetails};
-use crate::portals::{self, Exit, MapFacts, Minimap};
+use crate::portals::{self, Exit, MapFacts};
 use crate::portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 use serde_json::Value;
 
@@ -202,17 +202,7 @@ fn portals(
     let text = |v: &Value, what: &str| -> Result<String, String> {
         v.as_str().map(|s| s.trim().to_string()).ok_or_else(|| format!("{what} is {v}, not text"))
     };
-    let number = |v: &Value, what: &str| v.as_f64().ok_or_else(|| format!("{what} is {v}, not a number"));
-    let facts = MapFacts {
-        id,
-        is_town: map["isTown"].as_bool().ok_or("isTown is not true or false")?,
-        minimap: Minimap {
-            width: number(&map["minimapWidth"], "minimapWidth")?,
-            height: number(&map["minimapHeight"], "minimapHeight")?,
-            center_x: number(&map["miniMapCenterX"], "miniMapCenterX")?,
-            center_y: number(&map["miniMapCenterY"], "miniMapCenterY")?,
-        },
-    };
+    let facts = MapFacts { id, is_town: map["isTown"].as_bool().ok_or("isTown is not true or false")? };
     map["intraPortals"].as_array().ok_or("no intraPortals list")?;
     let exits = map["portals"]
         .as_array()
@@ -222,8 +212,6 @@ fn portals(
             Ok(Exit {
                 name: text(&p["name"], "portal name")?,
                 kind: uint(&p["type"], "portal type")?,
-                x: number(&p["x"], "portal x")?,
-                y: number(&p["y"], "portal y")?,
                 to_map_id: text(&p["toMapId"], "toMapId")?,
                 to_map_name: text(&p["toMapName"], "toMapName")?,
                 to_street_name: text(&p["toStreetName"], "toStreetName")?,

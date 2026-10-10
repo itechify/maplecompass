@@ -4,6 +4,8 @@
 
 use crate::map_data::{MapData, MapSummary, Mob, PerParty};
 use crate::map_index::{MapEntry, SourceError};
+use crate::portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
+use crate::portals::{self, Exit, MapFacts};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -62,31 +64,81 @@ impl MapSet {
 ///
 /// Map IDs are zero-padded to 9 digits, and names trimmed. A map with no name or no
 /// street can't be told by its title, so it is left out.
+///
+/// A map's portals to other maps, with their kinds, and its Hidden Portals follow the
+/// Hidden Portal rule and the app's hand-kept [`PORTAL_OVERRIDES`]. Teleports within the
+/// map (`intra_map`) are neither. A destination outside the map list is named from
+/// `lookups.json`, with no street, or else by its ID.
 pub fn read(files: &OsmsFiles) -> Result<MapSet, SourceError> {
-    read_set(files).map_err(|why| SourceError::FormatChanged(format!("OSMS: {why}")))
+    read_with(files, PORTAL_OVERRIDES)
 }
 
-fn read_set(files: &OsmsFiles) -> Result<MapSet, String> {
+/// [`read`], with these portal overrides in place of [`PORTAL_OVERRIDES`].
+pub(crate) fn read_with(files: &OsmsFiles, overrides: &[PortalOverride]) -> Result<MapSet, SourceError> {
+    read_set(files, overrides).map_err(|why| SourceError::FormatChanged(format!("OSMS: {why}")))
+}
+
+fn read_set(files: &OsmsFiles, overrides: &[PortalOverride]) -> Result<MapSet, String> {
     let maps: MapsFile = parse(&files.maps, "maps.json")?;
+    let portals: HashMap<String, Vec<OsmsPortal>> = parse(&files.portals, "portals.json")?;
     let monsters: MonstersFile = parse(&files.monsters, "monsters.json")?;
+    // Map pictures: the Map Preview's (#60).
+    let _pictures: HashMap<String, String> = parse(&files.map_manifest, "map_manifest.json")?;
+    let lookups: LookupsFile = parse(&files.lookups, "lookups.json")?;
     let mobs: HashMap<u64, &OsmsMob> = monsters.monsters.iter().map(|mob| (mob.id, mob)).collect();
+
+    let mut listed = Vec::new();
+    for map in maps.regions.iter().flat_map(|region| &region.maps) {
+        let entry = MapEntry {
+            id: map_id(map.id)?,
+            street_name: map.street_name.trim().to_string(),
+            map_name: map.name.trim().to_string(),
+            region: map.region.clone(),
+        };
+        listed.push((entry, map));
+    }
+    let names: HashMap<&str, &MapEntry> = listed.iter().map(|(entry, _)| (entry.id.as_str(), entry)).collect();
+    // A map's name and street, from the map list, else lookups.json, else its ID.
+    let name_of = |id: &str| match (names.get(id), lookups.map_names.get(id)) {
+        (Some(entry), _) => (entry.map_name.clone(), entry.street_name.clone()),
+        (None, Some(name)) => (name.trim().to_string(), String::new()),
+        (None, None) => (id.to_string(), String::new()),
+    };
+
     let mut set = Vec::new();
-    for region in maps.regions {
-        for map in region.maps {
-            let entry = MapEntry {
-                id: map_id(map.id)?,
-                street_name: map.street_name.trim().to_string(),
-                map_name: map.name.trim().to_string(),
-                region: map.region.clone(),
-            };
-            let (summary, mobs) = spawns(&map, &mobs).map_err(|why| format!("map {}: {why}", entry.id))?;
-            if entry.street_name.is_empty() || entry.map_name.is_empty() {
-                continue;
-            }
-            set.push((entry, MapData { summary, mobs, ..MapData::default() }));
+    for (entry, map) in &listed {
+        let data = map_data(entry, map, portals.get(&entry.id), &mobs, &name_of, overrides)
+            .map_err(|why| format!("map {}: {why}", entry.id))?;
+        if !entry.street_name.is_empty() && !entry.map_name.is_empty() {
+            set.push((entry.clone(), data));
         }
     }
     Ok(MapSet { maps: set })
+}
+
+/// One map's data, from its entry in `maps.json`, its `portals` and the `mobs`.
+fn map_data(
+    entry: &MapEntry,
+    map: &OsmsMap,
+    portals: Option<&Vec<OsmsPortal>>,
+    mobs: &HashMap<u64, &OsmsMob>,
+    name_of: &impl Fn(&str) -> (String, String),
+    overrides: &[PortalOverride],
+) -> Result<MapData, String> {
+    let (summary, mobs) = spawns(map, mobs)?;
+    let exits = portals
+        .map_or(&[][..], Vec::as_slice)
+        .iter()
+        .filter(|p| !p.intra_map)
+        .map(|p| {
+            let to_map_id = map_id(p.dest_map.trim().parse().map_err(|_| format!("dest_map {:?}", p.dest_map))?)?;
+            let (to_map_name, to_street_name) = name_of(&to_map_id);
+            Ok(Exit { name: p.name.trim().to_string(), kind: p.kind, to_map_id, to_map_name, to_street_name })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let facts = MapFacts { id: &entry.id, is_town: map.is_town };
+    let (portals, hidden_portals) = portals::portals(&facts, exits, overrides);
+    Ok(MapData { summary, mobs, hidden_portals, portals, ..MapData::default() })
 }
 
 /// How long the game takes to respawn a mob on an untimed spawn point, in seconds: a
@@ -191,9 +243,31 @@ struct OsmsMap {
     name: String,
     street_name: String,
     region: String,
+    #[serde(default)]
+    is_town: bool,
     /// One per spawn point.
     #[serde(default)]
     mob_positions: Vec<SpawnPoint>,
+}
+
+/// A portal in `portals.json`.
+#[derive(Deserialize)]
+struct OsmsPortal {
+    name: String,
+    #[serde(rename = "type")]
+    kind: u64,
+    /// The destination's ID as text, without zero padding.
+    dest_map: String,
+    /// A teleport within the map.
+    #[serde(default)]
+    intra_map: bool,
+}
+
+/// `lookups.json`.
+#[derive(Deserialize)]
+struct LookupsFile {
+    /// By 9-digit map ID.
+    map_names: HashMap<String, String>,
 }
 
 #[derive(Deserialize)]
