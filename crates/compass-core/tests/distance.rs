@@ -9,7 +9,7 @@
 mod common;
 
 use common::arrive;
-use common::world::{WorldMap, map, mob, orange, search_for, tick_through, world};
+use common::world::{WorldMap, map, mob, orange, search_for, world};
 use compass_core::{Action, Compass, Distance, PanelState, PortalKind};
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
@@ -20,8 +20,8 @@ fn sunset_sky(id: &str) -> WorldMap {
     map(id, "Sunset Sky", 100, vec![])
 }
 
-/// A core over `maps`, crawled, with the player arrived on Sunset Sky and the Orange
-/// Mushroom picked.
+/// A core over `maps`, its file set in hand, with the player arrived on Sunset Sky and
+/// the Orange Mushroom picked.
 fn searched_from_sunset_sky(maps: Vec<WorldMap>) -> PanelState {
     let mut compass = Compass::new(world(maps));
     compass.tick(0);
@@ -110,6 +110,19 @@ fn routes_never_pass_through_event_maps() {
     ]);
 
     assert_eq!(distances(&state), ["Mushroom Field: 3", "Festival Clearing: no route"]);
+}
+
+#[test]
+fn routes_never_pass_through_the_dev_map() {
+    let state = searched_from_sunset_sky(vec![
+        sunset_sky("100000000").to(&["100000001", "100000002"]),
+        map("100000001", "The Manager's Room", 100, vec![]).in_region("Dev").to(&["100000004"]),
+        map("100000002", "Road", 100, vec![]).to(&["100000003"]),
+        map("100000003", "Long Way Round", 100, vec![]).to(&["100000004"]),
+        map("100000004", "Mushroom Field", 100, vec![orange(10)]),
+    ]);
+
+    assert_eq!(distances(&state), ["Mushroom Field: 3"]);
 }
 
 /// Each result as "Map Name: Distance, Tier".
@@ -243,48 +256,18 @@ fn on_a_title_several_maps_share_distance_is_measured_from_the_candidate_shown()
 }
 
 #[test]
-fn distances_are_worked_out_again_as_the_crawl_adds_maps() {
-    // Crawled in index order, one page every 2 s: the Road to the Mushroom Field last.
-    let mut compass = Compass::new(
-        world(vec![
-            sunset_sky("100000000").to(&["100000002"]),
-            map("100000001", "Mushroom Field", 100, vec![orange(10)]),
-            map("100000002", "Road", 100, vec![]).to(&["100000001"]),
-        ])
-        .crawling_uncached(),
-    );
-    tick_through(&mut compass, 0, 100);
+fn from_the_first_launch_distances_reach_across_every_map_in_the_set() {
+    // A road of 24 maps from Sunset Sky, the Mushroom Field at its end.
+    let mut maps = vec![sunset_sky("100000000").to(&["100000001"])];
+    maps.extend((1..24).map(|n| map(&format!("1000000{n:02}"), &format!("Road {n}"), 100, vec![]).to(&[&format!("1000000{:02}", n + 1)])));
+    maps.push(map("100000024", "Mushroom Field", 100, vec![orange(10)]));
+    let mut compass = Compass::new(world(maps));
+    compass.tick(0);
     arrive(&mut compass, SUNSET, 100);
-    tick_through(&mut compass, 500, 2_100);
-    let state = search_for(&mut compass, "orange");
-    assert_eq!(state.search.crawl.known, 2);
-    assert_eq!(distances(&state), ["Mushroom Field: no route"]);
-
-    let state = tick_through(&mut compass, 2_100, 4_100);
-
-    assert_eq!(state.search.crawl.known, 3);
-    assert_eq!(distances(&state), ["Mushroom Field: 2"]);
-}
-
-#[test]
-fn the_shown_maps_own_page_gives_its_exits_before_the_crawl_reaches_it() {
-    // Crawled in index order, one page every 2 s: Sunset Sky, where the player is, last.
-    let mut compass = Compass::new(
-        world(vec![
-            map("100000001", "Mushroom Field", 100, vec![orange(10)]),
-            map("100000002", "Road", 100, vec![]).to(&["100000001"]),
-            sunset_sky("100000000").to(&["100000002"]),
-        ])
-        .crawling_uncached(),
-    );
-    tick_through(&mut compass, 0, 100);
-    arrive(&mut compass, SUNSET, 100);
-    tick_through(&mut compass, 500, 2_200);
 
     let state = search_for(&mut compass, "orange");
 
-    assert_eq!(state.search.crawl.known, 2);
-    assert_eq!(distances(&state), ["Mushroom Field: 2"]);
+    assert_eq!(distances(&state), ["Mushroom Field: 24"]);
 }
 
 #[test]

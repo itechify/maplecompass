@@ -4,8 +4,7 @@ use crate::map_preview::PortalMark;
 use crate::shown_map::LevelRange;
 use serde::{Deserialize, Serialize};
 
-/// One map's data, as read from OSMS's file set (or, for the world crawl until #57, from
-/// the map's MeowDB page).
+/// One map's data, as read from OSMS's file set.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MapData {

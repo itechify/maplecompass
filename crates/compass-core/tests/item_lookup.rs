@@ -198,6 +198,28 @@ fn meowdb_is_asked_once_per_lookup() {
 }
 
 #[test]
+fn meowdb_is_asked_no_more_than_once_every_2_seconds() {
+    // Each search goes over the network, answering on the poll after it started.
+    let source = FakeSource::osms_offline().items_taking(1);
+    let asked = source.item_requests.clone();
+    let mut compass = started_with(source, settings());
+    look_up(&mut compass, "Orihalcon Ore", 1_000);
+    compass.tick(1_100);
+
+    // A lookup a second later waits out MeowDB's pace, the name read showing meanwhile.
+    let state = look_up(&mut compass, "Soap Bubbles", 2_000);
+    assert_eq!(line(&state), Some(ItemLookup::LookingUp { read: "Soap Bubbles".into() }));
+    compass.tick(2_900);
+    assert_eq!(*asked.lock().unwrap(), ["Orihalcon Ore"]);
+
+    compass.tick(3_000);
+    let state = compass.tick(3_100).clone();
+
+    assert_eq!(*asked.lock().unwrap(), ["Orihalcon Ore", "Soap Bubbles"]);
+    assert_eq!(line(&state), opened("Soap Bubbles", "1552"));
+}
+
+#[test]
 fn letters_the_recogniser_confuses_and_case_still_find_the_item() {
     for read in ["0rihalcon 0re", "Orihalc0n Ore", "orihalcon ore", "Orihalcon  Ore"] {
         let mut compass = started_with(answering("Orihalcon Ore"), settings());

@@ -1,12 +1,12 @@
 //! Mob search: the search view (query, suggestions, the picked mob's map list and their
-//! highlights) and the Hunting Target it sets, as the overlay renders them, plus how far
-//! the world crawl behind it has got.
+//! highlights) and the Hunting Target it sets, as the overlay renders them, over every map
+//! in OSMS's file set.
 
-use crate::MEOWDB_CREDIT;
-use crate::crawl::{Crawl, CrawlProgress};
+use crate::OSMS_DATA_CREDIT;
 use crate::map_data::Mob;
 use crate::map_index::MapEntry;
-use crate::world::{Distance, Distances, Here, Step, Travel, World};
+use crate::osms::MapSet;
+use crate::world::{Distance, Distances, Step, Travel, World};
 use serde::Serialize;
 
 /// Which step of the search view is open. It takes over the whole panel.
@@ -58,7 +58,7 @@ pub struct MobChoice {
     pub level: u32,
 }
 
-/// How a map's Density for a mob compares with the mob's densest map (Event maps
+/// How a map's Density for a mob compares with the mob's densest map (Event and Dev maps
 /// aside). Ordered densest first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -122,11 +122,11 @@ pub struct SearchState {
     pub highlighted: Option<usize>,
     /// The mob whose map list the search view shows; `None` outside that step.
     pub picked: Option<MobChoice>,
-    /// Every known map the picked mob spawns on (Event maps left out), by Density Tier
+    /// Every map the picked mob spawns on (Event and Dev maps left out), by Density Tier
     /// and then Density: the search view's map list.
     pub results: Vec<SearchResult>,
-    /// The picked mob spawns only on Event maps (of the maps known so far), which
-    /// search leaves out: why it has no results.
+    /// The picked mob spawns only on maps search leaves out (Event maps; the Dev map has
+    /// no mobs): why it has no results.
     pub only_on_event_maps: bool,
     /// The map Enter would pick from the map list; `None` when there are no results.
     pub highlighted_result: Option<usize>,
@@ -134,11 +134,8 @@ pub struct SearchState {
     /// tier (of those equally near, the densest). `None` with no map shown or no route
     /// to any.
     pub nearest: Option<usize>,
-    /// [`crate::MEOWDB_CREDIT`] whenever there are results: they are MeowDB's data.
+    /// [`crate::OSMS_DATA_CREDIT`] whenever there are results or a Hunting Target.
     pub credit: Option<&'static str>,
-    /// How many of the index's maps the world crawl knows so far ("312 of 422 maps
-    /// known"): search can only find mobs on those.
-    pub crawl: CrawlProgress,
     /// What Distances count besides portals and ships (the checkboxes).
     pub travel: Travel,
     /// The Hunting Target the panel's Hunting section shows, until the player leaves its
@@ -146,13 +143,13 @@ pub struct SearchState {
     pub hunting: Option<HuntingTarget>,
 }
 
-/// What mob search works over: the maps the crawl knows (`None` before the map index
-/// arrives), the map the panel shows (`None`: no map, so no Distances), and the kinds
-/// of travel the player has turned on.
+/// What mob search works over: every map in OSMS's file set (`None` before it arrives),
+/// the ID of the map the panel shows (`None`: no map, so no Distances), and the kinds of
+/// travel the player has turned on.
 #[derive(Clone, Copy)]
 pub(crate) struct Searched<'a> {
-    pub crawl: Option<&'a Crawl>,
-    pub here: Option<Here<'a>>,
+    pub set: Option<&'a MapSet>,
+    pub here: Option<&'a str>,
     pub travel: Travel,
 }
 
@@ -163,7 +160,7 @@ pub(crate) struct MobSearch {
     view: Option<SearchView>,
     query: String,
     /// The ID of the mob the player moved the highlight to; `None` for the first
-    /// suggestion. Kept by ID, so the highlight stays on it as the crawl adds mobs.
+    /// suggestion. Kept by ID, so the highlight stays on it as the suggestions change.
     highlighted: Option<String>,
     /// The mob whose map list the search view shows.
     picked: Option<MobChoice>,
@@ -219,7 +216,7 @@ impl MobSearch {
     pub fn move_highlight(&mut self, by: isize, searched: &Searched) {
         match self.view {
             Some(SearchView::Mobs) => {
-                let suggestions = self.suggestions(searched.crawl);
+                let suggestions = self.suggestions(searched.set);
                 move_through(&mut self.highlighted, &suggestions, by, MobChoice::key);
             }
             Some(SearchView::Maps) => {
@@ -236,7 +233,7 @@ impl MobSearch {
     pub fn enter(&mut self, searched: &Searched) {
         let id = match self.view {
             Some(SearchView::Mobs) => {
-                let suggestions = self.suggestions(searched.crawl);
+                let suggestions = self.suggestions(searched.set);
                 highlight_in(&suggestions, &self.highlighted, MobChoice::key).map(|at| suggestions[at].id.clone())
             }
             Some(SearchView::Maps) => {
@@ -254,7 +251,7 @@ impl MobSearch {
     pub fn pick(&mut self, id: &str, searched: &Searched) {
         match self.view {
             Some(SearchView::Mobs) => {
-                if let Some(mob) = self.suggestions(searched.crawl).into_iter().find(|mob| mob.id == id) {
+                if let Some(mob) = self.suggestions(searched.set).into_iter().find(|mob| mob.id == id) {
                     self.picked = Some(mob);
                     self.highlighted_result = None;
                     self.view = Some(SearchView::Maps);
@@ -308,13 +305,13 @@ impl MobSearch {
 
     /// The search state for the panel.
     pub fn state(&self, searched: &Searched) -> SearchState {
-        let Searched { crawl, travel, .. } = *searched;
+        let Searched { set, travel, .. } = *searched;
         let hunting = self.hunting(searched);
-        let suggestions = self.suggestions(crawl);
+        let suggestions = self.suggestions(set);
         let results = self.results(searched);
-        let only_on_event_maps = match (&self.picked, crawl) {
-            (Some(mob), Some(crawl)) if results.is_empty() => {
-                crawl.known().any(|(entry, data)| entry.is_event() && data.mobs.iter().any(|m| m.id == mob.id))
+        let only_on_event_maps = match (&self.picked, set) {
+            (Some(mob), Some(set)) if results.is_empty() => {
+                set.maps().any(|(entry, data)| entry.is_left_out() && data.mobs.iter().any(|m| m.id == mob.id))
             }
             _ => false,
         };
@@ -324,22 +321,21 @@ impl MobSearch {
             highlighted: highlight_in(&suggestions, &self.highlighted, MobChoice::key),
             picked: self.picked.clone(),
             suggestions,
-            credit: (!results.is_empty() || hunting.is_some()).then_some(MEOWDB_CREDIT),
+            credit: (!results.is_empty() || hunting.is_some()).then_some(OSMS_DATA_CREDIT),
             nearest: nearest(&results),
             highlighted_result: highlight_in(&results, &self.highlighted_result, SearchResult::key),
             only_on_event_maps,
             results,
-            crawl: crawl.map(Crawl::progress).unwrap_or_default(),
             travel,
             hunting,
         }
     }
 
-    /// The Hunting Target with its map's figures, ranked among the mob's maps as they
-    /// are known now, and its route from the map the panel shows.
+    /// The Hunting Target with its map's figures, ranked among the mob's maps, and its
+    /// route from the map the panel shows.
     fn hunting(&self, searched: &Searched) -> Option<HuntingTarget> {
-        let (target, crawl) = (self.target.as_ref()?, searched.crawl?);
-        let map = results(&target.mob.id, crawl, searched.here, searched.travel)
+        let (target, set) = (self.target.as_ref()?, searched.set?);
+        let map = results(&target.mob.id, set, searched.here, searched.travel)
             .into_iter()
             .find(|r| r.map_id == target.map_id)?;
         Some(HuntingTarget { mob: target.mob.clone(), map, arrived: target.arrived, trip: target.trip.clone() })
@@ -347,20 +343,20 @@ impl MobSearch {
 
     /// The picked mob's map list; none outside that step.
     fn results(&self, searched: &Searched) -> Vec<SearchResult> {
-        match (&self.picked, searched.crawl) {
-            (Some(mob), Some(crawl)) => results(&mob.id, crawl, searched.here, searched.travel),
+        match (&self.picked, searched.set) {
+            (Some(mob), Some(set)) => results(&mob.id, set, searched.here, searched.travel),
             _ => Vec::new(),
         }
     }
 
-    /// The known mobs whose name contains the query, whatever the case: each once, by
-    /// name (then level and ID). None outside the view's first step.
-    fn suggestions(&self, crawl: Option<&Crawl>) -> Vec<MobChoice> {
+    /// The mobs whose name contains the query, whatever the case: each once, by name
+    /// (then level and ID). None outside the view's first step.
+    fn suggestions(&self, set: Option<&MapSet>) -> Vec<MobChoice> {
         let query = self.query.trim().to_lowercase();
         let open = self.view == Some(SearchView::Mobs);
-        let Some(crawl) = crawl.filter(|_| open && !query.is_empty()) else { return Vec::new() };
+        let Some(set) = set.filter(|_| open && !query.is_empty()) else { return Vec::new() };
         let mut found: Vec<MobChoice> = Vec::new();
-        for (_, data) in crawl.known() {
+        for (_, data) in set.maps() {
             for mob in &data.mobs {
                 if mob.name.to_lowercase().contains(&query) && !found.iter().any(|m| m.id == mob.id) {
                     found.push(MobChoice { id: mob.id.clone(), name: mob.name.clone(), level: mob.level });
@@ -421,12 +417,12 @@ fn nearest(results: &[SearchResult]) -> Option<usize> {
 }
 
 /// The shortest route to map `map_id` with its maps' names, or none.
-fn route(distances: &Distances, map_id: &str, crawl: &Crawl) -> Vec<RouteStop> {
+fn route(distances: &Distances, map_id: &str, set: &MapSet) -> Vec<RouteStop> {
     distances
         .route_to(map_id)
         .into_iter()
         .map(|(map_id, by)| {
-            let (street_name, map_name) = match crawl.entry(&map_id) {
+            let (street_name, map_name) = match set.entry(&map_id) {
                 Some(entry) => (entry.street_name.clone(), entry.map_name.clone()),
                 None => (String::new(), map_id.clone()),
             };
@@ -435,16 +431,16 @@ fn route(distances: &Distances, map_id: &str, crawl: &Crawl) -> Vec<RouteStop> {
         .collect()
 }
 
-/// Every known, non-Event map mob `mob_id` spawns on, ranked: by Density Tier; within a
-/// tier, maps with a route by Distance from the map the player is on (by portals, ships
-/// and the `travel` turned on), then those with no known route, then the quest-only
-/// ones; then by Density (densest first), then name.
-fn results(mob_id: &str, crawl: &Crawl, here: Option<Here>, travel: Travel) -> Vec<SearchResult> {
-    let distances = here.map(|here| World::of(crawl, Some(here), travel).distances_from(here.id));
+/// Every map mob `mob_id` spawns on, Event and Dev maps aside, ranked: by Density Tier;
+/// within a tier, maps with a route by Distance from the map the player is on (`here`; by
+/// portals, ships and the `travel` turned on), then those with no known route, then the
+/// quest-only ones; then by Density (densest first), then name.
+fn results(mob_id: &str, set: &MapSet, here: Option<&str>, travel: Travel) -> Vec<SearchResult> {
+    let distances = here.map(|here| World::of(set, travel).distances_from(here));
     let distance = |map_id: &str| distances.as_ref().map_or(Distance::Unknown, |d| d.to(map_id));
-    let found: Vec<(&MapEntry, &Mob, u32)> = crawl
-        .known()
-        .filter(|(entry, _)| !entry.is_event())
+    let found: Vec<(&MapEntry, &Mob, u32)> = set
+        .maps()
+        .filter(|(entry, _)| !entry.is_left_out())
         .flat_map(|(entry, data)| {
             data.mobs
                 .iter()
@@ -474,7 +470,7 @@ fn results(mob_id: &str, crawl: &Crawl, here: Option<Here>, travel: Travel) -> V
             spawn_share_percent: mob.spawn_share_percent,
             tier: tier(density),
             distance: distance(&entry.id),
-            route: distances.as_ref().map(|d| route(d, &entry.id, crawl)).unwrap_or_default(),
+            route: distances.as_ref().map(|d| route(d, &entry.id, set)).unwrap_or_default(),
             travel: Vec::new(),
         })
         .map(|mut result| {

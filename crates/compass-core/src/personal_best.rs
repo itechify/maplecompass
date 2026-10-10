@@ -22,7 +22,7 @@
 //! - Bests are per map (its 9-digit ID), for every character: nothing about the Session
 //!   touches them.
 //! - Each map's history keeps its 10 best Visits; one that doesn't make them is dropped.
-//! - They outlive the launch, as the saved world does: the core hands them to the shell
+//! - They outlive the launch, as the settings do: the core hands them to the shell
 //!   as [`SavedBests`], with a revision so it saves them only when they change, and takes
 //!   them back at startup. What it hands out includes the Visit under way's best, as if
 //!   it had ended: closing MapleCompass ends it.
