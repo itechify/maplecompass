@@ -489,7 +489,7 @@ h2 {
 }
 
 /* The current map's sections, marked with the minimap's legend: a portal ring for
-   Hidden Portals, a mob dot for Mobs. */
+   Portals, a mob dot for Mobs. */
 .portals h2,
 .map-mobs h2 {
   margin-bottom: 5px;
@@ -600,15 +600,16 @@ h2 {
   margin-bottom: 0;
 }
 
-/* Nothing to list: the heading and "None on this map" on one line. */
-.portals:has(> .none:not([hidden])),
+/* Nothing to list (and, for Portals, no picture): the heading and "No hidden portals" or
+   "No mobs on this map" on one line. */
+.portals:has(> .none:not([hidden])):not(:has(> .map-preview:not([hidden]), > .note:not([hidden]))),
 .map-mobs:has(> .none:not([hidden])):not(:has(> .summary:not([hidden]))) {
   display: flex;
   align-items: baseline;
   gap: 10px;
 }
 
-.portals:has(> .none:not([hidden])) h2,
+.portals:has(> .none:not([hidden])):not(:has(> .map-preview:not([hidden]), > .note:not([hidden]))) h2,
 .map-mobs:has(> .none:not([hidden])):not(:has(> .summary:not([hidden]))) h2 {
   margin: 0;
 }
@@ -624,6 +625,7 @@ h2 {
 .tracking .tag,
 .portals .tag,
 .mob-card .tag,
+.mark-card .tag,
 .route-stops .tag {
   flex: none;
   padding: 0 5px;
@@ -702,7 +704,20 @@ td:first-child {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
+}
+
+/* A Hidden Portal's row, lit (Selection Periwinkle) while the pointer is on it or on its
+   ring; its text stays where it is. */
+.portals li {
+  margin: 0 -5px;
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+
+.portals li.lit {
+  background: var(--select);
+  box-shadow: inset 0 0 0 1px var(--select-edge);
 }
 
 .portals .dest {
@@ -710,6 +725,178 @@ td:first-child {
   align-items: baseline;
   gap: 6px;
   min-width: 0;
+}
+
+/* Each row leads with its ring as the Map Preview draws it. */
+.row-ring {
+  flex: none;
+  align-self: center;
+  width: 12px;
+  height: 12px;
+  overflow: visible;
+}
+
+/* The Map Preview: OSMS's picture of the whole map on the minimap's paper, set into the
+   body as an inset box, fitted and centred within 180px, every portal ringed over it. */
+.map-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  margin-bottom: 7px;
+  padding: 5px;
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--minimap-paper);
+  overflow: hidden;
+}
+
+/* Waiting for the picture: a box of fixed height saying so. */
+.map-preview.loading {
+  height: 140px;
+}
+
+.map-picture {
+  position: relative;
+  flex: none;
+}
+
+.map-picture img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  -webkit-user-drag: none;
+}
+
+.panel .map-loading {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-2);
+}
+
+.portals > .note.problem {
+  margin-bottom: 7px;
+}
+
+/* The rings: a white halo under each so it holds on dark art and pale paper alike, then
+   the ring in its colour over a faint fill. Dashed when hidden or a Quest Portal: the
+   gaps show the halo. */
+.map-marks {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.ring circle {
+  pointer-events: none;
+}
+
+.ring .halo {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 3.75;
+}
+
+.ring .stroke {
+  stroke: var(--ring);
+  stroke-width: 1.75;
+  fill: var(--ring-fill);
+}
+
+.ring.dashed .stroke {
+  stroke-dasharray: 2.6 1.6;
+}
+
+.ring.anotherMap { --ring: var(--portal); --ring-fill: rgba(31, 99, 214, 0.22); }
+.ring.withinTheMap { --ring: var(--teleport); --ring-fill: rgba(30, 158, 58, 0.22); }
+.ring.mapNotInTheData { --ring: var(--unknown); --ring-fill: rgba(122, 131, 150, 0.22); }
+
+/* Lit: a second ring around it in its own colour, a static target. */
+.ring .lit-ring {
+  display: none;
+  fill: none;
+  stroke: var(--ring);
+  stroke-width: 1.5;
+}
+
+.ring.lit .lit-ring {
+  display: inline;
+}
+
+.ring .hit {
+  fill: transparent;
+  stroke: none;
+  pointer-events: all;
+}
+
+/* A teleport within the map: a dashed green arrow from its ring to where it lands, over a
+   white under-stroke; heads at both ends for a pair. */
+.arrow line {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.arrow .halo {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 3.25;
+}
+
+.arrow .dash {
+  stroke: var(--teleport);
+  stroke-width: 1.5;
+  stroke-dasharray: 3.5 2.5;
+}
+
+.arrow.lit .dash {
+  stroke-width: 2.25;
+}
+
+.map-marks .head {
+  fill: var(--teleport);
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 0.75;
+}
+
+/* The ring's card: where it leads, its street and its kind. Opaque, like the Mob Card,
+   above the ring or below it, never outside the panel; the pointer passes through. */
+.mark-card {
+  position: absolute;
+  z-index: 5;
+  box-sizing: border-box;
+  max-width: calc(100% - 16px);
+  padding: 4px 8px 6px;
+  border: 1px solid var(--window-edge);
+  border-radius: 4px;
+  background: var(--body-solid);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+  pointer-events: none;
+  font-size: 12px;
+  line-height: 15px;
+  color: var(--ink);
+}
+
+.mark-card-to {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mark-card-street {
+  display: block;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mark-card-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 4px;
+  margin-top: 3px;
 }
 
 .portals .to {
@@ -721,11 +908,12 @@ td:first-child {
   white-space: nowrap;
 }
 
-/* Quest Portals come from NPCs: the minimap's NPC green. */
-.portals .tag.quest {
-  border-color: #98c58a;
-  background: #dff0d8;
-  color: #2b6a20;
+/* Quest Portals in violet: green means only "within the map" on the Map Preview. */
+.portals .tag.quest,
+.mark-card .tag.quest {
+  border-color: var(--quest-edge);
+  background: var(--quest-bg);
+  color: var(--quest-ink);
 }
 
 /* EXP and mobs per hour, each figure beside its party size. */
