@@ -5,7 +5,7 @@
 mod common;
 
 use common::arrive;
-use common::world::{crawled, map, orange, world};
+use common::world::{loaded, map, orange, world};
 use compass_core::{Action, CollapsedSections, Compass, Section, Settings};
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
@@ -36,7 +36,7 @@ fn a_click_collapses_its_section_alone_and_another_opens_it_again() {
 
 #[test]
 fn a_collapsed_section_stays_collapsed_on_the_next_map() {
-    let mut compass = crawled(vec![
+    let mut compass = loaded(vec![
         map("100", "Sunset Sky", 100, vec![orange(5)]),
         map("103", "Kerning City", 100, vec![]),
     ]);

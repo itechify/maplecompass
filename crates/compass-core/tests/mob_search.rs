@@ -5,8 +5,8 @@
 
 mod common;
 
-use common::world::{SEARCH, WorldMap, crawled, map, mob, orange, search_for, tick_through, world};
-use compass_core::{Action, Compass, DensityTier, MEOWDB_CREDIT, Mob, PanelState, Request, SearchView};
+use common::world::{SEARCH, WorldMap, loaded, map, mob, orange, search_for, world};
+use compass_core::{Action, Compass, DensityTier, Mob, PanelState, Request, SearchView};
 
 fn mushroom_world() -> Vec<WorldMap> {
     vec![
@@ -29,7 +29,7 @@ fn hunting(state: &PanelState) -> Option<String> {
 
 #[test]
 fn the_player_picks_a_mob_then_one_of_its_maps_and_that_becomes_the_hunting_target() {
-    let mut compass = crawled(mushroom_world());
+    let mut compass = loaded(mushroom_world());
     compass.on_hotkey(SEARCH);
     assert_eq!(compass.panel_state().search.view, Some(SearchView::Mobs));
 
@@ -49,7 +49,7 @@ fn the_player_picks_a_mob_then_one_of_its_maps_and_that_becomes_the_hunting_targ
 
 #[test]
 fn a_click_picks_a_suggested_mob_and_then_a_listed_map() {
-    let mut compass = crawled(mushroom_world());
+    let mut compass = loaded(mushroom_world());
     compass.on_hotkey(SEARCH);
     compass.search_query("mush");
 
@@ -64,7 +64,7 @@ fn a_click_picks_a_suggested_mob_and_then_a_listed_map() {
 
 #[test]
 fn a_click_on_something_no_longer_listed_does_nothing() {
-    let mut compass = crawled(mushroom_world());
+    let mut compass = loaded(mushroom_world());
     compass.on_hotkey(SEARCH);
     compass.search_query("green");
 
@@ -81,7 +81,7 @@ fn a_click_on_something_no_longer_listed_does_nothing() {
 
 #[test]
 fn the_search_hotkey_with_the_search_view_open_brings_the_overlay_back_in_front_as_it_is() {
-    let mut compass = crawled(mushroom_world());
+    let mut compass = loaded(mushroom_world());
     assert_eq!(compass.on_hotkey(SEARCH), None, "opening the search view brings it in front");
     compass.search_query("mush");
     let before = compass.panel_state().clone();
@@ -105,7 +105,7 @@ fn highlighted(state: &PanelState) -> Option<&str> {
 
 #[test]
 fn typing_suggests_every_known_mob_whose_name_contains_it_whatever_the_case_with_its_level() {
-    let mut compass = crawled(mushroom_world());
+    let mut compass = loaded(mushroom_world());
     compass.on_hotkey(SEARCH);
 
     let state = compass.search_query("MUSH");
@@ -128,7 +128,7 @@ fn picked(state: &PanelState) -> Option<&str> {
 
 #[test]
 fn the_highlight_moves_through_the_suggestions_and_enter_lists_the_highlighted_mobs_maps() {
-    let mut compass = crawled(mushroom_world());
+    let mut compass = loaded(mushroom_world());
     compass.on_hotkey(SEARCH);
     compass.search_query("mush");
 
@@ -146,7 +146,7 @@ fn the_highlight_moves_through_the_suggestions_and_enter_lists_the_highlighted_m
 
 #[test]
 fn the_highlight_stays_at_the_top_going_up_and_a_new_query_starts_it_at_the_top_again() {
-    let mut compass = crawled(mushroom_world());
+    let mut compass = loaded(mushroom_world());
     compass.on_hotkey(SEARCH);
     compass.search_query("mush");
 
@@ -164,7 +164,7 @@ fn hunting_orange_on_the_field(compass: &mut Compass) {
 
 #[test]
 fn esc_from_either_step_returns_to_the_normal_view_with_nothing_changed() {
-    let mut compass = crawled(mushroom_world());
+    let mut compass = loaded(mushroom_world());
     hunting_orange_on_the_field(&mut compass);
     let before = compass.panel_state().clone();
 
@@ -179,7 +179,7 @@ fn esc_from_either_step_returns_to_the_normal_view_with_nothing_changed() {
 
 #[test]
 fn reopened_the_search_view_starts_afresh() {
-    let mut compass = crawled(mushroom_world());
+    let mut compass = loaded(mushroom_world());
     search_for(&mut compass, "orange");
     compass.act(Action::SearchEscape);
 
@@ -193,7 +193,7 @@ fn reopened_the_search_view_starts_afresh() {
 
 #[test]
 fn collapsing_the_panel_closes_the_search_view_and_keeps_the_hunting_target() {
-    let mut compass = crawled(mushroom_world());
+    let mut compass = loaded(mushroom_world());
     hunting_orange_on_the_field(&mut compass);
     search_for(&mut compass, "horny");
 
@@ -206,7 +206,7 @@ fn collapsing_the_panel_closes_the_search_view_and_keeps_the_hunting_target() {
 
 #[test]
 fn enter_on_a_query_that_matches_no_mob_or_with_nothing_typed_does_nothing() {
-    let mut compass = crawled(mushroom_world());
+    let mut compass = loaded(mushroom_world());
 
     for query in ["dragon", "  "] {
         let state = search_for(&mut compass, query);
@@ -218,7 +218,7 @@ fn enter_on_a_query_that_matches_no_mob_or_with_nothing_typed_does_nothing() {
 
 #[test]
 fn search_keys_do_nothing_with_the_search_view_closed() {
-    let mut compass = crawled(mushroom_world());
+    let mut compass = loaded(mushroom_world());
     search_for(&mut compass, "orange");
     compass.act(Action::SearchEnter);
     let before = compass.panel_state().clone();
@@ -244,7 +244,7 @@ fn ranked(state: &PanelState) -> Vec<String> {
 
 #[test]
 fn every_map_the_picked_mob_spawns_on_is_a_result_with_its_density_spawn_share_and_tier() {
-    let mut compass = crawled(vec![
+    let mut compass = loaded(vec![
         map("100000001", "Mushroom Field", 150, vec![sharing(40, orange(10)), mob("4", "Shroom", 2, 15)]),
         map("100000002", "Green Hill", 100, vec![mob("13", "Green Mushroom", 15, 8)]),
         map("100000003", "Mushroom Hill", 100, vec![sharing(100, orange(4))]),
@@ -262,13 +262,13 @@ fn every_map_the_picked_mob_spawns_on_is_a_result_with_its_density_spawn_share_a
     assert_eq!(field.spawn_share_percent, 40);
     assert_eq!(field.tier, DensityTier::High);
     assert_eq!(ranked(&state)[1], "Mushroom Hill: 400, Low");
-    assert_eq!(state.search.credit, Some(MEOWDB_CREDIT));
+    assert_eq!(state.search.credit, Some("Data: OSMS Data Explorer (osmsdataexplorer.com)"), "OSMS's data");
 }
 
 #[test]
 fn a_map_is_high_from_two_thirds_of_the_densest_maps_density_and_medium_from_one_third() {
     // Densities 3.00, 2.00 (exactly 2/3), 1.99, 1.00 (exactly 1/3) and 0.99.
-    let mut compass = crawled(vec![
+    let mut compass = loaded(vec![
         map("100000001", "Two Thirds", 200, vec![orange(1)]),
         map("100000002", "Just Under One Third", 99, vec![orange(1)]),
         map("100000003", "Densest", 300, vec![orange(1)]),
@@ -292,7 +292,7 @@ fn a_map_is_high_from_two_thirds_of_the_densest_maps_density_and_medium_from_one
 
 #[test]
 fn results_are_ordered_by_tier_then_density_with_spawn_count_and_mob_rate_both_counting() {
-    let mut compass = crawled(vec![
+    let mut compass = loaded(vec![
         map("100000001", "Slow Refill", 50, vec![orange(20)]),
         map("100000002", "Few But Fast", 200, vec![orange(4)]),
         map("100000003", "Many", 100, vec![orange(12)]),
@@ -310,7 +310,7 @@ fn results_are_ordered_by_tier_then_density_with_spawn_count_and_mob_rate_both_c
 
 #[test]
 fn event_maps_are_left_out_and_dont_set_the_densest_map() {
-    let mut compass = crawled(vec![
+    let mut compass = loaded(vec![
         map("100000001", "Mushroom Field", 100, vec![orange(10)]),
         map("100000002", "Mushroom Festival", 200, vec![orange(30)]).in_region("Event"),
         map("100000003", "Hidden Mushrooms", 100, vec![orange(4)]).in_region("Hidden Street"),
@@ -322,8 +322,20 @@ fn event_maps_are_left_out_and_dont_set_the_densest_map() {
 }
 
 #[test]
+fn the_dev_map_is_left_out_like_event_maps() {
+    let mut compass = loaded(vec![
+        map("100000001", "Mushroom Field", 100, vec![orange(10)]),
+        map("100000002", "The Manager's Room", 200, vec![orange(30)]).in_region("Dev"),
+    ]);
+
+    let state = search_for(&mut compass, "orange");
+
+    assert_eq!(ranked(&state), ["Mushroom Field: 1000, High"]);
+}
+
+#[test]
 fn a_mob_found_only_on_event_maps_has_no_results_and_search_says_why() {
-    let mut compass = crawled(vec![
+    let mut compass = loaded(vec![
         map("100000001", "Snail Field", 100, vec![mob("3", "Blue Snail", 4, 5)]),
         map("100000002", "Mushroom Festival", 200, vec![orange(30)]).in_region("Event"),
     ]);
@@ -339,57 +351,52 @@ fn a_mob_found_only_on_event_maps_has_no_results_and_search_says_why() {
 #[test]
 fn the_map_list_holds_every_map_the_mob_spawns_on_however_many() {
     let fields = (1..=7).map(|n| map(&format!("10000000{n}"), &format!("Field {n}"), 100, vec![orange(10 - n)])).collect();
-    let mut compass = crawled(fields);
+    let mut compass = loaded(fields);
 
     let state = search_for(&mut compass, "orange");
 
     assert_eq!(maps(&state),["Field 1", "Field 2", "Field 3", "Field 4", "Field 5", "Field 6", "Field 7"]);
 }
 
-#[test]
-fn mid_crawl_the_results_cover_the_maps_known_so_far_and_grow_as_the_crawl_goes_on() {
-    let maps = vec![
-        map("100000001", "Mushroom Field", 100, vec![orange(10)]),
-        map("100000002", "Green Hill", 100, vec![mob("13", "Green Mushroom", 15, 8)]),
-        map("100000003", "Mushroom Hill", 100, vec![orange(4)]),
-        map("100000004", "Mushroom Grove", 100, vec![orange(20)]),
-    ];
-    let mut compass = Compass::new(world(maps).crawling_uncached());
-    // One page every 2 s: by 2.1 s, the first two are known.
-    tick_through(&mut compass, 0, 2_100);
-
-    let state = search_for(&mut compass, "orange");
-    assert_eq!(ranked(&state), ["Mushroom Field: 1000, High"]);
-    let progress = state.search.crawl;
-    assert_eq!((progress.known, progress.total, progress.done), (2, 4, false));
-
-    let state = tick_through(&mut compass, 2_100, 4_100);
-    assert_eq!(ranked(&state), ["Mushroom Field: 1000, High", "Mushroom Hill: 400, Medium"]);
-    let state = tick_through(&mut compass, 4_100, 6_100);
-    assert_eq!(ranked(&state), ["Mushroom Grove: 2000, High", "Mushroom Field: 1000, Medium", "Mushroom Hill: 400, Low"]);
-    assert!(state.search.crawl.done);
+/// Thirty empty fields, with Orange Mushrooms on the first and a Green Mushroom with
+/// more Orange Mushrooms on the last.
+fn thirty_fields() -> Vec<WorldMap> {
+    (0..30)
+        .map(|n| {
+            let id = format!("1000000{n:02}");
+            match n {
+                0 => map(&id, "Mushroom Field", 100, vec![orange(10)]),
+                29 => map(&id, "Mushroom Grove", 100, vec![orange(20), mob("13", "Green Mushroom", 15, 8)]),
+                _ => map(&id, &format!("Field {n}"), 100, vec![]),
+            }
+        })
+        .collect()
 }
 
 #[test]
-fn mid_crawl_the_suggestions_cover_the_mobs_known_so_far() {
-    let maps = vec![
-        map("100000001", "Mushroom Field", 100, vec![orange(10)]),
-        map("100000002", "Green Hill", 100, vec![mob("13", "Green Mushroom", 15, 8)]),
-    ];
-    let mut compass = Compass::new(world(maps).crawling_uncached());
-    tick_through(&mut compass, 0, 100);
+fn from_the_first_launch_the_results_cover_every_map_in_the_set() {
+    let mut compass = Compass::new(world(thirty_fields()));
+    compass.tick(0);
+
+    let state = search_for(&mut compass, "orange");
+
+    assert_eq!(ranked(&state), ["Mushroom Grove: 2000, High", "Mushroom Field: 1000, Medium"]);
+}
+
+#[test]
+fn from_the_first_launch_the_suggestions_cover_every_mob_in_the_set() {
+    let mut compass = Compass::new(world(thirty_fields()));
+    compass.tick(0);
     compass.on_hotkey(SEARCH);
 
     let state = compass.search_query("mushroom");
-    assert_eq!(suggestions(state), ["Orange Mushroom (8)"]);
 
-    let state = tick_through(&mut compass, 100, 2_100);
-    assert_eq!(suggestions(&state), ["Green Mushroom (15)", "Orange Mushroom (8)"]);
+    assert_eq!(suggestions(state), ["Green Mushroom (15)", "Orange Mushroom (8)"]);
 }
 
 #[test]
 fn until_a_mob_is_picked_there_is_no_map_list_and_no_credit() {
-    let mut compass = crawled(mushroom_world());
+    let mut compass = loaded(mushroom_world());
     compass.on_hotkey(SEARCH);
 
     let state = compass.search_query("orange");
@@ -400,7 +407,7 @@ fn until_a_mob_is_picked_there_is_no_map_list_and_no_credit() {
 
 #[test]
 fn the_search_hotkey_opens_the_search_view_with_nothing_typed() {
-    let mut compass = crawled(mushroom_world());
+    let mut compass = loaded(mushroom_world());
     assert_eq!(compass.panel_state().search.view, None);
 
     compass.on_hotkey(SEARCH);
@@ -413,7 +420,7 @@ fn the_search_hotkey_opens_the_search_view_with_nothing_typed() {
 
 #[test]
 fn the_search_hotkey_expands_a_collapsed_panel_to_show_the_search_view() {
-    let mut compass = crawled(mushroom_world());
+    let mut compass = loaded(mushroom_world());
     assert!(!compass.act(Action::ToggleExpanded).expanded);
 
     compass.on_hotkey(SEARCH);

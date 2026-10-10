@@ -1,6 +1,3 @@
-/** Mirror of `compass_core::CrawlProgress`. */
-export type CrawlProgress = { known: number; total: number; done: boolean };
-
 /** Mirror of `compass_core::MobChoice`. */
 export type MobChoice = { id: string; name: string; level: number };
 
@@ -70,7 +67,6 @@ export type SearchState = {
   /** Which result is the nearest with a route. */
   nearest: number | null;
   credit: string | null;
-  crawl: CrawlProgress;
   /** What Distances count besides portals and ships (the checkboxes). */
   travel: Travel;
   /** The panel's Hunting section, until the player arrives or clears it. */
@@ -83,13 +79,9 @@ export const TIER_NAMES: Record<DensityTier, string> = { high: "High", medium: "
 export const density = (hundredths: number) =>
   (hundredths / 100).toLocaleString("en-US", { maximumFractionDigits: 2 });
 
-/** Why a picked mob has no results, as the core says. (The crawl line says how much of the world is known.) */
+/** Why a picked mob has no results, as the core says. */
 export const resultsNote = (search: SearchState) =>
   search.onlyOnEventMaps ? "Found only on Event maps, which search leaves out." : "";
-
-/** "312 of 422 maps known" while the world crawl runs; "" before the map list arrives and once it's done. */
-export const crawlLine = ({ crawl }: SearchState) =>
-  crawl.total > 0 && !crawl.done ? `${crawl.known} of ${crawl.total} maps known` : "";
 
 const DISTANCE_TEXT = {
   noRoute: { text: "no route", title: "No known route leads there" },

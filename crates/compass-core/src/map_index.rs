@@ -1,8 +1,7 @@
 //! The map list's entries, and the injected data source the core's data comes from: OSMS
-//! Data Explorer's file set (ADR 0008), and MeowDB's pages and search (ADR 0003).
+//! Data Explorer's file set and pictures (ADR 0008), and MeowDB's search (ADR 0007).
 
 use crate::item_lookup::ItemHit;
-use crate::map_data::MapData;
 use crate::osms::OsmsFiles;
 use std::task::Poll;
 
@@ -19,14 +18,15 @@ pub struct MapEntry {
     pub region: String,
 }
 
-/// The region of event maps.
-const EVENT_REGION: &str = "Event";
+/// The regions of maps the player can't normally enter: event maps, and the developers'
+/// map (The Manager's Room).
+const LEFT_OUT_REGIONS: [&str; 2] = ["Event", "Dev"];
 
 impl MapEntry {
-    /// An Event map: the player can't normally enter it, so mob search neither lists
-    /// it nor routes through it.
-    pub(crate) fn is_event(&self) -> bool {
-        self.region == EVENT_REGION
+    /// An Event or Dev map: the player can't normally enter it, so mob search neither
+    /// lists it nor routes through it.
+    pub(crate) fn is_left_out(&self) -> bool {
+        LEFT_OUT_REGIONS.contains(&self.region.as_str())
     }
 }
 
@@ -61,8 +61,8 @@ pub enum Fetched<T> {
     SavedCopy { data: T, saved_at_unix_ms: u64 },
 }
 
-/// Where the core gets OSMS's file set and pictures, and MeowDB's pages and search. The
-/// shell supplies one that fetches over HTTP with a disk cache; tests supply fakes.
+/// Where the core gets OSMS's file set and pictures, and MeowDB's search. The shell
+/// supplies one that fetches over HTTP with a disk cache; tests supply fakes.
 ///
 /// Every ask may take a while over the network, and the core never waits for
 /// them: on the first call start the fetch and answer [`Poll::Pending`]; the core asks
@@ -77,14 +77,6 @@ pub trait MapDataSource {
     /// was saved, when a file can't be fetched or the set fetched doesn't read.
     fn osms_files(&mut self) -> Poll<Result<Fetched<OsmsFiles>, SourceError>>;
 
-    /// One map's data for the world crawl (ADR 0004), which asks for each map it doesn't
-    /// know, and for each it knows once its data is a week old, one at a time. The core
-    /// keeps what the crawl learns and decides when to ask, so fetch it from MeowDB
-    /// (falling back on a saved copy when MeowDB can't be reached); an answer given at
-    /// once doesn't wait out the crawl's pace. The crawl goes with #57, OSMS's set
-    /// knowing every map.
-    fn crawl_data(&mut self, id: &str) -> Poll<Result<Fetched<MapData>, SourceError>>;
-
     /// Where the overlay can load one of OSMS's pictures from (ADR 0008): a mob's
     /// animation or a map's picture, by its `path` below
     /// [`crate::osms::PICTURES_URL`], such as `images/monsters/<hash>.webp` or
@@ -97,8 +89,8 @@ pub trait MapDataSource {
 
     /// The items MeowDB's search ([`crate::meowdb::ITEM_SEARCH_URL`]) gives for `name`, an
     /// item's name as read from an Item Tooltip, closest first (ADR 0007): the core asks
-    /// once per Item Lookup, ahead of the world crawl, and keeps to MeowDB's pace after
-    /// it. Read with [`crate::meowdb::read_item_search`]. A cached answer may be used as
-    /// it is; answer at once when it is.
+    /// once per Item Lookup, and keeps to MeowDB's pace after it. Read with
+    /// [`crate::meowdb::read_item_search`]. A cached answer may be used as it is; answer at
+    /// once when it is.
     fn item_search(&mut self, name: &str) -> Poll<Result<Fetched<Vec<ItemHit>>, SourceError>>;
 }

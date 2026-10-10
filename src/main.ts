@@ -26,7 +26,6 @@ import {
 } from "./hotkeys";
 import {
   TIER_NAMES,
-  crawlLine,
   density,
   distanceText,
   distanceWithTravel,
@@ -184,7 +183,6 @@ const iconCount = byId("icon-count");
 const iconAlert = byId("icon-alert");
 const recovery = byId("recovery");
 const uncertainty = byId("uncertainty");
-const crawlProgress = byId("crawl-progress");
 const normalView = byId("normal-view");
 const toolbar = byId("toolbar");
 const icon = document.querySelector<HTMLElement>(".icon")!;
@@ -214,7 +212,6 @@ const searchNearest = byId("search-nearest");
 const searchNote = byId("search-note");
 const resultsBox = byId("results-box");
 const resultsTable = byId("search-results") as HTMLTableElement;
-const searchCrawl = byId("search-crawl");
 const searchCredit = byId("search-credit");
 const settingsView = byId("settings-view");
 const settingsBack = byId("settings-back");
@@ -229,7 +226,7 @@ let draggable = false;
 
 /**
  * What each part of the panel was last rendered from. The panel state comes again
- * whenever anything in it changes (the world crawl's progress, say): a part whose own
+ * whenever anything in it changes (the EXP tracking's figures, say): a part whose own
  * inputs didn't change keeps its rows, and the scroll and hover on them.
  */
 const renderedFrom = new Map<string, string>();
@@ -523,7 +520,7 @@ function renderHunting(panel: PanelState) {
   huntingArrival.hidden = !arrived;
   huntingTrip.textContent = trip ? tripLine(trip) : "";
   huntingTrip.hidden = !trip;
-  // The footer credits MeowDB whenever a map is shown; otherwise the section does.
+  // The footer credits OSMS whenever a map is shown; otherwise the section does.
   huntingCredit.textContent = panel.search.credit ?? "";
   huntingCredit.hidden = !panel.search.credit || !!panel.credit;
 }
@@ -544,13 +541,11 @@ function renderSearchView(panel: PanelState) {
   mobsStep.hidden = view !== "mobs";
   mapsStep.hidden = view !== "maps";
   // Before the lists, which scroll their highlight into what room is left.
-  // The world crawl, while it runs: search only knows the mobs on the maps known so far.
-  renderCrawl(searchCrawl, search, true);
   searchCredit.textContent = search.credit ?? "";
   searchCredit.hidden = !search.credit;
   if (view === "mobs") {
     searchTitle.textContent = "Search a mob";
-    renderMobs(search);
+    renderMobs(search, panel.recognition);
     // A fresh query box, and the typing goes to it.
     if (opened) {
       query.value = search.query;
@@ -734,9 +729,11 @@ function renderSettingsView(panel: PanelState) {
   if (target) settingsView.querySelector<HTMLElement>(`[data-focus="${target}"]`)?.focus({ preventScroll: true });
 }
 
-/** The first step: the suggestions (the highlighted one is what Enter picks). */
-function renderMobs(search: SearchState) {
-  if (!changed("suggestions", search.suggestions, search.highlighted, search.query, search.crawl.total)) return;
+/** The first step: the suggestions (the highlighted one is what Enter picks). Search knows no
+ *  mob until OSMS's file set is in, which `recognition` says. */
+function renderMobs(search: SearchState, recognition: Recognition) {
+  const loaded = recognition.status === "ready" || recognition.status === "savedCopy";
+  if (!changed("suggestions", search.suggestions, search.highlighted, search.query, loaded)) return;
   suggestions.replaceChildren(
     ...search.suggestions.map((mob, i) => {
       const row = document.createElement("li");
@@ -760,7 +757,7 @@ function renderMobs(search: SearchState) {
   } else {
     query.removeAttribute("aria-activedescendant");
   }
-  noMatch.textContent = search.crawl.total === 0 ? "Loading the map list…" : "No known mob has that in its name.";
+  noMatch.textContent = loaded ? "No known mob has that in its name." : "Loading the map list…";
   noMatch.hidden = listed || search.query.trim() === "";
 }
 
@@ -785,24 +782,6 @@ function renderMaps(search: SearchState) {
   resultsTable.replaceChildren(resultsHeader, ...groups);
   const current = resultsTable.querySelector<HTMLElement>("tbody.current");
   if (current) scrollWithin(resultsBox, current);
-}
-
-/**
- * The world crawl's line and gauge (`el`), while it runs and `shown`: "Mapping the world:
- * 312 of 422 maps known" over the game's gauge, filled to the share known. The fill eases
- * to each new count in CSS, through `--known`.
- */
-function renderCrawl(el: HTMLElement, search: SearchState, shown: boolean) {
-  const line = crawlLine(search);
-  el.hidden = !shown || !line;
-  if (el.hidden) return;
-  el.querySelector(".crawl-text")!.textContent = `Mapping the world: ${line}`;
-  const { known, total } = search.crawl;
-  const gauge = el.querySelector<HTMLElement>(".gauge")!;
-  gauge.setAttribute("aria-valuenow", String(known));
-  gauge.setAttribute("aria-valuemax", String(total));
-  gauge.setAttribute("aria-valuetext", line);
-  gauge.style.setProperty("--known", String(total > 0 ? known / total : 0));
 }
 
 /** Scroll `box` just enough to show `item`. Not `scrollIntoView`, which would scroll the overlay's page too. */
@@ -1060,9 +1039,6 @@ function render(panel: PanelState) {
   hotkeyProblem.textContent = causes &&
     `${causes} ${taken ? "Close the other app, or change" : "Change"} ${them} in Settings (the gear at the top of the panel).`;
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
-  // The world crawl, while it runs, with or without a search: "Mapping the world: 312
-  // of 422 maps known". Search can only find mobs on the maps known so far.
-  renderCrawl(crawlProgress, panel.search, panel.gameFound);
   renderData(panel);
   renderHunting(panel);
   renderSearchView(panel);
