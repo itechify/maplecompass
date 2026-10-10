@@ -16,6 +16,7 @@ mod hotkey_settings;
 mod hotkeys;
 mod item_lookup;
 pub mod meowdb;
+mod old_caches;
 pub mod osms;
 mod search;
 mod settings;
@@ -188,6 +189,10 @@ pub fn run() {
             // MeowDB pages are cached on disk (ADR 0003), and maplestory.io's mob images
             // (ADR 0006).
             let cache = cache_dir(app.handle())?;
+            // What earlier versions cached and this one doesn't use: MeowDB's map pages and
+            // the world crawl's saved world.
+            let old = cache.clone();
+            std::thread::Builder::new().name("old-caches".into()).spawn(move || old_caches::clear(&old))?;
             let source = MeowDbSource::new(cache)?;
             let mut compass = Compass::new(source);
             let settings_path = settings::path(app.handle())?;
