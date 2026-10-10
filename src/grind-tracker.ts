@@ -60,11 +60,6 @@ function length(seconds: number) {
   return h === 0 ? `${m}m` : m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
-/** The headline's tag: only "paused". Warming up has none: its figures in Light say it. */
-const TAGS: Partial<Record<ExpTracking["state"], string>> = {
-  paused: "paused",
-};
-
 /** Why there is no Time to Level, in words: never a bare dash beside the label. */
 function noTimeToLevel(rolling: ExpRate | null) {
   if (rolling && rolling.expPerHour < 0) return "losing EXP";
@@ -96,10 +91,8 @@ function render({ shown, tracking: t }: TrackerView) {
   rollingRow.hidden = !started;
   timeToLevel.textContent = t.timeToLevelBadge ?? noTimeToLevel(t.rolling);
   timeToLevel.classList.toggle("words", !t.timeToLevelBadge);
-  const label = TAGS[t.state];
-  tag.hidden = !label;
-  tag.textContent = label ?? "";
-  tag.className = `tag ${t.state}`;
+  // The headline's one tag, "paused". Warming up has none: its figures in Light say it.
+  tag.hidden = t.state !== "paused";
 
   const expPerHour = (r: ExpRate | null) => (r ? rate(r.expPerHour) : "–");
   const percentPerHour = (r: ExpRate | null) =>
