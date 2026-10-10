@@ -82,6 +82,7 @@ pub use recogniser::{TitleLines, TitleReader, TitleReading};
 use tracker::Tracker;
 use world::Here;
 use serde::{Deserialize, Serialize};
+use osms::MapSet;
 use std::collections::VecDeque;
 use std::task::Poll;
 
@@ -156,8 +157,12 @@ pub enum Recognition {
         #[serde(rename = "savedAtUnixMs")]
         saved_at_unix_ms: u64,
     },
-    /// The map index couldn't be had, so readings can't be snapped to real maps.
+    /// OSMS couldn't be reached and no file set is saved, so readings can't be snapped to
+    /// real maps. The map list is asked for again every minute.
     Unavailable,
+    /// OSMS's file set doesn't read, and there is no earlier one to fall back on:
+    /// MapleCompass needs an update.
+    FormatChanged,
 }
 
 /// Everything the overlay renders.
@@ -307,9 +312,23 @@ pub enum PanelControl {
 /// The game window's title, unless the player picked another by hand.
 pub const GAME_WINDOW_TITLE: &str = "MapleStory";
 
-/// How long to wait before asking for the map index again after a failure. MeowDB is
-/// asked politely (ADR 0003): never on every frame.
-const INDEX_RETRY_MS: u64 = 60_000;
+/// How long a file set is used before OSMS is asked for it again (capture time): a day.
+const SET_RECHECK_MS: u64 = 24 * 60 * 60 * 1000;
+
+/// With no file set at all, how long to wait before asking again after OSMS couldn't be
+/// reached: never on every frame.
+const SET_RETRY_MS: u64 = 60_000;
+
+/// A file set saved longer ago than this (wall clock) is shown as a Saved Copy, with its
+/// date: game data changes only on patch days, so a younger one says nothing.
+const SAVED_COPY_AFTER_MS: u64 = 7 * 24 * 60 * 60 * 1000;
+
+/// OSMS's file set as read, and when it was saved if it is a saved copy (ms since the
+/// Unix epoch); `None` when it is fresh.
+struct HeldSet {
+    maps: MapSet,
+    saved_at_unix_ms: Option<u64>,
+}
 
 /// The world crawl's progress reaches the panel no more often than this (capture time),
 /// unless the crawl is done: each change re-renders the panel.
@@ -329,9 +348,15 @@ pub struct Compass {
     /// The Grind Tracker's window.
     grind_tracker: GrindTracker,
     source: Box<dyn MapDataSource + Send>,
+    /// Every map's data, once OSMS's file set has been read: the map list, and the
+    /// shown map's figures.
+    set: Option<HeldSet>,
+    /// When to ask for OSMS's file set next (capture time); 0 at startup.
+    ask_osms_at: u64,
+    /// The source is fetching OSMS's file set.
+    osms_in_flight: bool,
+    /// Built from the map list, once there is one.
     matcher: Option<Matcher>,
-    /// When asking for the map index last failed (frame time).
-    index_failed_at: Option<u64>,
     tracker: Tracker,
     shown_map: ShownMap,
     /// The world crawl, from when the map index arrives.
@@ -379,8 +404,10 @@ impl Compass {
             session: Session::default(),
             grind_tracker: GrindTracker::default(),
             source: Box::new(source),
+            set: None,
+            ask_osms_at: 0,
+            osms_in_flight: false,
             matcher: None,
-            index_failed_at: None,
             tracker: Tracker::default(),
             shown_map: ShownMap::default(),
             crawl: None,
@@ -415,9 +442,9 @@ impl Compass {
     /// Take what a Title Region frame read as (read by a [`TitleReader`], possibly on
     /// another thread) and update the panel state.
     pub fn on_reading(&mut self, reading: TitleReading) -> &PanelState {
-        self.load_map_index(reading.at_ms);
-        let Some(matcher) = &self.matcher else {
-            // Without the map index nothing can be recognised.
+        self.load_osms(reading.at_ms);
+        let (Some(matcher), Some(set)) = (&self.matcher, &self.set) else {
+            // Without the map list nothing can be recognised.
             self.setup.on_read(None);
             return self.sync_panel();
         };
@@ -426,7 +453,7 @@ impl Compass {
             // Names differing only in a numeral the reading doesn't make out: the
             // one within the player's reach, if just one is; otherwise not sure.
             Match::OneOf { maps, score } => {
-                let reach = self.shown_map.within_reach();
+                let reach = self.shown_map.within_reach(&set.maps);
                 let mut reachable = maps.into_iter().filter(|&i| {
                     matcher.same_title_as(i).into_iter().any(|j| reach.contains(&matcher.map(j).id))
                 });
@@ -453,7 +480,7 @@ impl Compass {
         let maps = titled.into_iter().map(current_map).collect();
         // Another title confirmed is another map: a new Visit. Losing the title, or choosing
         // among the maps sharing it, is not.
-        if self.shown_map.show(maps, &mut *self.source) {
+        if self.shown_map.show(maps, &set.maps) {
             self.session.arrive();
         }
         self.sync_shown_map();
@@ -488,7 +515,8 @@ impl Compass {
 
     fn sync_shown_map(&mut self) {
         let map = self.shown_map.map().cloned();
-        let data = self.shown_map.data();
+        let saved_copy_from = self.saved_copy_from();
+        let data = self.set.as_ref().map_or(MapDataStatus::NoMap, |set| self.shown_map.data(&set.maps, saved_copy_from));
         // Distances are measured from the map shown (with Candidates, the one shown),
         // and its page's exits count before the crawl gets to it.
         let moved = map.as_ref().map(|m| &m.id) != self.state.map.as_ref().map(|m| &m.id);
@@ -503,7 +531,7 @@ impl Compass {
         if moved || paged {
             self.sync_search();
         }
-        self.state.candidates = self.shown_map.candidates();
+        self.state.candidates = self.set.as_ref().and_then(|set| self.shown_map.candidates(&set.maps));
         let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
         self.mob_cards.list(listed);
         self.state.mob_cards = self.mob_cards.cards();
@@ -556,7 +584,7 @@ impl Compass {
             Action::PanelResized { width } => self.panel.resized_to(width),
             Action::CyclePlacement => self.panel.cycle_placement(),
             Action::ChooseCandidate => {
-                self.shown_map.choose_next(&mut *self.source);
+                self.shown_map.choose_next();
                 self.sync_shown_map();
             }
             Action::MarkTitleRegion(marked) => self.setup.mark(marked),
@@ -985,9 +1013,8 @@ impl Compass {
     /// waits for the network.
     pub fn tick(&mut self, at_ms: u64) -> &PanelState {
         self.session.tick(at_ms);
-        self.load_map_index(at_ms);
-        if self.matcher.is_some() {
-            self.shown_map.poll(&mut *self.source);
+        self.load_osms(at_ms);
+        if self.set.is_some() {
             self.sync_shown_map();
             // Once the shown map's page lists its mobs.
             self.mob_cards.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
@@ -1012,36 +1039,55 @@ impl Compass {
         self.sync_panel()
     }
 
-    /// Ask the source for the map index at startup (the first tick or frame) until it
-    /// answers, and after a failure, again no sooner than [`INDEX_RETRY_MS`] later.
-    fn load_map_index(&mut self, at_ms: u64) {
-        if self.matcher.is_some()
-            || self.index_failed_at.is_some_and(|t| at_ms.saturating_sub(t) < INDEX_RETRY_MS)
-        {
+    /// Ask the source for OSMS's file set at startup (the first tick or frame) and every
+    /// [`SET_RECHECK_MS`] after, and with no set at all, a minute after OSMS couldn't be
+    /// reached. A set that reads replaces the one held whole; one that doesn't, or an
+    /// answer that is none, leaves the one held as it is.
+    fn load_osms(&mut self, at_ms: u64) {
+        if !self.osms_in_flight && at_ms < self.ask_osms_at {
             return;
         }
-        let index = match self.source.map_index() {
-            Poll::Pending => return,
-            Poll::Ready(index) => index,
-        };
-        let index = match index {
-            Ok(Fetched::Fresh(index)) => {
-                self.state.recognition = Recognition::Ready;
-                index
-            }
-            Ok(Fetched::SavedCopy { data, saved_at_unix_ms }) => {
-                self.state.recognition = Recognition::SavedCopy { saved_at_unix_ms };
-                data
-            }
-            Err(_) => {
-                self.index_failed_at = Some(at_ms);
-                self.state.recognition = Recognition::Unavailable;
+        let answer = match self.source.osms_files() {
+            Poll::Pending => {
+                self.osms_in_flight = true;
                 return;
             }
+            Poll::Ready(answer) => answer,
         };
-        self.crawl = Some(Crawl::new(index.clone(), &self.saved_world));
-        self.matcher = Some(Matcher::new(index));
+        self.osms_in_flight = false;
+        self.ask_osms_at = at_ms + SET_RECHECK_MS;
+        let read = answer.and_then(|fetched| match fetched {
+            Fetched::Fresh(files) => osms::read(&files).map(|maps| (maps, None)),
+            Fetched::SavedCopy { data, saved_at_unix_ms } => {
+                osms::read(&data).map(|maps| (maps, Some(saved_at_unix_ms)))
+            }
+        });
+        match read {
+            Ok((maps, saved_at_unix_ms)) => self.take_set(maps, saved_at_unix_ms),
+            Err(_) if self.set.is_some() => {}
+            Err(SourceError::Unreachable(_)) => {
+                self.state.recognition = Recognition::Unavailable;
+                self.ask_osms_at = at_ms + SET_RETRY_MS;
+            }
+            Err(SourceError::FormatChanged(_)) => self.state.recognition = Recognition::FormatChanged,
+        }
+    }
+
+    /// Hold `maps`, a file set just read, in place of the one held.
+    fn take_set(&mut self, maps: MapSet, saved_at_unix_ms: Option<u64>) {
+        let entries = maps.entries();
+        self.crawl = Some(Crawl::new(entries.clone(), &self.saved_world));
+        self.matcher = Some(Matcher::new(entries));
+        self.set = Some(HeldSet { maps, saved_at_unix_ms });
         self.sync_search();
+    }
+
+    /// When the file set held was saved, if it is a saved copy older than
+    /// [`SAVED_COPY_AFTER_MS`]: the panel says so, with its date.
+    fn saved_copy_from(&self) -> Option<u64> {
+        let saved_at = self.set.as_ref()?.saved_at_unix_ms?;
+        let now = self.wall_clock?;
+        (now.saturating_sub(saved_at) > SAVED_COPY_AFTER_MS).then_some(saved_at)
     }
 
     pub fn panel_state(&self) -> &PanelState {
@@ -1049,6 +1095,12 @@ impl Compass {
     }
 
     fn sync_panel(&mut self) -> &PanelState {
+        if self.set.is_some() {
+            self.state.recognition = match self.saved_copy_from() {
+                Some(saved_at_unix_ms) => Recognition::SavedCopy { saved_at_unix_ms },
+                None => Recognition::Ready,
+            };
+        }
         self.sync_setup();
         // Never over a captured region: the capture would read the panel.
         self.panel.avoid = [self.state.title_region, self.state.exp_bar_region].into_iter().flatten().collect();
