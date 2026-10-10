@@ -50,7 +50,9 @@ const percent = (hundredths: number, decimals = Math.abs(hundredths) >= 10_000 ?
 const sharePercent = (hundredths: number) => percent(hundredths, hundredths < 1000 ? 1 : 0);
 
 /** An EXP rate to 3 significant figures, written out as the panel writes its rates:
- *  840, 6,120, 61,200, 1,230,000. */
+ *  840, 6,120, 61,200, 1,230,000; halves up, 66,550 is 66,600. It must agree with
+ *  `three_figures` in the core's session.rs, through which the star compares Last 5 min
+ *  with the Best row as written here, so it never shows beside two that read the same. */
 const rate = (n: number) => whole(Number(n.toPrecision(3)));
 
 /** A Session's length: "7m", "1h 12m". */
