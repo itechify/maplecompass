@@ -58,7 +58,7 @@ A hidden portal that only works while the player meets a quest condition.
 _Avoid_: script portal
 
 **Map Preview**:
-A picture of the whole of the shown map, with its hidden portals marked where they are.
+A picture of the whole of the shown map, with every portal marked where it is and its hidden portals set apart.
 _Avoid_: minimap (the game's own), map image
 
 ### Hunting

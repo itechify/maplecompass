@@ -48,11 +48,11 @@ pub struct Trip {
     pub travel: Vec<Step>,
 }
 
-/// A mob the player can pick: one per MeowDB mob ID.
+/// A mob the player can pick: one per mob ID.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MobChoice {
-    /// MeowDB's ID for the mob.
+    /// The mob's ID, the game's (OSMS's and MeowDB's alike).
     pub id: String,
     pub name: String,
     pub level: u32,
@@ -247,7 +247,7 @@ impl MobSearch {
         }
     }
 
-    /// The player picked the mob or map with this MeowDB ID from the open step's list.
+    /// The player picked the mob or map with this ID from the open step's list.
     pub fn pick(&mut self, id: &str, searched: &Searched) {
         match self.view {
             Some(SearchView::Mobs) => {
