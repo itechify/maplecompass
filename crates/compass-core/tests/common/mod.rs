@@ -419,8 +419,23 @@ impl FakeSource {
     }
 
     /// OSMS's file set answers these, one ask after another; the last one repeats.
+    ///
+    /// The world crawl, which reads MeowDB's pages until #57, is answered with the maps of
+    /// the first set: a MeowDB that agrees with OSMS.
     pub fn answering_osms(answers: Vec<OsmsAnswer>) -> Self {
-        Self { osms_answers: answers, ..Self::answering(vec![Poll::Ready(Err(unreachable()))]) }
+        let first = answers.iter().find_map(|answer| match answer {
+            Poll::Ready(Ok(Fetched::Fresh(files) | Fetched::SavedCopy { data: files, .. })) => Some(files.clone()),
+            _ => None,
+        });
+        let set = first.map(|files| compass_core::osms::read(&files));
+        let pages = move |id: &str| {
+            Poll::Ready(match &set {
+                Some(Ok(set)) => Ok(set.maps().find(|(entry, _)| entry.id == id).map(|(_, data)| data.clone()).unwrap_or_default()),
+                Some(Err(error)) => Err(error.clone()),
+                None => Err(unreachable()),
+            })
+        };
+        Self { osms_answers: answers, ..Self::answering(vec![Poll::Ready(Err(unreachable()))]) }.with_pages(pages)
     }
 
     /// OSMS serves this made-up world.

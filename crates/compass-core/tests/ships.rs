@@ -3,15 +3,15 @@
 //! has its route (the maps in order, each with how it is reached) and says which kinds
 //! of travel besides portals that route uses.
 //!
-//! The ships run between the real stations (by their MeowDB IDs), so the hand-built
+//! The ships run between the real stations (by their map IDs), so the hand-built
 //! worlds here use those IDs for the stations.
 
 mod common;
 
+use common::osms;
 use common::world::{WorldMap, map, orange, search_for, tick_through};
-use common::{FakeSource, arrive, index_with_title, saved_index};
-use compass_core::{Compass, Distance, MapData, MapEntry, Mob, PanelState, Portal, PortalKind, SearchResult, Step};
-use std::task::Poll;
+use common::{FakeSource, arrive};
+use compass_core::{Compass, Distance, PanelState, PortalKind, SearchResult, Step};
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
 const KERNING: &str = "victoria-road__kerning-city--window";
@@ -112,43 +112,52 @@ fn the_ship_from_orbis_takes_the_player_back_to_victoria_island() {
     assert_eq!(result.travel, [Step::Ship]);
 }
 
-/// A core over MeowDB's real map index (the saved copy), whose maps have these pages
-/// (and the rest none), crawled, with the player arrived on the Kerning City sample and
-/// the Orange Mushroom picked.
-fn searched_in_the_real_index(index: Vec<MapEntry>, pages: Vec<(&'static str, MapData)>) -> PanelState {
-    let source = FakeSource::with_index(index).with_pages(move |id| {
-        Poll::Ready(Ok(pages.iter().find(|(page_id, _)| *page_id == id).map(|(_, p)| p.clone()).unwrap_or_default()))
-    });
-    let mut compass = Compass::new(source);
+/// The game's map list (the map names fixture), with Orbis's maps added back: the
+/// Founder's Access client OSMS mines holds no Ossyria.
+fn game_with_orbis() -> osms::World {
+    [
+        (20_000_000, "Orbis", "Orbis"),
+        (20_000_001, "Orbis", "Orbis Weapon Store"),
+        (20_000_010, "Orbis", "Orbis Ticketing Booth"),
+        (20_000_098, "Orbis", "Orbis Tower <8th Floor>"),
+    ]
+    .into_iter()
+    .fold(osms::map_names(), |world, (id, street, name)| world.with(osms::map(id, street, name).in_region("Ossyria")))
+}
+
+/// A core over `world`, whose maps `ids` have visible exits to the maps `to` and
+/// `oranges` Orange Mushrooms (and the rest nothing), crawled, with the player arrived
+/// on the Kerning City sample and the Orange Mushroom picked.
+fn searched_in(world: osms::World, maps: &[(&str, &[&str], u32)]) -> PanelState {
+    let mut world = world.with_mob(osms::mob(9, "Orange Mushroom", 8, 0, 0));
+    for &(id, to, oranges) in maps {
+        world = world.changing(id.parse().unwrap(), |mut m| {
+            for to in to {
+                m = m.portal(&format!("to{to}"), 2, to.parse().unwrap());
+            }
+            if oranges > 0 { m.spawns(9, oranges) } else { m }
+        });
+    }
+    let mut compass = Compass::new(FakeSource::with_world(world));
     let state = tick_through(&mut compass, 0, 5_000);
-    assert!(state.search.crawl.done, "the whole index is crawled");
+    assert!(state.search.crawl.done, "the whole map list is crawled");
     arrive(&mut compass, KERNING, 5_100);
     search_for(&mut compass, "orange")
 }
 
-/// A page with visible exits to `to` and these mobs.
-fn page(to: &[&str], mobs: Vec<Mob>) -> MapData {
-    let portals = to
-        .iter()
-        .enumerate()
-        .map(|(i, to)| Portal { name: format!("portal{i}"), to_map_id: (*to).into(), kind: PortalKind::Visible })
-        .collect();
-    MapData { portals, mobs, mob_rate_percent: 100, ..MapData::default() }
-}
-
 #[test]
-fn the_ships_run_between_the_real_stations_in_meowdbs_map_index() {
+fn the_ships_run_between_the_real_stations() {
     // Made-up portals from Kerning City to Ellinia and from Orbis to Orbis Tower 8F, to
-    // keep the route short; the rest are the real stations' exits.
-    let state = searched_in_the_real_index(
-        saved_index(),
-        vec![
-            ("010003000", page(&[ELLINIA], vec![])),
-            (ELLINIA, page(&[ELLINIA_STATION], vec![])),
-            (ELLINIA_STATION, page(&[ELLINIA], vec![])),
-            (ORBIS_TICKETING_BOOTH, page(&[ORBIS], vec![])),
-            (ORBIS, page(&[ORBIS_TICKETING_BOOTH, "020000098"], vec![])),
-            ("020000098", page(&[], vec![orange(10)])),
+    // keep the route short.
+    let state = searched_in(
+        game_with_orbis(),
+        &[
+            ("010003000", &[ELLINIA], 0),
+            (ELLINIA, &[ELLINIA_STATION], 0),
+            (ELLINIA_STATION, &[ELLINIA], 0),
+            (ORBIS_TICKETING_BOOTH, &[ORBIS], 0),
+            (ORBIS, &[ORBIS_TICKETING_BOOTH, "020000098"], 0),
+            ("020000098", &[], 10),
         ],
     );
 
@@ -167,15 +176,16 @@ fn the_ships_run_between_the_real_stations_in_meowdbs_map_index() {
 fn the_ship_from_the_real_orbis_station_reaches_victoria_island() {
     // The player is in the Orbis Weapon Store, given the Kerning City title so the
     // sample arrives there.
-    let state = searched_in_the_real_index(
-        index_with_title("Victoria Road", "Kerning City", &["020000001"]),
-        vec![
-            ("020000001", page(&[ORBIS], vec![])),
-            (ORBIS, page(&[ORBIS_TICKETING_BOOTH], vec![])),
-            (ORBIS_TICKETING_BOOTH, page(&[ORBIS], vec![])),
-            (ELLINIA_STATION, page(&[ELLINIA], vec![])),
-            (ELLINIA, page(&["010002010"], vec![])),
-            ("010002010", page(&[], vec![orange(10)])),
+    let world = game_with_orbis().without(10_003_000).with(osms::map(20_000_001, "Victoria Road", "Kerning City"));
+    let state = searched_in(
+        world,
+        &[
+            ("020000001", &[ORBIS], 0),
+            (ORBIS, &[ORBIS_TICKETING_BOOTH], 0),
+            (ORBIS_TICKETING_BOOTH, &[ORBIS], 0),
+            (ELLINIA_STATION, &[ELLINIA], 0),
+            (ELLINIA, &["010002010"], 0),
+            ("010002010", &[], 10),
         ],
     );
 
