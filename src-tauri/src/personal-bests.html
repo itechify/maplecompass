@@ -526,8 +526,8 @@
           </table>
         </div>
         <ul class="notes">
-          <li>Solo EXP/h is MeowDB's ceiling for one player on the map, every mob killed the moment it spawns.</li>
-          <li id="note-missing" hidden>A dash is a figure not known for that map: MapleCompass hasn't read its MeowDB page yet, or MeowDB doesn't give it.</li>
+          <li>Solo EXP/h is the map's ceiling, worked out as NiaMeowDB does.</li>
+          <li id="note-missing" hidden>A dash is a figure not known for that map: it isn't in the map list, or no mobs spawn there.</li>
           <li>To see newer bests, open this page again from the Grind Tracker. MapleCompass's windows come back when you return to the game.</li>
         </ul>
         <footer id="credit"></footer>
@@ -639,9 +639,10 @@
         return td;
       }
 
-      /** Why a map's levels or share aren't known: its page isn't read, or MeowDB gives no
-       *  solo EXP/h for it. */
-      const notRead = "MapleCompass hasn't read this map's MeowDB page yet";
+      /** Why a map's figures aren't known: it isn't in the map list, or, for its levels
+       *  and share, no mobs spawn there. */
+      const notListed = "Not in the map list";
+      const noMobs = "No mobs spawn on this map";
 
       /** The star on the best of all maps: the Grind Tracker's. */
       function star() {
@@ -695,19 +696,19 @@
           region.textContent = ` · ${m.region}`;
           street.append(region);
         } else {
-          street.textContent = "Not in MeowDB's map list";
+          street.textContent = notListed;
         }
         mapCell.append(street);
         tr.append(mapCell);
 
         const region = cell(null, "text region-cell");
         if (known) region.textContent = m.region;
-        else missing(region, "Not in MeowDB's map list");
+        else missing(region, notListed);
         tr.append(region);
 
         const lv = cell("Mob levels");
         if (m.mobLevels) lv.textContent = levels(m.mobLevels);
-        else missing(lv, known ? notRead : "Not in MeowDB's map list");
+        else missing(lv, known ? noMobs : notListed);
         tr.append(lv);
 
         const exp = cell("Best EXP/h", "exp");
@@ -722,7 +723,7 @@
           of.textContent = `of ${whole(m.soloExpCeiling)}`;
           share.append(sharePercent(m.ceilingShareHundredths), of);
         } else {
-          missing(share, !known ? "Not in MeowDB's map list" : m.mobLevels ? "MeowDB gives no solo EXP/h for this map" : notRead);
+          missing(share, !known ? notListed : m.mobLevels ? "No solo EXP/h for this map" : noMobs);
         }
         tr.append(share);
 
