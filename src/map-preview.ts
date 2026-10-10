@@ -179,6 +179,8 @@ export function renderMapPreview(next: MapPreview | null, name: string): boolean
     return !!next;
   }
   if (url && image.getAttribute("src") !== url) {
+    // Another map: nothing on it is lit until the pointer moves onto it.
+    lit = null;
     drawnFor = "";
     image.hidden = true;
     image.src = url;
