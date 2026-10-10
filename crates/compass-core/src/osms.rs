@@ -246,9 +246,9 @@ fn map_data(
         Some(rate) if rate >= 0.0 && rate.is_finite() => (rate * 100.0).round() as u32,
         Some(rate) => return Err(format!("mob_rate {rate} isn't a rate")),
     };
-    let nearest_town = match map.return_map_id {
-        Some(DEAD_END) => None,
-        Some(town) => Some(map_id(town)?),
+    let nearest_town = match map.return_map_id.map(map_id).transpose()? {
+        Some(town) if town == portals::DEAD_END => None,
+        Some(town) => Some(town),
         None if map.is_town => Some(entry.id.clone()),
         None => None,
     };
@@ -343,15 +343,13 @@ fn parse<T: serde::de::DeserializeOwned>(text: &str, file: &str) -> Result<T, St
     serde_json::from_str(text).map_err(|e| format!("{file}: {e}"))
 }
 
-/// The dead end: where a portal that goes nowhere leads.
-const DEAD_END: u64 = 999_999_999;
-
 /// A map ID as MapleCompass writes it: 9 digits, zero padding kept.
 fn map_id(id: u64) -> Result<String, String> {
-    if id > 999_999_999 {
+    let padded = format!("{id:09}");
+    if padded.len() > 9 {
         return Err(format!("map ID {id} has more than 9 digits"));
     }
-    Ok(format!("{id:09}"))
+    Ok(padded)
 }
 
 /// `maps.json`.

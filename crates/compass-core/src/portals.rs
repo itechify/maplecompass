@@ -8,7 +8,8 @@ use crate::portal_overrides::PortalOverride;
 /// The street name of a Hidden Street.
 const HIDDEN_STREET: &str = "Hidden Street";
 
-/// The dead-end destination: a portal that goes nowhere (spawn points).
+/// The dead end: where a portal that goes nowhere leads (spawn points), and the nearest
+/// town of a map that has none.
 pub(crate) const DEAD_END: &str = "999999999";
 
 /// Portal types, the game's numbers as OSMS's files (and MeowDB's pages) give them.
