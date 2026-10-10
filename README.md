@@ -6,6 +6,10 @@ A helper overlay for MapleStory Classic World. It reads the minimap title by ord
 
 Its map and mob data come from the files [OSMS Data Explorer](https://osmsdataexplorer.com) publishes, and its links open [NiaMeowDB](https://meowdb.com)'s pages ([ADR 0008](docs/adr/0008-map-and-mob-data-from-osms-data-explorer.md)).
 
+## Install
+
+Download the latest Windows installer from [Releases](https://github.com/itechify/maplecompass/releases/latest). Each release says which file to pick. MapleCompass isn't made, endorsed or supported by NEXON, and using any third-party tool with MapleStory is at your own risk. Help & Setup's About & Credits credits the data, the recognition model and the typeface, and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) lists everything bundled.
+
 ## Layout
 
 - `crates/compass-core`: the headless core (no OS or UI dependencies). Title Region frames go in, a panel state comes out. It is the only test seam.

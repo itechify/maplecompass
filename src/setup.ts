@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { hotkeyAvailable, keyLabel, type Hotkeys } from "./hotkeys";
 import { LOADING_MAP_LIST, recognitionProblem, type Recognition } from "./recognition";
@@ -37,7 +38,11 @@ type SetupView = {
 };
 
 const STEPS = ["warning", "window", "requirements", "mark", "test", "exp", "expTest"] as const;
-type Step = (typeof STEPS)[number] | "guide";
+/** Pages opened from the window bar, outside the walk-through: back returns to the step left. */
+const ASIDES = ["guide", "about"] as const;
+type Aside = (typeof ASIDES)[number];
+type Step = (typeof STEPS)[number] | Aside;
+const isAside = (s: Step): s is Aside => (ASIDES as readonly Step[]).includes(s);
 
 const $ = (id: string) => document.getElementById(id)!;
 let step: Step = "warning";
@@ -49,20 +54,23 @@ let returnStep: Step = "window";
 let renderedRead = "";
 
 function show(next: Step) {
-  if (next === "guide" && step !== "guide") returnStep = step;
+  if (isAside(next) && !isAside(step)) returnStep = step;
   step = next;
   for (const section of document.querySelectorAll<HTMLElement>("[data-step]")) {
     section.hidden = section.dataset.step !== step;
   }
   // A re-setup skips the warning, so it has one step fewer.
   const steps = openedFor === "firstRun" ? STEPS : STEPS.slice(1);
-  $("progress").textContent = step === "guide" ? "Guide" : `Step ${steps.indexOf(step) + 1} of ${steps.length}`;
+  $("progress").textContent =
+    step === "guide" ? "Guide" : step === "about" ? "About & Credits" : `Step ${steps.indexOf(step) + 1} of ${steps.length}`;
+  // On its own page, its button would only repeat the bar's label (and wrap the bar).
+  $("about-open").hidden = step === "about";
   render();
   document.querySelector<HTMLElement>(`[data-step="${step}"] h2`)?.focus();
 }
 
 function move(by: number) {
-  if (step === "guide") return;
+  if (isAside(step)) return;
   // Back from the Grind Tracker after keeping the title goes to the title, not its test read.
   if (step === "exp" && by < 0 && !view?.setup.testRead) return show("mark");
   show(STEPS[Math.min(Math.max(STEPS.indexOf(step) + by, 0), STEPS.length - 1)]);
@@ -86,7 +94,8 @@ const NOTICES: Record<SetupReason, string> = {
 function render() {
   if (!view) return;
   const { setup, game, gameTitle, recognition } = view;
-  const notice = openedFor ? NOTICES[openedFor] : "";
+  // About & Credits is about the app, not this setup: no notice over it.
+  const notice = openedFor && step !== "about" ? NOTICES[openedFor] : "";
   $("notice").hidden = !notice;
   $("notice").textContent = notice;
   // A changed window size is a problem to fix; a requested re-setup is just information.
@@ -250,6 +259,9 @@ $("change-hotkeys").addEventListener("click", () => {
   invoke("open_hotkey_settings").catch(actionError);
 });
 $("guide-back").addEventListener("click", () => show(returnStep));
+$("about-open").addEventListener("click", () => show("about"));
+$("about-back").addEventListener("click", () => show(returnStep));
+getVersion().then((version) => ($("app-version").textContent = version));
 
 function actionError(error: unknown) {
   $("action-error").textContent = `Couldn't complete that action: ${String(error)}`;

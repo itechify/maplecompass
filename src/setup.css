@@ -309,6 +309,11 @@ button.secondary:disabled {
   font-size: 12px;
 }
 
+/* Guide, then About & Credits beside it, both at the bar's right. */
+.guide-button + .guide-button {
+  margin-left: 0;
+}
+
 /* A step's heading takes the focus when the step opens, for screen readers; it shows
    no ring for that. */
 h2:focus {
@@ -343,6 +348,22 @@ h3 {
 
 .shortcuts.compact {
   gap: 2px 12px;
+}
+
+/* About & Credits: what each credit is for, then who and on what terms. */
+.credits {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.credits dt {
+  font-weight: 700;
+}
+
+.credits dd {
+  margin: 2px 0 10px;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
 }
 
 /* The EXP figures read, as the EXP bar writes them. */

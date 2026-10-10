@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted. Since 0.7.0, the first public release, the model's attribution and licence are in Help & Setup's About & Credits and in THIRD-PARTY-NOTICES.md
 ---
 
 # One bundled title recogniser on every platform: ocrs

@@ -13,6 +13,7 @@
       <h1>MapleCompass Setup</h1>
       <span class="progress" id="progress"></span>
       <button class="secondary guide-button" id="guide-open">Guide</button>
+      <button class="secondary guide-button" id="about-open">About &amp; Credits</button>
     </header>
     <main>
       <p class="notice" id="notice" hidden></p>
@@ -150,6 +151,26 @@
         <footer>
           <button class="secondary" id="change-hotkeys">Change hotkeys</button>
           <button id="guide-back">Back to setup</button>
+        </footer>
+      </section>
+
+      <section data-step="about" hidden>
+        <h2 tabindex="-1">About &amp; Credits</h2>
+        <p>MapleCompass <span id="app-version"></span> is a free helper overlay for MapleStory Classic World. Its source and releases are at github.com/itechify/maplecompass. It isn't made, endorsed or supported by NEXON. Using any third-party tool with MapleStory is at your own risk.</p>
+        <dl class="credits">
+          <dt>Map and mob data, map pictures and mob animations</dt>
+          <dd>OSMS Data Explorer (osmsdataexplorer.com), mined from the game. The pictures and animations are NEXON's art.</dd>
+          <dt>Map, mob and item pages</dt>
+          <dd>NiaMeowDB (meowdb.com)</dd>
+          <dt>Title and item recognition</dt>
+          <dd>The text-recognition model of ocrs by Robert Knight (github.com/robertknight/ocrs), bundled unmodified under the Creative Commons Attribution-ShareAlike 4.0 licence (creativecommons.org/licenses/by-sa/4.0). Trained on HierText (CC BY-SA 4.0) and synthetic data. Provided as is, without warranties of any kind.</dd>
+          <dt>Typeface</dt>
+          <dd>Maplestory by NEXON. Copyright © 2017 NEXON-Maplestory, designed by FONTRIX Inc. "Maplestory" is a trademark of NEXON-Maplestory.</dd>
+          <dt>Open-source software</dt>
+          <dd>Built with Tauri, ocrs, rten and other open-source packages under their own licences. THIRD-PARTY-NOTICES.md in the repository lists them.</dd>
+        </dl>
+        <footer>
+          <button id="about-back">Back to setup</button>
         </footer>
       </section>
     </main>
