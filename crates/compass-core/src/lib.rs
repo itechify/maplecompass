@@ -17,6 +17,7 @@ mod map_index;
 mod matcher;
 pub mod meowdb;
 mod mob_card;
+pub mod osms;
 mod pace;
 mod panel;
 mod personal_best;
@@ -42,7 +43,7 @@ pub use hotkey_settings::{KeyPress, RebindProblem, SettingsNotice, SettingsView}
 pub use item_lookup::{ItemChoice, ItemHit, ItemLookup, ItemLookupLine, OurWindow};
 pub use item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReader, ItemTooltipReading};
 pub use map_data::{
-    HiddenPortal, LISTED_MOBS, MapData, MapDataStatus, MapSpot, MapSummary, Mob, MoreMobs, PerParty,
+    HiddenPortal, LISTED_MOBS, MapData, MapDataStatus, MapSummary, Mob, MoreMobs, PerParty,
     Portal, PortalKind,
 };
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
@@ -81,6 +82,7 @@ pub use recogniser::{TitleLines, TitleReader, TitleReading};
 use tracker::Tracker;
 use world::Here;
 use serde::{Deserialize, Serialize};
+use osms::MapSet;
 use std::collections::VecDeque;
 use std::task::Poll;
 
@@ -111,7 +113,7 @@ pub struct Rect {
 ///
 /// On the samples (1920x1200 client, default UI size) the title band is 66 px tall at
 /// client (0..4, 31). The region keeps ~15 px of slack above and below it, and is wide
-/// enough for the longest map name in MeowDB ("Physical Fitness Test <Normal Waiting
+/// enough for the longest map name MeowDB listed ("Physical Fitness Test <Normal Waiting
 /// Room>", ~470 px of panel). The core trims each frame where the panel ends, so a
 /// narrow minimap's surroundings are never read. Clamped to the client area.
 pub fn default_title_region(client_width: u32, client_height: u32) -> Rect {
@@ -122,41 +124,51 @@ pub fn default_title_region(client_width: u32, client_height: u32) -> Rect {
     Rect { x: 0, y, width: WIDTH.min(client_width), height: HEIGHT.min(client_height - y) }
 }
 
-/// The map the panel shows: a real map from the map index.
+/// The map the panel shows: a real map from the map list.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrentMap {
-    /// MeowDB's 9-digit map ID, zero padding kept.
+    /// The 9-digit map ID, zero padding kept.
     pub id: String,
     pub street_name: String,
     pub map_name: String,
-    /// The map's MeowDB page.
+    /// The map's MeowDB page, which the title and the open-page hotkey open.
     pub url: String,
 }
 
-/// The credit for everything MapleCompass shows from MeowDB (ADR 0003).
+/// The credit for what MapleCompass shows from MeowDB (ADR 0003): search's results, from
+/// the world crawl, and the Personal Bests page.
 pub const MEOWDB_CREDIT: &str = "NiaMeowDB (meowdb.com)";
+
+/// The panel's credit (ADR 0008): its data is OSMS Data Explorer's, and its title and
+/// mobs' names open NiaMeowDB's pages.
+pub const OSMS_CREDIT: &str = "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com)";
 
 /// The panel's credit when it lists mobs: their Mob Cards show images from maplestory.io
 /// (ADR 0006).
-pub const MEOWDB_AND_IMAGES_CREDIT: &str = "NiaMeowDB (meowdb.com) · images: maplestory.io";
+pub const OSMS_AND_IMAGES_CREDIT: &str =
+    "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com) · images: maplestory.io";
 
 /// Whether minimap titles can be recognised as real maps.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum Recognition {
-    /// The map index hasn't arrived yet (it is asked for at startup).
+    /// OSMS's file set hasn't arrived yet (it is asked for at startup).
     #[default]
     Starting,
     Ready,
-    /// MeowDB couldn't be reached, so titles are snapped to a copy of the map index
-    /// saved at `saved_at_unix_ms` (ms since the Unix epoch).
+    /// OSMS hasn't been reached for over 7 days, so titles are snapped to a copy of its
+    /// file set saved at `saved_at_unix_ms` (ms since the Unix epoch).
     SavedCopy {
         #[serde(rename = "savedAtUnixMs")]
         saved_at_unix_ms: u64,
     },
-    /// The map index couldn't be had, so readings can't be snapped to real maps.
+    /// OSMS couldn't be reached and no file set is saved, so readings can't be snapped to
+    /// real maps. The map list is asked for again every minute.
     Unavailable,
+    /// OSMS's file set doesn't read, and there is no earlier one to fall back on:
+    /// MapleCompass needs an update.
+    FormatChanged,
 }
 
 /// Everything the overlay renders.
@@ -174,11 +186,10 @@ pub struct PanelState {
     /// The maps sharing the shown map's title, when the core couldn't tell which of
     /// them the player is on; `None` when it could.
     pub candidates: Option<Candidates>,
-    /// The shown map's Map Summary, mobs and Hidden Portals from MeowDB, or why they
+    /// The shown map's Map Summary, mobs and Hidden Portals from OSMS's file set, or why they
     /// aren't there.
     pub data: MapDataStatus,
-    /// [`MEOWDB_CREDIT`] whenever a map is shown: its names and data are MeowDB's; with
-    /// Mob Cards, [`MEOWDB_AND_IMAGES_CREDIT`].
+    /// [`OSMS_CREDIT`] whenever a map is shown; with Mob Cards, [`OSMS_AND_IMAGES_CREDIT`].
     pub credit: Option<&'static str>,
     /// The Mob Card of each mob the panel lists, in its order; empty while it lists none.
     pub mob_cards: Vec<MobCard>,
@@ -306,9 +317,23 @@ pub enum PanelControl {
 /// The game window's title, unless the player picked another by hand.
 pub const GAME_WINDOW_TITLE: &str = "MapleStory";
 
-/// How long to wait before asking for the map index again after a failure. MeowDB is
-/// asked politely (ADR 0003): never on every frame.
-const INDEX_RETRY_MS: u64 = 60_000;
+/// How long a file set is used before OSMS is asked for it again (capture time): a day.
+const SET_RECHECK_MS: u64 = 24 * 60 * 60 * 1000;
+
+/// With no file set at all, how long to wait before asking again after OSMS couldn't be
+/// reached: never on every frame.
+const SET_RETRY_MS: u64 = 60_000;
+
+/// A file set saved longer ago than this (wall clock) is shown as a Saved Copy, with its
+/// date: game data changes only on patch days, so a younger one says nothing.
+const SAVED_COPY_AFTER_MS: u64 = 7 * 24 * 60 * 60 * 1000;
+
+/// OSMS's file set as read, and when it was saved if it is a saved copy (ms since the
+/// Unix epoch); `None` when it is fresh.
+struct HeldSet {
+    maps: MapSet,
+    saved_at_unix_ms: Option<u64>,
+}
 
 /// The world crawl's progress reaches the panel no more often than this (capture time),
 /// unless the crawl is done: each change re-renders the panel.
@@ -328,12 +353,20 @@ pub struct Compass {
     /// The Grind Tracker's window.
     grind_tracker: GrindTracker,
     source: Box<dyn MapDataSource + Send>,
+    /// Every map's data, once OSMS's file set has been read: the map list, and the
+    /// shown map's figures.
+    set: Option<HeldSet>,
+    /// When to ask for OSMS's file set next (capture time); 0 at startup.
+    ask_osms_at: u64,
+    /// The source is fetching OSMS's file set.
+    osms_in_flight: bool,
+    /// What the file set is read with: [`PORTAL_OVERRIDES`], but for tests of the list.
+    portal_overrides: Vec<PortalOverride>,
+    /// Built from the map list, once there is one.
     matcher: Option<Matcher>,
-    /// When asking for the map index last failed (frame time).
-    index_failed_at: Option<u64>,
     tracker: Tracker,
     shown_map: ShownMap,
-    /// The world crawl, from when the map index arrives.
+    /// The world crawl, from when the map list arrives.
     crawl: Option<Crawl>,
     /// What an earlier launch's crawl learned, for the crawl to start from.
     saved_world: SavedWorld,
@@ -368,7 +401,7 @@ pub struct Compass {
 }
 
 impl Compass {
-    /// A core using the given map data source and default settings. The map index is
+    /// A core using the given data source and default settings. OSMS's file set is
     /// asked for on the first tick or frame.
     pub fn new(source: impl MapDataSource + Send + 'static) -> Self {
         let mut compass = Self {
@@ -378,8 +411,11 @@ impl Compass {
             session: Session::default(),
             grind_tracker: GrindTracker::default(),
             source: Box::new(source),
+            set: None,
+            ask_osms_at: 0,
+            osms_in_flight: false,
+            portal_overrides: PORTAL_OVERRIDES.to_vec(),
             matcher: None,
-            index_failed_at: None,
             tracker: Tracker::default(),
             shown_map: ShownMap::default(),
             crawl: None,
@@ -404,6 +440,15 @@ impl Compass {
         compass
     }
 
+    /// The same core, reading OSMS's file set with these portal overrides in place of
+    /// [`PORTAL_OVERRIDES`]. Only for tests of the override list (integration tests can't
+    /// see test-only items); the app keeps the list it ships.
+    #[doc(hidden)]
+    pub fn with_portal_overrides(mut self, overrides: Vec<PortalOverride>) -> Self {
+        self.portal_overrides = overrides;
+        self
+    }
+
     /// Read a captured Title Region frame and update the panel state: the same as
     /// [`Compass::on_reading`] with what a [`TitleReader`] reads in the frame, here.
     pub fn on_frame(&mut self, frame: Frame) -> &PanelState {
@@ -414,9 +459,9 @@ impl Compass {
     /// Take what a Title Region frame read as (read by a [`TitleReader`], possibly on
     /// another thread) and update the panel state.
     pub fn on_reading(&mut self, reading: TitleReading) -> &PanelState {
-        self.load_map_index(reading.at_ms);
-        let Some(matcher) = &self.matcher else {
-            // Without the map index nothing can be recognised.
+        self.load_osms(reading.at_ms);
+        let (Some(matcher), Some(set)) = (&self.matcher, &self.set) else {
+            // Without the map list nothing can be recognised.
             self.setup.on_read(None);
             return self.sync_panel();
         };
@@ -425,7 +470,7 @@ impl Compass {
             // Names differing only in a numeral the reading doesn't make out: the
             // one within the player's reach, if just one is; otherwise not sure.
             Match::OneOf { maps, score } => {
-                let reach = self.shown_map.within_reach();
+                let reach = self.shown_map.within_reach(&set.maps);
                 let mut reachable = maps.into_iter().filter(|&i| {
                     matcher.same_title_as(i).into_iter().any(|j| reach.contains(&matcher.map(j).id))
                 });
@@ -452,7 +497,7 @@ impl Compass {
         let maps = titled.into_iter().map(current_map).collect();
         // Another title confirmed is another map: a new Visit. Losing the title, or choosing
         // among the maps sharing it, is not.
-        if self.shown_map.show(maps, &mut *self.source) {
+        if self.shown_map.show(maps, &set.maps) {
             self.session.arrive();
         }
         self.sync_shown_map();
@@ -487,7 +532,8 @@ impl Compass {
 
     fn sync_shown_map(&mut self) {
         let map = self.shown_map.map().cloned();
-        let data = self.shown_map.data();
+        let saved_copy_from = self.saved_copy_from();
+        let data = self.set.as_ref().map_or(MapDataStatus::NoMap, |set| self.shown_map.data(&set.maps, saved_copy_from));
         // Distances are measured from the map shown (with Candidates, the one shown),
         // and its page's exits count before the crawl gets to it.
         let moved = map.as_ref().map(|m| &m.id) != self.state.map.as_ref().map(|m| &m.id);
@@ -502,11 +548,11 @@ impl Compass {
         if moved || paged {
             self.sync_search();
         }
-        self.state.candidates = self.shown_map.candidates();
+        self.state.candidates = self.set.as_ref().and_then(|set| self.shown_map.candidates(&set.maps));
         let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
         self.mob_cards.list(listed);
         self.state.mob_cards = self.mob_cards.cards();
-        let credit = if self.state.mob_cards.is_empty() { MEOWDB_CREDIT } else { MEOWDB_AND_IMAGES_CREDIT };
+        let credit = if self.state.mob_cards.is_empty() { OSMS_CREDIT } else { OSMS_AND_IMAGES_CREDIT };
         self.state.credit = self.state.map.as_ref().map(|_| credit);
     }
 
@@ -555,7 +601,7 @@ impl Compass {
             Action::PanelResized { width } => self.panel.resized_to(width),
             Action::CyclePlacement => self.panel.cycle_placement(),
             Action::ChooseCandidate => {
-                self.shown_map.choose_next(&mut *self.source);
+                self.shown_map.choose_next();
                 self.sync_shown_map();
             }
             Action::MarkTitleRegion(marked) => self.setup.mark(marked),
@@ -793,7 +839,7 @@ impl Compass {
         None
     }
 
-    /// The Personal Bests page now: every map's best as saved, with what the map index and
+    /// The Personal Bests page now: every map's best as saved, with what the map list and
     /// the maps' pages (the shown map's own, else the crawl's) say of the map.
     fn bests_page(&self) -> BestsPage {
         let crawl = self.crawl.as_ref();
@@ -984,9 +1030,8 @@ impl Compass {
     /// waits for the network.
     pub fn tick(&mut self, at_ms: u64) -> &PanelState {
         self.session.tick(at_ms);
-        self.load_map_index(at_ms);
-        if self.matcher.is_some() {
-            self.shown_map.poll(&mut *self.source);
+        self.load_osms(at_ms);
+        if self.set.is_some() {
             self.sync_shown_map();
             // Once the shown map's page lists its mobs.
             self.mob_cards.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
@@ -1011,36 +1056,64 @@ impl Compass {
         self.sync_panel()
     }
 
-    /// Ask the source for the map index at startup (the first tick or frame) until it
-    /// answers, and after a failure, again no sooner than [`INDEX_RETRY_MS`] later.
-    fn load_map_index(&mut self, at_ms: u64) {
-        if self.matcher.is_some()
-            || self.index_failed_at.is_some_and(|t| at_ms.saturating_sub(t) < INDEX_RETRY_MS)
-        {
+    /// Ask the source for OSMS's file set at startup (the first tick or frame) and every
+    /// [`SET_RECHECK_MS`] after, and with no set at all, a minute after OSMS couldn't be
+    /// reached. A set that reads replaces the one held whole; one that doesn't, or an
+    /// answer that is none, leaves the one held as it is.
+    fn load_osms(&mut self, at_ms: u64) {
+        if !self.osms_in_flight && at_ms < self.ask_osms_at {
             return;
         }
-        let index = match self.source.map_index() {
-            Poll::Pending => return,
-            Poll::Ready(index) => index,
-        };
-        let index = match index {
-            Ok(Fetched::Fresh(index)) => {
-                self.state.recognition = Recognition::Ready;
-                index
-            }
-            Ok(Fetched::SavedCopy { data, saved_at_unix_ms }) => {
-                self.state.recognition = Recognition::SavedCopy { saved_at_unix_ms };
-                data
-            }
-            Err(_) => {
-                self.index_failed_at = Some(at_ms);
-                self.state.recognition = Recognition::Unavailable;
+        let answer = match self.source.osms_files() {
+            Poll::Pending => {
+                self.osms_in_flight = true;
                 return;
             }
+            Poll::Ready(answer) => answer,
         };
-        self.crawl = Some(Crawl::new(index.clone(), &self.saved_world));
-        self.matcher = Some(Matcher::new(index));
+        self.osms_in_flight = false;
+        self.ask_osms_at = at_ms + SET_RECHECK_MS;
+        let read = answer.and_then(|fetched| match fetched {
+            Fetched::Fresh(files) => osms::read_with(&files, &self.portal_overrides).map(|maps| (maps, None)),
+            Fetched::SavedCopy { data, saved_at_unix_ms } => {
+                osms::read_with(&data, &self.portal_overrides).map(|maps| (maps, Some(saved_at_unix_ms)))
+            }
+        });
+        match read {
+            Ok((maps, saved_at_unix_ms)) => self.take_set(maps, saved_at_unix_ms),
+            Err(_) if self.set.is_some() => {}
+            Err(SourceError::Unreachable(_)) => {
+                self.state.recognition = Recognition::Unavailable;
+                self.ask_osms_at = at_ms + SET_RETRY_MS;
+            }
+            Err(SourceError::FormatChanged(_)) => self.state.recognition = Recognition::FormatChanged,
+        }
+    }
+
+    /// Hold `maps`, a file set just read, in place of the one held. A new map list is
+    /// matched against from then on, and the map the player is on stays theirs; the crawl
+    /// starts over it, from what it knew.
+    fn take_set(&mut self, maps: MapSet, saved_at_unix_ms: Option<u64>) {
+        let entries = maps.entries();
+        if self.set.as_ref().is_none_or(|held| held.maps.entries() != entries) {
+            let matcher = Matcher::new(entries.clone());
+            if let Some(old) = &self.matcher {
+                self.tracker.remap(|at| matcher.index_of(&old.map(at).id));
+            }
+            let known = self.crawl.as_ref().map_or_else(|| self.saved_world.clone(), Crawl::saved);
+            self.crawl = Some(Crawl::new(entries, &known));
+            self.matcher = Some(matcher);
+        }
+        self.set = Some(HeldSet { maps, saved_at_unix_ms });
         self.sync_search();
+    }
+
+    /// When the file set held was saved, if it is a saved copy older than
+    /// [`SAVED_COPY_AFTER_MS`]: the panel says so, with its date.
+    fn saved_copy_from(&self) -> Option<u64> {
+        let saved_at = self.set.as_ref()?.saved_at_unix_ms?;
+        let now = self.wall_clock?;
+        (now.saturating_sub(saved_at) > SAVED_COPY_AFTER_MS).then_some(saved_at)
     }
 
     pub fn panel_state(&self) -> &PanelState {
@@ -1048,6 +1121,12 @@ impl Compass {
     }
 
     fn sync_panel(&mut self) -> &PanelState {
+        if self.set.is_some() {
+            self.state.recognition = match self.saved_copy_from() {
+                Some(saved_at_unix_ms) => Recognition::SavedCopy { saved_at_unix_ms },
+                None => Recognition::Ready,
+            };
+        }
         self.sync_setup();
         // Never over a captured region: the capture would read the panel.
         self.panel.avoid = [self.state.title_region, self.state.exp_bar_region].into_iter().flatten().collect();
@@ -1140,13 +1219,13 @@ fn searched<'a>(crawl: &'a Option<Crawl>, state: &'a PanelState, settings: &Sett
     }
 }
 
-/// The shown map, by MeowDB ID, if Personal Bests are kept there: only where the map is
+/// The shown map, by ID, if Personal Bests are kept there: only where the map is
 /// certain, and has a Map Summary (in a town, quest turn-ins would set one).
 fn bests_map(state: &PanelState) -> Option<&str> {
     certain_map(state).filter(|_| state.data.solo_exp_ceiling().is_some())
 }
 
-/// The shown map, by MeowDB ID, if the panel is certain the player is on it: no
+/// The shown map, by ID, if the panel is certain the player is on it: no
 /// Candidates waiting for a choice. One map has the title, the map the player came from
 /// settled it, or the player chose it. Maps that share a title but would show the same
 /// are certain too, as they show the same: the panel always shows the first of them, and

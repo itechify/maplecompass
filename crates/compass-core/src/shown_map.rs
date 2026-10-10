@@ -6,8 +6,8 @@
 //! holds until the title changes.
 
 use crate::CurrentMap;
-use crate::map_data::{MapData, MapDataLoader, MapDataStatus};
-use crate::map_index::MapDataSource;
+use crate::map_data::{MapData, MapDataStatus, for_panel};
+use crate::osms::MapSet;
 use serde::Serialize;
 
 /// Maps that share one Minimap Title and would show different content, with neither
@@ -16,7 +16,7 @@ use serde::Serialize;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Candidates {
-    /// In map index order.
+    /// In map list order.
     pub maps: Vec<Candidate>,
     /// Which of them the panel shows (an index into `maps`).
     pub shown: usize,
@@ -29,15 +29,14 @@ pub struct Candidates {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Candidate {
-    /// MeowDB's 9-digit map ID.
+    /// The map's 9-digit ID.
     pub id: String,
-    /// What sets it apart from the others; `None` until its MeowDB page is in (or if
-    /// it can't be had).
-    pub outline: Option<Outline>,
+    /// What sets it apart from the others.
+    pub outline: Outline,
 }
 
 /// A map at a glance: enough to tell apart maps that share a title.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Outline {
     /// The lowest and highest mob level; `None` on a map without mobs.
@@ -76,20 +75,16 @@ impl Outline {
 
 #[derive(Default)]
 pub(crate) struct ShownMap {
-    /// The maps with the confirmed title, in index order; empty before there is one.
+    /// The maps with the confirmed title, in map list order; empty before there is one.
     maps: Vec<CurrentMap>,
     settling: Settling,
-    loader: MapDataLoader,
 }
 
-/// How far the core got in settling which of the maps sharing the title to show.
+/// Whether the core settled which of the maps sharing the title to show.
 #[derive(Clone, Copy)]
 enum Settling {
     /// The core knows which map it is (`maps[i]`), or it doesn't matter.
     Settled(usize),
-    /// Getting the maps' data, one at a time, to see whether they show the same. The
-    /// first is shown meanwhile.
-    Comparing,
     /// They show different things and nothing settled which: the player may choose.
     Choosing { shown: usize, chosen: bool },
 }
@@ -101,54 +96,52 @@ impl Default for Settling {
 }
 
 impl ShownMap {
-    /// The title confirmed on the latest frame belongs to `maps` (none: no title yet).
-    /// Asks the source for whatever data is needed and not yet had. Whether it is
-    /// another title than before: the player arrived on another map, a new Visit.
-    pub fn show(&mut self, maps: Vec<CurrentMap>, source: &mut dyn MapDataSource) -> bool {
+    /// The title confirmed on the latest frame belongs to `maps` (none: no title yet),
+    /// whose data is in `set`. Whether it is another title than before: the player
+    /// arrived on another map, a new Visit.
+    pub fn show(&mut self, maps: Vec<CurrentMap>, set: &MapSet) -> bool {
         let arrived = maps != self.maps;
         if arrived {
-            let came_from = self.connected_maps();
-            self.loader.forget();
+            let came_from = self.connected_maps(set);
             // The map the player came from settles it when it leads to just one of
-            // them, with no need to compare them.
+            // them; otherwise it doesn't matter if they all show the same.
             let mut connected = maps.iter().enumerate().filter(|(_, m)| came_from.contains(&m.id));
             self.settling = match (maps.len(), connected.next(), connected.next()) {
                 (0 | 1, _, _) => Settling::Settled(0),
                 (_, Some((i, _)), None) => Settling::Settled(i),
-                _ => Settling::Comparing,
+                _ if all_show_the_same(&maps, set) => Settling::Settled(0),
+                _ => Settling::Choosing { shown: 0, chosen: false },
             };
             self.maps = maps;
         }
-        self.poll(source);
         arrived
     }
 
-    /// The maps the shown map leads to, if the core is sure it's the player's and has
-    /// its data; otherwise none.
-    fn connected_maps(&self) -> Vec<String> {
+    /// The maps the shown map leads to, if the core is sure it's the player's;
+    /// otherwise none.
+    fn connected_maps(&self, set: &MapSet) -> Vec<String> {
         let sure = match self.settling {
             Settling::Settled(_) | Settling::Choosing { chosen: true, .. } => true,
-            Settling::Choosing { chosen: false, .. } | Settling::Comparing => false,
+            Settling::Choosing { chosen: false, .. } => false,
         };
-        match (sure, self.data().data()) {
+        match (sure, self.map().and_then(|m| set.data(&m.id))) {
             (true, Some(data)) => data.connected_maps.clone(),
             _ => Vec::new(),
         }
     }
 
     /// The maps the player could be on now, going by the map shown: that map, and
-    /// those it leads to (when the core is sure it's the player's and has its data).
-    pub fn within_reach(&self) -> Vec<String> {
-        let mut maps = self.connected_maps();
+    /// those it leads to (when the core is sure it's the player's).
+    pub fn within_reach(&self, set: &MapSet) -> Vec<String> {
+        let mut maps = self.connected_maps(set);
         maps.extend(self.map().map(|m| m.id.clone()));
         maps
     }
 
     /// Show the next of the maps sharing the title, if the player may choose.
-    pub fn choose_next(&mut self, source: &mut dyn MapDataSource) {
+    pub fn choose_next(&mut self) {
         if let Settling::Choosing { shown, .. } = self.settling {
             self.settling = Settling::Choosing { shown: (shown + 1) % self.maps.len(), chosen: true };
-            self.poll(source);
         }
     }
 
@@ -156,25 +149,24 @@ impl ShownMap {
         self.maps.get(self.shown())
     }
 
-    /// The shown map's data. While the maps sharing its title are being compared, it
-    /// is loading: it may yet turn out to be one of several.
-    pub fn data(&self) -> MapDataStatus {
-        match (self.map(), self.settling) {
-            (None, _) => MapDataStatus::NoMap,
-            (Some(_), Settling::Comparing) => MapDataStatus::Loading,
-            (Some(map), _) => self.loader.status(&map.id).cloned().unwrap_or(MapDataStatus::Loading),
+    /// The shown map's data from `set`, as the panel shows it: a Saved Copy, saved at
+    /// `saved_copy_from`, when the set is one the panel must say is old.
+    pub fn data(&self, set: &MapSet, saved_copy_from: Option<u64>) -> MapDataStatus {
+        let Some(data) = self.map().and_then(|m| set.data(&m.id)) else { return MapDataStatus::NoMap };
+        let data = for_panel(data.clone());
+        match saved_copy_from {
+            Some(saved_at_unix_ms) => MapDataStatus::SavedCopy { saved_at_unix_ms, data },
+            None => MapDataStatus::Ready(data),
         }
     }
 
-    pub fn candidates(&self) -> Option<Candidates> {
+    pub fn candidates(&self, set: &MapSet) -> Option<Candidates> {
         let Settling::Choosing { shown, chosen } = self.settling else { return None };
+        let outline = |id: &str| set.data(id).map(|data| Outline::of(&for_panel(data.clone())));
         let maps = self
             .maps
             .iter()
-            .map(|m| Candidate {
-                id: m.id.clone(),
-                outline: self.loader.status(&m.id).and_then(MapDataStatus::data).map(Outline::of),
-            })
+            .map(|m| Candidate { id: m.id.clone(), outline: outline(&m.id).unwrap_or_default() })
             .collect();
         Some(Candidates { maps, shown, chosen })
     }
@@ -182,52 +174,16 @@ impl ShownMap {
     fn shown(&self) -> usize {
         match self.settling {
             Settling::Settled(i) | Settling::Choosing { shown: i, .. } => i,
-            Settling::Comparing => 0,
         }
     }
+}
 
-    /// Check on the data asked for, and ask for whatever is needed next.
-    pub fn poll(&mut self, source: &mut dyn MapDataSource) {
-        match self.settling {
-            Settling::Settled(i) => {
-                if let Some(map) = self.maps.get(i) {
-                    self.loader.load(&map.id, source);
-                }
-            }
-            Settling::Comparing => self.compare(source),
-            Settling::Choosing { shown, .. } => {
-                // The shown map first, then the rest for their outlines (the shell
-                // fetches one page at a time).
-                let order = std::iter::once(shown).chain(0..self.maps.len());
-                for i in order {
-                    if *self.loader.load(&self.maps[i].id, source) == MapDataStatus::Loading {
-                        return;
-                    }
-                }
-            }
-        }
-    }
-
-    /// Ask for the maps' data in turn, one answer before the next question (the shell
-    /// fetches one page at a time), and stop at the first map that shows something
-    /// different from the first: then the player must choose.
-    fn compare(&mut self, source: &mut dyn MapDataSource) {
-        for map in &self.maps {
-            if *self.loader.load(&map.id, source) == MapDataStatus::Loading {
-                return;
-            }
-            let data = |id: &str| self.loader.status(id).and_then(MapDataStatus::data);
-            let same = match (data(&self.maps[0].id), data(&map.id)) {
-                (Some(first), Some(this)) => first.shows_same_as(this),
-                _ => false,
-            };
-            if !same {
-                self.settling = Settling::Choosing { shown: 0, chosen: false };
-                // Go on to the other maps' data, for their outlines.
-                self.poll(source);
-                return;
-            }
-        }
-        self.settling = Settling::Settled(0);
-    }
+/// Whether every one of `maps` would show the same as the first.
+fn all_show_the_same(maps: &[CurrentMap], set: &MapSet) -> bool {
+    let data = |m: &CurrentMap| set.data(&m.id).map(|data| for_panel(data.clone()));
+    let first = maps.first().and_then(data);
+    maps.iter().all(|m| match (&first, data(m)) {
+        (Some(first), Some(this)) => first.shows_same_as(&this),
+        _ => false,
+    })
 }

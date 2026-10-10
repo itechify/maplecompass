@@ -2,7 +2,7 @@
 //! window, capture its default Title Region a few times, and print what the recogniser
 //! read (the street line and map line, before they are snapped to a map) and what the
 //! core shows. It only reads window geometry and screen pixels (ADR 0001), and fetches
-//! MeowDB's map index once (cached for a day, ADR 0003).
+//! OSMS Data Explorer's file set once (saved for a day, ADR 0008).
 //!
 //! `cargo run -p maplecompass --example probe [reads] [save.png]`
 //! With a path, the last captured Title Region is saved there for inspection; as a
@@ -23,8 +23,13 @@
 //! the client area (physical px) and the name is lower case with anything but letters
 //! and digits as `-`. Nothing is read or fetched: it only finds the game window, reads
 //! the pointer position and copies screen pixels.
+//!
+//! `cargo run -p maplecompass --example probe osms`
+//! OSMS mode: fetch OSMS Data Explorer's live file set (whatever is saved) and read it in
+//! full with the core's reader, reporting what it holds, or what didn't read. Run it by
+//! hand when OSMS changes and before a release. No game window is needed.
 
-use compass_core::{Compass, GAME_WINDOW_TITLE, Rect, TitleReader};
+use compass_core::{Compass, GAME_WINDOW_TITLE, PortalKind, Rect, TitleReader};
 use maplecompass_lib::{capture, capture_title_frame, gamewin, meowdb::MeowDbSource};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -38,6 +43,13 @@ fn main() {
             eprintln!("{e}");
             eprintln!("usage: probe record <out-dir> <name>=<x>,<y>,<w>,<h>@<hz> ... [--seconds <n>]");
             std::process::exit(2);
+        }
+        return;
+    }
+    if args.first().map(String::as_str) == Some("osms") {
+        if let Err(e) = osms() {
+            eprintln!("{e}");
+            std::process::exit(1);
         }
         return;
     }
@@ -87,6 +99,53 @@ fn main() {
         img.save(&path).expect("save png");
         println!("saved {path}");
     }
+}
+
+/// Fetch OSMS's live set, read it in full, and report its counts.
+fn osms() -> Result<(), String> {
+    let files = maplecompass_lib::osms::fetch_live()?;
+    let sizes = [&files.maps, &files.portals, &files.monsters, &files.map_manifest, &files.lookups];
+    for (name, text) in compass_core::osms::OsmsFiles::NAMES.iter().zip(sizes) {
+        println!("{name:>18}: {} KB", text.len() / 1024);
+    }
+    let listed = serde_json::from_str::<serde_json::Value>(&files.maps).ok().and_then(|maps| maps["total"].as_u64());
+    let set = compass_core::osms::read(&files).map_err(|e| format!("OSMS's set doesn't read: {e}"))?;
+    let maps: Vec<_> = set.maps().collect();
+    let mut regions: Vec<(&str, usize)> = Vec::new();
+    for (entry, _) in &maps {
+        match regions.iter_mut().find(|(region, _)| *region == entry.region) {
+            Some((_, n)) => *n += 1,
+            None => regions.push((&entry.region, 1)),
+        }
+    }
+    let portals = || maps.iter().flat_map(|(_, data)| &data.portals);
+    let kinds = |kind: PortalKind| portals().filter(|p| p.kind == kind).count();
+    let hidden: Vec<_> = maps.iter().flat_map(|(_, data)| &data.hidden_portals).collect();
+    let mut mobs: Vec<&str> = maps.iter().flat_map(|(_, data)| data.mobs.iter().map(|m| m.id.as_str())).collect();
+    mobs.sort_unstable();
+    mobs.dedup();
+    println!("Read in full.");
+    println!(
+        "Maps: {} in the map list (of {} OSMS lists; a map with no name or street is left out)",
+        maps.len(),
+        listed.map_or("?".into(), |n| n.to_string())
+    );
+    for (region, n) in regions {
+        println!("  {region}: {n}");
+    }
+    println!("  with mobs and a Map Summary: {}", maps.iter().filter(|(_, data)| data.summary.is_some()).count());
+    println!("  with a nearest town: {}", maps.iter().filter(|(_, data)| data.nearest_town.is_some()).count());
+    println!(
+        "Portals to other maps: {} ({} visible, {} Doors, {} hidden, {} Quest)",
+        portals().count(),
+        kinds(PortalKind::Visible),
+        kinds(PortalKind::Door),
+        kinds(PortalKind::Hidden),
+        kinds(PortalKind::Quest)
+    );
+    println!("Hidden Portal rows: {} (to a Hidden Street: {})", hidden.len(), hidden.iter().filter(|p| p.to_hidden_street).count());
+    println!("Mobs spawning: {}", mobs.len());
+    Ok(())
 }
 
 /// `<out-dir> "<item name>" [--desc <tag>] [--delay <seconds>]`

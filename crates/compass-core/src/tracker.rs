@@ -8,7 +8,7 @@ const READS_TO_SWITCH: u32 = 2;
 
 #[derive(Default)]
 pub struct Tracker {
-    /// Index (into the map index) of the last map we were confident about.
+    /// Index (into the map list) of the last map we were confident about.
     current: Option<usize>,
     /// A different map read confidently on the latest frames, and how many in a row.
     pending: Option<(usize, u32)>,
@@ -44,6 +44,13 @@ impl Tracker {
         }
         self.pending = Some((snap.index, reads));
         self.unconfirmed()
+    }
+
+    /// The map list changed: each map known by its index in the old list, by its index
+    /// in the new one (`None`: no longer listed).
+    pub fn remap(&mut self, index: impl Fn(usize) -> Option<usize>) {
+        self.current = self.current.and_then(&index);
+        self.pending = self.pending.and_then(|(at, reads)| Some((index(at)?, reads)));
     }
 
     fn unconfirmed(&self) -> Tracked {

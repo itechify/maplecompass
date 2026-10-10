@@ -29,7 +29,7 @@ type SetupView = {
   unavailableHotkeys: string[];
   /** Those of them that don't name a key combination; the rest another app has. */
   invalidHotkeys: string[];
-  recognition: { status: "starting" | "ready" | "savedCopy" | "unavailable" };
+  recognition: { status: "starting" | "ready" | "savedCopy" | "unavailable" | "formatChanged" };
   game: { width: number; height: number } | null;
   gameTitle: string;
   hotkeys: Hotkeys;
@@ -125,11 +125,15 @@ function render() {
       title.append(street, map);
       box.replaceChildren(title, tag("Recognised"));
     } else if (recognition.status === "starting") {
-      box.textContent = "Loading MeowDB's map list…";
+      box.textContent = "Loading the map list from OSMS Data Explorer…";
     } else if (recognition.status === "unavailable") {
       kind = "problem";
       box.textContent =
-        "Couldn't load MeowDB's map list, so no map can be recognised yet. Check your connection; MapleCompass tries again every minute.";
+        "Couldn't load the map list from OSMS Data Explorer, so no map can be recognised yet. Check your connection; MapleCompass tries again every minute.";
+    } else if (recognition.status === "formatChanged") {
+      kind = "problem";
+      box.textContent =
+        "OSMS Data Explorer's data has changed format, so no map can be recognised. MapleCompass needs an update to read it.";
     } else {
       kind = "problem";
       box.textContent =
@@ -138,7 +142,7 @@ function render() {
     box.className = `test-read ${kind}`;
   }
   ($("title-next") as HTMLButtonElement).disabled = read?.status !== "recognised";
-  $("test-credit").textContent = setup.credit ? `Map names from ${setup.credit}` : "";
+  $("test-credit").textContent = setup.credit ?? "";
 
   // The Grind Tracker: kept from before, it can be marked again, kept as it is or turned off.
   const kept = setup.expBarKept;

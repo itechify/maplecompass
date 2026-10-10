@@ -1,34 +1,33 @@
-//! One map's hunting information from MeowDB, and the panel's progress getting it.
+//! One map's hunting information, and how the panel shows it.
 
-use crate::map_index::{Fetched, MapDataSource, SourceError};
 use crate::shown_map::LevelRange;
 use serde::{Deserialize, Serialize};
-use std::task::Poll;
 
-/// One map's data, as the map data source reads it from the map's MeowDB page.
+/// One map's data, as read from OSMS's file set (or, for the world crawl until #57, from
+/// the map's MeowDB page).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MapData {
-    /// `None` on a map without mobs, such as a town: MeowDB has no summary for it.
+    /// `None` on a map without mobs, such as a town.
     pub summary: Option<MapSummary>,
     /// In the panel, sorted by level (then name); from a source, in any order.
     pub mobs: Vec<Mob>,
-    /// The exits the player can't see, in MeowDB's order. Empty when there are none.
+    /// The exits the player can't see, in the source's order. Empty when there are none.
     pub hidden_portals: Vec<HiddenPortal>,
     /// The IDs of the maps its portals lead to. They tell apart maps sharing a title
     /// (the one the player came from is connected to the right one); not rendered.
     #[serde(skip_serializing)]
     pub connected_maps: Vec<String>,
-    /// Every portal to another map (not to the map itself or MeowDB's dead end), with
-    /// its kind, in MeowDB's order: the map's edges in the world's portal graph. Not
+    /// Every portal to another map (not to the map itself or the dead end), with its
+    /// kind, in the source's order: the map's edges in the world's portal graph. Not
     /// rendered.
     #[serde(skip_serializing)]
     pub portals: Vec<Portal>,
     /// The map's Mob Rate in hundredths: 150 is a 1.5x respawn rate.
     #[serde(skip_serializing)]
     pub mob_rate_percent: u32,
-    /// The map's nearest town (MeowDB's `returnMap`), where a nearest-town Teleport
-    /// Scroll goes; a town's is itself. `None` when MeowDB gives the dead end. Not
+    /// The map's nearest town, where a nearest-town Teleport Scroll goes; a town's is
+    /// itself. `None` when there is none. Not
     /// rendered.
     #[serde(skip_serializing)]
     pub nearest_town: Option<String>,
@@ -54,7 +53,7 @@ pub struct MoreMobs {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Portal {
-    /// MeowDB's name for the portal on its map (e.g. `"in00"`).
+    /// The portal's name on its map (e.g. `"in00"`).
     pub name: String,
     pub to_map_id: String,
     pub kind: PortalKind,
@@ -78,7 +77,7 @@ pub enum PortalKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HiddenPortal {
-    /// MeowDB's name for the portal on its map (e.g. `"in00"`); with the map ID, what
+    /// The portal's name on its map (e.g. `"in00"`); with the map ID, what
     /// the portal override list is keyed by.
     pub name: String,
     pub to_map_id: String,
@@ -88,27 +87,10 @@ pub struct HiddenPortal {
     pub to_hidden_street: bool,
     /// A Quest Portal: it only works while the player meets a quest condition.
     pub quest: bool,
-    /// Roughly where the portal is on the map, in words: "far right, lower", or
-    /// "position unknown" when MeowDB has no minimap bounds for the map.
-    pub position: String,
-    /// The same spot as a cell of the minimap, for the panel to draw; `None` when the
-    /// position is unknown.
-    pub spot: Option<MapSpot>,
 }
 
-/// A cell of the minimap cut into 5 columns and 3 rows, counted from its top-left: the
-/// grid [`HiddenPortal::position`] names in words.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MapSpot {
-    /// 0 (far left) to 4 (far right).
-    pub column: u8,
-    /// 0 (upper) to 2 (lower).
-    pub row: u8,
-}
-
-/// The Map Summary: MeowDB's ceiling figures (every mob killed as soon as it spawns),
-/// with the map's mob rate not applied, as MeowDB gives them.
+/// The Map Summary: the ceiling figures (every mob killed as soon as it spawns), worked
+/// out as MeowDB works them out, with the map's mob rate not applied.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MapSummary {
@@ -117,8 +99,8 @@ pub struct MapSummary {
     pub exp_per_hour: PerParty,
 }
 
-/// A figure for a player alone on the map, and for a party of 6 or more. MeowDB gives
-/// only these two; sizes in between are not derived.
+/// A figure for a player alone on the map, and for a party of 6 or more: MeowDB's two;
+/// sizes in between are not derived.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PerParty {
@@ -130,7 +112,7 @@ pub struct PerParty {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Mob {
-    /// MeowDB's ID for the mob (e.g. `"3"`, Blue Snail): the same mob on every map.
+    /// The mob's ID (e.g. `"3"`, Blue Snail), MeowDB's and OSMS's: the same mob on every map.
     pub id: String,
     pub name: String,
     pub level: u32,
@@ -142,30 +124,23 @@ pub struct Mob {
     pub spawn_share_percent: u32,
 }
 
-/// The shown map's MeowDB data, or why there is none (yet).
+/// The shown map's data, from OSMS's file set.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum MapDataStatus {
     /// No map is shown.
     #[default]
     NoMap,
-    /// The map's page is being fetched.
-    Loading,
     Ready(MapData),
-    /// MeowDB couldn't be reached, but a copy of the map's page saved at
-    /// `saved_at_unix_ms` (ms since the Unix epoch) could: its figures, to be shown as
-    /// such.
+    /// From a copy of the file set saved at `saved_at_unix_ms` (ms since the Unix epoch),
+    /// over 7 days ago, because OSMS couldn't be reached since: its figures, to be shown
+    /// as such.
     SavedCopy {
         #[serde(rename = "savedAtUnixMs")]
         saved_at_unix_ms: u64,
         #[serde(flatten)]
         data: MapData,
     },
-    /// MeowDB couldn't be reached, and there is no saved copy.
-    Unavailable,
-    /// MeowDB's page no longer looks the way the reader expects. Nothing from it is
-    /// shown, rather than partial or wrong numbers.
-    FormatChanged,
 }
 
 impl MapDataStatus {
@@ -186,17 +161,19 @@ impl MapDataStatus {
 
 impl MapData {
     /// Whether the panel would show the same for both maps: the same Map Summary, mobs
-    /// and Hidden Portals. (Mobs sorted as the panel sorts them.)
+    /// and Hidden Portals, those by destination and kind. (Mobs sorted as the panel sorts
+    /// them.)
     pub(crate) fn shows_same_as(&self, other: &MapData) -> bool {
-        self.summary == other.summary
-            && self.mobs == other.mobs
-            && self.hidden_portals == other.hidden_portals
+        let portals = |data: &MapData| -> Vec<(String, bool)> {
+            data.hidden_portals.iter().map(|p| (p.to_map_id.clone(), p.quest)).collect()
+        };
+        self.summary == other.summary && self.mobs == other.mobs && portals(self) == portals(other)
     }
 }
 
 /// A source's data as the panel shows it: mobs sorted by level (then name), and the
 /// ones it lists picked out.
-fn for_panel(mut data: MapData) -> MapData {
+pub(crate) fn for_panel(mut data: MapData) -> MapData {
     data.mobs.sort_by(|a, b| a.level.cmp(&b.level).then_with(|| a.name.cmp(&b.name)));
     // The most common mobs, ties going to the lower level, as they come in `mobs`.
     let mut by_share: Vec<usize> = (0..data.mobs.len()).collect();
@@ -214,49 +191,4 @@ fn for_panel(mut data: MapData) -> MapData {
     };
     data.listed_mobs = shown.into_iter().map(|(_, mob)| mob.clone()).collect();
     data
-}
-
-/// Asks the source for maps' data, each only when the core needs it (ADR 0003: never
-/// ahead of time), and keeps the answers until told to forget them.
-#[derive(Default)]
-pub(crate) struct MapDataLoader {
-    /// Each map asked about, and how asking went.
-    statuses: Vec<(String, MapDataStatus)>,
-}
-
-impl MapDataLoader {
-    /// Map `id`'s data: asked for if it's new, checked on if a request is still in
-    /// flight, and otherwise what came back.
-    pub fn load(&mut self, id: &str, source: &mut dyn MapDataSource) -> &MapDataStatus {
-        let at = match self.statuses.iter().position(|(asked, _)| asked == id) {
-            Some(at) => at,
-            None => {
-                self.statuses.push((id.to_string(), MapDataStatus::Loading));
-                self.statuses.len() - 1
-            }
-        };
-        let status = &mut self.statuses[at].1;
-        if *status == MapDataStatus::Loading {
-            *status = match source.map_data(id) {
-                Poll::Pending => MapDataStatus::Loading,
-                Poll::Ready(Ok(Fetched::Fresh(data))) => MapDataStatus::Ready(for_panel(data)),
-                Poll::Ready(Ok(Fetched::SavedCopy { data, saved_at_unix_ms })) => {
-                    MapDataStatus::SavedCopy { saved_at_unix_ms, data: for_panel(data) }
-                }
-                Poll::Ready(Err(SourceError::Unreachable(_))) => MapDataStatus::Unavailable,
-                Poll::Ready(Err(SourceError::FormatChanged(_))) => MapDataStatus::FormatChanged,
-            };
-        }
-        status
-    }
-
-    /// Map `id`'s data as last loaded, if it was asked for.
-    pub fn status(&self, id: &str) -> Option<&MapDataStatus> {
-        self.statuses.iter().find(|(asked, _)| asked == id).map(|(_, status)| status)
-    }
-
-    /// Forget every answer, so a map is asked about afresh.
-    pub fn forget(&mut self) {
-        self.statuses.clear();
-    }
 }

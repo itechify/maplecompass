@@ -56,12 +56,7 @@ type HiddenPortal = {
   toStreetName: string;
   toHiddenStreet: boolean;
   quest: boolean;
-  position: string;
-  spot: MapSpot | null;
 };
-
-/** Mirror of `compass_core::MapSpot`: a cell of the minimap's 5x3 grid. */
-type MapSpot = { column: number; row: number };
 
 /** Mirror of `compass_core::LevelRange`. */
 type LevelRange = { lowest: number; highest: number };
@@ -81,7 +76,7 @@ type Section = "hiddenPortals" | "mobs";
 
 /** Mirror of `compass_core::MapDataStatus`. */
 type MapDataStatus =
-  | { status: "noMap" | "loading" | "unavailable" | "formatChanged" }
+  | { status: "noMap" }
   | ({ status: "ready" } & MapData)
   | ({ status: "savedCopy"; savedAtUnixMs: number } & MapData);
 
@@ -108,7 +103,7 @@ type MobCard = { id: string; url: string; image: string | null } & (
 
 /** Mirror of `compass_core::Recognition`. */
 type Recognition =
-  | { status: "starting" | "ready" | "unavailable" }
+  | { status: "starting" | "ready" | "unavailable" | "formatChanged" }
   | { status: "savedCopy"; savedAtUnixMs: number };
 
 /** Mirror of `compass_core::Outline`. */
@@ -120,7 +115,7 @@ type Outline = {
 
 /** Mirror of `compass_core::Candidates`. */
 type Candidates = {
-  maps: { id: string; outline: Outline | null }[];
+  maps: { id: string; outline: Outline }[];
   shown: number;
   chosen: boolean;
 };
@@ -297,73 +292,23 @@ function span(className: string, text: string): HTMLSpanElement {
   return el;
 }
 
-const SVG = "http://www.w3.org/2000/svg";
-
-function svg<K extends keyof SVGElementTagNameMap>(
-  tag: K,
-  attributes: Record<string, string | number>,
-): SVGElementTagNameMap[K] {
-  const el = document.createElementNS(SVG, tag);
-  for (const [name, value] of Object.entries(attributes)) el.setAttribute(name, String(value));
-  return el;
-}
-
-/** The minimap's 5x3 grid in miniature, with the game's portal ring in the portal's cell. */
-const CELL = 9;
-function miniMap(spot: MapSpot | null): SVGSVGElement {
-  const [width, height] = [5 * CELL, 3 * CELL];
-  const el = svg("svg", { class: "minimap", viewBox: `-1 -1 ${width + 2} ${height + 2}` });
-  el.setAttribute("aria-hidden", "true");
-  el.classList.toggle("unknown", !spot);
-  // Field, lit cell, grid, then the frame over them, so no edge cell covers its border.
-  el.append(svg("rect", { class: "field", x: 0, y: 0, width, height, rx: 1.5 }));
-  if (spot) {
-    el.append(
-      svg("rect", { class: "cell", x: spot.column * CELL, y: spot.row * CELL, width: CELL, height: CELL }),
-    );
-  }
-  for (let c = 1; c < 5; c++) {
-    el.append(svg("line", { class: "grid", x1: c * CELL, y1: 0, x2: c * CELL, y2: height }));
-  }
-  for (let r = 1; r < 3; r++) {
-    el.append(svg("line", { class: "grid", x1: 0, y1: r * CELL, x2: width, y2: r * CELL }));
-  }
-  el.append(svg("rect", { class: "frame", x: 0, y: 0, width, height, rx: 1.5 }));
-  if (spot) {
-    const [cx, cy] = [(spot.column + 0.5) * CELL, (spot.row + 0.5) * CELL];
-    el.append(
-      svg("circle", { class: "ring", cx, cy, r: 3.3 }),
-      svg("circle", { class: "core", cx, cy, r: 1.5 }),
-    );
-  }
-  return el;
-}
-
-/** A tiny minimap, then "Northern Top of Construction Site [Hidden Street]" over "Right, upper". */
+/** "Northern Top of Construction Site [Hidden Street]": where it leads, and its tags. */
 function portalRow(portal: HiddenPortal): HTMLLIElement {
   const row = document.createElement("li");
-  const text = document.createElement("div");
   const to = document.createElement("div");
   to.className = "dest";
   to.append(span("to", portal.toMapName));
   if (portal.toHiddenStreet) to.append(span("tag", "Hidden Street"));
   if (portal.quest) to.append(span("tag quest", "Quest"));
-  text.append(to, span("where", portal.position));
-  row.append(miniMap(portal.spot), text);
+  row.append(to);
   return row;
 }
 
 /** Keep player-recognizable clues ahead of the secondary map ID. */
-function candidateRow(id: string, outline: Outline | null): HTMLLIElement {
+function candidateRow(id: string, outline: Outline): HTMLLIElement {
   const row = document.createElement("li");
   const facts = document.createElement("div");
   facts.className = "candidate-facts";
-  if (!outline) {
-    row.append(span("candidate-mobs", "Comparison data unavailable"));
-    facts.append(span("candidate-id", `Map ${id}`));
-    row.append(facts);
-    return row;
-  }
   const { mobLevels, firstMobs, hiddenPortals } = outline;
   row.append(span("candidate-mobs", firstMobs.length ? firstMobs.join(", ") : "No mobs"));
   if (mobLevels) {
@@ -382,23 +327,13 @@ function candidateRow(id: string, outline: Outline | null): HTMLLIElement {
 /** "7 Oct 2026", in the player's time zone. */
 const savedOn = (unixMs: number) => dayText(new Date(unixMs), true);
 
-/** The note shown in place of (or above) the map's data. */
-function dataNote(data: MapDataStatus, recognition: Recognition, sourceHint: string): string {
+/** The note shown above the map's data: only that it comes from a saved copy over a week old. */
+function dataNote(data: MapDataStatus): string {
   // A map without mobs says so in its Mobs section, not here.
   switch (data.status) {
-    case "loading":
-      return "Loading MeowDB data…";
-    case "unavailable":
-      return `Couldn't reach MeowDB. Check your connection, then restart MapleCompass to retry.${sourceHint}`;
-    case "formatChanged":
-      return `MeowDB's page format has changed. MapleCompass needs an update to read it.${sourceHint}`;
     case "savedCopy":
-      return `MeowDB unreachable — showing a saved copy from ${savedOn(data.savedAtUnixMs)}`;
+      return `OSMS Data Explorer unreachable — showing a saved copy from ${savedOn(data.savedAtUnixMs)}`;
     case "ready":
-      if (recognition.status === "savedCopy") {
-        return `MeowDB unreachable — map list from a saved copy from ${savedOn(recognition.savedAtUnixMs)}`;
-      }
-      return "";
     case "noMap":
       return "";
   }
@@ -436,12 +371,9 @@ function renderData(panel: PanelState) {
     );
   }
 
-  const sourceAvailable = hotkeyAvailable(panel.hotkeys.openMeowdbPage, panel.unavailableHotkeys);
-  const sourceHint = sourceAvailable ? ` ${keyLabel(panel.hotkeys.openMeowdbPage)} opens the source page.` : "";
-  note.textContent = dataNote(data, panel.recognition, sourceHint);
+  note.textContent = dataNote(data);
   note.hidden = note.textContent === "";
-  const problem = ["unavailable", "formatChanged", "savedCopy"].includes(data.status);
-  note.classList.toggle("problem", problem || panel.recognition.status === "savedCopy");
+  note.classList.toggle("problem", data.status === "savedCopy");
 
   const ready = data.status === "ready" || data.status === "savedCopy" ? data : null;
 
@@ -837,7 +769,7 @@ function renderMobs(search: SearchState) {
   } else {
     query.removeAttribute("aria-activedescendant");
   }
-  noMatch.textContent = search.crawl.total === 0 ? "Loading MeowDB's map list…" : "No known mob has that in its name.";
+  noMatch.textContent = search.crawl.total === 0 ? "Loading the map list…" : "No known mob has that in its name.";
   noMatch.hidden = listed || search.query.trim() === "";
 }
 
@@ -1084,7 +1016,7 @@ function renderIcon(panel: PanelState) {
   iconAlert.hidden = !(
     panel.notSure ||
     (panel.candidates && !panel.candidates.chosen) ||
-    ["unavailable", "formatChanged", "savedCopy"].includes(panel.data.status) ||
+    panel.data.status === "savedCopy" ||
     panel.setup.needed === "firstRun" ||
     panel.setup.needed === "resolutionChanged" ||
     panel.expTracking.state === "unreadable"
@@ -1125,7 +1057,12 @@ function render(panel: PanelState) {
     problem = panel.setup.needed === "resolutionChanged";
   } else if (recognition.status === "unavailable") {
     map.textContent = "Map recognition unavailable";
-    recovery.textContent = "Couldn't load the map list from MeowDB. Check your connection. The map list retries every minute.";
+    recovery.textContent =
+      "Couldn't load the map list from OSMS Data Explorer. Check your connection. The map list retries every minute.";
+    problem = true;
+  } else if (recognition.status === "formatChanged") {
+    map.textContent = "Map recognition unavailable";
+    recovery.textContent = "OSMS Data Explorer's data has changed format. MapleCompass needs an update to read it.";
     problem = true;
   } else if (current) {
     street.textContent = current.streetName;
@@ -1136,7 +1073,7 @@ function render(panel: PanelState) {
   } else {
     map.textContent = "Reading the minimap title…";
     recovery.textContent = recognition.status === "starting"
-      ? "Loading MeowDB's map list…"
+      ? "Loading the map list from OSMS Data Explorer…"
       : `Keep the minimap open with both title lines visible. If this persists, ${setupHint.charAt(0).toLowerCase() + setupHint.slice(1)}`;
   }
   recovery.hidden = recovery.textContent === "";

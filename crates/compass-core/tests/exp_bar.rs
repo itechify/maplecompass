@@ -67,7 +67,7 @@ fn read(exp: u64, percent_hundredths: u32) -> Option<ExpBarTestRead> {
 
 /// A core set up on the Kerning City sample with the title only (EXP skipped).
 fn set_up_without_exp() -> Compass {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     mark_title(&mut compass, KERNING);
     compass.act(Action::FinishSetup);
     compass
@@ -75,7 +75,7 @@ fn set_up_without_exp() -> Compass {
 
 /// A core set up on the Kerning City sample with the title and the EXP bar.
 fn set_up_with_exp() -> Compass {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     mark_title(&mut compass, KERNING);
     mark_and_test_read_exp(&mut compass, KERNING);
     compass.act(Action::FinishSetup);
@@ -85,7 +85,7 @@ fn set_up_with_exp() -> Compass {
 /// What the shell does on restart: save the settings as JSON, load them into a new core.
 fn restart(compass: &Compass) -> Compass {
     let json = serde_json::to_string(&compass.settings()).unwrap();
-    let mut restarted = Compass::new(FakeSource::meowdb());
+    let mut restarted = Compass::new(FakeSource::osms());
     restarted.restore(serde_json::from_str(&json).unwrap());
     restarted
 }
@@ -104,7 +104,7 @@ fn setup_finished_without_marking_the_exp_bar_leaves_tracking_off() {
 
 #[test]
 fn marking_the_exp_bar_starts_a_test_read_there_keeping_the_marked_corner_and_height() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     mark_title(&mut compass, KERNING);
 
     let state = compass.act(Action::MarkExpBarRegion(exp_mark(KERNING)));
@@ -125,7 +125,7 @@ fn the_test_read_shows_the_exp_and_percentage_on_every_window_sample() {
         ("victoria-road__construction-site-north-of-kerning-city--window", 266, 633),
         ("hidden-street__northern-top-of-construction-site--window", 335, 798),
     ] {
-        let mut compass = Compass::new(FakeSource::meowdb());
+        let mut compass = Compass::new(FakeSource::osms());
         mark_title(&mut compass, sample);
 
         assert_eq!(mark_and_test_read_exp(&mut compass, sample), read(exp, hundredths), "{sample}");
@@ -141,7 +141,7 @@ fn tight_and_loose_marks_read_the_same_figures() {
         Rect { x: 1056, y: h - 48, width: 100, height: 20 },
         Rect { x: 1000, y: h - 60, width: 230, height: 45 },
     ] {
-        let mut compass = Compass::new(FakeSource::meowdb());
+        let mut compass = Compass::new(FakeSource::osms());
         mark_title(&mut compass, KERNING);
         compass.act(Action::MarkExpBarRegion(mark));
         let frame = exp_frame(&compass, KERNING, 0);
@@ -155,7 +155,7 @@ fn tight_and_loose_marks_read_the_same_figures() {
 /// Live captures come out uniformly darker than the samples (`prep.rs`: ~0.935x).
 #[test]
 fn a_dimmer_capture_still_reads() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     mark_title(&mut compass, KERNING);
     compass.act(Action::MarkExpBarRegion(exp_mark(KERNING)));
     let mut frame = exp_frame(&compass, KERNING, 0);
@@ -172,7 +172,7 @@ fn a_dimmer_capture_still_reads() {
 
 #[test]
 fn a_mark_that_misses_the_figures_fails_its_test_read_and_setup_cannot_finish_with_it() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     mark_title(&mut compass, KERNING);
     // Around the minimap's map name instead.
     compass.act(Action::MarkExpBarRegion(Rect { x: 70, y: 60, width: 150, height: 26 }));
@@ -187,7 +187,7 @@ fn a_mark_that_misses_the_figures_fails_its_test_read_and_setup_cannot_finish_wi
 
 #[test]
 fn discarding_a_failed_mark_lets_setup_finish_with_tracking_off() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     mark_title(&mut compass, KERNING);
     compass.act(Action::MarkExpBarRegion(exp_mark(KERNING)));
     compass.on_exp_bar_frame(common::black_frame(0));
@@ -202,7 +202,7 @@ fn discarding_a_failed_mark_lets_setup_finish_with_tracking_off() {
 
 #[test]
 fn finishing_setup_keeps_the_exp_bar_and_the_panel_shows_its_live_reading() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     mark_title(&mut compass, KERNING);
     mark_and_test_read_exp(&mut compass, KERNING);
     let marked = compass.panel_state().exp_bar_region;
@@ -335,7 +335,7 @@ fn cancelling_setup_drops_an_exp_bar_mark_and_keeps_the_saved_one() {
 /// the figures usually are, until one has been marked), and Enter test-reads it.
 #[test]
 fn the_exp_bar_can_be_marked_with_the_keyboard_from_where_the_figures_usually_are() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     mark_title(&mut compass, KERNING);
 
     let state = compass.act(Action::BeginSelection(MarkTarget::ExpBar)).clone();
@@ -359,7 +359,7 @@ fn the_exp_bar_can_be_marked_with_the_keyboard_from_where_the_figures_usually_ar
 /// give way to the Ctrl+Shift defaults (version 4).
 #[test]
 fn version_2_settings_load_with_tracking_off() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     compass.restore(
         serde_json::from_str(
             r#"{

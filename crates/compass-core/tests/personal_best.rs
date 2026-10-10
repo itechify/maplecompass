@@ -7,11 +7,8 @@
 mod common;
 
 use common::player::Player;
-use common::{CONSTRUCTION_SITE_ID, FakeSource, SUNSET_SKY_ID, saved_map_page, sharing_a_title, tracking, tracking_with};
+use common::{CONSTRUCTION_SITE_ID, SUNSET_SKY_ID, sharing_a_title, tracking, tracking_with};
 use compass_core::{ExpBar, ExpBarReading, PanelControl, PanelState, TrackingState, VisitBest};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::task::Poll;
 
 const S: u64 = 1000;
 const MIN: u64 = 60 * S;
@@ -193,68 +190,18 @@ fn the_best_row_holds_all_visit_and_a_best_set_in_it_shows_from_the_next() {
     assert_eq!((rolling(&five), starred(&five)), (Some(9000), false));
 }
 
-/// MeowDB's saved index and pages, but Sunset Sky's page is held back until `page_in`
-/// lets it through.
-fn sunset_sky_held_back(page_in: &Arc<AtomicBool>) -> FakeSource {
-    let page_in = page_in.clone();
-    FakeSource::meowdb().with_pages(move |id| {
-        if id == SUNSET_SKY_ID && !page_in.load(Ordering::SeqCst) { Poll::Pending } else { Poll::Ready(saved_map_page(id)) }
-    })
-}
-
 #[test]
 fn nothing_is_recorded_on_a_map_without_a_map_summary() {
-    let page_in = Arc::new(AtomicBool::new(false));
-    let mut player = Player::new(tracking_with(sunset_sky_held_back(&page_in)));
+    let mut player = Player::new(tracking());
 
     // A town has none: no best there, however long the play.
     player.arrive(KERNING);
     assert_eq!(best_row(&player.hunt(6 * MIN, 30)), None);
     assert!(player.compass.bests().maps.is_empty());
 
-    // Nor is there one while the map's page hasn't come.
-    let sunset = player.arrive(SUNSET);
-    assert_eq!(sunset.data.solo_exp_ceiling(), None);
-    player.hunt(6 * MIN, 30);
-    assert!(player.compass.bests().maps.is_empty());
-
-    // Back with its page in, nothing came of the Visit before: a first Visit, its best
-    // from 5 minutes there.
-    player.arrive(CONSTRUCTION_SITE);
-    page_in.store(true, Ordering::SeqCst);
-    player.hunt(MIN, 10);
-    let back = player.arrive(SUNSET);
-    assert_eq!(back.data.solo_exp_ceiling(), Some(223_928));
-    assert_eq!(best_row(&back), None);
+    // Sunset Sky has one: its best from 5 minutes there.
+    player.arrive(SUNSET);
     player.hunt(5 * MIN, 10);
-    assert_eq!(saved_rates(&player, SUNSET_SKY_ID), [3600]);
-}
-
-#[test]
-fn the_five_minutes_count_from_arriving_even_when_the_maps_page_comes_later() {
-    let page_in = Arc::new(AtomicBool::new(false));
-    let mut player = Player::new(tracking_with(sunset_sky_held_back(&page_in)));
-    // 10,800 EXP/h on the Construction Site for 6 minutes, then on to Sunset Sky, whose
-    // page hasn't come.
-    player.arrive(CONSTRUCTION_SITE);
-    player.hunt(6 * MIN, 30);
-    assert_eq!(player.arrive(SUNSET).data.solo_exp_ceiling(), None);
-
-    // 3,600 EXP/h there, the bar read all along; the page comes 2 minutes in.
-    player.hunt(2 * MIN, 10);
-    page_in.store(true, Ordering::SeqCst);
-    let paged = player.compass.tick(player.at).clone();
-    assert_eq!(paged.data.solo_exp_ceiling(), Some(223_928));
-    assert_eq!(saved_rates(&player, SUNSET_SKY_ID), [] as [u64; 0]);
-
-    // Under 5 minutes from arriving, the Rolling Rate still counts some of the
-    // Construction Site's play: nothing yet.
-    player.hunt(2 * MIN + 30 * S, 10);
-    assert_eq!(saved_rates(&player, SUNSET_SKY_ID), [] as [u64; 0]);
-
-    // 5 minutes from arriving, though only 3 from the page: Sunset Sky's first best.
-    let five = player.hunt(30 * S, 10);
-    assert_eq!(rolling(&five), Some(3600));
     assert_eq!(saved_rates(&player, SUNSET_SKY_ID), [3600]);
 }
 
@@ -317,18 +264,13 @@ fn the_best_row_shows_only_once_the_player_has_chosen_among_candidates() {
 
 #[test]
 fn nothing_is_recorded_while_the_exp_bar_cannot_be_read() {
-    let page_in = Arc::new(AtomicBool::new(false));
-    let mut player = Player::new(tracking_with(sunset_sky_held_back(&page_in)));
+    let mut player = Player::new(tracking());
     player.arrive(SUNSET);
-    player.hunt(6 * MIN, 30);
+    player.hunt(4 * MIN, 30);
 
-    // The bar goes unread, and Sunset Sky's page comes meanwhile: the figures are measured
-    // afresh for its Map Summary, but nothing is known of the EXP.
-    let unreadable = player.unread(30 * S);
+    // The bar goes unread past 5 minutes on the map: nothing is known of the EXP.
+    let unreadable = player.unread(2 * MIN);
     assert_eq!(unreadable.exp_tracking.state, TrackingState::Unreadable);
-    page_in.store(true, Ordering::SeqCst);
-    let paged = player.compass.tick(player.at).clone();
-    assert_eq!(paged.data.solo_exp_ceiling(), Some(223_928));
 
     // Off to the Construction Site before it reads again, then back: nothing came of the
     // Visit.
