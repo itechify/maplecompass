@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted, amended by ADR-0008 (its search is MapleCompass's only MeowDB request, and no longer bars a public release)
 ---
 
 # Item Lookup on a hotkey through MeowDB's search
@@ -30,4 +30,8 @@ What a lookup comes to (looking up, opened, why nothing opened, or the items to 
 - The search endpoint isn't documented. If its answer changes shape, Item Lookup says it is unavailable, as a map page in a changed format does. It never guesses.
 - The browser opens after a network round trip on a cache miss, not at the instant of the key press.
 - This is the first reader of text over a translucent background (ADR 0005 turned the Pickup Log down for that reason). The name is bold white on the tooltip's dark fill, which holds up where the Pickup Log's thin fading lines don't. `samples/item-tooltip` keeps every frame the reader must get right, and a frame it ever reads wrong becomes one.
-- The rest of ADR 0003 stands: one request per player's press, an honest user agent, the credit to NiaMeowDB, and no public release without MeowDB's written permission.
+- The rest of ADR 0003 stands: one request per player's press, an honest user agent, the credit to NiaMeowDB, and no public release without MeowDB's written permission (lifted by ADR 0008, below).
+
+## Since ADR 0008
+
+Maps and mobs now come from OSMS Data Explorer's files (ADR 0008), so this search is MapleCompass's only remaining request to MeowDB. With no crawl left to keep MeowDB's pace of one request every 2 seconds, a lookup now keeps it itself: its search waits until 2 seconds after the last one that went over the network. An answer from the cache still comes at once. The letter of MeowDB's terms (§4, "automated scripts, bots, or scrapers") arguably covers the search, while its Content Reuse Policy, aimed at bulk scraping and republishing, doesn't. We take it as a grey area to raise with MeowDB, not a bar to a public release.
