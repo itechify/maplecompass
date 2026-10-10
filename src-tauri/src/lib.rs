@@ -853,7 +853,7 @@ impl OverlayWindow {
     fn show(&mut self, state: &PanelState) {
         // On top of everything while it shows: its watcher alone changes that, so a
         // state the core has already moved on from never puts it back over another app.
-        self.shows_on_top.store(state.layer == Layer::AboveGame, Ordering::Relaxed);
+        self.shows_on_top.store(state.layer == Layer::OnTop, Ordering::Relaxed);
         let layer_changed = self.layer != Some(state.layer);
         self.layer = Some(state.layer);
         // Detached, it can be found in the taskbar.

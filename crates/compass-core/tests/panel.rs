@@ -360,7 +360,7 @@ fn with_the_game_or_maplecompass_back_in_front_the_overlay_shows_again_where_it_
         compass.on_foreground(Foreground::OtherApp);
         let state = compass.on_foreground(foreground);
 
-        assert_eq!(state.layer, Layer::AboveGame, "{foreground:?}");
+        assert_eq!(state.layer, Layer::OnTop, "{foreground:?}");
         assert!(state.draggable, "{foreground:?}");
         assert_eq!(state.placement, shown.placement, "{foreground:?}");
     }
@@ -387,18 +387,18 @@ fn until_the_shell_says_what_is_in_front_the_overlay_shows_with_the_game() {
 
     let state = compass.on_game_window(game(GAME));
 
-    assert_eq!(state.layer, Layer::AboveGame, "no hidden flash at launch");
+    assert_eq!(state.layer, Layer::OnTop, "no hidden flash at launch");
 }
 
 #[test]
-fn inside_or_docked_the_overlay_sits_above_the_game_and_disappears_without_it() {
+fn inside_or_docked_the_overlay_shows_on_top_with_the_game_and_disappears_without_it() {
     let mut compass = compass();
     let state = compass.on_game_window(game(GAME));
     assert!(state.game_found);
-    assert_eq!(state.layer, Layer::AboveGame);
+    assert_eq!(state.layer, Layer::OnTop);
 
     compass.act(Action::CyclePlacement);
-    assert_eq!(compass.panel_state().layer, Layer::AboveGame);
+    assert_eq!(compass.panel_state().layer, Layer::OnTop);
 
     // Minimised or closed: the shell reports no game window.
     let state = compass.on_game_window(None);
@@ -407,12 +407,12 @@ fn inside_or_docked_the_overlay_sits_above_the_game_and_disappears_without_it() 
 }
 
 #[test]
-fn a_detached_panel_also_sits_above_the_game_and_disappears_without_it() {
+fn a_detached_panel_also_shows_on_top_with_the_game_and_disappears_without_it() {
     let mut compass = compass();
     compass.on_game_window(game(GAME));
     detach(&mut compass);
     let state = compass.panel_state().clone();
-    assert_eq!(state.layer, Layer::AboveGame);
+    assert_eq!(state.layer, Layer::OnTop);
     assert!(state.draggable);
 
     let state = compass.on_game_window(None);
@@ -422,7 +422,7 @@ fn a_detached_panel_also_sits_above_the_game_and_disappears_without_it() {
 
     // It comes back where it was with the game.
     let state = compass.on_game_window(game(GAME));
-    assert_eq!(state.layer, Layer::AboveGame);
+    assert_eq!(state.layer, Layer::OnTop);
     assert_eq!(state.placement, Some(rect(471, 110, 340, 72)));
 }
 
