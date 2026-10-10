@@ -7,7 +7,7 @@
 
 use crate::CurrentMap;
 use crate::map_data::{MapData, MapDataStatus, for_panel};
-use crate::map_preview::MapPreview;
+use crate::map_preview::{MapPreview, Pictures, picture_path};
 use crate::osms::MapSet;
 use serde::Serialize;
 
@@ -164,14 +164,17 @@ impl ShownMap {
         }
     }
 
-    /// The shown map's Map Preview, from `set`: `None` when it has no picture, and
-    /// unless it's settled which map the player is on (each has its own layout).
-    pub fn preview(&self, set: &MapSet) -> Option<MapPreview> {
+    /// The shown map's Map Preview, from `set`, its picture as `pictures` has it: `None`
+    /// when it has no picture, and unless it's settled which map the player is on (each
+    /// has its own layout).
+    pub fn preview(&self, set: &MapSet, pictures: &Pictures) -> Option<MapPreview> {
         if !matches!(self.settling, Settling::Settled(_) | Settling::Choosing { chosen: true, .. }) {
             return None;
         }
         let data = set.data(&self.map()?.id)?;
-        Some(MapPreview { picture: data.picture.clone()?, marks: data.marks.clone() })
+        let picture = data.picture.clone()?;
+        let image = pictures.image(&picture_path(&picture));
+        Some(MapPreview { picture, image, marks: data.marks.clone() })
     }
 
     pub fn candidates(&self, set: &MapSet) -> Option<Candidates> {

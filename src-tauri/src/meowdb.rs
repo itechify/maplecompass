@@ -1,5 +1,5 @@
-//! The shell's data source: OSMS Data Explorer's file set (ADR 0008, in [`crate::osms`]),
-//! and MeowDB's pages and search (ADR 0003), fetched over HTTPS with an honest user agent
+//! The shell's data source: OSMS Data Explorer's file set and pictures (ADR 0008, in
+//! [`crate::osms`] and [`crate::pictures`]), and MeowDB's pages and search (ADR 0003), fetched over HTTPS with an honest user agent
 //! and kept in a disk cache. Reading them is left to the core.
 //!
 //! The core's world crawl (ADR 0004, until #57) keeps what it learns itself (saved
@@ -25,6 +25,7 @@
 //! are read on the caller's thread.
 
 use crate::osms::OsmsSet;
+use crate::pictures::Pictures;
 use compass_core::osms::OsmsFiles;
 use compass_core::{Fetched, ItemHit, MapData, MapDataSource, MobDetails, SourceError, meowdb};
 use std::path::{Path, PathBuf};
@@ -66,6 +67,8 @@ pub struct MeowDbSource {
     cache_dir: PathBuf,
     /// OSMS's file set.
     osms: OsmsSet,
+    /// OSMS's pictures.
+    pictures: Pictures,
     /// The world crawl's page being fetched in the background, and where its data will
     /// arrive.
     crawl_page_in_flight: Option<(String, Receiver<Answer<MapData>>)>,
@@ -83,6 +86,7 @@ impl MeowDbSource {
         let client = client()?;
         Ok(Self {
             osms: OsmsSet::new(client.clone(), &cache_dir),
+            pictures: Pictures::new(client.clone(), &cache_dir),
             client,
             cache_dir,
             crawl_page_in_flight: None,
@@ -185,6 +189,10 @@ impl MapDataSource for MeowDbSource {
         });
         self.mob_image_in_flight = Some((id.to_string(), rx));
         Poll::Pending
+    }
+
+    fn picture(&mut self, path: &str) -> Poll<Result<String, SourceError>> {
+        self.pictures.poll(path)
     }
 
     fn item_search(&mut self, name: &str) -> Poll<Answer<Vec<ItemHit>>> {

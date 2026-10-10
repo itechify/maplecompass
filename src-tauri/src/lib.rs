@@ -17,6 +17,7 @@ mod hotkeys;
 mod item_lookup;
 pub mod meowdb;
 pub mod osms;
+mod pictures;
 mod search;
 mod settings;
 mod setup;
@@ -177,6 +178,11 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
+        // OSMS's map pictures, from our saved copies of them.
+        .register_uri_scheme_protocol(pictures::SCHEME, |ctx, request| match cache_dir(ctx.app_handle()) {
+            Ok(dir) => pictures::serve(&dir, &request),
+            Err(_) => tauri::http::Response::builder().status(500).body(Vec::new()).unwrap_or_default(),
+        })
         // The Mob Cards' images, from our saved copies of maplestory.io's.
         .register_uri_scheme_protocol(meowdb::MOB_IMAGE_SCHEME, |ctx, request| match cache_dir(ctx.app_handle()) {
             Ok(dir) => meowdb::serve_mob_image(&dir, &request),
@@ -192,8 +198,8 @@ pub fn run() {
             // tauri.conf.json is WS_EX_NOACTIVATE), so the game keeps the keyboard.
             overlay.set_ignore_cursor_events(true)?;
 
-            // MeowDB pages are cached on disk (ADR 0003), and maplestory.io's mob images
-            // (ADR 0006).
+            // OSMS's file set and pictures are saved on disk (ADR 0008), MeowDB pages cached
+            // (ADR 0003), and maplestory.io's mob images (ADR 0006).
             let cache = cache_dir(app.handle())?;
             let source = MeowDbSource::new(cache.clone())?;
             let mut compass = Compass::new(source);

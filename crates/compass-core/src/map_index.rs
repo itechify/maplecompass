@@ -62,9 +62,9 @@ pub enum Fetched<T> {
     SavedCopy { data: T, saved_at_unix_ms: u64 },
 }
 
-/// Where the core gets OSMS's file set, MeowDB's pages and search, and maplestory.io's
-/// mob images. The shell supplies one that fetches over HTTP with a disk cache; tests
-/// supply fakes.
+/// Where the core gets OSMS's file set and pictures, MeowDB's pages and search, and
+/// maplestory.io's mob images. The shell supplies one that fetches over HTTP with a disk
+/// cache; tests supply fakes.
 ///
 /// Every ask may take a while over the network, and the core never waits for
 /// them: on the first call start the fetch and answer [`Poll::Pending`]; the core asks
@@ -97,6 +97,15 @@ pub trait MapDataSource {
     /// apart from it, since it comes from another site. A cached image up to 30 days old
     /// may be used as it is. [`SourceError::FormatChanged`] when maplestory.io has none.
     fn mob_image(&mut self, id: &str) -> Poll<Result<String, SourceError>>;
+
+    /// Where the overlay can load one of OSMS's pictures from (ADR 0008): a map's picture
+    /// or a mob's animation, by its path under OSMS's data (`maps/<hash>.webp`, below
+    /// `https://osmsdataexplorer.com/data/`). Pictures are named by content hash, so a copy
+    /// on disk never goes stale: answer at once with one, and fetch one that isn't there,
+    /// one at a time. The answer is a URL in MapleCompass's own scheme that serves the copy.
+    /// [`SourceError::Unreachable`] when it can't be fetched, and
+    /// [`SourceError::FormatChanged`] when OSMS has no such picture.
+    fn picture(&mut self, path: &str) -> Poll<Result<String, SourceError>>;
 
     /// The items MeowDB's search ([`crate::meowdb::ITEM_SEARCH_URL`]) gives for `name`, an
     /// item's name as read from an Item Tooltip, closest first (ADR 0007): the core asks

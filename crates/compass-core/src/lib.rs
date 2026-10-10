@@ -48,7 +48,7 @@ pub use map_data::{
     Portal, PortalKind,
 };
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
-pub use map_preview::{Landing, Leads, MapPreview, PortalMark};
+pub use map_preview::{Landing, Leads, MapPreview, PortalMark, PreviewImage};
 pub use mob_card::{DamageRange, Elements, HpPerExp, MobCard, MobDetails, MobPage};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 pub use panel::{
@@ -75,6 +75,7 @@ use item_lookup::ItemLookups;
 use search::{MobSearch, Searched};
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
+use map_preview::Pictures;
 use mob_card::MobCards;
 use pace::Pace;
 use panel::Panel;
@@ -384,6 +385,8 @@ pub struct Compass {
     wall_clock: Option<u64>,
     /// The listed mobs' pages and images, for their Mob Cards.
     mob_cards: MobCards,
+    /// The Map Preview's pictures, asked for and kept.
+    pictures: Pictures,
     /// MeowDB's pace, kept by the crawl and the Mob Cards' pages together.
     meowdb_pace: Pace,
     /// What the player typed, highlighted and picked in mob search.
@@ -430,6 +433,7 @@ impl Compass {
             progress_shown_at: None,
             wall_clock: None,
             mob_cards: MobCards::default(),
+            pictures: Pictures::default(),
             meowdb_pace: Pace::default(),
             search: MobSearch::default(),
             hotkey_settings: HotkeySettings::default(),
@@ -555,7 +559,7 @@ impl Compass {
             self.sync_search();
         }
         self.state.candidates = self.set.as_ref().and_then(|set| self.shown_map.candidates(&set.maps));
-        self.state.map_preview = self.set.as_ref().and_then(|set| self.shown_map.preview(&set.maps));
+        self.state.map_preview = self.set.as_ref().and_then(|set| self.shown_map.preview(&set.maps, &self.pictures));
         let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
         self.mob_cards.list(listed);
         self.state.mob_cards = self.mob_cards.cards();
@@ -1033,6 +1037,12 @@ impl Compass {
             self.sync_shown_map();
             // Once the shown map's page lists its mobs.
             self.mob_cards.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
+            // The picture of the Map Preview showing, if one is.
+            let wanted = self.state.map_preview.as_ref().map(|preview| map_preview::picture_path(&preview.picture));
+            self.pictures.poll(&mut *self.source, wanted.as_deref(), at_ms);
+            if let (Some(preview), Some(path)) = (&mut self.state.map_preview, wanted) {
+                preview.image = self.pictures.image(&path);
+            }
             self.state.mob_cards = self.mob_cards.cards();
         }
         // An Item Lookup's search, which the player waits on, before the crawl.

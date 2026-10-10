@@ -4,12 +4,18 @@
 //! not in the data), what kind of portal it is by the Hidden Portal rule, the destination's
 //! name and street, its Hidden Portal row if it has one, and for a teleport within the map
 //! where it lands. Served from made-up worlds in OSMS's shape.
+//!
+//! The picture itself is asked of the source by its path under OSMS's data while the
+//! preview shows, and kept for the run.
 
 mod common;
 
 use common::osms::{self, CONSTRUCTION_SITE, DEAD_END, KERNING_CITY, NORTHERN_TOP, SUNSET_SKY, map};
 use common::{FakeSource, arrive, fresh_files};
-use compass_core::{Compass, Landing, Leads, MapDataStatus, MapPreview, PanelState, PortalKind, PortalMark, TitleLines, TitleReading};
+use compass_core::{
+    Compass, Landing, Leads, MapDataStatus, MapPreview, PanelState, PortalKind, PortalMark, PreviewImage, SourceError,
+    TitleLines, TitleReading,
+};
 
 /// A made-up map whose portals the tests give, on a street of its own.
 const FIELD: u64 = 100_000_000;
@@ -225,4 +231,96 @@ fn no_map_preview_shows_before_a_map_is() {
     let state = compass.tick(0);
 
     assert_eq!(state.map_preview, None);
+}
+
+/// The panel on Kerning City, from `source`, at 0 ms.
+fn in_kerning_city(source: FakeSource) -> (Compass, PanelState) {
+    let mut compass = Compass::new(source);
+    let state = arrive(&mut compass, "victoria-road__kerning-city--window", 0);
+    (compass, state)
+}
+
+fn image(state: &PanelState) -> &PreviewImage {
+    &preview(state).image
+}
+
+/// The picture is asked for by its path under OSMS's data; the overlay loads it from where
+/// the source says it is.
+#[test]
+fn the_shown_maps_picture_is_asked_for_by_its_path_and_loads_from_where_the_source_says() {
+    let source = FakeSource::osms().pictures_taking(1);
+    let requests = source.picture_requests.clone();
+    let (mut compass, state) = in_kerning_city(source);
+    assert_eq!(*image(&state), PreviewImage::Loading);
+
+    let state = compass.tick(400).clone();
+    assert_eq!(*image(&state), PreviewImage::Loading);
+    let state = compass.tick(500).clone();
+
+    assert_eq!(*image(&state), PreviewImage::Ready { url: "picture:maps/picture010003000.webp".into() });
+    assert_eq!(*requests.lock().unwrap(), ["maps/picture010003000.webp"]);
+}
+
+#[test]
+fn a_picture_that_cant_be_had_is_unavailable() {
+    for error in [SourceError::Unreachable("offline".into()), SourceError::FormatChanged("404".into())] {
+        let source = FakeSource::osms().with_pictures(move |_| Err(error.clone()));
+        let (mut compass, _) = in_kerning_city(source);
+
+        let state = compass.tick(400);
+
+        assert_eq!(*image(state), PreviewImage::Unavailable);
+    }
+}
+
+/// OSMS couldn't be reached: the picture is asked for again five minutes on, while the
+/// map is still shown.
+#[test]
+fn an_unreachable_picture_is_asked_for_again_five_minutes_on() {
+    let mut reachable = false;
+    let source = FakeSource::osms().with_pictures(move |path| {
+        let answer = if reachable { Ok(format!("picture:{path}")) } else { Err(SourceError::Unreachable("offline".into())) };
+        reachable = true;
+        answer
+    });
+    let requests = source.picture_requests.clone();
+    let (mut compass, _) = in_kerning_city(source);
+    compass.tick(400);
+
+    let state = compass.tick(400 + 4 * 60_000).clone();
+    assert_eq!(*image(&state), PreviewImage::Unavailable);
+    let state = compass.tick(400 + 5 * 60_000).clone();
+
+    assert_eq!(*image(&state), PreviewImage::Ready { url: "picture:maps/picture010003000.webp".into() });
+    assert_eq!(requests.lock().unwrap().len(), 2);
+}
+
+/// A picture is kept for the run: coming back to a map shows it at once, asking nothing.
+#[test]
+fn a_map_shown_again_shows_its_picture_without_asking_again() {
+    let source = FakeSource::osms();
+    let requests = source.picture_requests.clone();
+    let (mut compass, _) = in_kerning_city(source);
+    compass.tick(400);
+    arrive(&mut compass, "victoria-road__sunset-sky--window", 1000);
+    compass.tick(1400);
+
+    let state = arrive(&mut compass, "victoria-road__kerning-city--window", 2000);
+
+    assert_eq!(*image(&state), PreviewImage::Ready { url: "picture:maps/picture010003000.webp".into() });
+    assert_eq!(*requests.lock().unwrap(), ["maps/picture010003000.webp", "maps/picture010003070.webp"]);
+}
+
+/// While it isn't settled which of the maps sharing a title the player is on, no picture
+/// is asked for.
+#[test]
+fn no_picture_is_asked_for_while_no_map_preview_shows() {
+    let source = common::sharing_a_title();
+    let requests = source.picture_requests.clone();
+    let (mut compass, state) = in_kerning_city(source);
+    assert!(state.candidates.is_some());
+
+    compass.tick(400);
+
+    assert_eq!(*requests.lock().unwrap(), Vec::<String>::new());
 }
