@@ -41,6 +41,12 @@
   --portal: #1f63d6;
   --portal-fill: #eef5ff;
   --portal-inner: #8db3ee;
+  /* The Map Preview's other two rings, as OSMS Data Explorer colours them: green for a
+     teleport within the map, grey to a map not in the data. */
+  --teleport: #1e9e3a;
+  --unknown: #7a8396;
+  /* The paper the Map Preview's picture is laid on: OSMS's pictures are see-through. */
+  --minimap-paper: #eef3fb;
   --mob: #d8342a;
   --mob-edge: #8e1c15;
   /* The player's own dot on the minimap: where you are. */
@@ -52,6 +58,11 @@
   --tag-bg: #dae3f3;
   --tag-edge: #a3b6d8;
   --tag-ink: #284a86;
+  /* The Quest tag: a violet no other meaning holds (green is within the map, cream and
+     amber a state to notice). */
+  --quest-bg: #ece4f7;
+  --quest-edge: #b9a5dc;
+  --quest-ink: #55308f;
   --orange: #f08a1c;
   --orange-deep: #b85e00;
   --problem-bg: #fff1dc;

@@ -246,7 +246,13 @@ fn a_mob_without_an_animation_still_has_its_card() {
     assert_eq!((card(&state, "3").image.as_ref(), card(&state, "6").image.as_ref()), (None, None));
     assert_eq!((details(&state, "3").speed.as_str(), details(&state, "6").speed.as_str()), ("Normal", "Normal"));
     assert_eq!(card(&state, "9").image, Some(format!("picture:{}", animation("gif9"))));
-    assert_eq!(*requests.lock().unwrap(), [animation("gif3"), animation("gif9")]);
+    assert_eq!(animations_asked(&requests), [animation("gif3"), animation("gif9")]);
+}
+
+/// The animations asked for, in order, leaving out the Map Preview's picture, which goes
+/// first.
+fn animations_asked(requests: &std::sync::Mutex<Vec<String>>) -> Vec<String> {
+    requests.lock().unwrap().iter().filter(|path| path.starts_with("images/monsters/")).cloned().collect()
 }
 
 #[test]
@@ -286,9 +292,9 @@ fn animations_are_asked_for_one_at_a_time_with_no_other_pace() {
 
     let mut starts = Vec::new();
     for at in (50..=20_000).step_by(50) {
-        let before = requests.lock().unwrap().len();
+        let before = animations_asked(&requests).len();
         compass.tick(at);
-        starts.extend(std::iter::repeat_n(at, requests.lock().unwrap().len() - before));
+        starts.extend(std::iter::repeat_n(at, animations_asked(&requests).len() - before));
     }
 
     assert_eq!(starts.len(), listed, "{starts:?}");

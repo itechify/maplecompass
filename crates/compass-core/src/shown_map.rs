@@ -7,6 +7,8 @@
 
 use crate::CurrentMap;
 use crate::map_data::{MapData, MapDataStatus, for_panel};
+use crate::map_preview::{MapPreview, PreviewImage};
+use crate::pictures::Pictures;
 use crate::osms::MapSet;
 use serde::Serialize;
 
@@ -83,8 +85,11 @@ pub(crate) struct ShownMap {
 /// Whether the core settled which of the maps sharing the title to show.
 #[derive(Clone, Copy)]
 enum Settling {
-    /// The core knows which map it is (`maps[i]`), or it doesn't matter.
+    /// The core knows which map it is (`maps[i]`).
     Settled(usize),
+    /// They would all show the same, so it shows the first without asking; but which of
+    /// them the player is on is still open.
+    Alike,
     /// They show different things and nothing settled which: the player may choose.
     Choosing { shown: usize, chosen: bool },
 }
@@ -109,7 +114,7 @@ impl ShownMap {
             self.settling = match (maps.len(), connected.next(), connected.next()) {
                 (0 | 1, _, _) => Settling::Settled(0),
                 (_, Some((i, _)), None) => Settling::Settled(i),
-                _ if all_show_the_same(&maps, set) => Settling::Settled(0),
+                _ if all_show_the_same(&maps, set) => Settling::Alike,
                 _ => Settling::Choosing { shown: 0, chosen: false },
             };
             self.maps = maps;
@@ -121,7 +126,7 @@ impl ShownMap {
     /// otherwise none.
     fn connected_maps(&self, set: &MapSet) -> Vec<String> {
         let sure = match self.settling {
-            Settling::Settled(_) | Settling::Choosing { chosen: true, .. } => true,
+            Settling::Settled(_) | Settling::Alike | Settling::Choosing { chosen: true, .. } => true,
             Settling::Choosing { chosen: false, .. } => false,
         };
         match (sure, self.map().and_then(|m| set.data(&m.id))) {
@@ -160,6 +165,19 @@ impl ShownMap {
         }
     }
 
+    /// The shown map's Map Preview, from `set`, its picture as `pictures` has it: `None`
+    /// when it has no picture, and unless it's settled which map the player is on (each
+    /// has its own layout).
+    pub fn preview(&self, set: &MapSet, pictures: &Pictures) -> Option<MapPreview> {
+        if !matches!(self.settling, Settling::Settled(_) | Settling::Choosing { chosen: true, .. }) {
+            return None;
+        }
+        let data = set.data(&self.map()?.id)?;
+        let picture = data.picture.clone()?;
+        let image = PreviewImage::of(&picture, pictures);
+        Some(MapPreview { picture, image, marks: data.marks.clone() })
+    }
+
     pub fn candidates(&self, set: &MapSet) -> Option<Candidates> {
         let Settling::Choosing { shown, chosen } = self.settling else { return None };
         let outline = |id: &str| set.data(id).map(|data| Outline::of(&for_panel(data.clone())));
@@ -174,6 +192,7 @@ impl ShownMap {
     fn shown(&self) -> usize {
         match self.settling {
             Settling::Settled(i) | Settling::Choosing { shown: i, .. } => i,
+            Settling::Alike => 0,
         }
     }
 }

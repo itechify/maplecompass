@@ -194,6 +194,7 @@ fn a_file_set_whose_portals_are_not_as_expected_is_a_format_change() {
         ("a portal's type in words", OsmsFiles { portals: files.portals.replace("\"type\":1,", "\"type\":\"invisible\","), ..files.clone() }),
         ("a destination renamed", OsmsFiles { portals: files.portals.replace("\"dest_map\"", "\"to_map\""), ..files.clone() }),
         ("a destination that isn't a map ID", OsmsFiles { portals: files.portals.replace("\"dest_map\":\"10003081\"", "\"dest_map\":\"north\""), ..files.clone() }),
+        ("a portal's position in words", OsmsFiles { portals: files.portals.replace("\"x\":1400", "\"x\":\"far right\""), ..files.clone() }),
         ("within the map in words", OsmsFiles { portals: files.portals.replace("\"intra_map\":true", "\"intra_map\":\"yes\""), ..files.clone() }),
         ("no map names in lookups.json", OsmsFiles { lookups: files.lookups.replace("\"map_names\"", "\"maps\""), ..files.clone() }),
         ("map_manifest.json isn't a list of pictures", OsmsFiles { map_manifest: "[]".into(), ..files.clone() }),

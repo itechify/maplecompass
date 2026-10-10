@@ -4,6 +4,14 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { dayText } from "./dates";
 import type { ExpTracking } from "./exp-tracking";
 import {
+  initMapPreview,
+  layOutMapPreview,
+  renderMapPreview,
+  renderPortalRows,
+  type HiddenPortal,
+  type MapPreview,
+} from "./map-preview";
+import {
   HOTKEY_NAMES,
   KEY_ONLY,
   codeLabel,
@@ -45,16 +53,6 @@ type Mob = {
   exp: number;
   spawnCount: number;
   spawnSharePercent: number;
-};
-
-/** Mirror of `compass_core::HiddenPortal`. */
-type HiddenPortal = {
-  name: string;
-  toMapId: string;
-  toMapName: string;
-  toStreetName: string;
-  toHiddenStreet: boolean;
-  quest: boolean;
 };
 
 /** Mirror of `compass_core::LevelRange`. */
@@ -125,6 +123,8 @@ type PanelState = {
   notSure: boolean;
   candidates: Candidates | null;
   data: MapDataStatus;
+  /** The shown map's Map Preview; null while there is none, or it isn't settled which map it is. */
+  mapPreview: MapPreview | null;
   credit: string | null;
   /** The Mob Card of each mob the panel lists, in its order. */
   mobCards: MobCard[];
@@ -168,7 +168,6 @@ const mobsTable = byId("mobs");
 const mobRows = byId("mob-rows");
 const portals = byId("portals");
 const noPortals = byId("no-portals");
-const portalRows = byId("portal-rows");
 const footer = byId("footer");
 const credit = byId("credit");
 const hotkeyProblem = byId("hotkey-problem");
@@ -284,18 +283,6 @@ function span(className: string, text: string): HTMLSpanElement {
   return el;
 }
 
-/** "Northern Top of Construction Site [Hidden Street]": where it leads, and its tags. */
-function portalRow(portal: HiddenPortal): HTMLLIElement {
-  const row = document.createElement("li");
-  const to = document.createElement("div");
-  to.className = "dest";
-  to.append(span("to", portal.toMapName));
-  if (portal.toHiddenStreet) to.append(span("tag", "Hidden Street"));
-  if (portal.quest) to.append(span("tag quest", "Quest"));
-  row.append(to);
-  return row;
-}
-
 /** Keep player-recognizable clues ahead of the secondary map ID. */
 function candidateRow(id: string, outline: Outline): HTMLLIElement {
   const row = document.createElement("li");
@@ -337,7 +324,7 @@ function renderData(panel: PanelState) {
   dataEl.hidden = !shown;
   footer.hidden = !shown;
   if (!shown) return;
-  const inputs = [data, panel.candidates, panel.collapsedSections, panel.credit, panel.recognition];
+  const inputs = [data, panel.mapPreview, panel.candidates, panel.collapsedSections, panel.credit, panel.recognition];
   if (!changed("data", ...inputs, panel.hotkeys, panel.unavailableHotkeys)) return;
 
   const { candidates } = panel;
@@ -369,10 +356,13 @@ function renderData(panel: PanelState) {
 
   const ready = data.status === "ready" || data.status === "savedCopy" ? data : null;
 
-  // Hidden Portals first: what the game won't show the player.
+  // Portals first: the map with every portal on it, then the Hidden Portals, what the game
+  // won't show the player.
   portals.hidden = !ready;
-  noPortals.hidden = !ready || ready.hiddenPortals.length > 0;
-  portalRows.replaceChildren(...(ready?.hiddenPortals ?? []).map(portalRow));
+  const hiddenPortals: HiddenPortal[] = ready?.hiddenPortals ?? [];
+  const pictured = renderMapPreview(ready ? panel.mapPreview : null, panel.map?.mapName ?? "");
+  noPortals.hidden = !ready || hiddenPortals.length > 0;
+  renderPortalRows(hiddenPortals, panel.mapPreview?.marks ?? []);
 
   mapMobs.hidden = !ready;
   noMobs.hidden = !ready || ready.listedMobs.length > 0;
@@ -419,19 +409,25 @@ function renderData(panel: PanelState) {
   // Each section collapses to its heading, which then says how many it holds. One with
   // nothing to list has nothing to collapse: its heading and "None" show as ever.
   const mobCount = (ready?.listedMobs.length ?? 0) + (ready?.moreMobs?.count ?? 0);
-  foldSection(portals, portalsToggle, panel.collapsedSections.hiddenPortals, ready?.hiddenPortals.length ?? 0);
+  foldSection(portals, portalsToggle, panel.collapsedSections.hiddenPortals, hiddenPortals.length, pictured);
   foldSection(mapMobs, mobsToggle, panel.collapsedSections.mobs, mobCount);
+  // Opened again, the picture is fitted to the section.
+  layOutMapPreview();
 
   credit.textContent = panel.credit ?? "";
 }
 
-/** A section collapsed to its heading, or open; `count` is how many it lists. */
-function foldSection(section: HTMLElement, toggle: HTMLButtonElement, collapsed: boolean, count: number) {
-  const folded = collapsed && count > 0;
+/**
+ * A section collapsed to its heading, or open; `count` is how many it lists, and
+ * `pictured` whether it shows more than its list (the Portals section's Map Preview).
+ */
+function foldSection(section: HTMLElement, toggle: HTMLButtonElement, collapsed: boolean, count: number, pictured = false) {
+  const holds = count > 0 || pictured;
+  const folded = collapsed && holds;
   section.classList.toggle("collapsed", folded);
-  toggle.disabled = count === 0;
+  toggle.disabled = !holds;
   toggle.setAttribute("aria-expanded", String(!folded));
-  toggle.title = count === 0 ? "" : folded ? "Show this section" : "Collapse to the heading";
+  toggle.title = !holds ? "" : folded ? "Show this section" : "Collapse to the heading";
   const countEl = byId(`${toggle.id}-count`);
   countEl.hidden = !folded;
   countEl.textContent = String(count);
@@ -806,6 +802,10 @@ function renderBadge(panel: PanelState) {
   badge.textContent = text ?? "";
   badge.classList.toggle("held", panel.expTracking.state !== "active");
 }
+
+// The Map Preview's card shows over the expanded panel's normal view only, and the panel
+// is measured again once its picture is in.
+initMapPreview({ cardAllowed: () => !!shownPanel?.expanded && step === null, laidOut: () => reportHeight() });
 
 /** How long the pointer rests on a mob's name before its Mob Card shows. */
 const MOB_CARD_DELAY_MS = 250;
