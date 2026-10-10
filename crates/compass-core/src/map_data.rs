@@ -1,32 +1,33 @@
-//! One map's hunting information from MeowDB, and the panel's progress getting it.
+//! One map's hunting information, and how the panel shows it.
 
 use crate::shown_map::LevelRange;
 use serde::{Deserialize, Serialize};
 
-/// One map's data, as the map data source reads it from the map's MeowDB page.
+/// One map's data, as read from OSMS's file set (or, for the world crawl until #57, from
+/// the map's MeowDB page).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MapData {
-    /// `None` on a map without mobs, such as a town: MeowDB has no summary for it.
+    /// `None` on a map without mobs, such as a town.
     pub summary: Option<MapSummary>,
     /// In the panel, sorted by level (then name); from a source, in any order.
     pub mobs: Vec<Mob>,
-    /// The exits the player can't see, in MeowDB's order. Empty when there are none.
+    /// The exits the player can't see, in the source's order. Empty when there are none.
     pub hidden_portals: Vec<HiddenPortal>,
     /// The IDs of the maps its portals lead to. They tell apart maps sharing a title
     /// (the one the player came from is connected to the right one); not rendered.
     #[serde(skip_serializing)]
     pub connected_maps: Vec<String>,
-    /// Every portal to another map (not to the map itself or MeowDB's dead end), with
-    /// its kind, in MeowDB's order: the map's edges in the world's portal graph. Not
+    /// Every portal to another map (not to the map itself or the dead end), with its
+    /// kind, in the source's order: the map's edges in the world's portal graph. Not
     /// rendered.
     #[serde(skip_serializing)]
     pub portals: Vec<Portal>,
     /// The map's Mob Rate in hundredths: 150 is a 1.5x respawn rate.
     #[serde(skip_serializing)]
     pub mob_rate_percent: u32,
-    /// The map's nearest town (MeowDB's `returnMap`), where a nearest-town Teleport
-    /// Scroll goes; a town's is itself. `None` when MeowDB gives the dead end. Not
+    /// The map's nearest town, where a nearest-town Teleport Scroll goes; a town's is
+    /// itself. `None` when there is none. Not
     /// rendered.
     #[serde(skip_serializing)]
     pub nearest_town: Option<String>,
@@ -52,7 +53,7 @@ pub struct MoreMobs {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Portal {
-    /// MeowDB's name for the portal on its map (e.g. `"in00"`).
+    /// The portal's name on its map (e.g. `"in00"`).
     pub name: String,
     pub to_map_id: String,
     pub kind: PortalKind,
@@ -76,7 +77,7 @@ pub enum PortalKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HiddenPortal {
-    /// MeowDB's name for the portal on its map (e.g. `"in00"`); with the map ID, what
+    /// The portal's name on its map (e.g. `"in00"`); with the map ID, what
     /// the portal override list is keyed by.
     pub name: String,
     pub to_map_id: String,
@@ -88,8 +89,8 @@ pub struct HiddenPortal {
     pub quest: bool,
 }
 
-/// The Map Summary: MeowDB's ceiling figures (every mob killed as soon as it spawns),
-/// with the map's mob rate not applied, as MeowDB gives them.
+/// The Map Summary: the ceiling figures (every mob killed as soon as it spawns), worked
+/// out as MeowDB works them out, with the map's mob rate not applied.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MapSummary {
@@ -98,8 +99,8 @@ pub struct MapSummary {
     pub exp_per_hour: PerParty,
 }
 
-/// A figure for a player alone on the map, and for a party of 6 or more. MeowDB gives
-/// only these two; sizes in between are not derived.
+/// A figure for a player alone on the map, and for a party of 6 or more: MeowDB's two;
+/// sizes in between are not derived.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PerParty {
@@ -111,7 +112,7 @@ pub struct PerParty {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Mob {
-    /// MeowDB's ID for the mob (e.g. `"3"`, Blue Snail): the same mob on every map.
+    /// The mob's ID (e.g. `"3"`, Blue Snail), MeowDB's and OSMS's: the same mob on every map.
     pub id: String,
     pub name: String,
     pub level: u32,
@@ -123,30 +124,23 @@ pub struct Mob {
     pub spawn_share_percent: u32,
 }
 
-/// The shown map's MeowDB data, or why there is none (yet).
+/// The shown map's data, from OSMS's file set.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum MapDataStatus {
     /// No map is shown.
     #[default]
     NoMap,
-    /// The map's page is being fetched.
-    Loading,
     Ready(MapData),
-    /// MeowDB couldn't be reached, but a copy of the map's page saved at
-    /// `saved_at_unix_ms` (ms since the Unix epoch) could: its figures, to be shown as
-    /// such.
+    /// From a copy of the file set saved at `saved_at_unix_ms` (ms since the Unix epoch),
+    /// over 7 days ago, because OSMS couldn't be reached since: its figures, to be shown
+    /// as such.
     SavedCopy {
         #[serde(rename = "savedAtUnixMs")]
         saved_at_unix_ms: u64,
         #[serde(flatten)]
         data: MapData,
     },
-    /// MeowDB couldn't be reached, and there is no saved copy.
-    Unavailable,
-    /// MeowDB's page no longer looks the way the reader expects. Nothing from it is
-    /// shown, rather than partial or wrong numbers.
-    FormatChanged,
 }
 
 impl MapDataStatus {

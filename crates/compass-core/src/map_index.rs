@@ -1,4 +1,5 @@
-//! The map index and the injected map data source it comes from (MeowDB, ADR 0003).
+//! The map list's entries, and the injected data source the core's data comes from: OSMS
+//! Data Explorer's file set (ADR 0008), and MeowDB's pages and search (ADR 0003).
 
 use crate::item_lookup::ItemHit;
 use crate::map_data::MapData;
@@ -6,19 +7,20 @@ use crate::mob_card::MobDetails;
 use crate::osms::OsmsFiles;
 use std::task::Poll;
 
-/// One map in MeowDB's map index.
+/// One map in the map list.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MapEntry {
-    /// MeowDB's 9-digit map ID, zero padding kept (e.g. `"010001010"`).
+    /// The 9-digit map ID, zero padding kept (e.g. `"010001010"`): the game's, as MeowDB's
+    /// pages are numbered.
     pub id: String,
     pub street_name: String,
     pub map_name: String,
-    /// MeowDB's display region, e.g. "Victoria Island" (includes pseudo-regions such as
-    /// "Hidden Street" and "Event").
+    /// The region as OSMS gives it: "Maple Island", "Victoria Island", "Event", "Other" or
+    /// "Dev".
     pub region: String,
 }
 
-/// MeowDB's display region for event maps.
+/// The region of event maps.
 const EVENT_REGION: &str = "Event";
 
 impl MapEntry {
@@ -29,41 +31,42 @@ impl MapEntry {
     }
 }
 
-/// Why map data could not be had.
+/// Why data could not be had.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SourceError {
-    /// MeowDB could not be reached and nothing usable was cached.
+    /// The site could not be reached and nothing usable was saved.
     Unreachable(String),
-    /// MeowDB answered, but its page no longer looks the way the reader expects.
+    /// The site answered, but not in the shape the reader expects.
     FormatChanged(String),
 }
 
 impl std::fmt::Display for SourceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Unreachable(why) => write!(f, "MeowDB unreachable: {why}"),
-            Self::FormatChanged(why) => write!(f, "MeowDB format changed: {why}"),
+            Self::Unreachable(why) => write!(f, "unreachable: {why}"),
+            Self::FormatChanged(why) => write!(f, "format changed: {why}"),
         }
     }
 }
 
 impl std::error::Error for SourceError {}
 
-/// What a source got from MeowDB: fresh data, or a copy saved earlier because MeowDB
-/// couldn't be reached.
+/// What a source got: fresh data, or a copy saved earlier because the site couldn't be
+/// reached.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fetched<T> {
     /// Just fetched, or a cached copy young enough to use as it is.
     Fresh(T),
-    /// MeowDB couldn't be reached: a copy saved at `saved_at_unix_ms` (ms since the
-    /// Unix epoch). The panel shows it, saying so and since when.
+    /// The site couldn't be reached: a copy saved at `saved_at_unix_ms` (ms since the
+    /// Unix epoch).
     SavedCopy { data: T, saved_at_unix_ms: u64 },
 }
 
-/// Where the core gets MeowDB's data, and maplestory.io's mob images. The shell supplies
-/// one that fetches over HTTP with a disk cache; tests supply fakes.
+/// Where the core gets OSMS's file set, MeowDB's pages and search, and maplestory.io's
+/// mob images. The shell supplies one that fetches over HTTP with a disk cache; tests
+/// supply fakes.
 ///
-/// Both operations may take a while over the network, and the core never waits for
+/// Every ask may take a while over the network, and the core never waits for
 /// them: on the first call start the fetch and answer [`Poll::Pending`]; the core asks
 /// again (each tick and frame) until the answer is ready. A source should answer at
 /// once when it can (from a cache, say).
@@ -74,26 +77,14 @@ pub trait MapDataSource {
     /// answer it fresh once it reads with [`crate::osms::read`], saving it whole. Answer the
     /// saved set fresh, at once, while it is younger; and as a saved copy, with when it
     /// was saved, when a file can't be fetched or the set fetched doesn't read.
-    fn osms_files(&mut self) -> Poll<Result<Fetched<OsmsFiles>, SourceError>> {
-        Poll::Ready(Err(SourceError::Unreachable("no OSMS source".into())))
-    }
-
-    /// Every map's ID, street name, map name and region. The core asks at startup,
-    /// and again only if asking failed.
-    fn map_index(&mut self) -> Poll<Result<Fetched<Vec<MapEntry>>, SourceError>>;
-
-    /// One map's data, by its 9-digit ID, for the panel: the core asks once the panel
-    /// is sure of the map (or of the title it shares with other maps). A cached copy
-    /// may be used as it is for up to a day.
-    fn map_data(&mut self, id: &str) -> Poll<Result<Fetched<MapData>, SourceError>>;
+    fn osms_files(&mut self) -> Poll<Result<Fetched<OsmsFiles>, SourceError>>;
 
     /// One map's data for the world crawl (ADR 0004), which asks for each map it doesn't
     /// know, and for each it knows once its data is a week old, one at a time. The core
     /// keeps what the crawl learns and decides when to ask, so fetch it from MeowDB
     /// (falling back on a saved copy when MeowDB can't be reached); an answer given at
-    /// once doesn't wait out the crawl's pace. Kept apart from
-    /// [`MapDataSource::map_data`]: a crawl request must never delay or replace the
-    /// shown map's.
+    /// once doesn't wait out the crawl's pace. The crawl goes with #57, OSMS's set
+    /// knowing every map.
     fn crawl_data(&mut self, id: &str) -> Poll<Result<Fetched<MapData>, SourceError>>;
 
     /// One mob's figures from its MeowDB page, by MeowDB's mob ID (ADR 0006): the core

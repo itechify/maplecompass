@@ -47,7 +47,7 @@ fn tracking_settings() -> Settings {
 
 /// A core restored from `settings`, with the game window found and the windows' sizes known.
 fn started(settings: Settings) -> Compass {
-    let mut compass = Compass::new(FakeSource::offline());
+    let mut compass = Compass::new(FakeSource::osms_offline());
     compass.restore(settings);
     compass.set_panel_sizes(sizes(72));
     compass.set_grind_tracker_size(Size { width: 300, height: 150 });

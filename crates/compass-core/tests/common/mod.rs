@@ -1,5 +1,6 @@
-//! Shared test inputs: minimap samples turned into frames, and fake map data sources
-//! serving MeowDB's saved map index and map pages (personal-use test data, ADR 0003).
+//! Shared test inputs: minimap samples turned into frames, and a fake data source serving
+//! made-up worlds in OSMS's shape (ADR 0008), with MeowDB's saved mob pages and search
+//! answers (personal-use test data, ADR 0003) until #58 and #62.
 #![allow(dead_code)]
 
 pub mod osms;
@@ -8,10 +9,9 @@ pub mod world;
 
 use compass_core::osms::OsmsFiles;
 use compass_core::{
-    Compass, ExpBarRegion, Fetched, Frame, GameWindow, ItemHit, MapData, MapDataSource, MapEntry, MobDetails,
+    Compass, ExpBarRegion, Fetched, Frame, GameWindow, ItemHit, MapData, MapDataSource, MobDetails,
     PanelState, Rect, ScreenRect, Settings, Size, SourceError, TitleRegion, default_title_region, meowdb,
 };
-use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
@@ -110,60 +110,6 @@ pub fn kerning_title_region() -> TitleRegion {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SavedEntry {
-    id: String,
-    street_name: String,
-    map_name: String,
-    region: String,
-}
-
-/// MeowDB's map index as saved on 2026-10-07 (422 maps).
-pub fn saved_index() -> Vec<MapEntry> {
-    let json = std::fs::read_to_string(fixtures_dir().join("meowdb-map-index.json")).expect("fixture");
-    let saved: Vec<SavedEntry> = serde_json::from_str(&json).expect("map index json");
-    saved
-        .into_iter()
-        .map(|e| MapEntry { id: e.id, street_name: e.street_name, map_name: e.map_name, region: e.region })
-        .collect()
-}
-
-/// The saved index, except that the title `street` / `map` belongs to the maps `ids`
-/// and to no other. A sample showing that title then stands in for those maps'
-/// minimap: there are no samples of titles MeowDB really shares.
-pub fn index_with_title(street: &str, map: &str, ids: &[&str]) -> Vec<MapEntry> {
-    saved_index()
-        .into_iter()
-        .filter(|e| !(e.street_name == street && e.map_name == map) || ids.contains(&e.id.as_str()))
-        .map(|e| {
-            if ids.contains(&e.id.as_str()) {
-                MapEntry { street_name: street.into(), map_name: map.into(), ..e }
-            } else {
-                e
-            }
-        })
-        .collect()
-}
-
-/// A MeowDB map page saved on 2026-10-07: `tests/fixtures/meowdb-maps/<id>__<slug>.html`.
-pub fn saved_page(id: &str) -> Option<String> {
-    let dir = fixtures_dir().join("meowdb-maps");
-    let file = std::fs::read_dir(dir)
-        .expect("fixture dir")
-        .filter_map(|e| e.ok())
-        .find(|e| e.file_name().to_string_lossy().starts_with(&format!("{id}__")))?;
-    Some(std::fs::read_to_string(file.path()).expect("fixture"))
-}
-
-/// Map `id`'s saved MeowDB page, read; unreachable without one.
-pub fn saved_map_page(id: &str) -> Result<MapData, SourceError> {
-    match saved_page(id) {
-        Some(html) => meowdb::read_map_page(&html, id),
-        None => Err(SourceError::Unreachable(format!("no saved page for {id}"))),
-    }
-}
-
 /// Sunset Sky's and the Construction Site's map IDs: both have a Map Summary in the
 /// made-up game world ([`osms::game`]).
 pub const SUNSET_SKY_ID: &str = "010003070";
@@ -232,24 +178,18 @@ pub fn saved_mob_ids() -> Vec<String> {
 type PageAnswer = Poll<Result<MapData, SourceError>>;
 type MobAnswer = Result<MobDetails, SourceError>;
 type ImageAnswer = Result<String, SourceError>;
-type IndexAnswer = Poll<Result<Vec<MapEntry>, SourceError>>;
 type SearchAnswer = Result<Vec<ItemHit>, SourceError>;
 pub type OsmsAnswer = Poll<Result<Fetched<OsmsFiles>, SourceError>>;
 
-/// A map data source that answers from memory and counts index and map data requests.
+/// A data source that answers from memory and counts what it is asked.
 pub struct FakeSource {
     /// Answers for successive asks for OSMS's file set; the last one repeats.
     osms_answers: Vec<OsmsAnswer>,
     /// How many times OSMS's file set was asked for.
     pub osms_requests: Arc<AtomicU32>,
-    /// Answers for successive index requests; the last one repeats.
-    answers: Vec<IndexAnswer>,
-    pub index_requests: Arc<AtomicU32>,
-    /// Answers a map data request for a map ID. Defaults to the saved pages, read with
-    /// the core's MeowDB reader; a map without a saved page is unreachable.
+    /// Answers the crawl's request for a map's page (MeowDB's, until #57), by map ID.
+    /// Defaults to the map's data in the first file set: a MeowDB that agrees with OSMS.
     pages: Box<dyn FnMut(&str) -> PageAnswer + Send>,
-    /// The map ID of every map data request, in order.
-    pub map_requests: Arc<Mutex<Vec<String>>>,
     /// The map ID of every crawl fetch started, in order: a crawl request for a map
     /// whose fetch is still in flight checks on it and isn't logged again.
     pub crawl_requests: Arc<Mutex<Vec<String>>>,
@@ -258,8 +198,8 @@ pub struct FakeSource {
     crawl_uncached: bool,
     /// The crawl fetch in flight, and its answer once it has arrived.
     crawl_in_flight: Option<(String, Option<Result<MapData, SourceError>>)>,
-    /// MeowDB is unreachable and the answers are copies saved at this time (ms since the
-    /// Unix epoch); `None`: they are fresh.
+    /// The sites are unreachable and the answers are copies saved at this time (ms since
+    /// the Unix epoch); `None`: they are fresh.
     saved_at: Option<u64>,
     /// Answers a mob page request for a mob ID. Defaults to the saved mob pages, read
     /// with the core's MeowDB reader; a mob without a saved page is unreachable.
@@ -288,14 +228,27 @@ pub struct FakeSource {
 }
 
 impl FakeSource {
-    fn answering(answers: Vec<IndexAnswer>) -> Self {
+    /// OSMS's file set answers these, one ask after another; the last one repeats.
+    ///
+    /// The world crawl, which reads MeowDB's pages until #57, is answered with the maps of
+    /// the first set: a MeowDB that agrees with OSMS.
+    pub fn answering_osms(answers: Vec<OsmsAnswer>) -> Self {
+        let first = answers.iter().find_map(|answer| match answer {
+            Poll::Ready(Ok(Fetched::Fresh(files) | Fetched::SavedCopy { data: files, .. })) => Some(files.clone()),
+            _ => None,
+        });
+        let set = first.map(|files| compass_core::osms::read(&files));
+        let pages = move |id: &str| {
+            Poll::Ready(match &set {
+                Some(Ok(set)) => Ok(set.maps().find(|(entry, _)| entry.id == id).map(|(_, data)| data.clone()).unwrap_or_default()),
+                Some(Err(error)) => Err(error.clone()),
+                None => Err(unreachable()),
+            })
+        };
         Self {
-            osms_answers: vec![fresh(osms::game())],
+            osms_answers: answers,
             osms_requests: Arc::default(),
-            answers,
-            index_requests: Arc::default(),
-            pages: Box::new(|id| Poll::Ready(saved_map_page(id))),
-            map_requests: Arc::default(),
+            pages: Box::new(pages),
             crawl_requests: Arc::default(),
             crawl_uncached: false,
             crawl_in_flight: None,
@@ -314,18 +267,27 @@ impl FakeSource {
         }
     }
 
-    /// MeowDB can't be reached, and every answer (index and pages) is a copy saved at
-    /// `saved_at_unix_ms`.
-    pub fn serving_saved_copies(self, saved_at_unix_ms: u64) -> Self {
-        Self { saved_at: Some(saved_at_unix_ms), ..self }
+    /// OSMS serves this made-up world.
+    pub fn with_world(world: osms::World) -> Self {
+        Self::answering_osms(vec![fresh(world)])
     }
 
-    /// The map index arrives only on the `polls`-th request for it; until then the
-    /// fetch is still in flight.
-    pub fn with_slow_index(index: Vec<MapEntry>, polls: usize) -> Self {
-        let mut answers: Vec<IndexAnswer> = (1..polls).map(|_| Poll::Pending).collect();
-        answers.push(Poll::Ready(Ok(index)));
-        Self::answering(answers)
+    /// OSMS serves the game's map list, with made-up figures on the maps the minimap
+    /// samples show ([`osms::game`]).
+    pub fn osms() -> Self {
+        Self::with_world(osms::game())
+    }
+
+    /// OSMS can't be reached, and no set is saved.
+    pub fn osms_offline() -> Self {
+        Self::answering_osms(vec![Poll::Ready(Err(unreachable()))])
+    }
+
+    /// The sites can't be reached, and every answer is a copy saved at
+    /// `saved_at_unix_ms`: OSMS's file set, the crawl's pages, mob pages and item
+    /// searches.
+    pub fn serving_saved_copies(self, saved_at_unix_ms: u64) -> Self {
+        Self { saved_at: Some(saved_at_unix_ms), ..self }
     }
 
     fn fetched<T>(&self, answer: Poll<Result<T, SourceError>>) -> Poll<Result<Fetched<T>, SourceError>> {
@@ -337,34 +299,15 @@ impl FakeSource {
         })
     }
 
-    /// Answer map data requests with `pages` instead of the saved pages.
+    /// Answer the crawl's page requests with `pages` instead of the first set's maps.
     pub fn with_pages(mut self, pages: impl FnMut(&str) -> PageAnswer + Send + 'static) -> Self {
         self.pages = Box::new(pages);
         self
     }
 
-    /// Serve `html` as the MeowDB page of map `id`, and the saved pages for other maps.
-    pub fn with_page(self, id: &str, html: String) -> Self {
-        let id = id.to_string();
-        self.with_pages(move |asked| {
-            Poll::Ready(if asked == id { meowdb::read_map_page(&html, asked) } else { saved_map_page(asked) })
-        })
-    }
-
-    /// Map pages can't be had: MeowDB is unreachable (the map index still is).
+    /// The crawl's pages can't be had: MeowDB is unreachable.
     pub fn with_pages_offline(self) -> Self {
         self.with_pages(|_| Poll::Ready(Err(unreachable())))
-    }
-
-    /// Each map's saved page arrives only on the `polls`-th request for it; until then
-    /// the fetch is still in flight.
-    pub fn with_slow_pages(self, polls: usize) -> Self {
-        let mut asked = std::collections::HashMap::<String, usize>::new();
-        self.with_pages(move |id| {
-            let n = asked.entry(id.to_string()).or_default();
-            *n += 1;
-            if *n < polls { Poll::Pending } else { Poll::Ready(saved_map_page(id)) }
-        })
     }
 
     /// Crawl answers come over the network, not from the cache: each arrives on the
@@ -417,85 +360,13 @@ impl FakeSource {
     pub fn items_taking(self, polls: usize) -> Self {
         Self { item_polls: polls, ..self }
     }
-
-    /// OSMS's file set answers these, one ask after another; the last one repeats.
-    ///
-    /// The world crawl, which reads MeowDB's pages until #57, is answered with the maps of
-    /// the first set: a MeowDB that agrees with OSMS.
-    pub fn answering_osms(answers: Vec<OsmsAnswer>) -> Self {
-        let first = answers.iter().find_map(|answer| match answer {
-            Poll::Ready(Ok(Fetched::Fresh(files) | Fetched::SavedCopy { data: files, .. })) => Some(files.clone()),
-            _ => None,
-        });
-        let set = first.map(|files| compass_core::osms::read(&files));
-        let pages = move |id: &str| {
-            Poll::Ready(match &set {
-                Some(Ok(set)) => Ok(set.maps().find(|(entry, _)| entry.id == id).map(|(_, data)| data.clone()).unwrap_or_default()),
-                Some(Err(error)) => Err(error.clone()),
-                None => Err(unreachable()),
-            })
-        };
-        Self { osms_answers: answers, ..Self::answering(vec![Poll::Ready(Err(unreachable()))]) }.with_pages(pages)
-    }
-
-    /// OSMS serves this made-up world.
-    pub fn with_world(world: osms::World) -> Self {
-        Self::answering_osms(vec![fresh(world)])
-    }
-
-    /// OSMS serves the game's map list, with made-up figures on the maps the minimap
-    /// samples show ([`osms::game`]).
-    pub fn osms() -> Self {
-        Self::with_world(osms::game())
-    }
-
-    /// OSMS can't be reached, and no set is saved.
-    pub fn osms_offline() -> Self {
-        Self::answering_osms(vec![Poll::Ready(Err(unreachable()))])
-    }
-
-    pub fn with_index(index: Vec<MapEntry>) -> Self {
-        Self::answering(vec![Poll::Ready(Ok(index))])
-    }
-
-    /// The saved MeowDB index.
-    pub fn meowdb() -> Self {
-        Self::with_index(saved_index())
-    }
-
-    /// MeowDB can't be reached.
-    pub fn offline() -> Self {
-        Self::failing(unreachable())
-    }
-
-    /// Every index request fails this way.
-    pub fn failing(error: SourceError) -> Self {
-        Self::answering(vec![Poll::Ready(Err(error))])
-    }
-
-    /// MeowDB can't be reached at first, then serves this index.
-    pub fn offline_then(index: Vec<MapEntry>) -> Self {
-        Self::answering(vec![Poll::Ready(Err(unreachable())), Poll::Ready(Ok(index))])
-    }
 }
 
 fn unreachable() -> SourceError {
     SourceError::Unreachable("offline".into())
 }
 
-/// A small index of `n` made-up maps ("100000000", "100000001", …) on one street.
-pub fn made_up_index(n: usize) -> Vec<MapEntry> {
-    (0..n)
-        .map(|i| MapEntry {
-            id: format!("{:09}", 100_000_000 + i),
-            street_name: "Made-up Street".into(),
-            map_name: format!("Made-up Map {i}"),
-            region: "Victoria Island".into(),
-        })
-        .collect()
-}
-
-/// How many map data requests a [`FakeSource`] had for map `id`.
+/// How many of `requests` (a [`FakeSource`]'s log) were for `id`.
 pub fn requests_for(requests: &Mutex<Vec<String>>, id: &str) -> usize {
     requests.lock().unwrap().iter().filter(|r| *r == id).count()
 }
@@ -569,20 +440,7 @@ impl MapDataSource for FakeSource {
         }
     }
 
-    fn map_index(&mut self) -> Poll<Result<Fetched<Vec<MapEntry>>, SourceError>> {
-        let n = self.index_requests.fetch_add(1, Ordering::SeqCst) as usize;
-        let answer = self.answers[n.min(self.answers.len() - 1)].clone();
-        self.fetched(answer)
-    }
-
-    fn map_data(&mut self, id: &str) -> Poll<Result<Fetched<MapData>, SourceError>> {
-        self.map_requests.lock().unwrap().push(id.to_string());
-        let answer = (self.pages)(id);
-        self.fetched(answer)
-    }
-
-    /// Answered from the same pages as [`FakeSource::map_data`], but logged in
-    /// `crawl_requests`.
+    /// Answered from `pages`, and logged in `crawl_requests`.
     fn crawl_data(&mut self, id: &str) -> Poll<Result<Fetched<MapData>, SourceError>> {
         let answer = match self.crawl_in_flight.take() {
             Some((asked, Some(arrived))) if asked == id => Poll::Ready(arrived),
