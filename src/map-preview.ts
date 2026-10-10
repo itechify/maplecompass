@@ -199,7 +199,10 @@ export function layOutMapPreview() {
   image.hidden = !ready;
   // Collapsed, the box has no width to fit the picture to.
   if (!ready || !shown || preview.clientWidth === 0) return;
-  const room = preview.clientWidth - 2 * PAPER;
+  // Fitted as if the panel's scrollbar showed, whether it does or not. Fitted to the room
+  // the scrollbar leaves, the picture would be taller without it: in a panel just short of
+  // the picture's height the scrollbar would come and go every frame.
+  const room = preview.clientWidth - (scrollbarShows() ? 0 : scrollbarWidth()) - 2 * PAPER;
   const scale = Math.min(room / image.naturalWidth, MAX_PICTURE_HEIGHT / image.naturalHeight);
   const width = Math.round(image.naturalWidth * scale);
   const height = Math.round(image.naturalHeight * scale);
@@ -370,11 +373,30 @@ image.addEventListener("error", () => {
   renderMapPreview(shown, mapName);
   laidOut();
 });
+/** Whether the panel's scrolling view shows its scrollbar now. */
+function scrollbarShows(): boolean {
+  const view = preview.closest<HTMLElement>(".view");
+  return !!view && view.offsetWidth - view.clientWidth - view.clientLeft * 2 > 0;
+}
+
+/** How wide a scrollbar is here, in CSS px: it changes with the display's scale. */
+function scrollbarWidth(): number {
+  const probe = document.createElement("div");
+  probe.style.cssText = "position: absolute; visibility: hidden; width: 50px; height: 50px; overflow-y: scroll";
+  document.body.append(probe);
+  const width = probe.offsetWidth - probe.clientWidth;
+  probe.remove();
+  return width;
+}
+
 // The box changed width (the player resized the panel, or a scrollbar came or went): the
-// picture is fitted again.
+// picture is fitted again, and the panel's height, which follows it, reported.
 let fittedTo = 0;
 new ResizeObserver(() => {
   if (preview.clientWidth === fittedTo) return;
   fittedTo = preview.clientWidth;
-  if (shown && !preview.hidden) layOutMapPreview();
+  if (shown && !preview.hidden) {
+    layOutMapPreview();
+    laidOut();
+  }
 }).observe(preview);
