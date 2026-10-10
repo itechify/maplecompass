@@ -403,7 +403,9 @@ function renderData(panel: PanelState) {
   // Opened again, the picture is fitted to the section.
   layOutMapPreview();
 
-  credit.textContent = panel.credit ?? "";
+  // The credit is the footer icon's tooltip, so it takes one small line.
+  credit.title = panel.credit ?? "";
+  credit.setAttribute("aria-label", panel.credit ?? "");
 }
 
 /**
@@ -973,6 +975,14 @@ function render(panel: PanelState) {
     : hotkeys.setup === ""
       ? "Re-mark from Help & Setup, the ? at the top of the panel."
       : "Setup shortcut unavailable. Close the app using it, or change it in Settings (the gear at the top of the panel).";
+  // Why it isn't sure is the chip's tooltip, not a note taking room under the title.
+  const doubt = !doubtful
+    ? ""
+    : panel.candidates && !panel.candidates.chosen
+      ? `${panel.candidates.maps.length} maps share this title; not sure which you're on.`
+      : `Title not confirmed. Keep both minimap title lines visible. ${setupHint}`;
+  uncertainty.title = doubt;
+  uncertainty.setAttribute("aria-label", doubt ? `Not sure: ${doubt}` : "Current Map is uncertain");
   // Without a map, the title bar holds the status and the note under it what to do; the
   // Street Name slot stays the Street Name's.
   recovery.textContent = "";
@@ -994,9 +1004,6 @@ function render(panel: PanelState) {
   } else if (current) {
     street.textContent = current.streetName;
     map.textContent = current.mapName;
-    if (notSure && !panel.candidates) {
-      recovery.textContent = `Title not confirmed. Keep both minimap title lines visible. ${setupHint}`;
-    }
   } else {
     map.textContent = "Reading the minimap title…";
     recovery.textContent = recognition.status === "starting"

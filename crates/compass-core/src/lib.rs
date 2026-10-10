@@ -140,7 +140,7 @@ pub const OSMS_ONLY_CREDIT: &str = "Data: OSMS Data Explorer (osmsdataexplorer.c
 /// The panel's credit (ADR 0008): its data is OSMS Data Explorer's, and its title and
 /// mobs' names open NiaMeowDB's pages.
 pub const OSMS_AND_MEOWDB_CREDIT: &str =
-    "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com)";
+    "Data: OSMS Data Explorer (osmsdataexplorer.com) · Pages: NiaMeowDB (meowdb.com)";
 
 /// Whether minimap titles can be recognised as real maps.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]

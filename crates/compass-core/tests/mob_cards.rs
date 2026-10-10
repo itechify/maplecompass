@@ -388,5 +388,5 @@ fn with_mob_cards_the_panel_credits_only_osms_and_meowdb() {
 
     assert!(state.mob_cards.iter().all(|c| c.image.is_some()));
     assert_eq!(state.credit, Some(OSMS_AND_MEOWDB_CREDIT));
-    assert_eq!(OSMS_AND_MEOWDB_CREDIT, "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com)");
+    assert_eq!(OSMS_AND_MEOWDB_CREDIT, "Data: OSMS Data Explorer (osmsdataexplorer.com) · Pages: NiaMeowDB (meowdb.com)");
 }
