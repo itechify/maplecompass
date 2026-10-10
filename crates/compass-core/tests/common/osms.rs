@@ -49,7 +49,7 @@ pub struct Portal {
     pub within_map: bool,
 }
 
-/// A mob, as `monsters.json` holds it.
+/// A mob, as `monsters.json` holds it. A figure that is `None` is left out.
 #[derive(Debug, Clone)]
 pub struct Mob {
     pub id: u64,
@@ -57,6 +57,21 @@ pub struct Mob {
     pub level: u32,
     pub hp: u64,
     pub exp: u64,
+    /// `PADamage`.
+    pub p_atk: Option<u64>,
+    /// `PDDamage`.
+    pub p_def: Option<u64>,
+    /// `MDDamage`.
+    pub m_def: Option<u64>,
+    pub mp: Option<u64>,
+    pub acc: Option<u64>,
+    /// `eva`.
+    pub avoid: Option<u64>,
+    pub speed: Option<i64>,
+    /// `elements`: each element and its affinity ("Weak", "Strong", "Immune").
+    pub elements: Vec<(String, String)>,
+    /// `gif`, the hash of OSMS's default animation for it: `"gif<id>"` unless set.
+    pub animation: Option<String>,
 }
 
 /// A map on Victoria Island with nothing on it.
@@ -75,8 +90,79 @@ pub fn map(id: u64, street_name: &str, name: &str) -> Map {
     }
 }
 
+/// A mob with no figures but these, and its default animation `"gif<id>"`.
 pub fn mob(id: u64, name: &str, level: u32, hp: u64, exp: u64) -> Mob {
-    Mob { id, name: name.into(), level, hp, exp }
+    Mob {
+        id,
+        name: name.into(),
+        level,
+        hp,
+        exp,
+        p_atk: None,
+        p_def: None,
+        m_def: None,
+        mp: None,
+        acc: None,
+        avoid: None,
+        speed: None,
+        elements: Vec::new(),
+        animation: Some(format!("gif{id}")),
+    }
+}
+
+impl Mob {
+    pub fn p_atk(mut self, p_atk: u64) -> Self {
+        self.p_atk = Some(p_atk);
+        self
+    }
+
+    pub fn p_def(mut self, p_def: u64) -> Self {
+        self.p_def = Some(p_def);
+        self
+    }
+
+    pub fn m_def(mut self, m_def: u64) -> Self {
+        self.m_def = Some(m_def);
+        self
+    }
+
+    pub fn mp(mut self, mp: u64) -> Self {
+        self.mp = Some(mp);
+        self
+    }
+
+    pub fn acc(mut self, acc: u64) -> Self {
+        self.acc = Some(acc);
+        self
+    }
+
+    pub fn avoid(mut self, avoid: u64) -> Self {
+        self.avoid = Some(avoid);
+        self
+    }
+
+    pub fn speed(mut self, speed: i64) -> Self {
+        self.speed = Some(speed);
+        self
+    }
+
+    /// Its affinity (`"Weak"`, `"Strong"`, `"Immune"`) to `element` (`"Fire"`).
+    pub fn element(mut self, element: &str, affinity: &str) -> Self {
+        self.elements.push((element.into(), affinity.into()));
+        self
+    }
+
+    /// The hash of its default animation (`gif`).
+    pub fn animation(mut self, hash: &str) -> Self {
+        self.animation = Some(hash.into());
+        self
+    }
+
+    /// No default animation: `gif` left out.
+    pub fn without_animation(mut self) -> Self {
+        self.animation = None;
+        self
+    }
 }
 
 impl Map {
@@ -334,10 +420,36 @@ impl World {
                     "level": mob.level,
                     "hp": mob.hp,
                     "exp": mob.exp,
-                    "gif": format!("gif{}", mob.id),
-                    "gifs": { "stand": format!("gif{}", mob.id) },
+                    "pushed": 1,
+                    "stagger": 600,
+                    "gifs": { "hit1": format!("hit{}", mob.id), "die1": format!("die{}", mob.id) },
                     "thumbnail": format!("thumb{}", mob.id),
                 });
+                let figures = [
+                    ("PADamage", mob.p_atk),
+                    ("PDDamage", mob.p_def),
+                    ("MDDamage", mob.m_def),
+                    ("mp", mob.mp),
+                    ("acc", mob.acc),
+                    ("eva", mob.avoid),
+                ];
+                for (field, figure) in figures {
+                    if let Some(figure) = figure {
+                        m[field] = json!(figure);
+                    }
+                }
+                if let Some(speed) = mob.speed {
+                    m["speed"] = json!(speed);
+                }
+                if !mob.elements.is_empty() {
+                    let elements: Object<String, Value> =
+                        mob.elements.iter().map(|(element, affinity)| (element.clone(), json!(affinity))).collect();
+                    m["elements"] = Value::Object(elements);
+                }
+                if let Some(hash) = &mob.animation {
+                    m["gif"] = json!(hash);
+                    m["gifs"]["move"] = json!(hash);
+                }
                 let maps: Vec<Value> = self
                     .maps
                     .iter()

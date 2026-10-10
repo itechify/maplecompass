@@ -1,13 +1,12 @@
 //! The Map Preview: OSMS's picture of the whole of the shown map, with every portal on it
 //! marked where it is, as OSMS Data Explorer's own map view marks them (ADR 0008).
 //!
-//! The picture is asked of the source while the preview shows, one at a time, and its
-//! answer kept for the run, so a map shown again shows it at once.
+//! The picture is asked of the source while the preview shows, ahead of the Mob Cards'
+//! animations, and its answer kept for the run, so a map shown again shows it at once.
 
 use crate::map_data::PortalKind;
-use crate::map_index::{MapDataSource, SourceError};
+use crate::pictures::Pictures;
 use serde::Serialize;
-use std::task::Poll;
 
 /// The shown map's Map Preview.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -40,57 +39,13 @@ pub(crate) fn picture_path(picture: &str) -> String {
     format!("maps/{picture}.webp")
 }
 
-/// How long a picture OSMS couldn't serve waits before it is asked for again, while its
-/// map is still shown.
-const RETRY_MS: u64 = 5 * 60_000;
-
-/// The pictures asked of the source: each answer, kept for the run, and the one awaited.
-#[derive(Default)]
-pub(crate) struct Pictures {
-    /// Each picture asked for, by path, its latest answer, and when it came.
-    answers: Vec<(String, Result<String, SourceError>, u64)>,
-    in_flight: Option<String>,
-}
-
-impl Pictures {
-    /// Time passed: check on the picture in flight (even one no longer wanted), then ask
-    /// for `wanted` (a path under OSMS's data) if it has no answer yet, or OSMS couldn't
-    /// be reached for it [`RETRY_MS`] ago.
-    pub fn poll(&mut self, source: &mut dyn MapDataSource, wanted: Option<&str>, at_ms: u64) {
-        if let Some(path) = self.in_flight.take() {
-            match source.picture(&path) {
-                Poll::Pending => {
-                    self.in_flight = Some(path);
-                    return;
-                }
-                Poll::Ready(answer) => self.keep(path, answer, at_ms),
-            }
-        }
-        let Some(wanted) = wanted else { return };
-        let due = match self.answers.iter().find(|(path, ..)| path == wanted) {
-            None => true,
-            Some((_, Err(SourceError::Unreachable(_)), came_ms)) => at_ms.saturating_sub(*came_ms) >= RETRY_MS,
-            Some(_) => false,
-        };
-        if due {
-            match source.picture(wanted) {
-                Poll::Pending => self.in_flight = Some(wanted.to_string()),
-                Poll::Ready(answer) => self.keep(wanted.to_string(), answer, at_ms),
-            }
-        }
-    }
-
-    fn keep(&mut self, path: String, answer: Result<String, SourceError>, at_ms: u64) {
-        self.answers.retain(|(asked, ..)| *asked != path);
-        self.answers.push((path, answer, at_ms));
-    }
-
-    /// The picture at `path`, as the preview shows it.
-    pub fn image(&self, path: &str) -> PreviewImage {
-        match self.answers.iter().find(|(asked, ..)| asked == path) {
-            None => PreviewImage::Loading,
-            Some((_, Ok(url), _)) => PreviewImage::Ready { url: url.clone() },
-            Some((_, Err(_), _)) => PreviewImage::Unavailable,
+impl PreviewImage {
+    /// The picture named `picture`, as `pictures` has it.
+    pub(crate) fn of(picture: &str, pictures: &Pictures) -> Self {
+        match pictures.answer(&picture_path(picture)) {
+            None => Self::Loading,
+            Some(Ok(url)) => Self::Ready { url: url.to_string() },
+            Some(Err(_)) => Self::Unavailable,
         }
     }
 }
