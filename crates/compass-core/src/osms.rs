@@ -8,7 +8,7 @@ use crate::mob_card::{DamageRange, Elements, HpPerExp, MobDetails};
 use crate::portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 use crate::portals::{self, Exit, MapFacts};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// Where OSMS Data Explorer publishes its current data set: each of [`OsmsFiles::NAMES`]
 /// is a file under it.
@@ -152,8 +152,17 @@ fn mob_details(mob: &OsmsMob, all: &[OsmsMob]) -> MobDetails {
             ranked: u32::try_from(all.len()).unwrap_or(u32::MAX),
         }
     });
+    let mut elements = Elements::default();
+    for (element, affinity) in &mob.elements {
+        let list = match affinity {
+            Affinity::Weak => &mut elements.weak,
+            Affinity::Strong => &mut elements.strong,
+            Affinity::Immune => &mut elements.immune,
+        };
+        list.push(element.trim().to_string());
+    }
     MobDetails {
-        elements: Elements::default(),
+        elements,
         touch_damage: p_atk.map(|p| DamageRange { min: 11 * p / 10, max: (3 * p).div_ceil(2) - 1 }),
         mp: mob.mp.filter(|&mp| mp > 0),
         accuracy: mob.acc.filter(|&acc| acc > 0),
@@ -385,9 +394,20 @@ struct OsmsMob {
     eva: Option<u32>,
     /// Below 0 slow, above 0 fast.
     speed: Option<i64>,
+    /// Each element it has an affinity to ("Fire"), in name order; absent for none.
+    #[serde(default)]
+    elements: BTreeMap<String, Affinity>,
     /// The maps it spawns on; absent for a mob on none.
     #[serde(default)]
     maps: Vec<MobOnMap>,
+}
+
+/// A mob's affinity to an element. Any other is a changed format.
+#[derive(Deserialize)]
+enum Affinity {
+    Weak,
+    Strong,
+    Immune,
 }
 
 #[derive(Deserialize)]
