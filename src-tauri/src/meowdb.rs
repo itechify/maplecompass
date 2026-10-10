@@ -1,26 +1,20 @@
 //! The shell's data source: OSMS Data Explorer's file set and pictures (ADR 0008, in
-//! [`crate::osms`] and [`crate::pictures`]), and MeowDB's pages and search (ADR 0003),
-//! fetched over HTTPS with an honest user agent and kept in a disk cache. Reading them is
-//! left to the core.
-//!
-//! The core's world crawl (ADR 0004, until #57) keeps what it learns itself (saved
-//! between launches by `world.rs`) and decides when a map's MeowDB page is due, so its
-//! requests always go to MeowDB, paced to about one every 2 seconds, falling back on the
-//! saved copy when MeowDB can't be reached. Every page MeowDB serves is cached, even one
-//! the core can't read.
+//! [`crate::osms`] and [`crate::pictures`]), and MeowDB's search (ADR 0007), fetched over
+//! HTTPS with an honest user agent and kept in a disk cache. Reading them is left to the
+//! core. No MeowDB page is fetched.
 //!
 //! Item Lookup (ADR 0007): the core asks MeowDB's search for an item's name once per
 //! lookup the player makes. An answer is cached for [`ITEM_SEARCH_FRESH_FOR`] (a week),
-//! so looking the same item up again asks MeowDB nothing.
+//! so looking the same item up again asks MeowDB nothing. Every answer MeowDB gives is
+//! cached, even one the core can't read.
 //!
 //! Fetches run on the async runtime and never block the caller: the first call starts
-//! one and answers `Pending`, later calls collect it. A map page is read from the cache
-//! there too (a page is a few hundred KB to read).
+//! one and answers `Pending`, later calls collect it.
 
 use crate::osms::OsmsSet;
 use crate::pictures::Pictures;
 use compass_core::osms::OsmsFiles;
-use compass_core::{Fetched, ItemHit, MapData, MapDataSource, SourceError, meowdb};
+use compass_core::{Fetched, ItemHit, MapDataSource, SourceError, meowdb};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::task::Poll;
@@ -55,9 +49,6 @@ pub struct MeowDbSource {
     osms: OsmsSet,
     /// OSMS's pictures.
     pictures: Pictures,
-    /// The world crawl's page being fetched in the background, and where its data will
-    /// arrive.
-    crawl_page_in_flight: Option<(String, Receiver<Answer<MapData>>)>,
     /// The item name being searched for, and where MeowDB's items will arrive.
     item_search_in_flight: Option<(String, Receiver<Answer<Vec<ItemHit>>>)>,
 }
@@ -71,13 +62,8 @@ impl MeowDbSource {
             pictures: Pictures::new(client.clone(), &cache_dir),
             client,
             cache_dir,
-            crawl_page_in_flight: None,
             item_search_in_flight: None,
         })
-    }
-
-    fn map_file(&self, id: &str) -> PathBuf {
-        self.cache_dir.join(format!("map-{id}.html"))
     }
 
     /// In the background: fetch `url` and cache it at `path`. What `read` makes of it
@@ -101,25 +87,6 @@ impl MeowDbSource {
 impl MapDataSource for MeowDbSource {
     fn osms_files(&mut self) -> Poll<Answer<OsmsFiles>> {
         self.osms.poll()
-    }
-
-    fn crawl_data(&mut self, id: &str) -> Poll<Answer<MapData>> {
-        if let Some((asked, arriving)) = &self.crawl_page_in_flight {
-            if asked == id {
-                let Poll::Ready(data) = collect(arriving) else { return Poll::Pending };
-                self.crawl_page_in_flight = None;
-                if let Err(e) = &data {
-                    eprintln!("map {id}: {e}");
-                }
-                return Poll::Ready(data);
-            }
-        }
-        // A new map: an earlier fetch still in flight finishes into the cache unheard.
-        let owned = id.to_string();
-        let read = move |page: &str| meowdb::read_map_page(page, &owned);
-        let arriving = self.fetch(meowdb::map_url(id), self.map_file(id), read);
-        self.crawl_page_in_flight = Some((id.to_string(), arriving));
-        Poll::Pending
     }
 
     fn picture(&mut self, path: &str) -> Poll<Result<String, SourceError>> {
