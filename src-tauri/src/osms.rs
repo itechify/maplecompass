@@ -9,10 +9,11 @@
 //! file fails, or the set doesn't read, nothing is saved, and the core keeps the set it
 //! has.
 
-use compass_core::osms::{self, OsmsFiles, SavedFiles};
+use crate::http;
 use compass_core::SourceError;
+use compass_core::osms::{self, OsmsFiles, SavedFiles};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::mpsc::Receiver;
 use std::task::Poll;
 use std::time::UNIX_EPOCH;
 
@@ -48,23 +49,15 @@ impl OsmsSet {
     /// ones collect it.
     pub fn fetch(&mut self) -> Poll<Answer> {
         if let Some(arriving) = &self.in_flight {
-            let answer = match arriving.try_recv() {
-                Err(TryRecvError::Empty) => return Poll::Pending,
-                Ok(answer) => answer,
-                Err(TryRecvError::Disconnected) => Err(SourceError::Unreachable("fetch abandoned".into())),
-            };
+            let Poll::Ready(answer) = http::collect(arriving) else { return Poll::Pending };
             self.in_flight = None;
             if let Err(e) = &answer {
                 eprintln!("OSMS's file set: {e}");
             }
             return Poll::Ready(answer);
         }
-        let (tx, rx) = mpsc::channel();
         let (client, file) = (self.client.clone(), self.file.clone());
-        tauri::async_runtime::spawn(async move {
-            let _ = tx.send(fetch_and_save(&client, &file).await);
-        });
-        self.in_flight = Some(rx);
+        self.in_flight = Some(http::in_background(async move { fetch_and_save(&client, &file).await }));
         Poll::Pending
     }
 }
@@ -78,16 +71,10 @@ async fn fetch_and_save(client: &reqwest::Client, file: &Path) -> Answer {
 }
 
 /// Fetch OSMS's five files, one after another: the first that fails fails the set.
-pub async fn fetch(client: &reqwest::Client) -> Result<OsmsFiles, String> {
+async fn fetch(client: &reqwest::Client) -> Result<OsmsFiles, String> {
     let mut texts = Vec::new();
     for name in OsmsFiles::NAMES {
-        let url = format!("{}{name}", osms::DATA_URL);
-        let response = client.get(&url).send().await.and_then(|r| r.error_for_status());
-        let text = match response {
-            Ok(response) => response.text().await,
-            Err(e) => Err(e),
-        };
-        texts.push(text.map_err(|e| format!("{url}: {e}"))?);
+        texts.push(http::text(client, &format!("{}{name}", osms::DATA_URL)).await?);
     }
     let [maps, portals, monsters, map_manifest, lookups]: [String; 5] =
         texts.try_into().map_err(|_| "not five files".to_string())?;
@@ -96,7 +83,7 @@ pub async fn fetch(client: &reqwest::Client) -> Result<OsmsFiles, String> {
 
 /// Fetch OSMS's live set now, whatever is saved, for the probe.
 pub fn fetch_live() -> Result<OsmsFiles, String> {
-    let client = crate::meowdb::client().map_err(|e| e.to_string())?;
+    let client = http::client().map_err(|e| e.to_string())?;
     tauri::async_runtime::block_on(fetch(&client))
 }
 
