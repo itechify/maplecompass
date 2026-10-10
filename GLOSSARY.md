@@ -124,11 +124,11 @@ A rate measured over the last few minutes of active play in a session, as oppose
 _Avoid_: current rate, live rate
 
 **Personal Best**:
-The highest Rolling Rate, in EXP/h, the player has had over a full 5 minutes of active play on one map, shared by all their characters. The Grind Tracker shows the one from earlier Visits and marks the Rolling Rate while it beats it, and the player can remove one from history that came from a bug.
+The highest Rolling Rate, in EXP/h, the player has had over a full 5 minutes of active play on one map, shared by all their characters. A map keeps a history of its best Visits, from which the player can remove one that came from a bug. The Grind Tracker shows the best in the history and marks the Rolling Rate while it beats it.
 _Avoid_: record, high score, PB, max
 
 **Visit**:
-The stretch from the panel confirming a map until it confirms another. Losing the title for a while doesn't end it; closing MapleCompass does. Each map keeps its best Visits, and its Personal Best is the best of them.
+The stretch from the panel confirming a map until it confirms another. Losing the title for a while doesn't end it; closing MapleCompass does. Each map keeps a history of its best Visits, and its Personal Best is the best of them.
 _Avoid_: stay, trip
 
 **Time to Level**:

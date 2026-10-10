@@ -7,10 +7,10 @@
 //!   certain and has a Map Summary: the core says which map that is. Maps that share a
 //!   title but would show the same count as certain, as the first of them, which the
 //!   panel shows: their bests are kept under its ID.
-//! - A map's Personal Best is the best of its Visits'. The Grind Tracker's Best row shows
-//!   the best of the earlier Visits, the map's history, from arriving: it can't change
-//!   until the Visit ends, when this Visit's best joins them, unless the player removes
-//!   it. No rate is capped or rejected.
+//! - A map's Personal Best is the best of its Visits'. Each map keeps a history of its
+//!   best Visits, the ones that have ended, and the Grind Tracker's Best row shows the
+//!   best in it from arriving: it can't change until the Visit ends, when this Visit's
+//!   best joins the history, unless the player removes it. No rate is capped or rejected.
 //! - A Visit's best is for the map it was last certain on with a rate to count. The
 //!   player may choose among Candidates, and the hotkey goes past the others on the way.
 //!   One shown with nothing to count yet (just after a reset, say) doesn't take the
@@ -21,7 +21,7 @@
 //!   the date in the history.
 //! - Bests are per map (MeowDB map ID), for every character: nothing about the Session
 //!   touches them.
-//! - Each map keeps its 10 best Visits; one that doesn't make them is dropped.
+//! - Each map's history keeps its 10 best Visits; one that doesn't make them is dropped.
 //! - They outlive the launch, as the saved world does: the core hands them to the shell
 //!   as [`SavedBests`], with a revision so it saves them only when they change, and takes
 //!   them back at startup. What it hands out includes the Visit under way's best, as if
@@ -80,8 +80,9 @@ pub struct VisitBest {
 /// Every map's Visit bests, and the Visit under way's.
 #[derive(Debug, Default)]
 pub(crate) struct Bests {
-    /// The best of each Visit that has ended.
-    earlier: SavedBests,
+    /// The history: each map's best Visits that have ended, highest first. The Best row
+    /// shows the first, and the player can remove it.
+    history: SavedBests,
     /// The Visit under way's best on each map it was certain on with a rate to count: one,
     /// unless the player chose among Candidates. Only `on`'s is the Visit's best.
     visit: Vec<(String, VisitBest)>,
@@ -124,7 +125,7 @@ impl Bests {
     pub fn end_visit(&mut self) {
         let on = self.on.take();
         let Some((map, best)) = self.visit.drain(..).find(|(id, _)| Some(id) == on.as_ref()) else { return };
-        join(&mut self.earlier, map, best);
+        join(&mut self.history, map, best);
     }
 
     /// The Visit under way's best on the map it is for, if it has one.
@@ -145,7 +146,7 @@ impl Bests {
     /// `map`'s Personal Best from its history, the best of the earlier Visits, if it has
     /// one: what the Best row shows.
     pub fn history_best(&self, map: &str) -> Option<VisitBest> {
-        self.earlier.maps.iter().find(|m| m.id == map).and_then(|m| m.visits.first()).copied()
+        self.history.maps.iter().find(|m| m.id == map).and_then(|m| m.visits.first()).copied()
     }
 
     /// Remove `map`'s Personal Best from its history, the best of the earlier Visits. The
@@ -153,7 +154,7 @@ impl Bests {
     /// the Visit ends.
     pub fn remove(&mut self, map: &str) {
         self.changing(|bests| {
-            let maps = &mut bests.earlier.maps;
+            let maps = &mut bests.history.maps;
             let Some(at) = maps.iter().position(|m| m.id == map) else { return };
             if !maps[at].visits.is_empty() {
                 maps[at].visits.remove(0);
@@ -167,7 +168,7 @@ impl Bests {
     /// Every map's Visit bests, for the shell to save: the Visit under way's as if it
     /// ended now, since closing MapleCompass ends it.
     pub fn saved(&self) -> SavedBests {
-        let mut saved = self.earlier.clone();
+        let mut saved = self.history.clone();
         if let Some((map, best)) = self.this_visit() {
             join(&mut saved, map.clone(), best);
         }
@@ -185,7 +186,7 @@ impl Bests {
             map.visits.retain(|best| best.exp_per_hour > 0);
         }
         saved.maps.retain(|map| !map.visits.is_empty());
-        self.changing(|bests| bests.earlier = saved);
+        self.changing(|bests| bests.history = saved);
     }
 
     /// Changes whenever what [`Bests::saved`] hands out does: a best removed from the
