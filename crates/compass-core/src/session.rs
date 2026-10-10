@@ -6,12 +6,15 @@
 //!   16,836). The range learned is what every reading in the level allows; it narrows
 //!   as the percentage grows.
 //! - A reading that fits the range is the same level: less EXP than before is a death.
-//!   One that doesn't fit is a level-up if it allows only bigger totals and the bar was
-//!   near 100%, a misread otherwise, unless [`SWITCH_READINGS`] in a row fit another
-//!   level. If they carry on from the last reading taken, and their level is within
-//!   [`RELEARN_PERCENT`] of the one learned, the level was learned wrong (a misread that
-//!   fitted it narrowed the range past the true total): it is learned anew from them,
-//!   and the Session goes on. Otherwise it is a character switch, which starts a new
+//!   One that doesn't fit is a level-up if it allows only bigger totals and the bar fell
+//!   from near 100%, its EXP and its percentage both (one figure misread near the end
+//!   of a level can allow bigger totals, but the other hasn't fallen); a misread
+//!   otherwise, unless [`SWITCH_READINGS`] in a row fit another level. If their EXP
+//!   carries on from the last reading taken (see [`carries_on`]), and their level is
+//!   within [`RELEARN_PERCENT`] of the one learned, the level was learned wrong (a
+//!   misread that fitted it narrowed the range past the true total), or they are one
+//!   misread repeated on still frames: it is learned anew from them, and the Session
+//!   goes on. Otherwise it is a character switch, which starts a new
 //!   Session. A reading barely into the next level may fit the range too (2 [0.01%]
 //!   allows a wide range of totals); when the bar went from near 100% to as near 0%, it
 //!   is a level-up all the same.
@@ -467,7 +470,7 @@ impl Session {
                 self.same_level(narrowed, last, bar, at_ms);
             }
         } else if let Some(doubled_total) = total.doubled_midpoint()
-            && (wrapped || self.levelled_up(total, last, allowed))
+            && (wrapped || self.levelled_up(total, last, bar, allowed))
         {
             // What was left of the old level, and what is in the new one.
             let gain = (doubled_total as i64 - 2 * last.exp as i64 + 1) / 2 + bar.exp as i64;
@@ -486,7 +489,7 @@ impl Session {
             self.misfits = Some(misfits);
             if misfits.count < SWITCH_READINGS {
                 // Not yet.
-            } else if total.close_to(misfits.total) && carries_on(last, bar, self.near()) {
+            } else if total.close_to(misfits.total) && carries_on(last, bar, self.near(), misfits.total) {
                 // The level was learned wrong: the Session goes on.
                 self.same_level(misfits.total, last, bar, at_ms);
             } else {
@@ -515,12 +518,17 @@ impl Session {
         }
     }
 
-    /// A reading that doesn't fit the level learned (`total`), and allows the totals
-    /// `allowed`, is the next level's after `last`: its total is higher, and the bar was
-    /// near 100%. "Near" is within 10 points, or twice the largest gain seen in the
-    /// Session if that is more.
-    fn levelled_up(&self, total: Total, last: ExpBar, allowed: Total) -> bool {
-        last.percent_hundredths + self.near() >= HUNDRED_PERCENT && allowed.lo > total.hi
+    /// A reading `bar` that doesn't fit the level learned (`total`), and allows the totals
+    /// `allowed`, is the next level's after `last`: its total is higher, and the bar fell
+    /// from near 100%, both its EXP and its percentage. "Near" is within 10 points, or
+    /// twice the largest gain seen in the Session if that is more. One figure misread
+    /// near the end of a level can make a higher total, but the other, read right,
+    /// hasn't fallen.
+    fn levelled_up(&self, total: Total, last: ExpBar, bar: ExpBar, allowed: Total) -> bool {
+        last.percent_hundredths + self.near() >= HUNDRED_PERCENT
+            && bar.exp < last.exp
+            && bar.percent_hundredths < last.percent_hundredths
+            && allowed.lo > total.hi
     }
 
     /// A reading `bar` barely into the next level after `last`: the bar was near 100%
@@ -783,12 +791,12 @@ fn three_figures(exp_per_hour: u64) -> u64 {
     (exp_per_hour + step / 2) / step * step
 }
 
-/// Whether `bar` carries on from `last` as the same level could: the percentage moved
-/// no more than `near` points, and the same way as the EXP (or one of them stayed).
-fn carries_on(last: ExpBar, bar: ExpBar, near: u32) -> bool {
-    use std::cmp::Ordering::{Greater, Less};
-    let ways = (bar.exp.cmp(&last.exp), bar.percent_hundredths.cmp(&last.percent_hundredths));
-    bar.percent_hundredths.abs_diff(last.percent_hundredths) <= near && !matches!(ways, (Greater, Less) | (Less, Greater))
+/// Whether `bar`, which fits a level of `total`, carries on from `last` as the same
+/// level could: the EXP moved no more than `near` points of it, either way. Not the
+/// percentage: `bar`'s may be a misread repeated on still frames, which can even fall
+/// as the EXP grows.
+fn carries_on(last: ExpBar, bar: ExpBar, near: u32, total: Total) -> bool {
+    u128::from(bar.exp.abs_diff(last.exp)) * u128::from(HUNDRED_PERCENT) <= u128::from(near) * u128::from(total.lo)
 }
 
 /// Time to Level rounded no finer than it can be trusted: to the minute under an hour,

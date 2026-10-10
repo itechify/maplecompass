@@ -308,6 +308,46 @@ fn a_death_near_the_end_of_a_level_is_a_death_not_a_level_up() {
     assert_eq!(died.exp_tracking.time_to_level_s, None);
 }
 
+/// 100 EXP every 10 s on the recording's ~16,682 EXP level, from 15,500 [92.91%] to
+/// 16,500 [98.91%] at 100 s, and `misread` read at 35 s, while the bar shows 15,800
+/// [94.71%]; measured at 120 s, the start of a half minute.
+fn near_the_end_of_a_level(misread: Option<ExpBar>) -> PanelState {
+    let mut compass = tracking();
+    for k in 0..=10 {
+        let exp = 15_500 + 100 * k;
+        read(&mut compass, k * 10 * S, exp, percent_lv15(exp));
+        if let (3, Some(bar)) = (k, misread) {
+            read(&mut compass, 35 * S, bar.exp, bar.percent_hundredths);
+        }
+    }
+    compass.tick(120 * S).clone()
+}
+
+#[test]
+fn a_misread_near_the_end_of_a_level_is_not_a_level_up() {
+    // 15,800 [94.71%] with its 0 read as an 8: a level of ~16,767 EXP, bigger than the
+    // one learned, with the bar near 100%. But at a level-up the EXP and the percentage
+    // both fall, and here neither did.
+    let clean = near_the_end_of_a_level(None);
+    let misread = near_the_end_of_a_level(Some(ExpBar { exp: 15_880, percent_hundredths: 9471 }));
+
+    assert_eq!(misread.exp_tracking, clean.exp_tracking);
+    // From 15,600 at 10 s, the Session's start; the 20 s since 16,500 count too.
+    assert_eq!(exp_per_hour(&misread), (Some(29_455), Some(29_455)), "900 EXP in 110 s, no jump");
+}
+
+#[test]
+fn a_misread_near_the_end_of_a_level_is_not_a_character_switch() {
+    // 15,800 [94.71%] with its 5 read as a 6: 16,800, a level of ~17,738 EXP. Taken for
+    // a level-up, the true readings after it would have less EXP than it and a higher
+    // percentage, as the same level can't: three of them, another character's.
+    let clean = near_the_end_of_a_level(None);
+    let misread = near_the_end_of_a_level(Some(ExpBar { exp: 16_800, percent_hundredths: 9471 }));
+
+    assert!(!misread.exp_tracking.character_switched);
+    assert_eq!(misread.exp_tracking, clean.exp_tracking);
+}
+
 #[test]
 fn a_switch_to_another_character_starts_a_new_session() {
     let mut compass = a_minute_in();
@@ -431,6 +471,39 @@ fn the_same_misread_on_a_still_bar_keeps_the_session() {
     assert_eq!(exp_per_hour(&misread), exp_per_hour(&clean));
     // From 4,100 at 10 s, the Session's start; the 30 s since 5,100 count too.
     assert_eq!(exp_per_hour(&misread), (Some(25_714), Some(25_714)), "1,000 EXP in 140 s");
+}
+
+#[test]
+fn the_same_misread_as_the_bar_moves_on_keeps_the_session() {
+    // 50 EXP every 10 s on the recording's ~16,682 EXP level, up to 5,000 [29.97%] at
+    // 100 s; then the bar stands still while the player loots, and 5,050 at 120 s.
+    let mut readings: Vec<(u64, u64, u32)> =
+        (0..=10).map(|k| (k * 10, 4500 + 50 * k, percent_lv15(4500 + 50 * k))).collect();
+    readings.extend((101..=110).map(|at| (at, 5000, percent_lv15(5000))));
+    readings.push((120, 5050, percent_lv15(5050)));
+    let mut clean = tracking();
+    for &(at, exp, percent) in &readings {
+        read(&mut clean, at * S, exp, percent);
+    }
+
+    // The first three frames of 5,000 read 29.97% as 29.37%: from 4,950 [29.67%], more
+    // EXP and a lower percentage, as no level allows; but of the level they fit, ~17,024
+    // EXP, the EXP moved as little as ever. The Session goes on, the level learned anew,
+    // and learned back from the true readings after them.
+    let mut misread = tracking();
+    for &(at, exp, percent) in &readings {
+        let percent = if (100..=102).contains(&at) { 2937 } else { percent };
+        let state = read(&mut misread, at * S, exp, percent);
+        assert_eq!(state.exp_tracking.state == TrackingState::Waiting, at == 0, "at {at} s");
+        assert!(!state.exp_tracking.character_switched, "at {at} s");
+    }
+
+    let clean = clean.tick(150 * S).clone();
+    let misread = misread.tick(150 * S).clone();
+    assert_eq!(misread.exp_tracking.state, TrackingState::Active);
+    assert_eq!(exp_per_hour(&misread), exp_per_hour(&clean));
+    // From 4,550 at 10 s, the Session's start; the 30 s since 5,050 count too.
+    assert_eq!(exp_per_hour(&misread), (Some(12_857), Some(12_857)), "500 EXP in 140 s");
 }
 
 #[test]
