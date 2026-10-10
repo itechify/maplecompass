@@ -134,12 +134,13 @@ pub struct CurrentMap {
 }
 
 /// Search's credit (ADR 0008): its results and routes are worked out from OSMS Data
-/// Explorer's data, and open no pages.
-pub const OSMS_DATA_CREDIT: &str = "Data: OSMS Data Explorer (osmsdataexplorer.com)";
+/// Explorer's data, and open no pages, so MeowDB isn't credited.
+pub const OSMS_ONLY_CREDIT: &str = "Data: OSMS Data Explorer (osmsdataexplorer.com)";
 
 /// The panel's credit (ADR 0008): its data is OSMS Data Explorer's, and its title and
 /// mobs' names open NiaMeowDB's pages.
-pub const OSMS_CREDIT: &str = "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com)";
+pub const OSMS_AND_MEOWDB_CREDIT: &str =
+    "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com)";
 
 /// Whether minimap titles can be recognised as real maps.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
@@ -185,7 +186,7 @@ pub struct PanelState {
     /// with no map shown, on a map without a picture, and while it isn't settled which
     /// of the maps sharing a title the player is on.
     pub map_preview: Option<MapPreview>,
-    /// [`OSMS_CREDIT`] whenever a map is shown.
+    /// [`OSMS_AND_MEOWDB_CREDIT`] whenever a map is shown.
     pub credit: Option<&'static str>,
     /// The Mob Card of each mob the panel lists, in its order; empty while it lists none.
     pub mob_cards: Vec<MobCard>,
@@ -530,7 +531,7 @@ impl Compass {
         }
         self.state.candidates = self.set.as_ref().and_then(|set| self.shown_map.candidates(&set.maps));
         self.sync_pictured();
-        self.state.credit = self.state.map.as_ref().map(|_| OSMS_CREDIT);
+        self.state.credit = self.state.map.as_ref().map(|_| OSMS_AND_MEOWDB_CREDIT);
     }
 
     /// What shows OSMS's pictures, with those in so far: the Map Preview and the listed
@@ -841,7 +842,10 @@ impl Compass {
     /// The Personal Bests page now: every map's best as saved, with what OSMS's file set
     /// held says of the map.
     fn bests_page(&self) -> BestsPage {
-        let map = |id: &str| self.set.as_ref().and_then(|held| held.maps.maps().find(|(entry, _)| entry.id == id));
+        let map = |id: &str| {
+            let maps = &self.set.as_ref()?.maps;
+            Some((maps.entry(id)?, maps.data(id)?))
+        };
         bests_page::page(&self.session.bests().saved(), map, certain_map(&self.state), self.wall_clock)
     }
 

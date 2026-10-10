@@ -6,7 +6,7 @@ mod common;
 
 use common::osms::{self, SUNSET_SKY, map, mob};
 use common::{FakeSource, arrive, sample_frame};
-use compass_core::{Compass, LevelRange, MapData, MapDataStatus, MoreMobs, OSMS_CREDIT, PanelState, Request};
+use compass_core::{Compass, LevelRange, MapData, MapDataStatus, MoreMobs, OSMS_AND_MEOWDB_CREDIT, PanelState, Request};
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
 const KERNING: &str = "victoria-road__kerning-city--window";
@@ -112,8 +112,8 @@ fn the_shown_map_credits_osms_for_its_data_and_meowdb_for_its_pages() {
 
     let state = arrive(&mut compass, KERNING, 0);
 
-    assert_eq!(state.credit, Some(OSMS_CREDIT));
-    assert_eq!(OSMS_CREDIT, "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com)");
+    assert_eq!(state.credit, Some(OSMS_AND_MEOWDB_CREDIT));
+    assert_eq!(OSMS_AND_MEOWDB_CREDIT, "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com)");
 }
 
 #[test]

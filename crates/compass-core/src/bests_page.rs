@@ -18,7 +18,7 @@ use crate::map_data::MapData;
 use crate::map_index::MapEntry;
 use crate::personal_best::SavedBests;
 use crate::shown_map::LevelRange;
-use crate::{OSMS_CREDIT, meowdb};
+use crate::{OSMS_AND_MEOWDB_CREDIT, meowdb};
 use serde::Serialize;
 
 /// The Personal Bests page, as the shell renders it into a page for the browser.
@@ -30,8 +30,8 @@ pub struct BestsPage {
     pub as_of_unix_ms: Option<u64>,
     /// Every map with a Personal Best, highest EXP/h first.
     pub maps: Vec<BestsPageMap>,
-    /// [`OSMS_CREDIT`]: the names, levels and ceilings are from OSMS's data, and the rows
-    /// open MeowDB's pages.
+    /// [`OSMS_AND_MEOWDB_CREDIT`]: the names, levels and ceilings are from OSMS's data,
+    /// and the rows open MeowDB's pages.
     pub credit: &'static str,
 }
 
@@ -99,7 +99,7 @@ pub(crate) fn page<'a>(
         })
         .collect();
     maps.sort_by(|a, b| b.exp_per_hour.cmp(&a.exp_per_hour).then_with(|| a.id.cmp(&b.id)));
-    BestsPage { as_of_unix_ms: now_unix_ms, maps, credit: OSMS_CREDIT }
+    BestsPage { as_of_unix_ms: now_unix_ms, maps, credit: OSMS_AND_MEOWDB_CREDIT }
 }
 
 /// The lowest and highest of the map's mobs' levels. A map's mobs are read in any order
