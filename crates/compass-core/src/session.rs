@@ -771,7 +771,10 @@ impl Session {
 }
 
 /// An EXP rate as the Grind Tracker writes it, to 3 significant figures, halves up:
-/// 66,523 is 66,500, and 66,550 is 66,600.
+/// 66,523 is 66,500, and 66,550 is 66,600. It must agree with `rate()` in
+/// `src/grind-tracker.ts`, which writes Last 5 min and the Best row: the star compares
+/// the two through this, so it never shows beside two figures that read the same
+/// (`the_star_compares_the_rates_as_the_grind_tracker_writes_them`).
 fn three_figures(exp_per_hour: u64) -> u64 {
     let mut step = 1;
     while exp_per_hour / step >= 1000 {
