@@ -116,7 +116,7 @@ fn made_up_search(query: &str) -> Result<Vec<ItemHit>, SourceError> {
                 {"id":603,"name":"Gladius","sub":"One-Handed Sword"},
                 {"id":604,"name":"Hero's Cape","sub":"Cape"}
             ],"quests":[
-                {"id":"9001","name":"Hero's Gladius","sub":"Lv 50+"}
+                {"id":"9001","name":"Hero's Gladius","sub":"A quest"}
             ]}"#
         }
         // Six items share the name, as many as an answer holds.
