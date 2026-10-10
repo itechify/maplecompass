@@ -66,11 +66,11 @@ pub struct BestsPageMap {
 }
 
 /// The Personal Bests page for the bests `saved`, at `now_unix_ms` by the wall clock.
-/// `map` gives a map's index entry and page, if they are known; `here` is the map the
-/// player is certainly on, if any.
+/// `map` gives a map's entry in the map list and its data, if it is in the list; `here`
+/// is the map the player is certainly on, if any.
 pub(crate) fn page<'a>(
     saved: &SavedBests,
-    map: impl Fn(&str) -> (Option<&'a MapEntry>, Option<&'a MapData>),
+    map: impl Fn(&str) -> Option<(&'a MapEntry, &'a MapData)>,
     here: Option<&str>,
     now_unix_ms: Option<u64>,
 ) -> BestsPage {
@@ -79,7 +79,7 @@ pub(crate) fn page<'a>(
         .iter()
         .filter_map(|bests| {
             let best = bests.visits.first()?;
-            let (entry, data) = map(&bests.id);
+            let (entry, data) = map(&bests.id).unzip();
             let ceiling = data.and_then(|d| d.summary).map(|s| s.exp_per_hour.solo).filter(|&c| c > 0);
             Some(BestsPageMap {
                 id: bests.id.clone(),
