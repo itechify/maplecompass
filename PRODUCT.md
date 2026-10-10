@@ -10,7 +10,7 @@ web
 
 The primary user is the average MapleStory Classic player, playing MapleStory Classic World. Product decisions should serve ordinary players rather than assume expert map knowledge or familiarity with MapleCompass internals.
 
-MapleCompass isn't released publicly yet. ADR 0008 lifted ADR 0003's ban on a public release; the release still waits on the repo's history being cleaned of MeowDB's pages, and on the font and recogniser terms below.
+MapleCompass is public: its repository and its releases (from 0.7.0) are on GitHub. ADR 0008 lifted ADR 0003's ban on a public release, and the repo's history was cleaned of MeowDB's pages before it went public. `docs/releasing.md` says how a version is made and released.
 
 ## Product Purpose
 
@@ -43,7 +43,7 @@ The companion follows the player's current Map by recognising the displayed Mini
 ## Brand Commitments
 
 - Product name: MapleCompass. The app icon is the pixel-art gold compass in [assets/icon.png](assets/icon.png), with packaged variants in `src-tauri/icons`.
-- The windows are set in NEXON's Maplestory typeface, bundled in `assets/fonts` with its provenance in `NOTICE.md`. Its terms for a third-party app need confirming before any public release.
+- The windows are set in NEXON's Maplestory typeface, bundled in `assets/fonts` with its provenance in `NOTICE.md`. Help & Setup's About & Credits and `THIRD-PARTY-NOTICES.md` credit it.
 - Each screen credits what it shows. The panel's footer (as the tooltip of its info icon) and the Personal Bests page credit `Data: OSMS Data Explorer (osmsdataexplorer.com) · Pages: NiaMeowDB (meowdb.com)`; the search view, which opens no pages, credits `Data: OSMS Data Explorer (osmsdataexplorer.com)`; setup's test read says `Map names from OSMS Data Explorer`.
 - Preserve the explicit first-run account-risk disclosure. The product is a third-party companion, not made or approved by Nexon.
 - The windows lean into MapleStory: they borrow the game's own window language (the minimap and the Quest Helper), so they read as if they shipped with the game (chosen by the user in the October 2026 critique; see DESIGN.md).
@@ -54,7 +54,7 @@ The companion follows the player's current Map by recognising the displayed Mini
 - [GLOSSARY.md](GLOSSARY.md) and [docs/adr](docs/adr/) hold the domain vocabulary and accepted technical decisions.
 - `samples/minimap/` contains real title and game-window screenshots used for recognition and setup tests. These are evidence for recognition, not screenshots of the overlay design.
 - `crates/compass-core/tests/` exercises public inputs and resulting panel state, on made-up worlds in OSMS's shape. Its `fixtures/` directory holds only the map names fixture (every Map's ID, Street Name, Map Name and Region), which recognition is tested against.
-- [ADR 0002](docs/adr/0002-one-bundled-title-recogniser.md) records the recogniser selection and model attribution requirements. `crates/compass-core/models/NOTICE.md` contains the bundled model notice; public release also requires the attribution and licence work identified by that ADR.
+- [ADR 0002](docs/adr/0002-one-bundled-title-recogniser.md) records the recogniser selection and model attribution requirements. `crates/compass-core/models/NOTICE.md` contains the bundled model notice, and Help & Setup's About & Credits and `THIRD-PARTY-NOTICES.md` carry its attribution and licence, as that ADR requires of a public release.
 
 ## Product Principles
 
@@ -72,5 +72,5 @@ The panel is read over busy, saturated game scenes, often on high-DPI screens or
 
 ## Open Decisions
 
-- Release timing and support commitments beyond Windows remain undecided. A public release waits on the history clean-up and the terms named under Users.
+- Support commitments beyond Windows remain undecided.
 - Item Lookup's MeowDB search is a grey area under MeowDB's terms, to raise with MeowDB (ADR 0007).

@@ -1,0 +1,144 @@
+# Versioning and releasing
+
+How a MapleCompass version is numbered, made and published as a GitHub Release. Follow it top to bottom for every release.
+
+## Versioning
+
+- Versions are `MAJOR.MINOR.PATCH`. Before 1.0:
+  - **MINOR** (0.6.0 → 0.7.0) for anything a player notices as new or different: features, a changed panel, a new data source.
+  - **PATCH** (0.2.0 → 0.2.1) for fixes only, with nothing new to learn.
+- The version lives in four files, which always agree:
+  - `package.json` (`"version"`)
+  - `src-tauri/tauri.conf.json` (`"version"`): the installers' version, and the one About & Credits shows
+  - `src-tauri/Cargo.toml` (`version`)
+  - `crates/compass-core/Cargo.toml` (`version`)
+
+  `Cargo.lock` follows when Cargo next builds.
+- The tag is `vX.Y.Z`, on the merge commit that brings the version into `main`. The release is titled `MapleCompass X.Y.Z`.
+- A published version is never moved or rebuilt. If something is wrong with it, release the next PATCH.
+
+## Before you start
+
+- **`main` holds everything for the release, and passes its checks:**
+  - `cargo test`
+  - `cargo test -p maplecompass --lib`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
+  - `pnpm build`
+- **The live data still reads:** `cargo run -p maplecompass --example probe osms` reads OSMS Data Explorer's live set in full.
+- **A smoke test against the game** (`pnpm tauri dev`): the map is recognised; the Map section shows its picture; a mob search sets a Hunting Target and Navigation shows the route; a Mob Card opens; Item Lookup opens a page.
+- **The credits are current:**
+  - If dependencies were added, removed or upgraded, regenerate the crate table in `THIRD-PARTY-NOTICES.md` (how is described there).
+  - If a bundled asset or data source changed, update About & Credits in `setup.html` to match.
+- **Tools:** `gh` is signed in to an account that can push to `itechify/maplecompass`. Cargo is on `PATH`; in Git Bash, `export PATH="$HOME/.cargo/bin:$PATH"`.
+
+## 1. Bump the version
+
+From an up-to-date `main`, on a branch named for the version:
+
+```bash
+git fetch origin
+git switch -c t3code/version-X.Y.Z origin/main
+```
+
+1. Change the version in the four files listed above.
+2. Run `cargo check -p maplecompass` so `Cargo.lock` follows.
+3. Check that `git diff --stat` shows those four files and `Cargo.lock`, with one line changed in each, two in `Cargo.lock`.
+4. Commit:
+
+```bash
+git commit -am "Version X.Y.Z"
+```
+
+## 2. Merge into main
+
+Merge without fast-forwarding, so the version has its own merge commit to tag, then push:
+
+```bash
+git switch main && git pull --ff-only origin main
+git merge --no-ff t3code/version-X.Y.Z -m "Merge version X.Y.Z"
+git push origin main
+```
+
+## 3. Build the release files
+
+On the merge commit, with nothing uncommitted:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm tauri build
+```
+
+Tauri builds the optimised app and both installers. It downloads the NSIS and WiX tools the first time. The files land under `target/release/`, at the repo root, because the repo is a Cargo workspace:
+
+| Built file | Upload it as |
+| --- | --- |
+| `target/release/bundle/nsis/MapleCompass_X.Y.Z_x64-setup.exe` | as is |
+| `target/release/bundle/msi/MapleCompass_X.Y.Z_x64_en-US.msi` | as is |
+| `target/release/maplecompass.exe` | `maplecompass-X.Y.Z-portable.exe` (copy and rename) |
+| `THIRD-PARTY-NOTICES.md` | as is |
+
+Before uploading, install the setup `.exe` over the previous version and check that it starts: About & Credits shows `X.Y.Z`, and settings and Personal Bests carried over.
+
+## 4. Tag
+
+```bash
+git tag -a vX.Y.Z -m "MapleCompass X.Y.Z"
+git push origin vX.Y.Z
+```
+
+## 5. Write the release notes
+
+Write them for players, not developers, in the shape of the previous releases. Put them in a file outside the repo, say `notes.md`:
+
+```markdown
+<One sentence: what this version gives the player.>
+
+> MapleCompass isn't made, endorsed or supported by NEXON. Using any third-party tool with MapleStory is at your own risk.
+
+## Changes
+
+- **<Feature in bold.>** <What the player sees and does, in the panel's own words.>
+- <Smaller changes, one line each.>
+
+Your settings, hotkeys and Personal Bests carry over from <previous version>.
+
+## Download (Windows 10/11, 64-bit)
+
+| File | What it is |
+| --- | --- |
+| `MapleCompass_X.Y.Z_x64-setup.exe` | Installer (recommended). Installs for your user over earlier versions, with a Start menu entry and an uninstaller. |
+| `MapleCompass_X.Y.Z_x64_en-US.msi` | The same, as an MSI package (installs for all users, so it asks for admin rights). |
+| `maplecompass-X.Y.Z-portable.exe` | No install: run it from any folder. Needs the Microsoft Edge WebView2 runtime, which Windows 11 already has. |
+
+Quit the running MapleCompass first (its compass in the notification area: **Quit MapleCompass**). The files aren't code-signed, so Windows SmartScreen may say it "protected your PC": choose **More info**, then **Run anyway**.
+
+Map and mob data, map pictures and mob animations: [OSMS Data Explorer](https://osmsdataexplorer.com). Pages: [NiaMeowDB](https://meowdb.com). Title and item recognition: [ocrs](https://github.com/robertknight/ocrs) (model under CC BY-SA 4.0). Typeface: Maplestory by NEXON. See THIRD-PARTY-NOTICES.md, attached, and About & Credits in Help & Setup.
+```
+
+To list what changed since the last release, run `git log --first-parent vPREVIOUS..vX.Y.Z` for the merges and `gh pr view <n>` for each PR.
+
+## 6. Publish
+
+```bash
+cp target/release/maplecompass.exe maplecompass-X.Y.Z-portable.exe
+gh release create vX.Y.Z --verify-tag --title "MapleCompass X.Y.Z" --notes-file notes.md \
+  target/release/bundle/nsis/MapleCompass_X.Y.Z_x64-setup.exe \
+  target/release/bundle/msi/MapleCompass_X.Y.Z_x64_en-US.msi \
+  maplecompass-X.Y.Z-portable.exe \
+  THIRD-PARTY-NOTICES.md
+```
+
+The newest release becomes Latest, which the README's download link points to.
+
+Then check the release:
+- `gh release view vX.Y.Z` lists the four files.
+- The release page reads correctly.
+- Downloading the setup `.exe` from it and installing works.
+
+## If a release goes wrong
+
+- **Before anyone could download it** (minutes after publishing):
+  1. `gh release delete vX.Y.Z --cleanup-tag --yes` removes the release and its tag.
+  2. Fix the problem on `main`.
+  3. Tag and publish again from step 3.
+- **After that:** leave the release, and publish `X.Y.(Z+1)` with the fix.
