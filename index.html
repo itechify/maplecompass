@@ -57,14 +57,22 @@
             <section class="portals" id="portals">
               <h2>
                 <button type="button" class="section-toggle" id="portals-toggle" data-section="hiddenPortals" aria-expanded="true">
-                  <span class="section-name">Hidden Portals</span>
+                  <span class="section-name">Portals</span>
                   <span class="section-count" id="portals-toggle-count" hidden></span>
                   <span class="fold" aria-hidden="true">
                     <svg viewBox="0 0 16 16"><path class="bar" d="M4 8h8" /><path class="post" d="M8 4v8" /></svg>
                   </span>
                 </button>
               </h2>
-              <p class="none" id="no-portals">None on this map</p>
+              <div class="map-preview" id="map-preview" hidden>
+                <div class="map-picture" id="map-picture" role="img">
+                  <img id="map-image" alt="" draggable="false" hidden />
+                  <svg class="map-marks" id="map-marks" aria-hidden="true"></svg>
+                </div>
+                <p class="map-loading" id="map-loading">Loading map…</p>
+              </div>
+              <p class="note problem" id="map-failed" hidden>Couldn't load the map picture</p>
+              <p class="none" id="no-portals">No hidden portals</p>
               <ul id="portal-rows"></ul>
             </section>
             <section class="map-mobs" id="map-mobs">
@@ -202,6 +210,7 @@
       <div class="grip right" data-resize="East" title="Drag to resize" aria-hidden="true"></div>
       <!-- The Mob Card of the mob whose name the pointer rests on, over the panel's content. -->
       <div class="mob-card" id="mob-card" role="tooltip" hidden></div>
+      <div class="mark-card" id="mark-card" role="tooltip" hidden></div>
     </main>
     <div class="icon" id="icon" title="Click to expand" draggable="false">
       <img class="art" src="/assets/icon.png" alt="MapleCompass" draggable="false" />
