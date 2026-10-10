@@ -1,42 +1,39 @@
 //! Mob Cards: what the panel shows when the player hovers a listed mob's name. Each
-//! holds the mob's image (from maplestory.io) and the figures from its MeowDB page that
-//! the panel's row doesn't show.
+//! holds the mob's image and the figures from OSMS's set that the panel's row doesn't
+//! show (ADR 0008). The figures come with the set, so a card is ready as soon as its map
+//! is shown.
 //!
-//! Once the shown map's page is in, its listed mobs' pages and images are asked for one
-//! at a time (ADR 0006). Mob pages go ahead of the world crawl and keep to MeowDB's pace
-//! with it; images keep to maplestory.io's own. An answer is kept for the run, so a mob
-//! met again on another map isn't asked for again.
+//! Once the shown map lists its mobs, their images are asked for one at a time. An answer
+//! is kept for the run, so a mob met again on another map isn't asked for again.
 
 use crate::map_data::Mob;
-use crate::map_index::{Fetched, MapDataSource, SourceError};
+use crate::map_index::{MapDataSource, SourceError};
 use crate::meowdb;
+use crate::osms::MapSet;
 use crate::pace::Pace;
 use serde::Serialize;
 use std::task::Poll;
 
-/// The figures from a mob's MeowDB page that the panel's row (level, HP, EXP, share)
-/// doesn't show. A figure MeowDB shows as "—" is `None`.
+/// The figures from OSMS's set that the panel's row (level, HP, EXP, share) doesn't show.
+/// A figure the mob doesn't have, or has as 0, is `None` (the panel shows "—").
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MobDetails {
     pub elements: Elements,
     /// The damage it deals when the player walks into it.
     pub touch_damage: Option<DamageRange>,
-    /// `None` when MeowDB lists no MP for it.
     pub mp: Option<u64>,
     pub accuracy: Option<u32>,
     pub avoid: Option<u32>,
     pub physical_defense: Option<u32>,
     pub magic_defense: Option<u32>,
-    /// MeowDB's word for how fast it moves: "Slow", "Normal", "Fast".
+    /// How fast it moves: "Slow", "Normal" or "Fast".
     pub speed: String,
-    /// MeowDB's words for how it gets about: "Stays on its floor", "Flies".
-    pub movement: String,
     pub hp_per_exp: Option<HpPerExp>,
 }
 
-/// The elements a mob is weak to, strong against and immune to, as MeowDB names them
-/// ("Fire", "Poison"). All empty: no elemental affinity.
+/// The elements a mob is weak to, strong against and immune to ("Fire", "Poison"). All
+/// empty: no elemental affinity.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Elements {
@@ -59,9 +56,9 @@ pub struct DamageRange {
 pub struct HpPerExp {
     /// In hundredths: 1275 is 12.75.
     pub hundredths: u64,
-    /// Its place among the mobs MeowDB ranks, 1 being the lowest HP per EXP.
+    /// Its place among the set's mobs, 1 being the lowest HP per EXP.
     pub rank: u32,
-    /// How many mobs MeowDB ranks.
+    /// How many mobs the set has.
     pub ranked: u32,
 }
 
@@ -69,98 +66,60 @@ pub struct HpPerExp {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MobCard {
-    /// MeowDB's ID for the mob, as in the panel's [`Mob`].
+    /// The mob's ID, as in the panel's [`Mob`].
     pub id: String,
     /// The mob's MeowDB page, which a click on its name opens.
     pub url: String,
-    /// Where the overlay loads the mob's image from (the shell's copy of maplestory.io's);
-    /// `None` until it's in, or if it can't be had.
+    /// Where the overlay loads the mob's image from; `None` until it's in, or if it can't
+    /// be had.
     pub image: Option<String>,
     #[serde(flatten)]
-    pub page: MobPage,
+    pub details: MobDetails,
 }
 
-/// The figures from a mob's MeowDB page, or why there are none (yet).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "status", rename_all = "camelCase")]
-pub enum MobPage {
-    /// The page is being fetched.
-    Loading,
-    Ready(MobDetails),
-    /// MeowDB couldn't be reached, but a copy of the page saved at `saved_at_unix_ms`
-    /// (ms since the Unix epoch) could: its figures, to be shown as such.
-    SavedCopy {
-        #[serde(rename = "savedAtUnixMs")]
-        saved_at_unix_ms: u64,
-        #[serde(flatten)]
-        details: MobDetails,
-    },
-    /// MeowDB couldn't be reached, and there is no saved copy.
-    Unavailable,
-    /// MeowDB's page no longer looks the way the reader expects: nothing from it is
-    /// shown, rather than a card with figures missing.
-    FormatChanged,
-}
-
-/// How long an unreachable page or image waits before it is asked for again, while its
-/// mob is still listed.
+/// How long an unreachable image waits before it is asked for again, while its mob is
+/// still listed.
 const RETRY_MS: u64 = 5 * 60_000;
 
 /// How many answers given at once (from the source's cache) are taken in one tick.
 const AT_ONCE_PER_TICK: usize = 8;
 
-/// The listed mobs' pages and images, asked for and kept.
+/// The listed mobs' images, asked for and kept.
 #[derive(Default)]
 pub(crate) struct MobCards {
     /// The mobs the panel lists now, in its order.
     listed: Vec<Mob>,
-    pages: Lane<Fetched<MobDetails>>,
     images: Lane<String>,
-    /// maplestory.io's pace; MeowDB's is shared with the crawl.
     image_pace: Pace,
 }
 
 impl MobCards {
-    /// The panel lists these mobs now: their pages and images are wanted.
+    /// The panel lists these mobs now: their images are wanted.
     pub fn list(&mut self, mobs: &[Mob]) {
         self.listed = mobs.to_vec();
     }
 
-    /// Time passed: check on the requests in flight, and ask for the next page and image
-    /// when their site's pace allows.
-    pub fn poll(&mut self, source: &mut dyn MapDataSource, meowdb: &mut Pace, at_ms: u64) {
+    /// Time passed: check on the request in flight, and ask for the next image when the
+    /// pace allows.
+    pub fn poll(&mut self, source: &mut dyn MapDataSource, at_ms: u64) {
         let wanted: Vec<&str> = self.listed.iter().map(|m| m.id.as_str()).collect();
-        self.pages.poll(&wanted, meowdb, at_ms, |id| source.mob_page(id));
         self.images.poll(&wanted, &mut self.image_pace, at_ms, |id| source.mob_image(id));
     }
 
-    /// Whether a listed mob's page is still to be asked for or on its way: the world
-    /// crawl waits until it isn't.
-    pub fn wants_meowdb(&self, at_ms: u64) -> bool {
-        let wanted: Vec<&str> = self.listed.iter().map(|m| m.id.as_str()).collect();
-        self.pages.in_flight.is_some() || self.pages.next(&wanted, at_ms).is_some()
-    }
-
-    /// The listed mobs' cards, in the panel's order.
-    pub fn cards(&self) -> Vec<MobCard> {
+    /// The listed mobs' cards, in the panel's order, with their figures from `set`.
+    pub fn cards(&self, set: &MapSet) -> Vec<MobCard> {
         self.listed
             .iter()
-            .map(|mob| MobCard {
-                id: mob.id.clone(),
-                url: meowdb::mob_url(&mob.id),
-                image: match self.images.answer(&mob.id) {
-                    Some(Ok(image)) => Some(image.clone()),
-                    _ => None,
-                },
-                page: match self.pages.answer(&mob.id) {
-                    None => MobPage::Loading,
-                    Some(Ok(Fetched::Fresh(details))) => MobPage::Ready(details.clone()),
-                    Some(Ok(Fetched::SavedCopy { data, saved_at_unix_ms })) => {
-                        MobPage::SavedCopy { saved_at_unix_ms: *saved_at_unix_ms, details: data.clone() }
-                    }
-                    Some(Err(SourceError::Unreachable(_))) => MobPage::Unavailable,
-                    Some(Err(SourceError::FormatChanged(_))) => MobPage::FormatChanged,
-                },
+            .filter_map(|mob| {
+                Some(MobCard {
+                    id: mob.id.clone(),
+                    url: meowdb::mob_url(&mob.id),
+                    image: match self.images.answer(&mob.id) {
+                        Some(Ok(image)) => Some(image.clone()),
+                        _ => None,
+                    },
+                    details: set.mob(&mob.id)?.clone(),
+                })
             })
             .collect()
     }

@@ -3,7 +3,6 @@
 
 use crate::item_lookup::ItemHit;
 use crate::map_data::MapData;
-use crate::mob_card::MobDetails;
 use crate::osms::OsmsFiles;
 use std::task::Poll;
 
@@ -87,15 +86,10 @@ pub trait MapDataSource {
     /// knowing every map.
     fn crawl_data(&mut self, id: &str) -> Poll<Result<Fetched<MapData>, SourceError>>;
 
-    /// One mob's figures from its MeowDB page, by MeowDB's mob ID (ADR 0006): the core
-    /// asks for each mob the shown map lists, one at a time. A cached copy up to 7 days
-    /// old may be used as it is; answer at once when it is.
-    fn mob_page(&mut self, id: &str) -> Poll<Result<Fetched<MobDetails>, SourceError>>;
-
     /// Where the overlay can load one mob's image from, by mob ID: the shell's copy of
-    /// maplestory.io's (ADR 0006), asked for like [`MapDataSource::mob_page`] but kept
-    /// apart from it, since it comes from another site. A cached image up to 30 days old
-    /// may be used as it is. [`SourceError::FormatChanged`] when maplestory.io has none.
+    /// maplestory.io's (ADR 0006), asked for one at a time. A cached image up to 30 days
+    /// old may be used as it is. [`SourceError::FormatChanged`] when maplestory.io has
+    /// none.
     fn mob_image(&mut self, id: &str) -> Poll<Result<String, SourceError>>;
 
     /// The items MeowDB's search ([`crate::meowdb::ITEM_SEARCH_URL`]) gives for `name`, an

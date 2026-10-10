@@ -47,7 +47,7 @@ pub use map_data::{
     Portal, PortalKind,
 };
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
-pub use mob_card::{DamageRange, Elements, HpPerExp, MobCard, MobDetails, MobPage};
+pub use mob_card::{DamageRange, Elements, HpPerExp, MobCard, MobDetails};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 pub use panel::{
     Action, CollapsedSections, DEFAULT_PANEL_WIDTH, Foreground, GameWindow, InsideOffset, Layer, MIN_PANEL_WIDTH, PanelSizes,
@@ -376,9 +376,9 @@ pub struct Compass {
     progress_shown_at: Option<u64>,
     /// The wall clock (ms since the Unix epoch), as the shell last told it.
     wall_clock: Option<u64>,
-    /// The listed mobs' pages and images, for their Mob Cards.
+    /// The listed mobs' images, for their Mob Cards.
     mob_cards: MobCards,
-    /// MeowDB's pace, kept by the crawl and the Mob Cards' pages together.
+    /// MeowDB's pace, kept by the crawl and Item Lookup together.
     meowdb_pace: Pace,
     /// What the player typed, highlighted and picked in mob search.
     search: MobSearch,
@@ -551,7 +551,7 @@ impl Compass {
         self.state.candidates = self.set.as_ref().and_then(|set| self.shown_map.candidates(&set.maps));
         let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
         self.mob_cards.list(listed);
-        self.state.mob_cards = self.mob_cards.cards();
+        self.state.mob_cards = self.set.as_ref().map_or_else(Vec::new, |set| self.mob_cards.cards(&set.maps));
         let credit = if self.state.mob_cards.is_empty() { OSMS_CREDIT } else { OSMS_AND_IMAGES_CREDIT };
         self.state.credit = self.state.map.as_ref().map(|_| credit);
     }
@@ -1033,15 +1033,15 @@ impl Compass {
         self.load_osms(at_ms);
         if self.set.is_some() {
             self.sync_shown_map();
-            // Once the shown map's page lists its mobs.
-            self.mob_cards.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
-            self.state.mob_cards = self.mob_cards.cards();
+            // Once the shown map lists its mobs.
+            self.mob_cards.poll(&mut *self.source, at_ms);
+            self.state.mob_cards = self.set.as_ref().map_or_else(Vec::new, |set| self.mob_cards.cards(&set.maps));
         }
         // An Item Lookup's search, which the player waits on, before the crawl.
         let open = self.item_lookups.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
         self.requests.extend(open.map(|url| Request::OpenInBrowser { url }));
-        // After the shown map, which never waits for the crawl, and its listed mobs' pages.
-        let crawling = !self.world_awaited && !self.mob_cards.wants_meowdb(at_ms);
+        // After the shown map, which never waits for the crawl.
+        let crawling = !self.world_awaited;
         if let Some(crawl) = self.crawl.as_mut().filter(|_| crawling) {
             crawl.poll(&mut *self.source, &mut self.meowdb_pace, at_ms, self.wall_clock);
             // Search covers the maps known so far: redone as the crawl learns more, but
