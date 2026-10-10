@@ -1968,9 +1968,10 @@ body:has(#badge:not([hidden])) .icon .count {
   .mobs td:first-child { grid-column: 1 / -1; font-weight: 700; }
   .mobs td:not(:first-child)::before { content: attr(data-label); display: block; font-size: 12px; line-height: 15px; color: var(--ink-2); }
   .portals .dest { flex-wrap: wrap; }
-  .portals .to { flex-basis: 100%; white-space: normal; }
-  /* An empty section's heading stays on one line; "None on this map" goes under it
-     rather than losing its end. */
+  /* The destination keeps its ring beside it, and its tags go under it. */
+  .portals .to { flex-basis: calc(100% - 18px); white-space: normal; }
+  /* An empty section's heading stays on one line; "No hidden portals" or "No mobs on
+     this map" goes under it rather than losing its end. */
   .portals, .map-mobs { flex-wrap: wrap; row-gap: 2px; }
   .portals > h2, .map-mobs > h2 { flex: none; }
   .portals > .none, .map-mobs > .none { flex: none; max-width: 100%; }
