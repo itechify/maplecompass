@@ -90,7 +90,6 @@
         bestEarly: tracking({ ...early, ...best }),
         bestStar: tracking(beaten),
         bestStarPaused: tracking({ state: "paused", ...beaten }),
-        bestStarWarmingUp: tracking({ state: "warmingUp", ...early, ...beaten }),
         extreme: tracking(extreme),
         bestExtreme: tracking({ ...extreme, personalBest: 1104000, newBest: true }),
       };
