@@ -77,6 +77,11 @@ impl Matcher {
         &self.maps[index].entry
     }
 
+    /// The index of the map with this ID, if it is listed.
+    pub fn index_of(&self, id: &str) -> Option<usize> {
+        self.maps.iter().position(|known| known.entry.id == id)
+    }
+
     /// Every map with the same title as map `index` (itself included), in index order.
     pub fn same_title_as(&self, index: usize) -> Vec<usize> {
         (0..self.maps.len()).filter(|&i| self.same_title(i, index)).collect()
