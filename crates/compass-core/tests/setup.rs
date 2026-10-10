@@ -31,7 +31,7 @@ fn window(client: ScreenRect) -> Option<GameWindow> {
 
 #[test]
 fn a_fresh_install_asks_for_setup_and_reads_nothing_until_the_title_is_marked() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     let state = compass.on_game_window(window(game(KERNING)));
 
     assert_eq!(state.setup.needed, Some(SetupReason::FirstRun));
@@ -43,7 +43,7 @@ const MARK: Rect = Rect { x: 70, y: 40, width: 130, height: 48 };
 
 #[test]
 fn marking_the_title_starts_a_test_read_there_keeping_the_marked_corner_and_height() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     compass.on_game_window(window(game(KERNING)));
 
     let state = compass.act(Action::MarkTitleRegion(MARK));
@@ -77,7 +77,7 @@ fn recognised(id: &str, street_name: &str, map_name: &str) -> Option<TestRead> {
 
 #[test]
 fn the_test_read_shows_the_real_map_the_title_snapped_to() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     let read = mark_and_test_read(&mut compass, KERNING);
 
@@ -88,7 +88,7 @@ fn the_test_read_shows_the_real_map_the_title_snapped_to() {
 /// captures a long one whole: the region extends to fit the longest name in the index.
 #[test]
 fn a_mark_narrower_than_a_long_map_name_still_reads_it_whole() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     // MARK spans client x 70..200; this map name runs to x ~423.
     let read = mark_and_test_read(&mut compass, "victoria-road__construction-site-north-of-kerning-city--window");
@@ -100,7 +100,7 @@ fn a_mark_narrower_than_a_long_map_name_still_reads_it_whole() {
 /// panel) aren't read as part of the title.
 #[test]
 fn the_extended_region_still_reads_a_short_title_on_a_narrow_minimap() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     let read = mark_and_test_read(&mut compass, "victoria-road__sunset-sky--window");
 
@@ -109,7 +109,7 @@ fn the_extended_region_still_reads_a_short_title_on_a_narrow_minimap() {
 
 #[test]
 fn a_mark_that_misses_the_title_fails_its_test_read_and_can_be_marked_again() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     compass.on_game_window(window(game(KERNING)));
     compass.act(Action::MarkTitleRegion(MARK));
 
@@ -123,14 +123,14 @@ fn a_mark_that_misses_the_title_fails_its_test_read_and_can_be_marked_again() {
 /// What the shell does on restart: save the settings as JSON, load them into a new core.
 fn restart(compass: &Compass) -> Compass {
     let json = serde_json::to_string(&compass.settings()).unwrap();
-    let mut restarted = Compass::new(FakeSource::meowdb());
+    let mut restarted = Compass::new(FakeSource::osms());
     restarted.restore(serde_json::from_str(&json).unwrap());
     restarted
 }
 
 /// A core whose setup was finished on the Kerning City sample with `MARK`.
 fn set_up() -> Compass {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     mark_and_test_read(&mut compass, KERNING);
     compass.act(Action::FinishSetup);
     compass
@@ -138,7 +138,7 @@ fn set_up() -> Compass {
 
 #[test]
 fn finishing_setup_after_a_good_test_read_keeps_reading_the_marked_region() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     mark_and_test_read(&mut compass, KERNING);
     let marked = compass.panel_state().title_region;
 
@@ -151,7 +151,7 @@ fn finishing_setup_after_a_good_test_read_keeps_reading_the_marked_region() {
 
 #[test]
 fn setup_cannot_be_finished_until_the_test_read_recognises_a_map() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     compass.on_game_window(window(game(KERNING)));
     compass.act(Action::MarkTitleRegion(MARK));
     compass.on_frame(common::black_frame(0));
@@ -263,7 +263,7 @@ fn cancelling_a_requested_setup_goes_back_to_the_saved_region() {
 
 #[test]
 fn cancelling_first_run_setup_leaves_it_still_needed() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     compass.on_game_window(window(game(KERNING)));
     compass.act(Action::MarkTitleRegion(MARK));
 
@@ -276,7 +276,7 @@ fn cancelling_first_run_setup_leaves_it_still_needed() {
 
 #[test]
 fn a_game_window_picked_by_hand_is_looked_for_from_then_on_even_after_a_restart() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     assert_eq!(compass.panel_state().game_window_title, "MapleStory");
 
     let state = compass.pick_game_window("MapleStory Classic".into());
@@ -287,7 +287,7 @@ fn a_game_window_picked_by_hand_is_looked_for_from_then_on_even_after_a_restart(
 
 #[test]
 fn an_empty_settings_file_has_a_re_setup_hotkey_and_needs_setup() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     compass.restore(serde_json::from_str("{}").unwrap());
 
     let state = compass.on_game_window(window(game(KERNING)));
@@ -300,7 +300,7 @@ fn an_empty_settings_file_has_a_re_setup_hotkey_and_needs_setup() {
 
 #[test]
 fn the_setup_window_opens_on_first_run_and_closing_it_then_quits() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     let state = compass.on_game_window(window(game(KERNING)));
     assert!(state.setup.window_open);
     assert!(!state.quit);
@@ -345,18 +345,18 @@ fn a_new_game_resolution_opens_setup_and_closing_it_leaves_it_needed_without_qui
 }
 
 #[test]
-fn a_recognised_test_read_credits_meowdb_for_the_names_it_shows() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+fn a_recognised_test_read_credits_osms_for_the_names_it_shows() {
+    let mut compass = Compass::new(FakeSource::osms());
     compass.on_game_window(window(game(KERNING)));
     assert_eq!(compass.act(Action::MarkTitleRegion(MARK)).setup.credit, None);
 
     mark_and_test_read(&mut compass, KERNING);
 
-    assert_eq!(compass.panel_state().setup.credit, Some("NiaMeowDB (meowdb.com)"));
+    assert_eq!(compass.panel_state().setup.credit, Some("Map names from OSMS Data Explorer"));
 }
 
 /// The width of the region the core captures after marking `MARK` and reading one frame
-/// (which loads the map index).
+/// (which loads the map list).
 fn region_width(source: FakeSource) -> u32 {
     let mut compass = Compass::new(source);
     mark_and_test_read(&mut compass, KERNING);
@@ -364,17 +364,16 @@ fn region_width(source: FakeSource) -> u32 {
 }
 
 #[test]
-fn the_region_extends_only_as_far_as_the_longest_name_in_the_index_needs() {
-    let short_names = FakeSource::with_index(
-        common::saved_index().into_iter().filter(|m| m.map_name.len() <= 12).collect(),
-    );
+fn the_region_extends_only_as_far_as_the_longest_name_in_the_map_list_needs() {
+    let mut short_names = common::osms::map_names();
+    short_names.maps.retain(|m| m.name.trim().len() <= 12);
 
-    assert!(region_width(short_names) < region_width(FakeSource::meowdb()));
+    assert!(region_width(FakeSource::with_world(short_names)) < region_width(FakeSource::osms()));
 }
 
 #[test]
 fn the_region_never_extends_past_the_game_window() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     // A small 400x300 window: the region can reach at most 330 px right of x 70.
     compass.on_game_window(window(ScreenRect { x: 812, y: 110, width: 400, height: 300 }));
 
@@ -385,7 +384,7 @@ fn the_region_never_extends_past_the_game_window() {
 
 #[test]
 fn keyboard_marking_starts_with_a_visible_box_without_committing_a_read() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     compass.on_game_window(window(game(KERNING)));
 
     let state = compass.act(Action::BeginSelection(MarkTarget::Title));
@@ -420,7 +419,7 @@ fn keyboard_marking_can_move_resize_and_test_the_previous_mark() {
 
 #[test]
 fn keyboard_selection_stays_inside_the_client_and_never_shrinks_below_eight_pixels() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     compass.on_game_window(window(ScreenRect { x: 100, y: 50, width: 40, height: 30 }));
     compass.act(Action::BeginSelection(MarkTarget::Title));
     for direction in [SelectionDirection::Left, SelectionDirection::Up] {
@@ -450,7 +449,7 @@ fn keyboard_selection_stays_inside_the_client_and_never_shrinks_below_eight_pixe
 
 #[test]
 fn cancelling_keyboard_marking_keeps_the_existing_test_read() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     mark_and_test_read(&mut compass, KERNING);
     let read = compass.panel_state().setup.test_read.clone();
     let region = compass.panel_state().title_region;
@@ -484,7 +483,7 @@ fn a_selection_is_discarded_if_the_game_disappears_or_changes_size() {
 
 #[test]
 fn a_pointer_mark_is_bounded_before_it_is_test_read() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     compass.on_game_window(window(ScreenRect { x: 100, y: 50, width: 40, height: 30 }));
 
     let state = compass.act(Action::MarkTitleRegion(Rect { x: 999, y: 999, width: 100, height: 4 }));

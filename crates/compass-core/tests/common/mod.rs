@@ -84,7 +84,7 @@ pub fn arrive(compass: &mut Compass, sample: &str, at_ms: u64) -> PanelState {
 
 /// A core with EXP tracking on: both regions kept, on a 1920x1200 game window.
 pub fn tracking() -> Compass {
-    tracking_with(FakeSource::meowdb())
+    tracking_with(FakeSource::osms())
 }
 
 /// As [`tracking`], with maps and their pages from `source`.

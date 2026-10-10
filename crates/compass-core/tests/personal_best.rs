@@ -197,7 +197,7 @@ fn the_best_row_holds_all_visit_and_a_best_set_in_it_shows_from_the_next() {
 /// lets it through.
 fn sunset_sky_held_back(page_in: &Arc<AtomicBool>) -> FakeSource {
     let page_in = page_in.clone();
-    FakeSource::meowdb().with_pages(move |id| {
+    FakeSource::osms().with_pages(move |id| {
         if id == SUNSET_SKY_ID && !page_in.load(Ordering::SeqCst) { Poll::Pending } else { Poll::Ready(saved_map_page(id)) }
     })
 }

@@ -33,7 +33,7 @@ fn read(compass: &mut Compass, at_ms: u64, exp: u64, percent_hundredths: u32) ->
 
 #[test]
 fn without_an_exp_bar_region_tracking_is_off() {
-    let compass = Compass::new(FakeSource::meowdb());
+    let compass = Compass::new(FakeSource::osms());
 
     assert_eq!(compass.panel_state().exp_tracking.state, TrackingState::Off);
 }
@@ -575,7 +575,7 @@ fn the_overlay_gets_tracking_as_the_panel_renders_it() {
     unread(&mut compass, 10 * MIN);
     let unreadable = serde_json::to_value(unread(&mut compass, 10 * MIN + 10 * S)).unwrap();
     assert_eq!(unreadable["expTracking"]["state"], "unreadable");
-    let off = serde_json::to_value(Compass::new(FakeSource::meowdb()).panel_state()).unwrap();
+    let off = serde_json::to_value(Compass::new(FakeSource::osms()).panel_state()).unwrap();
     assert_eq!(off["expTracking"]["state"], "off");
     read(&mut compass, 10 * MIN + 20 * S, 266, 633);
     compass.act(Action::ResetSession);
@@ -632,7 +632,7 @@ fn standing_in(source: FakeSource, stand_ins: &[(&'static str, &'static str)]) -
 #[test]
 fn on_the_second_of_two_maps_with_the_same_ceiling_the_share_counts_only_play_since_arriving() {
     // The Construction Site with Sunset Sky's page: the same 223,928 solo ceiling.
-    let mut compass = tracking_with(standing_in(FakeSource::meowdb(), &[(CONSTRUCTION_SITE_ID, SUNSET_SKY_ID)]));
+    let mut compass = tracking_with(standing_in(FakeSource::osms(), &[(CONSTRUCTION_SITE_ID, SUNSET_SKY_ID)]));
     arrive(&mut compass, SUNSET, 0);
     read(&mut compass, 0, 160, 381);
     read(&mut compass, 10 * S, 266, 633);
@@ -656,7 +656,7 @@ fn on_the_second_of_two_maps_with_the_same_ceiling_the_share_counts_only_play_si
 fn a_map_whose_page_arrives_after_the_player_counts_play_from_arriving() {
     // MeowDB's pages are held back until `page_in` lets them through.
     let page_in = Arc::new(AtomicBool::new(false));
-    let source = FakeSource::meowdb().with_pages({
+    let source = FakeSource::osms().with_pages({
         let page_in = page_in.clone();
         move |id| if page_in.load(Ordering::SeqCst) { Poll::Ready(saved_map_page(id)) } else { Poll::Pending }
     });
