@@ -5,6 +5,7 @@
 //! is a [`PanelState`] holding everything the overlay renders. No OS or UI dependencies
 //! live here.
 
+mod bests_page;
 mod crawl;
 mod exp_bar;
 mod grind_tracker;
@@ -32,6 +33,7 @@ mod tracker;
 mod travel_links;
 mod world;
 
+pub use bests_page::{BestsPage, BestsPageMap};
 pub use crawl::CrawlProgress;
 pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use grind_tracker::{ClientOffset, GrindTrackerWindow};
@@ -252,6 +254,9 @@ pub enum Request {
     /// (or [`Compass::on_item_tooltip_reading`] with what an [`ItemTooltipReader`] reads
     /// in it, or `None` if the capture failed).
     CaptureItemTooltip,
+    /// Open the Personal Bests page in the player's browser (the Grind Tracker's button):
+    /// the shell renders `page` into a page of its own.
+    OpenBestsPage { page: BestsPage },
 }
 
 /// Something the player can do with a hotkey or with the matching icon at the top of
@@ -284,6 +289,9 @@ pub enum PanelControl {
     RemoveBest,
     /// The Grind Tracker window's ×: close it.
     CloseGrindTracker,
+    /// The Grind Tracker window's Personal Bests button: open the Personal Bests page in
+    /// the browser.
+    OpenBestsPage,
 }
 
 /// The game window's title, unless the player picked another by hand.
@@ -709,9 +717,30 @@ impl Compass {
             PanelControl::OpenMeowdbPage => {
                 return self.state.map.as_ref().map(|map| Request::OpenInBrowser { url: map.url.clone() });
             }
+            // None while no map has a best: the button is hidden then.
+            PanelControl::OpenBestsPage => {
+                let page = self.bests_page();
+                return (!page.maps.is_empty()).then_some(Request::OpenBestsPage { page });
+            }
         };
         self.act(action);
         None
+    }
+
+    /// The Personal Bests page now: every map's best as saved, with what the map index and
+    /// the maps' pages (the shown map's own, else the crawl's) say of the map.
+    fn bests_page(&self) -> BestsPage {
+        let crawl = self.crawl.as_ref();
+        let shown = self.state.map.as_ref().map(|m| m.id.as_str());
+        let map = |id: &str| {
+            let entry = crawl.and_then(|c| c.entry(id));
+            let data = match self.state.data.data() {
+                Some(data) if shown == Some(id) => Some(data),
+                _ => crawl.and_then(|c| c.known().find(|(e, _)| e.id == id).map(|(_, data)| data)),
+            };
+            (entry, data)
+        };
+        bests_page::page(&self.session.bests().saved(), map, certain_map(&self.state), self.wall_clock)
     }
 
     /// The player clicked a listed mob's name in the panel: open its MeowDB page. `None`
@@ -1019,7 +1048,11 @@ impl Compass {
             }
             _ => None,
         };
-        self.state.grind_tracker = GrindTrackerWindow { open: self.grind_tracker.open, placement };
+        self.state.grind_tracker = GrindTrackerWindow {
+            open: self.grind_tracker.open,
+            placement,
+            personal_bests: self.session.bests().any(),
+        };
     }
 
     /// Whether EXP tracking is on: there is an EXP Bar Region to read, kept and fitting
@@ -1040,15 +1073,19 @@ fn searched<'a>(crawl: &'a Option<Crawl>, state: &'a PanelState, settings: &Sett
 }
 
 /// The shown map, by MeowDB ID, if Personal Bests are kept there: only where the map is
-/// certain, and has a Map Summary (in a town, quest turn-ins would set one). Certain is
-/// no Candidates waiting for a choice: one map has the title, the map the player came
-/// from settled it, or the player chose it. Maps that share a title but would show the
-/// same are certain too, as they show the same: the panel always shows the first of
-/// them, and their bests are kept under its ID.
+/// certain, and has a Map Summary (in a town, quest turn-ins would set one).
 fn bests_map(state: &PanelState) -> Option<&str> {
+    certain_map(state).filter(|_| state.data.solo_exp_ceiling().is_some())
+}
+
+/// The shown map, by MeowDB ID, if the panel is certain the player is on it: no
+/// Candidates waiting for a choice. One map has the title, the map the player came from
+/// settled it, or the player chose it. Maps that share a title but would show the same
+/// are certain too, as they show the same: the panel always shows the first of them, and
+/// their bests are kept under its ID.
+fn certain_map(state: &PanelState) -> Option<&str> {
     let certain = state.candidates.as_ref().is_none_or(|c| c.chosen);
-    let summary = state.data.solo_exp_ceiling().is_some();
-    state.map.as_ref().filter(|_| certain && summary).map(|m| m.id.as_str())
+    state.map.as_ref().filter(|_| certain).map(|m| m.id.as_str())
 }
 
 /// Whether two accelerator strings name the same keys ("Ctrl+Shift+C", "shift + ctrl + c").

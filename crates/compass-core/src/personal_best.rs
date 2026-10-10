@@ -26,6 +26,7 @@
 //!   as [`SavedBests`], with a revision so it saves them only when they change, and takes
 //!   them back at startup. What it hands out includes the Visit under way's best, as if
 //!   it had ended: closing MapleCompass ends it.
+//! - The Personal Bests page shows every map's, as handed out (see [`crate::bests_page`]).
 //! - The player can remove the best the Best row shows from the history, one that came
 //!   from a bug. The map's next-best Visit's takes over the row. There is no undo. This
 //!   Visit's best can't be removed: it joins the history when the Visit ends, and can be
@@ -73,8 +74,8 @@ pub struct VisitBest {
     /// The Rolling Rate's EXP/h shown, over a full 5 minutes of active play on the map.
     pub exp_per_hour: u64,
     /// When it was first shown, by the wall clock (ms since the Unix epoch); `None` if
-    /// the shell hadn't told the wall clock by then. Kept in the saved file, though no
-    /// window shows it now (the Best row has no date).
+    /// the shell hadn't told the wall clock by then. The Personal Bests page shows it (the
+    /// Best row has no date).
     pub set_at_unix_ms: Option<u64>,
 }
 
@@ -164,6 +165,12 @@ impl Bests {
                 maps.remove(at);
             }
         });
+    }
+
+    /// Whether some map has a best: in the history, or the Visit under way's. Whether
+    /// [`Bests::saved`] hands out any, without making them.
+    pub fn any(&self) -> bool {
+        !self.history.maps.is_empty() || self.this_visit().is_some()
     }
 
     /// Every map's Visit bests, for the shell to save: the Visit under way's as if it
