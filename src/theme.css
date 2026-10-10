@@ -48,8 +48,9 @@
   /* The Hunting Target's route: the wide ring around a portal it takes next on the Map
      Preview, and the Navigation section's mark. A hue nothing else in the panel holds. */
   --route: #c8189a;
-  /* The paper the Map Preview's picture is laid on: OSMS's pictures are see-through. */
-  --minimap-paper: #eef3fb;
+  /* The paper the Map Preview's picture is laid on, see-through as OSMS's pictures are,
+     so the game shows through it as through the glass, only paler. */
+  --minimap-paper: rgba(238, 243, 251, 0.45);
   --mob: #d8342a;
   --mob-edge: #8e1c15;
   /* The player's own dot on the minimap: where you are. */
