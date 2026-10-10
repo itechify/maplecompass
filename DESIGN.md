@@ -267,6 +267,24 @@ components:
     rounded: "{rounded.game-button}"
     padding: "0 7px"
     height: "19px"
+  text-button-disabled:
+    backgroundColor: "{colors.disabled-bg}"
+    textColor: "{colors.disabled-ink}"
+    rounded: "{rounded.game-button}"
+    padding: "0 7px"
+    height: "19px"
+  hotkey-row-waiting:
+    backgroundColor: "{colors.select}"
+    textColor: "{colors.panel-ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.chip}"
+    padding: "2px 2px 4px 8px"
+  keys-refused:
+    backgroundColor: "{colors.problem-bg}"
+    textColor: "{colors.problem-ink}"
+    typography: "{typography.title}"
+    rounded: "{rounded.chip}"
+    padding: "0 5px"
   tracker-figures:
     backgroundColor: "{colors.body}"
     textColor: "{colors.panel-ink}"
@@ -337,7 +355,7 @@ The overlay is one more of the game's windows laid over the screen, built from t
 
 It is light because the game's windows are light, see-through because the game's windows over the screen are, and dense because it is read in glances between attacks. Every state is drawn in the same window. Doubt and problems get the game's orange, and nothing else does. The confirmed rejection is the generic dark dev-tools card with a stats table on top, which this world replaced. Setup is a window on the desktop rather than over the game: it keeps an opaque lavender body, navy ink and steel buttons under the same grey window bar, and shows a recognised map exactly as the overlay's title panel will. The title-marking window's hint is a small translucent lavender window.
 
-Every window takes the pointer. The overlay is always clickable, but a click never takes the keyboard from the game except in the search view, where the query field needs it. The panel is dragged by its window bar or title panel when it sits inside the game or is detached, and resized by its sides or bottom corners, width only. Its buttons and setup's buttons carry the game's hover, pressed and keyboard-focus states; list rows in the search view take a faint hover tint. Its height follows its content. Nothing in any window moves but the world crawl's gauge: its fill eases to each new count, and a sheen runs along it while the crawl goes on. There is no other transition or animation anywhere: the Grind Tracker's EXP gauge changes with each reading, as the game's own does, without easing.
+Every window takes the pointer. The overlay is always clickable, but a click never takes the keyboard from the game except in the search view, where the query field needs it, and the settings view, where a hotkey's new keys are pressed. The panel is dragged by its window bar or title panel when it sits inside the game or is detached, and resized by its sides or bottom corners, width only. Its buttons and setup's buttons carry the game's hover, pressed and keyboard-focus states; list rows in the search view take a faint hover tint. Its height follows its content. Nothing in any window moves but the world crawl's gauge: its fill eases to each new count, and a sheen runs along it while the crawl goes on. There is no other transition or animation anywhere: the Grind Tracker's EXP gauge changes with each reading, as the game's own does, without easing.
 
 **Key Characteristics:**
 - The Mini Map's light grey window bar and sky-blue title panel over the Quest Helper's see-through periwinkle body, in a 4px-cornered frame.
@@ -356,7 +374,7 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 - **Portal Ring Blue** (portal): the minimap's portal ring. The section mark for Hidden Portals (over Portal Ring Fill, portal-fill) and the ring and core in each mini-minimap.
 
 ### Secondary
-- **Game Orange** (orange, with orange-deep for edges and text outlines): the game's small orange button. The dot in problem notes (overlay, setup and the Grind Tracker's "Can't read the EXP bar") and the collapsed icon's alert dot. The "Not sure" chip is the game's orange button itself, a gradient from Doubt Gold (doubt-top) to Doubt Amber (doubt-base). Problem notes sit on Problem Cream (problem-bg), edged in Problem Amber (problem-edge), with Problem Brown text (problem-ink). The "paused" tag in the Grind Tracker borrows that cream, amber and brown, without the orange, because held figures are a state to notice.
+- **Game Orange** (orange, with orange-deep for edges and text outlines): the game's small orange button. The dot in problem notes (overlay, setup and the Grind Tracker's "Can't read the EXP bar"), in the settings view's line under keys it refused, and the collapsed icon's alert dot. The "Not sure" chip is the game's orange button itself, a gradient from Doubt Gold (doubt-top) to Doubt Amber (doubt-base). Problem notes sit on Problem Cream (problem-bg), edged in Problem Amber (problem-edge), with Problem Brown text (problem-ink). The "paused" tag in the Grind Tracker borrows that cream, amber and brown, without the orange, because held figures are a state to notice; so do the settings view's "Taken" and "Invalid" tags, and the keys it refused, set in a cream chip until others are pressed.
 
 ### Tertiary
 - **Mob Dot Red** (mob, edged by mob-edge): the minimap's mob dot. The section mark for Mobs and the bullet on each mob row.
@@ -375,7 +393,7 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 - **Results Header** (results-head): the opaque tone of the glass behind the search results' sticky header, so rows scrolled under it don't show through.
 - **Ink** (ink), **Ink Steel** (ink-2) and **Ink Slate** (ink-3): navy text on lavender, in setup, the title-marking hint and the Personal Bests page; Ink is also the ground of the collapsed icon's count chip and Time to Level badge; Ink Steel is the badge's ground while its figure is held.
 - **Window Lavender** (body) and **Window Lavender, Opaque** (body-solid): the title-marking hint's translucent body, and setup's and the Personal Bests page's opaque one; at 95%, the ground of the Grind Tracker's figures. **Frame Navy** (frame): the hint's border, setup's secondary buttons and the search field. **Window Rule** (rule): the hairline above setup's button row.
-- **Selection Periwinkle** (select, edged by select-edge): the selected row wherever there is one: the shown candidate, the suggestion Enter picks, the result Enter makes the Hunting Target; and the Personal Bests page's text selection. select-edge also colours every scrollbar thumb.
+- **Selection Periwinkle** (select, edged by select-edge): the selected row wherever there is one: the shown candidate, the suggestion Enter picks, the result Enter makes the Hunting Target, the hotkey waiting for its new keys; and the Personal Bests page's text selection. select-edge also colours every scrollbar thumb.
 - **Tag Periwinkle** (tag-bg, tag-edge, tag-ink): the "Hidden Street" tag, setup's "Recognised" and "Read" tags, and (tag-bg alone) the Personal Bests page's table header. **NPC Green** (quest-bg, quest-edge, quest-ink): the "Quest" tag, taken from the minimap's NPC green.
 - **Edit Blue** (edit): the 2px keyboard-focus ring in every window, the dashed drag box when marking, the checked travel checkboxes (`accent-color`), and, at 8%, the hover tint on suggestion and result rows and the Personal Bests page's rows.
 - **Minimap Paper** (minimap-paper, minimap-frame, minimap-grid, minimap-cell): the mini-minimap's ground, frame, 5x3 grid lines and lit cell.
@@ -411,7 +429,7 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 - **Body Reading** (400, 14px/20px): setup's prose, the search field's text, and the title-marking hint's heading (at 700). Setup is read at rest, not in glances, so it reads one step larger than the overlay.
 - **Body** (400, 13px/17px): overlay notes, the mob and rates tables, the suggestions, and any panel text without a role of its own (the panel sets 13px/17px). Mob names are 700. Setup's notices, test read and shortcuts use 13px at an 18px line; the title-marking hint's instructions are 13px.
 - **Body Small** (400, 12px/15–17px; 15px on a single line, 16px where it wraps, 17px in a table row): positions, labels, summary units, table headers, figure labels, the route, the arrival's trip, candidate rows, key hints, the crawl note, the footer, setup's MeowDB credit, the title-marking status line.
-- **Button** (700, 13px/18px): setup's button labels, sentence case. The Overlay guide button in setup's window bar is 12px.
+- **Button** (700, 13px/18px): setup's button labels, sentence case. The Overlay Guide button in setup's window bar is 12px.
 - **Label** (700, 11px/15px): tags, in sentence case and untracked, so a tag never takes room from the destination beside it. The "Not sure" chip alone is uppercase, tracked 0.04em, at a 13px line. Candidate map IDs are 11px regular.
 
 The collapsed icon carries the system's two sizes below the Label step, held there because they share a 44px square with the compass: the Hidden Portal count at 10px/13px bold and the Time to Level badge at 9px/12px bold, both white on Ink (the badge in Light on Ink Steel while its figure is held). They are exceptions, not scale steps.
@@ -435,9 +453,11 @@ The Grind Tracker has a window of its own, built like the panel without a title 
 
 The search view replaces the whole panel: its own window bar (7px gaps, the back button then the title), then a 6px-gapped step: the query field, suggestions and the key hint; or, once a mob is picked, the nearest map, the results table, the travel checkboxes and the key hint; then the crawl note and credit.
 
+The settings view replaces the whole panel the same way: its window bar ("Settings"), then the Hotkeys heading over its one-line intro, the hotkey rows in an inset box 6px under them, and the actions row (the last change's notice, then Undo and Restore defaults at the right). Its rows don't truncate: what a hotkey does wraps, keeping at least 8em, and its keys break only after a "+", so the narrowest panel loses no word of either.
+
 Collapsed, the window becomes a 44px square holding the compass. One container query (`max-width: 300px`, for raised text scale) narrows the panel without losing alignment or ends: the summary puts each figure on its own line beside its party size (solo, then 6+ party under it) with the label beside the pair; mob rows become labelled cards, the name over its four figures side by side; an empty section's heading stays on one line and "None on this map" goes under it if it must.
 
-The setup window is a fixed 520×560 opaque window: a full-width window bar (padding 9px 20px 10px, 10px gaps, wrapping) holding the 28px compass, the window name, the step count ("Step N of 7" on first run, "of 6" when setup reopens, "Guide" in the overlay guide) and the Overlay guide button at the right, then a column with 22px side insets and 18px bottom padding that scrolls if it must. Each step is a heading (18px above, 8px below), prose in 10px-spaced paragraphs, and a footer pinned to the bottom of the window above a Window Rule, buttons right-aligned with 10px between them, the step forward always last. Notices sit above the step, 14px below the window bar and 8px apart.
+The setup window is a fixed 520×560 opaque window: a full-width window bar (padding 9px 20px 10px, 10px gaps, wrapping) holding the 28px compass, the window name, the step count ("Step N of 7" on first run, "of 6" when setup reopens, "Guide" in the Overlay Guide) and the Overlay Guide button at the right, then a column with 22px side insets and 18px bottom padding that scrolls if it must. Each step is a heading (18px above, 8px below), prose in 10px-spaced paragraphs, and a footer pinned to the bottom of the window above a Window Rule, buttons right-aligned with 10px between them, the step forward always last. Notices sit above the step, 14px below the window bar and 8px apart.
 
 The title-marking window covers the game client exactly. Its hint is centred horizontally, 12% up from the bottom, or 12% down from the top while marking the EXP bar so it never covers what is being marked; it is as wide as its longest line, up to the window less 64px.
 
@@ -467,18 +487,18 @@ Small, game-window corners: 4px on the panel, notices, setup's buttons, the sear
 ## Components
 
 ### Window Bar
-The Mini Map's light grey strip: `--window-bar`, a Window Edge rule beneath, no text edge. The 16px pixel-art compass, the window's name in Window Name type, and the toolbar at the right. It and the title panel are the drag handle: inside the game or detached, they show a move cursor and drag the panel, except over the buttons. The search view's window bar holds the back button, then the mob's name in Window Name type with its level in regular weight. Setup's window bar runs the full window width with a white top highlight and holds the 28px compass, the window name (14px bold), the step count (12px bold), both in Window Bar Ink, and the Overlay guide button.
+The Mini Map's light grey strip: `--window-bar`, a Window Edge rule beneath, no text edge. The 16px pixel-art compass, the window's name in Window Name type, and the toolbar at the right. It and the title panel are the drag handle: inside the game or detached, they show a move cursor and drag the panel, except over the buttons. The search view's window bar holds the back button, then the mob's name in Window Name type with its level in regular weight. Setup's window bar runs the full window width with a white top highlight and holds the 28px compass, the window name (14px bold), the step count (12px bold), both in Window Bar Ink, and the Overlay Guide button.
 
 ### Title Panel
 The Mini Map's sky blue (title-panel) under the window bar, edged beneath in Window Edge: the Street Name over the Map Name, both in Title Lettering, with the doubt chip at the Map Name's right end when the map isn't confirmed. Each line keeps 1px of room at its sides so the outline isn't cut where a long name ends in an ellipsis. While a map is shown the title is its MeowDB page's link (the open-page hotkey's action, so the toolbar has no button for it): a pointer cursor, both lines underlined 1px in Title Ink (3px offset) under the pointer, and a tooltip naming the hotkey. A press drags the panel once the mouse moves 4px, and opens the page if let go first, as the collapsed icon does.
 
 ### Toolbar and Icon Buttons
-The game's small window buttons, one per hotkey action, at the right of the window bar: search, next candidate, Grind Tracker (pressed while its window shows), placement, help and setup, collapse. The Grind Tracker's window has only its Personal Bests button and its close button on its bar, with no hotkeys; its reset is a light button in its body, away from the ×. Buttons whose action isn't available are hidden, not greyed.
+The game's small window buttons, one per hotkey action, at the right of the window bar: search, next candidate, Grind Tracker (pressed while its window shows), placement, Settings, Help & Setup, collapse. Settings is the one with no hotkey (it is where the hotkeys are changed); its icon is a six-toothed cog with its hub, drawn as an outline, so at 13px it reads as a gear rather than a sun. The Grind Tracker's window has only its Personal Bests button and its close button on its bar, with no hotkeys; its reset is a light button in its body, away from the ×. Buttons whose action isn't available are hidden, not greyed.
 - **Shape:** 19px square, 2px radius, 1px border, no padding.
 - **Icon:** a 13px inline SVG on a 16-unit grid, stroked in `currentColor` at 2 with round caps and joins, no fill (a single filled dot where a glyph needs one).
 - **Game blue** (window bars): the Game Button Blue gradient, game-button-edge border, white icon with its drop, and the game button bevel. The search view's back button is the same.
 - **Light steel** (body): the Light Steel gradient, Window Edge border, Panel Ink icon with no drop, solid white top highlight. The Hunting Target's reopen-search and clear buttons, and the Grind Tracker's reset and the × on its Best row. That × is always this light button, never the window bar's game-blue ×, so it can't be read as closing the window; its title and accessible name say "Remove this best from your history".
-- **Text button** (body): the light steel button with a word where an icon couldn't say it, 19px tall, padding 0 7px, 12px/17px bold Panel Ink, no text shadow. The Grind Tracker's: the Undo in its reset note.
+- **Text button** (body): the light steel button with a word where an icon couldn't say it, 19px tall, padding 0 7px, 12px/17px bold Panel Ink, no text shadow. The Grind Tracker's: the Undo in its reset note. The settings view's: Change and Cancel, Turn off and Swap (all 54px wide, one in another's place), Undo and Restore defaults. One the panel won't take now is greyed and flat, as setup greys its buttons: Restore defaults with every hotkey at its default, or while a hotkey waits for its keys.
 - **States:** hover shifts the gradient one step lighter; pressed one step deeper with the Pressed shadow; keyboard focus draws the 2px Edit Blue ring offset 2px. The cursor is a pointer while the panel is draggable.
 
 ### Corner Grips
@@ -522,7 +542,7 @@ While the world crawl maps maps never seen, the crawl note ("Mapping the world: 
 
 ### Grind Tracker
 In its own window, read at a glance between attacks.
-- **Notes,** on the glass in 13px Panel Ink, wrapping: "Waiting for EXP" until the Session starts; "You switched character, so this is a new Session." when the Session started afresh by itself, until it warms up; "Session reset." with the Undo text button, until the next EXP gain, when the reset can no longer be undone; and the problem note "Can't read the EXP bar. Move whatever covers it, or mark it again from Help & setup." once the bar has gone 10 seconds without reading whole.
+- **Notes,** on the glass in 13px Panel Ink, wrapping: "Waiting for EXP" until the Session starts; "You switched character, so this is a new Session." when the Session started afresh by itself, until it warms up; "Session reset." with the Undo text button, until the next EXP gain, when the reset can no longer be undone; and the problem note "Can't read the EXP bar. Move whatever covers it, or mark it again from Help & Setup." once the bar has gone 10 seconds without reading whole.
 - **Figures:** a box set into the body on Window Lavender at 95%, edged in Inset Edge with a 4px radius, so the densest reading holds over any scene. A headline row: "Time to Level" (12px Panel Ink Steel), the figure (18px bold) and, while paused, the "paused" tag in the problem palette, with the light reset button at the far end. Warming up has no tag: its figures in Light say it. Then the rates, the panel's summary in miniature: a five-column grid at 12px Panel Ink Steel of period, value, "EXP/h", value, "/h" (the "/h" set against its percentage so "12.9%/h" reads as one), values 13px bold Panel Ink and right-aligned. "Last 5 min" always; "Session" with its length in Panel Ink Slate ("1h 12m") only once the Session is longer than the rolling window; then "Best" with the map's Personal Best from its history (the best of earlier Visits, as saved), its "EXP/h", and the light × in the percentages' column, which removes that best from the history at once, with no undo and no note, the next-best Visit's taking the row. The Best row shows from arriving on the map, with no wait: before the Session's first gain too, alone in the box under "Waiting for EXP". It never shows on a first Visit, a map without a Map Summary, or while Candidates wait for a choice. While Last 5 min beats it, over a full 5 minutes of play on the map, the You Yellow star follows "Last 5 min" (named "New best on this map"); the core says when, comparing the two figures as they are written, so the star never shows beside two that read the same. The star keeps its room while it's off, so the figures never shift as it comes and goes. EXP rates are written out at three significant figures as the panel writes its rates ("61,200"). Then "21% of this map's solo EXP/h (297,499)", counting only the play on the shown map once there is a minute of it, and "1 death (−2.1% of the level)", 12px Panel Ink Steel lines that wrap. Held, the figures drop to Light (see Typography), all but the Best row's: it doesn't move.
 - **EXP gauge,** the window's signature: the game's status-bar EXP gauge in miniature. "EXP" in 12px bold and the reading as the bar writes it ("8,435 [41.72%]") in 12px Panel Ink, over a 10px gauge framed in EXP Frame with a 2px radius and a white top line: an EXP Lime fill on the EXP Track grey. It shows from the first reading, while waiting too, so the player sees the bar being read, and changes with every reading rather than holding with the figures. No easing, no sheen. It is a `progressbar` whose value text is the reading.
 - **Personal Bests button,** on the window bar left of the ×: the game-blue icon button, an outlined star (the Best row's own mark for a best, drawn as the bar's icons are), named "Open your Personal Bests in the browser". Hidden, not greyed, until some map has a Personal Best (the Visit under way's counts). The Best row's "Best" opens the page too: plain at rest, so the row reads as before, Portal Blue and underlined under the pointer, as a mob's name in the panel. Either opens the Personal Bests page and leaves the window as it was.
@@ -561,6 +581,16 @@ Its own section at the bottom of the normal view, 8px below a Panel Rule. A head
 - **Travel:** a Panel Ink Steel legend and checkboxes in Edit Blue (`accent-color`), 12px.
 - **Key hint:** one 12px/16px Panel Ink Slate line naming the keys, its arrows in text presentation (`font-variant-emoji: text`) so they stay ink rather than the emoji font's blue keycaps.
 
+### Settings View
+Opened by the gear, or by Change hotkeys in setup's Overlay Guide, it takes the keyboard as the search view does and closes when the player clicks back into the game. It changes the hotkeys, and every change is saved at once.
+- **Head:** "Hotkeys" in Section Heading type, and under it, 2px down, one 12px/16px Panel Ink Steel line on what a hotkey costs the game: "While the game or MapleCompass is in front, these keys act here and never reach the game."
+- **Rows:** an inset box on the near-opaque Body lavender (1px Inset Edge, 4px radius, padding 3px, rows 1px apart), as the map list is set. Each row is a three-column grid (padding 2px 2px 2px 8px, gaps 3px 8px, at least 23px tall, 3px radius): what the hotkey does in 13px Panel Ink Steel, wrapping, never under 8em; its keys in 13px bold Panel Ink, right-aligned, breaking only after a "+" ("Ctrl+Shift+F"; "Off" in Light Panel Ink Steel when it has none); and a 54px Change text button. The names are the setup guide's, word for word.
+- **Waiting for keys:** the row wears Selection Periwinkle with its inset ring, its name turns Panel Ink, "Press keys…" in Light Panel Ink Steel takes the keys' place, and Change becomes Cancel. A second line spans the row: "Hold Ctrl+Shift and press a key · Esc cancels" in 12px Panel Ink Steel, with Turn off under Cancel (Backspace or Delete does the same).
+- **Refused:** the keys pressed sit in a cream chip (Problem Cream, a 1px inset Problem Amber ring, Problem Brown, 3px radius, padding 0 5px) in the keys' place, and the second line says why in Problem Brown after a 7px orange dot: "Ctrl+Shift+F is already “Search a mob”. Swap them, or press other keys.", with Swap under Cancel; "Add Ctrl, Alt or Win: …"; "Caps Lock can't be part of a hotkey. Press another key."
+- **Doing nothing:** under a row whose keys Windows or another app has, or that aren't keys at all, a "Taken" or "Invalid" tag in the problem palette (as "paused") leads a 12px Panel Ink Steel line saying why. Item Lookup, the one action with no button, says when it is off that it can't be used.
+- **Actions:** the last change in 12px Panel Ink Steel ("Saved: Search a mob is now Ctrl+Alt+F."), then Undo while Restore defaults can be undone, then Restore defaults, right-aligned; the line takes a row of its own above them when it would be squeezed.
+- **Focus and speech:** opening focuses the first Change; waiting focuses its row, so no key press lands on a button (plain Tab still reaches Cancel, Turn off and Swap, and Enter or Space presses them); done, its Change again. Restored, Undo; undone, Restore defaults. One polite live region speaks the wait, the refusal and the saved change, and each Change names its hotkey and keys.
+
 ### Footer
 The credit, "NiaMeowDB (meowdb.com)", in 12px Panel Ink Slate, 6px below a Panel Rule. While the panel lists mobs, whose Mob Cards show maplestory.io's images, it reads "NiaMeowDB (meowdb.com) · images: maplestory.io".
 
@@ -574,7 +604,7 @@ While the map shown isn't confirmed, or several maps share its title and none is
 One box with three states. Reading: a plain unboxed note. Nothing read: the problem note (padded 9px 12px 10px 28px). Read: the map as the overlay's title panel will show it, on Mini Map Sky with a Window Edge border and 4px radius (padding 8px 12px 9px), the Street Name over the Map Name in Title Lettering, tagged "Recognised" at the right in sentence case. For the EXP bar, the figures as the bar writes them ("EXP 160 [3.81%]", 16px bold ink), tagged "Read".
 
 ### Shortcuts List (setup)
-A two-column definition grid at 13px: the action in Ink Steel, its keys right-aligned in bold ink (gap 6px 16px). A compact variant (gap 2px 12px) sits under "While you play" on the title test step; the full list is the overlay guide.
+A two-column definition grid at 13px: the action in Ink Steel, its keys right-aligned in bold ink (gap 6px 16px). A compact variant (gap 2px 12px) sits under "While you play" on the title test step; the full list is the Overlay Guide.
 
 ### Title-Marking Window
 A transparent window over the game client, its whole surface the Navy Veil with a crosshair cursor.
@@ -600,7 +630,7 @@ A transparent window over the game client, its whole surface the Navy Veil with 
 - **Don't** return to the dark dev-tools card with a stats table on top.
 - **Don't** use orange, or the outlined title lettering, for anything other than their single roles.
 - **Don't** add small labels or kickers above content beyond the Street Name in the title panel; a label belongs only to the field or figure it names.
-- **Don't** let a click on the overlay take the keyboard from the game outside the search view.
+- **Don't** let a click on the overlay take the keyboard from the game outside the search and settings views.
 - **Don't** add motion (transitions or animations) to any window. The crawl gauge is the one exception, because its motion is the progress itself; it stops when the gauge hides and under reduced motion.
 - **Don't** float any window on a blurred drop shadow; depth is highlights, bevels and hairlines.
 - **Don't** introduce a second typeface or icon fonts.
