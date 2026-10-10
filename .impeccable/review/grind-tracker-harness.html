@@ -96,8 +96,11 @@
       const params = new URLSearchParams(location.search);
       document.documentElement.classList.toggle("dark", params.get("bg") === "dark");
       const s = params.get("s") ?? "active";
+      // The Personal Bests button shows once some map has a best: in every state back on a
+      // map with one (the Best row's), and not on a first Visit with none anywhere yet.
       window.__show = (name) => {
-        window.__handlers["grind-tracker-state"]({ event: "grind-tracker-state", id: 1, payload: { shown: true, tracking: states[name] } });
+        const personalBests = name.startsWith("best");
+        window.__handlers["grind-tracker-state"]({ event: "grind-tracker-state", id: 1, payload: { shown: true, tracking: states[name], personalBests } });
       };
       if (s === "all") {
         // A contact sheet: every state at once, each a still copy of the rendered window.
