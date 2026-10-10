@@ -3,7 +3,19 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { dayText } from "./dates";
 import type { ExpTracking } from "./exp-tracking";
-import { hotkeyAvailable, keyLabel, type Hotkeys } from "./hotkeys";
+import {
+  HOTKEY_NAMES,
+  KEY_ONLY,
+  codeLabel,
+  hotkeyAvailable,
+  keyLabel,
+  sameHotkey,
+  type Hotkey,
+  type Hotkeys,
+  type RebindProblem,
+  type SettingsNotice,
+  type SettingsView,
+} from "./hotkeys";
 import {
   TIER_NAMES,
   crawlLine,
@@ -142,6 +154,8 @@ type PanelState = {
   invalidHotkeys: string[];
   /** The shell has the hotkeys registered: the game or one of our windows is in front. */
   hotkeysLive: boolean;
+  /** The settings view, which takes over the panel; null while it is closed. */
+  settingsView: SettingsView | null;
   gameWindowTitle: string;
   expBarRegion: { x: number; y: number; width: number; height: number } | null;
   expBar: ExpBar | null;
@@ -213,6 +227,13 @@ const resultsBox = byId("results-box");
 const resultsTable = byId("search-results") as HTMLTableElement;
 const searchCrawl = byId("search-crawl");
 const searchCredit = byId("search-credit");
+const settingsView = byId("settings-view");
+const settingsBack = byId("settings-back");
+const hotkeyRows = byId("hotkey-rows");
+const settingsNotice = byId("settings-notice");
+const settingsAnnounce = byId("settings-announce");
+const hotkeysUndo = byId("hotkeys-undo") as HTMLButtonElement;
+const hotkeysReset = byId("hotkeys-reset") as HTMLButtonElement;
 const resultsHeader = resultsHead();
 resultsTable.append(resultsHeader);
 let draggable = false;
@@ -231,6 +252,8 @@ function changed(part: string, ...inputs: unknown[]): boolean {
 }
 /** The search view's open step, as last rendered. */
 let step: SearchState["view"] = null;
+/** The settings view, as last rendered: null while it is closed. */
+let settings: SettingsView | null = null;
 
 /**
  * "Ctrl+Shift+N is taken by another app, so it does nothing here." and "Ctrl+Shift+Banana
@@ -393,9 +416,12 @@ function renderData(panel: PanelState) {
   const { candidates } = panel;
   candidatesEl.hidden = !candidates;
   if (candidates) {
-    const next = hotkeyAvailable(panel.hotkeys.chooseCandidate, panel.unavailableHotkeys)
-      ? `${keyLabel(panel.hotkeys.chooseCandidate)} for the next`
-      : "Candidate shortcut unavailable; check shortcut settings";
+    const nextKey = panel.hotkeys.chooseCandidate;
+    const next = hotkeyAvailable(nextKey, panel.unavailableHotkeys)
+      ? `${keyLabel(nextKey)} for the next`
+      : nextKey === ""
+        ? "the two arrows at the top for the next"
+        : "Candidate shortcut unavailable; change it in Settings";
     candidatesNote.textContent = candidates.chosen
       ? `Your pick of ${candidates.maps.length} maps with this title · ${next}`
       : `${candidates.maps.length} maps share this title; not sure which you're on · ${next}`;
@@ -587,7 +613,7 @@ function renderHunting(panel: PanelState) {
 function renderSearchView(panel: PanelState) {
   const { search } = panel;
   const view = search.view;
-  normalView.hidden = view !== null;
+  normalView.hidden = view !== null || panel.settingsView !== null;
   searchView.hidden = view === null;
   const opened = view !== step;
   step = view;
@@ -613,6 +639,176 @@ function renderSearchView(panel: PanelState) {
     renderMaps(search);
     if (opened) resultsBox.focus({ preventScroll: true });
   }
+}
+
+/** What a hotkey does, as the settings view and the setup guide name it. */
+const hotkeyName = (hotkey: Hotkey) => HOTKEY_NAMES.find(([h]) => h === hotkey)?.[1] ?? hotkey;
+
+/** A combination as read aloud or in a sentence: "Ctrl+Shift+F", or "off". */
+const spokenKeys = (binding: string) => (binding === "" ? "off" : keyLabel(binding));
+
+/**
+ * A combination as the settings view draws it: "Ctrl+Shift+F", breaking only after a "+"
+ * so a long one wraps rather than squeezing what the hotkey does; "Off" with none.
+ */
+function keysElement(binding: string, kind: "set" | "refused" = "set"): HTMLElement {
+  const keys = document.createElement("kbd");
+  keys.className = `keys ${kind}`;
+  if (binding === "") {
+    keys.classList.add("off");
+    keys.textContent = "Off";
+    return keys;
+  }
+  const parts = keyLabel(binding).split("+");
+  parts.forEach((key, i) => {
+    keys.append(key);
+    if (i < parts.length - 1) keys.append("+", document.createElement("wbr"));
+  });
+  return keys;
+}
+
+/** "Ctrl+Shift+F is already “Search a mob”. …": why the combination pressed wasn't taken. */
+function rebindProblemText(problem: RebindProblem): string {
+  switch (problem.kind) {
+    case "noModifier":
+      return `Add Ctrl, Alt or Win: as a hotkey, ${keyLabel(problem.pressed)} would never reach the game, not even its chat.`;
+    case "unsupportedKey":
+      return `${codeLabel(problem.code)} can't be part of a hotkey. Press another key.`;
+    case "inUse":
+      return `${keyLabel(problem.pressed)} is already “${hotkeyName(problem.by)}”. Swap them, or press other keys.`;
+  }
+}
+
+/** "Saved: Search a mob is now Ctrl+Alt+F.": what the player's last change came to. */
+function settingsNoticeText(notice: SettingsNotice, hotkeys: Hotkeys): string {
+  switch (notice.kind) {
+    case "saved": {
+      const now = (hotkey: Hotkey) => `${hotkeyName(hotkey)} is now ${spokenKeys(hotkeys[hotkey])}`;
+      const swapped = notice.swappedWith ? `, and ${now(notice.swappedWith)}` : "";
+      return `Saved: ${now(notice.hotkey)}${swapped}.`;
+    }
+    case "restored":
+      return "Every hotkey is back to its default, and on.";
+    case "restoreUndone":
+      return "Saved: your hotkeys are back as they were.";
+  }
+}
+
+function textButton(text: string, focusKey: string, label: string): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "text-button";
+  button.textContent = text;
+  button.dataset.focus = focusKey;
+  button.setAttribute("aria-label", label);
+  return button;
+}
+
+/** A row's second line: what to press while it waits, why its keys were refused, or why they do nothing. */
+function rowNote(text: string, kind: "help" | "problem" | "broken", tag?: string, button?: HTMLButtonElement): HTMLElement {
+  const note = document.createElement("p");
+  note.className = `row-note ${kind}`;
+  const words = span("words", text);
+  if (tag) words.prepend(span("tag", tag), " ");
+  note.append(words);
+  if (button) note.append(button);
+  return note;
+}
+
+/** One hotkey's row: what it does, its keys and Change; waiting, its instruction or problem under it. */
+function hotkeyRow(hotkey: Hotkey, name: string, panel: PanelState, view: SettingsView): HTMLLIElement {
+  const row = document.createElement("li");
+  row.dataset.focus = `row:${hotkey}`;
+  row.tabIndex = -1;
+  const binding = panel.hotkeys[hotkey];
+  const waiting = view.rebinding === hotkey;
+  row.classList.toggle("rebinding", waiting);
+  const { problem } = view;
+  let keys: HTMLElement;
+  if (!waiting) keys = keysElement(binding);
+  else if (problem?.kind === "unsupportedKey") keys = keysElement(codeLabel(problem.code), "refused");
+  else if (problem) keys = keysElement(problem.pressed, "refused");
+  else keys = span("keys pending", "Press keys…");
+  const change = textButton(
+    waiting ? "Cancel" : "Change",
+    `change:${hotkey}`,
+    waiting ? `Cancel changing ${name}` : `Change ${name}, now ${spokenKeys(binding)}`,
+  );
+  change.dataset.hotkey = hotkey;
+  row.append(span("action", name), keys, change);
+  if (waiting && problem) {
+    const swap =
+      problem.kind === "inUse" ? textButton("Swap", `swap:${hotkey}`, `Swap with ${hotkeyName(problem.by)}`) : undefined;
+    swap?.addEventListener("click", () => invoke("rebind_swap"));
+    row.append(rowNote(rebindProblemText(problem), "problem", undefined, swap));
+  } else if (waiting) {
+    const turnOff =
+      binding === "" ? undefined : textButton("Turn off", `turn-off:${hotkey}`, `Turn off ${name}`);
+    if (turnOff) turnOff.title = "Turn off (Backspace)";
+    turnOff?.addEventListener("click", () => invoke("rebind_turn_off"));
+    row.append(rowNote("Hold Ctrl+Shift and press a key · Esc cancels", "help", undefined, turnOff));
+  } else if (binding === "" && hotkey === KEY_ONLY) {
+    row.append(rowNote("It has no button, so it can't be used while it is off.", "help"));
+  } else if (binding !== "" && !hotkeyAvailable(binding, panel.unavailableHotkeys)) {
+    const invalid = panel.invalidHotkeys.some((key) => sameHotkey(key, binding));
+    const why = invalid ? "These aren't keys a hotkey can use." : "Windows or another app has these keys.";
+    row.append(rowNote(why, "broken", invalid ? "Invalid" : "Taken"));
+    change.setAttribute("aria-label", `Change ${name}, now ${spokenKeys(binding)}, which does nothing: ${why}`);
+  }
+  return row;
+}
+
+/** What to announce for the settings view's latest change: the problem, the wait, or the notice. */
+function settingsAnnouncement(view: SettingsView, hotkeys: Hotkeys): string {
+  if (view.problem) return rebindProblemText(view.problem);
+  if (view.rebinding) {
+    return `Press the new keys for ${hotkeyName(view.rebinding)}, holding Ctrl and Shift. Escape cancels; Backspace turns it off.`;
+  }
+  return view.notice ? settingsNoticeText(view.notice, hotkeys) : "";
+}
+
+/**
+ * The settings view, in the search view's place: each hotkey with what it does, its keys and
+ * a Change button. Changing one, its row waits for the new keys, which the keys pressed now
+ * are (see the keydown handler below), with its instruction, or why the keys pressed were
+ * refused, under it. Every change is saved at once, and the line by Restore defaults says
+ * so. The rows are drawn anew on every change, so the focus is put back where it was.
+ */
+function renderSettingsView(panel: PanelState) {
+  const view = panel.settingsView;
+  settingsView.hidden = view === null;
+  const was = settings;
+  settings = view;
+  if (view === null) return;
+  const focused = (document.activeElement as HTMLElement | null)?.dataset?.focus;
+  const { hotkeys, unavailableHotkeys, invalidHotkeys } = panel;
+  const redrawn = changed("hotkey-rows", hotkeys, unavailableHotkeys, invalidHotkeys, view.rebinding, view.problem);
+  if (redrawn) {
+    hotkeyRows.replaceChildren(...HOTKEY_NAMES.map(([hotkey, name]) => hotkeyRow(hotkey, name, panel, view)));
+  }
+  settingsNotice.textContent = view.notice ? settingsNoticeText(view.notice, hotkeys) : "";
+  hotkeysUndo.hidden = view.notice?.kind !== "restored";
+  // Nothing to restore, or a row waiting: one change at a time.
+  hotkeysReset.disabled = view.atDefaults || view.rebinding !== null;
+  const announcement = settingsAnnouncement(view, hotkeys);
+  if (changed("settings-announce", announcement)) settingsAnnounce.textContent = announcement;
+  // Opened: the first Change. Waiting: its row, so no key presses a button. Done: that
+  // row's Change. Restored: Undo, and undone: Restore defaults. Otherwise where it was.
+  const target =
+    was === null
+      ? `change:${HOTKEY_NAMES[0][0]}`
+      : view.rebinding && view.rebinding !== was.rebinding
+        ? `row:${view.rebinding}`
+        : !view.rebinding && was.rebinding
+          ? `change:${was.rebinding}`
+          : view.notice?.kind !== was.notice?.kind && view.notice?.kind === "restored"
+            ? "undo"
+            : view.notice?.kind !== was.notice?.kind && view.notice?.kind === "restoreUndone"
+              ? "reset"
+              : redrawn
+                ? focused
+                : undefined;
+  if (target) settingsView.querySelector<HTMLElement>(`[data-focus="${target}"]`)?.focus({ preventScroll: true });
 }
 
 /** The first step: the suggestions (the highlighted one is what Enter picks). */
@@ -641,7 +837,7 @@ function renderMobs(search: SearchState) {
   } else {
     query.removeAttribute("aria-activedescendant");
   }
-  noMatch.textContent = search.crawl.total === 0 ? "Loading MeowDB's Map list…" : "No known mob has that in its name.";
+  noMatch.textContent = search.crawl.total === 0 ? "Loading MeowDB's map list…" : "No known mob has that in its name.";
   noMatch.hidden = listed || search.query.trim() === "";
 }
 
@@ -911,7 +1107,9 @@ function render(panel: PanelState) {
   uncertainty.hidden = !doubtful;
   const setupHint = hotkeyAvailable(hotkeys.setup, panel.unavailableHotkeys)
     ? `Re-mark with ${keyLabel(hotkeys.setup)}.`
-    : "Setup shortcut unavailable. Close the app using it, or change hotkeys in %APPDATA%\com.itechify.maplecompass\settings.json, then restart MapleCompass.";
+    : hotkeys.setup === ""
+      ? "Re-mark from Help & Setup, the ? at the top of the panel."
+      : "Setup shortcut unavailable. Close the app using it, or change it in Settings (the gear at the top of the panel).";
   // Without a map, the title bar holds the status and the note under it what to do; the
   // Street Name slot stays the Street Name's.
   recovery.textContent = "";
@@ -927,7 +1125,7 @@ function render(panel: PanelState) {
     problem = panel.setup.needed === "resolutionChanged";
   } else if (recognition.status === "unavailable") {
     map.textContent = "Map recognition unavailable";
-    recovery.textContent = "Couldn't load the map list from MeowDB. Check your connection. The Map list retries every minute.";
+    recovery.textContent = "Couldn't load the map list from MeowDB. Check your connection. The map list retries every minute.";
     problem = true;
   } else if (current) {
     street.textContent = current.streetName;
@@ -938,7 +1136,7 @@ function render(panel: PanelState) {
   } else {
     map.textContent = "Reading the minimap title…";
     recovery.textContent = recognition.status === "starting"
-      ? "Loading MeowDB's Map list…"
+      ? "Loading MeowDB's map list…"
       : `Keep the minimap open with both title lines visible. If this persists, ${setupHint.charAt(0).toLowerCase() + setupHint.slice(1)}`;
   }
   recovery.hidden = recovery.textContent === "";
@@ -946,11 +1144,10 @@ function render(panel: PanelState) {
   renderToolbar(panel);
   // Each hotkey that does nothing, its real cause, then one way to fix it.
   const causes = hotkeyCauses(panel);
-  hotkeyProblem.textContent = causes && `${causes} ${
-    hotkeyAvailable(hotkeys.setup, panel.unavailableHotkeys)
-      ? `${keyLabel(hotkeys.setup)} opens setup; select Guide for shortcut help.`
-      : "Close the other app, or edit %APPDATA%\com.itechify.maplecompass\settings.json, then restart MapleCompass."
-  }`;
+  const them = panel.unavailableHotkeys.length === 1 ? "it" : "them";
+  const taken = panel.unavailableHotkeys.some((key) => !panel.invalidHotkeys.includes(key));
+  hotkeyProblem.textContent = causes &&
+    `${causes} ${taken ? "Close the other app, or change" : "Change"} ${them} in Settings (the gear at the top of the panel).`;
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
   // The world crawl, while it runs, with or without a search: "Mapping the world: 312
   // of 422 maps known". Search can only find mobs on the maps known so far.
@@ -958,6 +1155,7 @@ function render(panel: PanelState) {
   renderData(panel);
   renderHunting(panel);
   renderSearchView(panel);
+  renderSettingsView(panel);
   shownPanel = panel;
   renderMobCard();
   renderBadge(panel);
@@ -1115,10 +1313,48 @@ teleportScrolls.addEventListener("change", () => {
   invoke("search_toggle_teleport_scrolls");
   resultsBox.focus({ preventScroll: true });
 });
-// Whenever the overlay comes in front with the search view open, the keys go to it.
+// Whenever the overlay comes in front with the search view or the settings view open, the
+// keys go to it.
 window.addEventListener("focus", () => {
   if (step === "mobs") query.focus({ preventScroll: true });
   else if (step === "maps") resultsBox.focus({ preventScroll: true });
+  else if (settings && !settingsView.contains(document.activeElement)) {
+    const target = settings.rebinding ? `row:${settings.rebinding}` : `change:${HOTKEY_NAMES[0][0]}`;
+    settingsView.querySelector<HTMLElement>(`[data-focus="${target}"]`)?.focus({ preventScroll: true });
+  }
+});
+
+settingsBack.addEventListener("click", () => invoke("settings_close"));
+hotkeysReset.addEventListener("click", () => invoke("hotkeys_reset"));
+hotkeysUndo.addEventListener("click", () => invoke("hotkeys_undo_reset"));
+// A row's Change button waits for its new combination; while it waits, it cancels.
+hotkeyRows.addEventListener("click", (e) => {
+  const button = e.target instanceof Element ? e.target.closest<HTMLButtonElement>("button[data-hotkey]") : null;
+  const hotkey = button?.dataset.hotkey as Hotkey | undefined;
+  if (!hotkey) return;
+  if (settings?.rebinding === hotkey) invoke("rebind_cancel");
+  else invoke("rebind_begin", { hotkey });
+});
+// The settings view's keys. While a hotkey waits for its new combination, every key goes
+// to the core as part of it (a modifier on its own waits for the key, Esc cancels, and
+// Backspace turns it off), and none does what it would do here, but for two that no hotkey
+// could be: Tab alone moves to the waiting row's buttons, and Enter or Space alone presses
+// the one focused. Otherwise Esc goes back.
+document.addEventListener("keydown", (e) => {
+  if (!settings || e.isComposing) return;
+  if (settings.rebinding) {
+    const plain = !(e.ctrlKey || e.altKey || e.metaKey);
+    const onButton = e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ");
+    if (plain && (e.key === "Tab" || onButton)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.repeat) return;
+    const press = { code: e.code, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, win: e.metaKey };
+    invoke("rebind_key", { press });
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    invoke("settings_close");
+  }
 });
 
 listen<PanelState>("overlay-state", (e) => render(e.payload));

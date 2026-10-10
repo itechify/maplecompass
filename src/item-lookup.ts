@@ -55,7 +55,7 @@ function sentence(line: ItemLookupLine, key: string): [string, boolean] {
     case "unreachable":
       return ["MeowDB can't be reached right now.", true];
     case "formatChanged":
-      return ["Item lookup is unavailable: MeowDB's search has changed.", true];
+      return ["Item Lookup is unavailable: MeowDB's search has changed.", true];
   }
 }
 

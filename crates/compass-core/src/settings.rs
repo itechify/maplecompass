@@ -76,12 +76,12 @@ impl Default for Settings {
     }
 }
 
-/// Global hotkeys, as accelerator strings such as `"ctrl+shift+c"`.
+/// Global hotkeys, as accelerator strings such as `"ctrl+shift+c"`; an empty one is off.
 ///
 /// They fire while the game has focus and the game never sees them. The defaults use
 /// Ctrl+Shift+letter: Windows and other apps already hold many Win+Alt letters
 /// (Win+Alt+F among them), so a player who binds one of these in the game rebinds it
-/// here instead. Files saved before edit mode was retired also have `editMode`, and
+/// here instead, or turns it off. Files saved before edit mode was retired also have `editMode`, and
 /// files saved before the Grind Tracker had a window have `resetSession` (Ctrl+Shift+R,
 /// too easily pressed while attacking with Ctrl); both are ignored.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -108,19 +108,67 @@ pub struct Hotkeys {
 }
 
 impl Hotkeys {
-    /// Every hotkey, for the shell to register: one list, so none is forgotten.
-    pub fn all(&self) -> [&str; 8] {
-        [
-            &self.toggle_panel,
-            &self.cycle_placement,
-            &self.open_meowdb_page,
-            &self.setup,
-            &self.choose_candidate,
-            &self.grind_tracker,
-            &self.item_lookup,
-            &self.search,
-        ]
+    /// Every hotkey that is on, for the shell to register: one list, so none is forgotten.
+    pub fn all(&self) -> Vec<&str> {
+        Hotkey::ALL.into_iter().map(|hotkey| self.get(hotkey)).filter(|combination| !combination.is_empty()).collect()
     }
+
+    /// The combination bound to `hotkey`; empty while it is off.
+    pub fn get(&self, hotkey: Hotkey) -> &str {
+        match hotkey {
+            Hotkey::TogglePanel => &self.toggle_panel,
+            Hotkey::CyclePlacement => &self.cycle_placement,
+            Hotkey::OpenMeowdbPage => &self.open_meowdb_page,
+            Hotkey::Setup => &self.setup,
+            Hotkey::ChooseCandidate => &self.choose_candidate,
+            Hotkey::GrindTracker => &self.grind_tracker,
+            Hotkey::ItemLookup => &self.item_lookup,
+            Hotkey::Search => &self.search,
+        }
+    }
+
+    /// Bind `hotkey` to `combination` instead; an empty one turns it off.
+    pub(crate) fn set(&mut self, hotkey: Hotkey, combination: String) {
+        let bound = match hotkey {
+            Hotkey::TogglePanel => &mut self.toggle_panel,
+            Hotkey::CyclePlacement => &mut self.cycle_placement,
+            Hotkey::OpenMeowdbPage => &mut self.open_meowdb_page,
+            Hotkey::Setup => &mut self.setup,
+            Hotkey::ChooseCandidate => &mut self.choose_candidate,
+            Hotkey::GrindTracker => &mut self.grind_tracker,
+            Hotkey::ItemLookup => &mut self.item_lookup,
+            Hotkey::Search => &mut self.search,
+        };
+        *bound = combination;
+    }
+}
+
+/// One of the player's hotkeys, by what it does: named as in [`Hotkeys`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Hotkey {
+    TogglePanel,
+    CyclePlacement,
+    OpenMeowdbPage,
+    Setup,
+    ChooseCandidate,
+    GrindTracker,
+    ItemLookup,
+    Search,
+}
+
+impl Hotkey {
+    /// Every hotkey, in the order [`Hotkeys::all`] lists them.
+    pub const ALL: [Hotkey; 8] = [
+        Hotkey::TogglePanel,
+        Hotkey::CyclePlacement,
+        Hotkey::OpenMeowdbPage,
+        Hotkey::Setup,
+        Hotkey::ChooseCandidate,
+        Hotkey::GrindTracker,
+        Hotkey::ItemLookup,
+        Hotkey::Search,
+    ];
 }
 
 impl Default for Hotkeys {
