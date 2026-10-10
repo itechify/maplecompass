@@ -1,9 +1,7 @@
 //! One map's hunting information from MeowDB, and the panel's progress getting it.
 
-use crate::map_index::{Fetched, MapDataSource, SourceError};
 use crate::shown_map::LevelRange;
 use serde::{Deserialize, Serialize};
-use std::task::Poll;
 
 /// One map's data, as the map data source reads it from the map's MeowDB page.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -196,7 +194,7 @@ impl MapData {
 
 /// A source's data as the panel shows it: mobs sorted by level (then name), and the
 /// ones it lists picked out.
-fn for_panel(mut data: MapData) -> MapData {
+pub(crate) fn for_panel(mut data: MapData) -> MapData {
     data.mobs.sort_by(|a, b| a.level.cmp(&b.level).then_with(|| a.name.cmp(&b.name)));
     // The most common mobs, ties going to the lower level, as they come in `mobs`.
     let mut by_share: Vec<usize> = (0..data.mobs.len()).collect();
@@ -214,49 +212,4 @@ fn for_panel(mut data: MapData) -> MapData {
     };
     data.listed_mobs = shown.into_iter().map(|(_, mob)| mob.clone()).collect();
     data
-}
-
-/// Asks the source for maps' data, each only when the core needs it (ADR 0003: never
-/// ahead of time), and keeps the answers until told to forget them.
-#[derive(Default)]
-pub(crate) struct MapDataLoader {
-    /// Each map asked about, and how asking went.
-    statuses: Vec<(String, MapDataStatus)>,
-}
-
-impl MapDataLoader {
-    /// Map `id`'s data: asked for if it's new, checked on if a request is still in
-    /// flight, and otherwise what came back.
-    pub fn load(&mut self, id: &str, source: &mut dyn MapDataSource) -> &MapDataStatus {
-        let at = match self.statuses.iter().position(|(asked, _)| asked == id) {
-            Some(at) => at,
-            None => {
-                self.statuses.push((id.to_string(), MapDataStatus::Loading));
-                self.statuses.len() - 1
-            }
-        };
-        let status = &mut self.statuses[at].1;
-        if *status == MapDataStatus::Loading {
-            *status = match source.map_data(id) {
-                Poll::Pending => MapDataStatus::Loading,
-                Poll::Ready(Ok(Fetched::Fresh(data))) => MapDataStatus::Ready(for_panel(data)),
-                Poll::Ready(Ok(Fetched::SavedCopy { data, saved_at_unix_ms })) => {
-                    MapDataStatus::SavedCopy { saved_at_unix_ms, data: for_panel(data) }
-                }
-                Poll::Ready(Err(SourceError::Unreachable(_))) => MapDataStatus::Unavailable,
-                Poll::Ready(Err(SourceError::FormatChanged(_))) => MapDataStatus::FormatChanged,
-            };
-        }
-        status
-    }
-
-    /// Map `id`'s data as last loaded, if it was asked for.
-    pub fn status(&self, id: &str) -> Option<&MapDataStatus> {
-        self.statuses.iter().find(|(asked, _)| asked == id).map(|(_, status)| status)
-    }
-
-    /// Forget every answer, so a map is asked about afresh.
-    pub fn forget(&mut self) {
-        self.statuses.clear();
-    }
 }
