@@ -113,7 +113,7 @@ pub struct Rect {
 ///
 /// On the samples (1920x1200 client, default UI size) the title band is 66 px tall at
 /// client (0..4, 31). The region keeps ~15 px of slack above and below it, and is wide
-/// enough for the longest map name in MeowDB ("Physical Fitness Test <Normal Waiting
+/// enough for the longest map name MeowDB listed ("Physical Fitness Test <Normal Waiting
 /// Room>", ~470 px of panel). The core trims each frame where the panel ends, so a
 /// narrow minimap's surroundings are never read. Clamped to the client area.
 pub fn default_title_region(client_width: u32, client_height: u32) -> Rect {
@@ -124,15 +124,15 @@ pub fn default_title_region(client_width: u32, client_height: u32) -> Rect {
     Rect { x: 0, y, width: WIDTH.min(client_width), height: HEIGHT.min(client_height - y) }
 }
 
-/// The map the panel shows: a real map from the map index.
+/// The map the panel shows: a real map from the map list.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrentMap {
-    /// MeowDB's 9-digit map ID, zero padding kept.
+    /// The 9-digit map ID, zero padding kept.
     pub id: String,
     pub street_name: String,
     pub map_name: String,
-    /// The map's MeowDB page.
+    /// The map's MeowDB page, which the title and the open-page hotkey open.
     pub url: String,
 }
 
@@ -153,12 +153,12 @@ pub const OSMS_AND_IMAGES_CREDIT: &str =
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum Recognition {
-    /// The map index hasn't arrived yet (it is asked for at startup).
+    /// OSMS's file set hasn't arrived yet (it is asked for at startup).
     #[default]
     Starting,
     Ready,
-    /// MeowDB couldn't be reached, so titles are snapped to a copy of the map index
-    /// saved at `saved_at_unix_ms` (ms since the Unix epoch).
+    /// OSMS hasn't been reached for over 7 days, so titles are snapped to a copy of its
+    /// file set saved at `saved_at_unix_ms` (ms since the Unix epoch).
     SavedCopy {
         #[serde(rename = "savedAtUnixMs")]
         saved_at_unix_ms: u64,
@@ -186,7 +186,7 @@ pub struct PanelState {
     /// The maps sharing the shown map's title, when the core couldn't tell which of
     /// them the player is on; `None` when it could.
     pub candidates: Option<Candidates>,
-    /// The shown map's Map Summary, mobs and Hidden Portals from MeowDB, or why they
+    /// The shown map's Map Summary, mobs and Hidden Portals from OSMS's file set, or why they
     /// aren't there.
     pub data: MapDataStatus,
     /// [`OSMS_CREDIT`] whenever a map is shown; with Mob Cards, [`OSMS_AND_IMAGES_CREDIT`].
@@ -366,7 +366,7 @@ pub struct Compass {
     matcher: Option<Matcher>,
     tracker: Tracker,
     shown_map: ShownMap,
-    /// The world crawl, from when the map index arrives.
+    /// The world crawl, from when the map list arrives.
     crawl: Option<Crawl>,
     /// What an earlier launch's crawl learned, for the crawl to start from.
     saved_world: SavedWorld,
@@ -401,7 +401,7 @@ pub struct Compass {
 }
 
 impl Compass {
-    /// A core using the given map data source and default settings. The map index is
+    /// A core using the given data source and default settings. OSMS's file set is
     /// asked for on the first tick or frame.
     pub fn new(source: impl MapDataSource + Send + 'static) -> Self {
         let mut compass = Self {
@@ -839,7 +839,7 @@ impl Compass {
         None
     }
 
-    /// The Personal Bests page now: every map's best as saved, with what the map index and
+    /// The Personal Bests page now: every map's best as saved, with what the map list and
     /// the maps' pages (the shown map's own, else the crawl's) say of the map.
     fn bests_page(&self) -> BestsPage {
         let crawl = self.crawl.as_ref();
@@ -1219,13 +1219,13 @@ fn searched<'a>(crawl: &'a Option<Crawl>, state: &'a PanelState, settings: &Sett
     }
 }
 
-/// The shown map, by MeowDB ID, if Personal Bests are kept there: only where the map is
+/// The shown map, by ID, if Personal Bests are kept there: only where the map is
 /// certain, and has a Map Summary (in a town, quest turn-ins would set one).
 fn bests_map(state: &PanelState) -> Option<&str> {
     certain_map(state).filter(|_| state.data.solo_exp_ceiling().is_some())
 }
 
-/// The shown map, by MeowDB ID, if the panel is certain the player is on it: no
+/// The shown map, by ID, if the panel is certain the player is on it: no
 /// Candidates waiting for a choice. One map has the title, the map the player came from
 /// settled it, or the player chose it. Maps that share a title but would show the same
 /// are certain too, as they show the same: the panel always shows the first of them, and

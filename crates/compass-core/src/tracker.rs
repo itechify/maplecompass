@@ -8,7 +8,7 @@ const READS_TO_SWITCH: u32 = 2;
 
 #[derive(Default)]
 pub struct Tracker {
-    /// Index (into the map index) of the last map we were confident about.
+    /// Index (into the map list) of the last map we were confident about.
     current: Option<usize>,
     /// A different map read confidently on the latest frames, and how many in a row.
     pending: Option<(usize, u32)>,
