@@ -168,7 +168,7 @@ impl ItemLookups {
         let (read, asked) = self.searching.take()?;
         let answer = match source.item_search(&read) {
             Poll::Pending => {
-                // A lookup goes ahead of the crawl, which then waits out MeowDB's pace.
+                // A lookup doesn't wait out MeowDB's pace; what comes after it does.
                 if !asked {
                     pace.sent(at_ms);
                 }

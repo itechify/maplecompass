@@ -1,6 +1,5 @@
 //! Small hand-built worlds for mob search: made-up maps written out in OSMS's shape, the
-//! map list and the shown map's data. The world crawl, which still reads MeowDB's pages
-//! until #57, is served the same maps.
+//! map list and every map's data.
 
 use super::FakeSource;
 use super::osms::{self, Spawn};
@@ -85,17 +84,15 @@ pub fn osms_world(maps: Vec<WorldMap>) -> osms::World {
     world
 }
 
-/// A source serving a hand-built world: as OSMS's file set, and each map's data for the
-/// crawl.
+/// A source serving a hand-built world as OSMS's file set.
 pub fn world(maps: Vec<WorldMap>) -> FakeSource {
     FakeSource::with_world(osms_world(maps))
 }
 
-/// A core over `maps`, crawled (every page cached, so at once).
-pub fn crawled(maps: Vec<WorldMap>) -> Compass {
+/// A core over `maps`, its file set in hand (answered at once, on the first tick).
+pub fn loaded(maps: Vec<WorldMap>) -> Compass {
     let mut compass = Compass::new(world(maps));
     compass.tick(0);
-    compass.tick(50);
     compass
 }
 

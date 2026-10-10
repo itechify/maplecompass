@@ -3,8 +3,8 @@
 //! the panel's row doesn't show.
 //!
 //! Once the shown map's page is in, its listed mobs' pages and images are asked for one
-//! at a time (ADR 0006). Mob pages go ahead of the world crawl and keep to MeowDB's pace
-//! with it; images keep to maplestory.io's own. An answer is kept for the run, so a mob
+//! at a time (ADR 0006). Mob pages keep to MeowDB's pace with Item Lookup; images keep
+//! to maplestory.io's own. An answer is kept for the run, so a mob
 //! met again on another map isn't asked for again.
 
 use crate::map_data::Mob;
@@ -116,7 +116,7 @@ pub(crate) struct MobCards {
     listed: Vec<Mob>,
     pages: Lane<Fetched<MobDetails>>,
     images: Lane<String>,
-    /// maplestory.io's pace; MeowDB's is shared with the crawl.
+    /// maplestory.io's pace; MeowDB's is shared with Item Lookup.
     image_pace: Pace,
 }
 
@@ -132,13 +132,6 @@ impl MobCards {
         let wanted: Vec<&str> = self.listed.iter().map(|m| m.id.as_str()).collect();
         self.pages.poll(&wanted, meowdb, at_ms, |id| source.mob_page(id));
         self.images.poll(&wanted, &mut self.image_pace, at_ms, |id| source.mob_image(id));
-    }
-
-    /// Whether a listed mob's page is still to be asked for or on its way: the world
-    /// crawl waits until it isn't.
-    pub fn wants_meowdb(&self, at_ms: u64) -> bool {
-        let wanted: Vec<&str> = self.listed.iter().map(|m| m.id.as_str()).collect();
-        self.pages.in_flight.is_some() || self.pages.next(&wanted, at_ms).is_some()
     }
 
     /// The listed mobs' cards, in the panel's order.

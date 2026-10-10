@@ -9,7 +9,7 @@ pub mod world;
 
 use compass_core::osms::OsmsFiles;
 use compass_core::{
-    Compass, ExpBarRegion, Fetched, Frame, GameWindow, ItemHit, MapData, MapDataSource, MobDetails,
+    Compass, ExpBarRegion, Fetched, Frame, GameWindow, ItemHit, MapDataSource, MobDetails,
     PanelState, Rect, ScreenRect, Settings, Size, SourceError, TitleRegion, default_title_region, meowdb,
 };
 use std::path::{Path, PathBuf};
@@ -175,7 +175,6 @@ pub fn saved_mob_ids() -> Vec<String> {
     names.iter().map(|n| n[..n.find("__").expect("<id>__<slug>")].trim_start_matches('0').to_string()).collect()
 }
 
-type PageAnswer = Poll<Result<MapData, SourceError>>;
 type MobAnswer = Result<MobDetails, SourceError>;
 type ImageAnswer = Result<String, SourceError>;
 type SearchAnswer = Result<Vec<ItemHit>, SourceError>;
@@ -187,17 +186,6 @@ pub struct FakeSource {
     osms_answers: Vec<OsmsAnswer>,
     /// How many times OSMS's file set was asked for.
     pub osms_requests: Arc<AtomicU32>,
-    /// Answers the crawl's request for a map's page (MeowDB's, until #57), by map ID.
-    /// Defaults to the map's data in the first file set: a MeowDB that agrees with OSMS.
-    pages: Box<dyn FnMut(&str) -> PageAnswer + Send>,
-    /// The map ID of every crawl fetch started, in order: a crawl request for a map
-    /// whose fetch is still in flight checks on it and isn't logged again.
-    pub crawl_requests: Arc<Mutex<Vec<String>>>,
-    /// Crawl answers aren't in the cache: each arrives only on the poll after its fetch
-    /// started, as from the network.
-    crawl_uncached: bool,
-    /// The crawl fetch in flight, and its answer once it has arrived.
-    crawl_in_flight: Option<(String, Option<Result<MapData, SourceError>>)>,
     /// The sites are unreachable and the answers are copies saved at this time (ms since
     /// the Unix epoch); `None`: they are fresh.
     saved_at: Option<u64>,
@@ -229,29 +217,10 @@ pub struct FakeSource {
 
 impl FakeSource {
     /// OSMS's file set answers these, one ask after another; the last one repeats.
-    ///
-    /// The world crawl, which reads MeowDB's pages until #57, is answered with the maps of
-    /// the first set: a MeowDB that agrees with OSMS.
     pub fn answering_osms(answers: Vec<OsmsAnswer>) -> Self {
-        let first = answers.iter().find_map(|answer| match answer {
-            Poll::Ready(Ok(Fetched::Fresh(files) | Fetched::SavedCopy { data: files, .. })) => Some(files.clone()),
-            _ => None,
-        });
-        let set = first.map(|files| compass_core::osms::read(&files));
-        let pages = move |id: &str| {
-            Poll::Ready(match &set {
-                Some(Ok(set)) => Ok(set.maps().find(|(entry, _)| entry.id == id).map(|(_, data)| data.clone()).unwrap_or_default()),
-                Some(Err(error)) => Err(error.clone()),
-                None => Err(unreachable()),
-            })
-        };
         Self {
             osms_answers: answers,
             osms_requests: Arc::default(),
-            pages: Box::new(pages),
-            crawl_requests: Arc::default(),
-            crawl_uncached: false,
-            crawl_in_flight: None,
             saved_at: None,
             mob_pages: Box::new(read_saved_mob_page),
             images: Box::new(|id| Ok(format!("image:{id}"))),
@@ -284,8 +253,7 @@ impl FakeSource {
     }
 
     /// The sites can't be reached, and every answer is a copy saved at
-    /// `saved_at_unix_ms`: OSMS's file set, the crawl's pages, mob pages and item
-    /// searches.
+    /// `saved_at_unix_ms`: OSMS's file set, mob pages and item searches.
     pub fn serving_saved_copies(self, saved_at_unix_ms: u64) -> Self {
         Self { saved_at: Some(saved_at_unix_ms), ..self }
     }
@@ -297,24 +265,6 @@ impl FakeSource {
                 None => Fetched::Fresh(data),
             })
         })
-    }
-
-    /// Answer the crawl's page requests with `pages` instead of the first set's maps.
-    pub fn with_pages(mut self, pages: impl FnMut(&str) -> PageAnswer + Send + 'static) -> Self {
-        self.pages = Box::new(pages);
-        self
-    }
-
-    /// The crawl's pages can't be had: MeowDB is unreachable.
-    pub fn with_pages_offline(self) -> Self {
-        self.with_pages(|_| Poll::Ready(Err(unreachable())))
-    }
-
-    /// Crawl answers come over the network, not from the cache: each arrives on the
-    /// poll after its fetch started. (By default the crawl is answered at once, as from
-    /// the cache.)
-    pub fn crawling_uncached(self) -> Self {
-        Self { crawl_uncached: true, ..self }
     }
 
     /// Answer mob page requests with `pages` instead of the saved mob pages.
@@ -438,28 +388,6 @@ impl MapDataSource for FakeSource {
             }
             (answer, _) => answer,
         }
-    }
-
-    /// Answered from `pages`, and logged in `crawl_requests`.
-    fn crawl_data(&mut self, id: &str) -> Poll<Result<Fetched<MapData>, SourceError>> {
-        let answer = match self.crawl_in_flight.take() {
-            Some((asked, Some(arrived))) if asked == id => Poll::Ready(arrived),
-            Some((asked, None)) if asked == id => (self.pages)(id),
-            _ => {
-                self.crawl_requests.lock().unwrap().push(id.to_string());
-                match (self.pages)(id) {
-                    Poll::Ready(arrived) if self.crawl_uncached => {
-                        self.crawl_in_flight = Some((id.to_string(), Some(arrived)));
-                        return Poll::Pending;
-                    }
-                    answer => answer,
-                }
-            }
-        };
-        if answer.is_pending() {
-            self.crawl_in_flight = Some((id.to_string(), None));
-        }
-        self.fetched(answer)
     }
 
     fn mob_page(&mut self, id: &str) -> Poll<Result<Fetched<MobDetails>, SourceError>> {

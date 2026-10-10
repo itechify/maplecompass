@@ -9,7 +9,7 @@
 mod common;
 
 use common::osms;
-use common::world::{WorldMap, map, orange, search_for, tick_through};
+use common::world::{WorldMap, map, orange, search_for};
 use common::{FakeSource, arrive};
 use compass_core::{Compass, Distance, PanelState, PortalKind, SearchResult, Step};
 
@@ -21,8 +21,8 @@ const ELLINIA_STATION: &str = "010002090";
 const ORBIS: &str = "020000000";
 const ORBIS_TICKETING_BOOTH: &str = "020000010";
 
-/// A core over `maps`, crawled, with the player arrived on the map named Sunset Sky
-/// and the Orange Mushroom picked.
+/// A core over `maps`, its file set in hand, with the player arrived on the map named
+/// Sunset Sky and the Orange Mushroom picked.
 fn searched_from_sunset_sky(maps: Vec<WorldMap>) -> PanelState {
     let mut compass = Compass::new(common::world::world(maps));
     compass.tick(0);
@@ -126,7 +126,7 @@ fn game_with_orbis() -> osms::World {
 }
 
 /// A core over `world`, whose maps `ids` have visible exits to the maps `to` and
-/// `oranges` Orange Mushrooms (and the rest nothing), crawled, with the player arrived
+/// `oranges` Orange Mushrooms (and the rest nothing), with the player arrived
 /// on the Kerning City sample and the Orange Mushroom picked.
 fn searched_in(world: osms::World, maps: &[(&str, &[&str], u32)]) -> PanelState {
     let mut world = world.with_mob(osms::mob(9, "Orange Mushroom", 8, 0, 0));
@@ -139,9 +139,8 @@ fn searched_in(world: osms::World, maps: &[(&str, &[&str], u32)]) -> PanelState 
         });
     }
     let mut compass = Compass::new(FakeSource::with_world(world));
-    let state = tick_through(&mut compass, 0, 5_000);
-    assert!(state.search.crawl.done, "the whole map list is crawled");
-    arrive(&mut compass, KERNING, 5_100);
+    compass.tick(0);
+    arrive(&mut compass, KERNING, 100);
     search_for(&mut compass, "orange")
 }
 
