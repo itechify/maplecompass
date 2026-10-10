@@ -944,10 +944,11 @@ pub(crate) fn keep_on_top(window: &WebviewWindow, name: &str, commands: Sender<C
 #[cfg(windows)]
 fn keep_on_top_while_in_front(window: isize, shows: Arc<AtomicBool>, commands: Sender<Command>) {
     use compass_core::Foreground;
+    use gamewin::Stacking;
     let window = windows::Win32::Foundation::HWND(window as *mut _);
     let mut last_error = None;
-    // On top or out of sight, as this watcher last set it: the window's style alone can't
-    // be trusted to say (see `gamewin::set_on_top`).
+    // On top or at the bottom, as this watcher last put it: the window's style alone can't
+    // be trusted to say (see `gamewin::restack`).
     let mut set_before = None;
     loop {
         std::thread::sleep(WINDOW_TICK);
@@ -956,13 +957,14 @@ fn keep_on_top_while_in_front(window: isize, shows: Arc<AtomicBool>, commands: S
         let in_front = || {
             gamewin::find_game().is_some_and(|game| gamewin::foreground(Some(game.handle)) != Foreground::OtherApp)
         };
-        let on_top = shows && in_front();
-        let moved = gamewin::set_on_top(window, on_top, set_before);
+        let to = if shows && in_front() { Stacking::OnTop } else { Stacking::Bottom };
+        let moved = gamewin::restack(window, to, set_before);
         if moved.is_ok() {
-            set_before = Some(on_top);
+            set_before = Some(to);
         }
         // The core still shows it, over another app: the compass loop is behind.
-        if shows && !on_top && matches!(moved, Ok(true)) && commands.send(Command::CheckForeground).is_err() {
+        let behind = shows && to == Stacking::Bottom && matches!(moved, Ok(true));
+        if behind && commands.send(Command::CheckForeground).is_err() {
             return;
         }
         // Polled 20 times a second: report a failure once, not every time.

@@ -35,7 +35,8 @@ pub fn looking_for() -> String {
 
 #[cfg(windows)]
 pub use win::{
-    cursor_position, find_game, foreground, foreground_is_ours, monitor_work_areas, set_on_top, window_under_cursor,
+    Stacking, cursor_position, find_game, foreground, foreground_is_ours, monitor_work_areas, restack,
+    window_under_cursor,
 };
 
 #[cfg(not(windows))]
@@ -254,26 +255,37 @@ mod win {
         !foreground.is_invalid() && is_ours(foreground)
     }
 
-    /// Put our `window` on top of every other window (in the topmost band), or take it
-    /// out of sight. Only our own window is moved, and only when it may not be where it
-    /// should be: its style says otherwise, or the caller last set it (`set_before`)
-    /// otherwise. (Tao rewrites our windows' extended style from its own flags whenever
-    /// one of them changes, without `WS_EX_TOPMOST`, so the style alone can say a window
-    /// on top isn't.) Returns whether it moved it.
-    ///
-    /// Any process may make its own window topmost, so this works while the game has the
-    /// foreground (Windows silently ignores a background process raising a normal window
-    /// above the foreground one). Out of sight is the bottom of the z-order, under every
-    /// other window, which also takes it out of the topmost band: `HWND_NOTOPMOST` alone
-    /// would put it at the top of the normal windows, over the app in front.
+    /// Where [`restack`] puts one of our windows in the z-order.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum Stacking {
+        /// On top of every other window, in the topmost band. Any process may make its
+        /// own window topmost, so this works while the game has the foreground (Windows
+        /// silently ignores a background process raising a normal window above the
+        /// foreground one).
+        OnTop,
+        /// Out of sight: the bottom of the z-order, under every other window, which also
+        /// takes it out of the topmost band. (`HWND_NOTOPMOST` alone would put it at the
+        /// top of the normal windows, over the app in front.)
+        Bottom,
+    }
+
+    /// Put our `window` on top of every other window, or send it to the bottom, out of
+    /// sight (`to`). Only our own window is moved, and only when it may not be where it
+    /// should be: its style says otherwise, or the caller last put it elsewhere
+    /// (`set_before`). (Tao rewrites our windows' extended style from its own flags
+    /// whenever one of them changes, without `WS_EX_TOPMOST`, so the style alone can say
+    /// a window on top isn't.) Returns whether it moved it.
     ///
     /// No owner/parent link to the game (that would attach input queues across the
     /// processes, ADR 0001) and no event hook: the caller polls this.
-    pub fn set_on_top(window: HWND, on_top: bool, set_before: Option<bool>) -> windows::core::Result<bool> {
-        if is_topmost(window) == on_top && set_before == Some(on_top) {
+    pub fn restack(window: HWND, to: Stacking, set_before: Option<Stacking>) -> windows::core::Result<bool> {
+        if is_topmost(window) == (to == Stacking::OnTop) && set_before == Some(to) {
             return Ok(false);
         }
-        let after = if on_top { HWND_TOPMOST } else { HWND_BOTTOM };
+        let after = match to {
+            Stacking::OnTop => HWND_TOPMOST,
+            Stacking::Bottom => HWND_BOTTOM,
+        };
         unsafe { SetWindowPos(window, Some(after), 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE)? };
         Ok(true)
     }
