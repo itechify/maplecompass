@@ -67,9 +67,9 @@ fn render(page: &BestsPage) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use compass_core::{BestsPageMap, LevelRange, MEOWDB_CREDIT};
+    use compass_core::{BestsPageMap, LevelRange, OSMS_CREDIT};
 
-    /// A page of one map, named `map_name`.
+    /// A page of one map, named `map_name`, with made-up figures.
     fn page_of(map_name: &str) -> BestsPage {
         BestsPage {
             as_of_unix_ms: Some(1_791_547_200_000),
@@ -81,12 +81,12 @@ mod tests {
                 url: "https://meowdb.com/msclassic/maps/010003070".into(),
                 mob_levels: Some(LevelRange { lowest: 2, highest: 14 }),
                 exp_per_hour: 7200,
-                solo_exp_ceiling: Some(223_928),
-                ceiling_share_hundredths: Some(322),
+                solo_exp_ceiling: Some(213_571),
+                ceiling_share_hundredths: Some(337),
                 set_at_unix_ms: None,
                 here: true,
             }],
-            credit: MEOWDB_CREDIT,
+            credit: OSMS_CREDIT,
         }
     }
 
