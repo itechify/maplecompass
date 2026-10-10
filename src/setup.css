@@ -302,7 +302,7 @@ button.secondary:disabled {
   font-size: 12px;
 }
 
-/* The overlay guide's button, small, at the right end of the title bar. */
+/* The Overlay Guide's button, small, at the right end of the title bar. */
 .guide-button {
   margin-left: auto;
   padding: 3px 9px 4px;

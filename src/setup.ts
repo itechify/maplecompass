@@ -33,7 +33,6 @@ type SetupView = {
   game: { width: number; height: number } | null;
   gameTitle: string;
   hotkeys: Hotkeys;
-  settingsPath: string;
 };
 
 const STEPS = ["warning", "window", "requirements", "mark", "test", "exp", "expTest"] as const;
@@ -71,6 +70,7 @@ function move(by: number) {
 function shortcut(name: keyof Hotkeys): string {
   if (!view) return "";
   const binding = view.hotkeys[name];
+  if (binding === "") return "Off";
   return keyLabel(binding) + (hotkeyAvailable(binding, view.unavailableHotkeys) ? "" : " (unavailable)");
 }
 
@@ -172,10 +172,16 @@ function render() {
   $("handoff").hidden = read?.status !== "recognised";
   $("resetup-hint").textContent = hotkeyAvailable(view.hotkeys.setup, view.unavailableHotkeys)
     ? `${shortcut("setup")} reopens setup and this guide while you play.`
-    : "The setup shortcut is unavailable. Resolve the shortcut warning before closing this window.";
+    : view.hotkeys.setup === ""
+      ? "Help & Setup, the ? at the top of the panel, reopens setup and this guide while you play."
+      : "The setup shortcut is unavailable. Resolve the shortcut warning before closing this window.";
   for (const label of document.querySelectorAll<HTMLElement>("[data-shortcut]")) {
     label.textContent = shortcut(label.dataset.shortcut as keyof Hotkeys);
   }
+  // The hotkeys are changed on the panel, which shows only with the game.
+  ($("change-hotkeys") as HTMLButtonElement).disabled = !game;
+  $("change-hotkeys-note").textContent = game ? "" : "Start the game first: the hotkeys are changed on its panel.";
+  $("change-hotkeys-note").hidden = !!game;
   $("hotkey-problem").textContent = hotkeyProblems(view);
   $("hotkey-problem").hidden = $("hotkey-problem").textContent === "";
 }
@@ -208,10 +214,9 @@ function hotkeyProblems(view: SetupView): string {
     );
   }
   // One way to recover, in one sentence.
+  const them = taken.length + invalid.length === 1 ? "it" : "them";
   sentences.push(
-    taken.length > 0
-      ? `Close the other app, or edit the hotkeys in ${view.settingsPath}, then restart MapleCompass.`
-      : `Edit the hotkeys in ${view.settingsPath}, then restart MapleCompass.`,
+    `${taken.length > 0 ? "Close the other app, or change" : "Change"} ${them} in the panel's Settings (the gear at its top).`,
   );
   return sentences.join(" ");
 }
@@ -239,6 +244,11 @@ listen("exp-bar-marked", () => show("expTest"));
 listen("marking-cancelled", () => document.querySelector<HTMLElement>(`[data-step="${step}"] .mark, [data-step="${step}"] .mark-exp`)?.focus());
 listen<string>("marking-error", (e) => actionError(e.payload));
 $("guide-open").addEventListener("click", () => show("guide"));
+// The panel's settings view comes in front with the keyboard, its first Change focused.
+$("change-hotkeys").addEventListener("click", () => {
+  $("action-error").hidden = true;
+  invoke("open_hotkey_settings").catch(actionError);
+});
 $("guide-back").addEventListener("click", () => show(returnStep));
 
 function actionError(error: unknown) {

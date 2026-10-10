@@ -87,7 +87,7 @@ export const density = (hundredths: number) =>
 export const resultsNote = (search: SearchState) =>
   search.onlyOnEventMaps ? "Found only on Event maps, which search leaves out." : "";
 
-/** "312 of 422 maps known" while the world crawl runs; "" before the Map list arrives and once it's done. */
+/** "312 of 422 maps known" while the world crawl runs; "" before the map list arrives and once it's done. */
 export const crawlLine = ({ crawl }: SearchState) =>
   crawl.total > 0 && !crawl.done ? `${crawl.known} of ${crawl.total} maps known` : "";
 
