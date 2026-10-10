@@ -38,9 +38,16 @@ export type Trip = { from: string; mapChanges: number; travel: Step[] };
 
 /**
  * Mirror of `compass_core::HuntingTarget`: the mob and map picked, with the map's figures
- * and route, and once the player is there, that they've arrived.
+ * and route, and once the player is there, that they've arrived. `image` is where the
+ * mob's OSMS animation loads from, once it's in.
  */
-export type HuntingTarget = { mob: MobChoice; map: SearchResult; arrived: boolean; trip: Trip | null };
+export type HuntingTarget = {
+  mob: MobChoice;
+  map: SearchResult;
+  arrived: boolean;
+  trip: Trip | null;
+  image: string | null;
+};
 
 /** An arrival's trip: "2 map changes from Sunset Sky, by teleport scroll". */
 export function tripLine({ from, mapChanges, travel }: Trip): string {
@@ -69,7 +76,7 @@ export type SearchState = {
   credit: string | null;
   /** What Distances count besides portals and ships (the checkboxes). */
   travel: Travel;
-  /** The panel's Hunting section, until the player arrives or clears it. */
+  /** The panel's Navigation section, until the player leaves its map having arrived, or clears it. */
   hunting: HuntingTarget | null;
 };
 
@@ -147,7 +154,7 @@ export function resultsHead(): HTMLTableSectionElement {
   return head;
 }
 
-/** A result's Distance as the map list and the Hunting section read it ("5 · ship"), with why. */
+/** A result's Distance as the map list and the Navigation section read it ("5 · ship"), with why. */
 export function distanceWithTravel(result: SearchResult): { text: string; title: string } {
   const distance = distanceText(result.distance);
   const travel = travelMarker(result);
