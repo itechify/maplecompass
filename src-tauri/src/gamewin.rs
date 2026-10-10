@@ -88,7 +88,7 @@ mod win {
     use windows::Win32::System::Threading::GetCurrentProcessId;
     use windows::Win32::UI::WindowsAndMessaging::{
         EnumWindows, GA_ROOT, GWL_EXSTYLE, GetAncestor, GetClientRect, GetCursorPos, GetForegroundWindow,
-        GetWindowLongPtrW, GetWindowTextW, GetWindowThreadProcessId, HWND_BOTTOM, HWND_TOPMOST, IsIconic,
+        GetWindowLongPtrW, GetWindowTextW, GetWindowThreadProcessId, HWND_BOTTOM, HWND_NOTOPMOST, HWND_TOPMOST, IsIconic,
         IsWindowVisible, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, WS_EX_TOPMOST, WindowFromPoint,
     };
     use windows::core::BOOL;
@@ -276,17 +276,27 @@ mod win {
     /// whenever one of them changes, without `WS_EX_TOPMOST`, so the style alone can say
     /// a window on top isn't.) Returns whether it moved it.
     ///
+    /// Put on top, the window first leaves the topmost band, then joins it. Coming back
+    /// from the bottom as it shows again (another app in front, then the game), Windows
+    /// can ignore a plain `HWND_TOPMOST` for it, returning success and leaving it under
+    /// the game, and goes on ignoring it however often it is asked, from the window's own
+    /// thread too; going by `HWND_NOTOPMOST` first puts it on top every time. Seen on
+    /// whichever of our windows the player clicked last.
+    ///
     /// No owner/parent link to the game (that would attach input queues across the
     /// processes, ADR 0001) and no event hook: the caller polls this.
     pub fn restack(window: HWND, to: Stacking, set_before: Option<Stacking>) -> windows::core::Result<bool> {
         if is_topmost(window) == (to == Stacking::OnTop) && set_before == Some(to) {
             return Ok(false);
         }
-        let after = match to {
-            Stacking::OnTop => HWND_TOPMOST,
-            Stacking::Bottom => HWND_BOTTOM,
-        };
-        unsafe { SetWindowPos(window, Some(after), 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE)? };
+        let flags = SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE;
+        match to {
+            Stacking::OnTop => unsafe {
+                SetWindowPos(window, Some(HWND_NOTOPMOST), 0, 0, 0, 0, flags)?;
+                SetWindowPos(window, Some(HWND_TOPMOST), 0, 0, 0, 0, flags)?;
+            },
+            Stacking::Bottom => unsafe { SetWindowPos(window, Some(HWND_BOTTOM), 0, 0, 0, 0, flags)? },
+        }
         Ok(true)
     }
 }
