@@ -2,7 +2,10 @@
 //! after it, their test reads, and when to ask for setup again.
 
 use crate::panel::{ScreenRect, Size};
-use crate::{CurrentMap, ExpBar, MEOWDB_CREDIT, Rect, default_title_region};
+use crate::{CurrentMap, ExpBar, Rect, default_title_region};
+
+/// The credit for a recognised test read: the names it shows are OSMS Data Explorer's.
+const MAP_NAMES_CREDIT: &str = "Map names from OSMS Data Explorer";
 use serde::{Deserialize, Serialize};
 
 /// Why the player needs to (re)do setup.
@@ -52,7 +55,7 @@ pub struct SetupState {
     pub needed: Option<SetupReason>,
     /// The test read of the region just marked; `None` when none is being marked.
     pub test_read: Option<TestRead>,
-    /// [`MEOWDB_CREDIT`] when the test read shows a map: its names are MeowDB's.
+    /// "Map names from OSMS Data Explorer" when the test read shows a map.
     pub credit: Option<&'static str>,
     /// The setup window shows: when setup becomes needed, and when the player asks
     /// for it, until it is finished or closed.
@@ -316,7 +319,7 @@ impl Setup {
         let test_read = self.marking.as_ref().map(|(_, read)| read.clone());
         SetupState {
             needed: self.needed(),
-            credit: matches!(test_read, Some(TestRead::Recognised { .. })).then_some(MEOWDB_CREDIT),
+            credit: matches!(test_read, Some(TestRead::Recognised { .. })).then_some(MAP_NAMES_CREDIT),
             test_read,
             window_open: self.window_open,
             selection: self.selection.map(|(_, marked, _)| marked),

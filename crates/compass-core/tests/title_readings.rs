@@ -5,9 +5,9 @@
 
 mod common;
 
-use common::{FakeSource, sample_frame, saved_index};
-use compass_core::{Compass, MapData, PanelState, TitleLines, TitleReader, TitleReading};
-use std::task::Poll;
+use common::osms;
+use common::{FakeSource, sample_frame};
+use compass_core::{Compass, PanelState, TitleLines, TitleReader, TitleReading};
 
 const KERNING: &str = "victoria-road__kerning-city--window";
 
@@ -27,7 +27,7 @@ fn frames_read_on_another_thread_switch_the_map_like_frames_fed_to_the_core() {
     })
     .join()
     .unwrap();
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     let [first, second] = readings;
     compass.on_reading(first);
@@ -40,7 +40,7 @@ fn frames_read_on_another_thread_switch_the_map_like_frames_fed_to_the_core() {
 /// Reported in play: the recogniser ran "Mountain" and "I" together.
 #[test]
 fn a_title_read_as_west_rocky_mountaini_snaps_to_west_rocky_mountain_i() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     compass.on_reading(read_as("Victoria Road", "West Rocky MountainI", 0));
     let state = compass.on_reading(read_as("Victoria Road", "West Rocky MountainI", 333));
@@ -58,7 +58,7 @@ const TREE_III: &str = "010002062";
 /// numeral, and the panel confidently showed The Tree That Grew I, the shortest name.
 #[test]
 fn a_title_whose_numeral_is_unreadable_is_not_sure_rather_than_the_shortest_name() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     compass.on_reading(read_as("Victoria Road", "The Tree That Grew ?", 0));
     let state = compass.on_reading(read_as("Victoria Road", "The Tree That Grew ?", 333));
@@ -69,8 +69,8 @@ fn a_title_whose_numeral_is_unreadable_is_not_sure_rather_than_the_shortest_name
 
 #[test]
 fn an_unreadable_numeral_is_not_taken_for_the_name_without_one() {
-    // MeowDB has both Pig Park and Pig Park II.
-    let mut compass = Compass::new(FakeSource::meowdb());
+    // OSMS lists both Pig Park and Pig Park II.
+    let mut compass = Compass::new(FakeSource::osms());
 
     compass.on_reading(read_as("Hidden Street", "Pig Park ?", 0));
     let state = compass.on_reading(read_as("Hidden Street", "Pig Park ?", 333));
@@ -83,7 +83,7 @@ fn an_unreadable_numeral_is_not_taken_for_the_name_without_one() {
 #[test]
 fn a_numeral_read_with_look_alike_strokes_snaps_to_its_map() {
     for numeral in ["ll", "|I", "1l", "Il"] {
-        let mut compass = Compass::new(FakeSource::meowdb());
+        let mut compass = Compass::new(FakeSource::osms());
         let map = format!("The Tree That Grew {numeral}");
 
         compass.on_reading(read_as("Victoria Road", &map, 0));
@@ -96,11 +96,14 @@ fn a_numeral_read_with_look_alike_strokes_snaps_to_its_map() {
 
 /// Folding look-alikes and weighing numerals apart never confuses two real titles.
 #[test]
-fn every_title_in_meowdbs_index_read_exactly_shows_that_title() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+fn every_title_in_osmss_map_list_read_exactly_shows_that_title() {
+    let mut compass = Compass::new(FakeSource::osms());
     let mut wrong = Vec::new();
-    for (i, entry) in saved_index().iter().enumerate() {
-        let (street, map) = (entry.street_name.trim(), entry.map_name.trim());
+    let names = osms::map_names();
+    // The nameless map isn't in the map list.
+    let titled = names.maps.iter().filter(|m| !m.name.trim().is_empty() && !m.street_name.trim().is_empty());
+    for (i, entry) in titled.enumerate() {
+        let (street, map) = (entry.street_name.trim(), entry.name.trim());
         let at_ms = 1000 * i as u64;
         compass.on_reading(read_as(street, map, at_ms));
         let state = compass.on_reading(read_as(street, map, at_ms + 333));
@@ -113,13 +116,14 @@ fn every_title_in_meowdbs_index_read_exactly_shows_that_title() {
     assert!(wrong.is_empty(), "wrong maps:\n{}", wrong.join("\n"));
 }
 
-/// A source whose map pages say map `from` leads to the maps `to`, and every other
-/// map leads nowhere.
-fn leading(from: &'static str, to: &'static [&'static str]) -> FakeSource {
-    FakeSource::meowdb().with_pages(move |id| {
-        let connected_maps = if id == from { to.iter().map(|s| s.to_string()).collect() } else { vec![] };
-        Poll::Ready(Ok(MapData { connected_maps, ..MapData::default() }))
-    })
+/// A source whose map list says map `from` leads to the maps `to`, and every other map
+/// leads nowhere.
+fn leading(from: &str, to: &[&str]) -> FakeSource {
+    let id = |id: &str| id.parse::<u64>().unwrap();
+    let to: Vec<u64> = to.iter().map(|to| id(to)).collect();
+    let mut world = osms::map_names();
+    world.maps = world.maps.into_iter().map(|m| osms::Map { exits: Some(vec![]), ..m }).collect();
+    FakeSource::with_world(world.changing(id(from), |m| m.exits(&to)))
 }
 
 #[test]
@@ -165,7 +169,7 @@ fn an_unreadable_numeral_on_one_of_the_maps_is_not_sure_when_it_leads_to_another
 
 #[test]
 fn an_unreadable_reading_keeps_the_last_map_marked_not_sure() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     compass.on_reading(read_as("Victoria Road", "Kerning City", 0));
     compass.on_reading(read_as("Victoria Road", "Kerning City", 333));
 
