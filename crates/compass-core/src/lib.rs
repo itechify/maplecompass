@@ -130,9 +130,6 @@ pub struct CurrentMap {
     pub url: String,
 }
 
-/// The credit for what MapleCompass shows from MeowDB (ADR 0003): the Personal Bests page.
-pub const MEOWDB_CREDIT: &str = "NiaMeowDB (meowdb.com)";
-
 /// Search's credit (ADR 0008): its results and routes are worked out from OSMS Data
 /// Explorer's data, and open no pages.
 pub const OSMS_DATA_CREDIT: &str = "Data: OSMS Data Explorer (osmsdataexplorer.com)";

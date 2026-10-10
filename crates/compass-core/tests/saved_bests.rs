@@ -1,6 +1,6 @@
 //! Personal Bests outlive the launch: the core hands the shell every map's Visit bests
 //! as plain data, the Visit under way's included, and takes them back at the next
-//! launch, the same way as the saved world. Closing MapleCompass ends the Visit.
+//! launch, the same way as the settings. Closing MapleCompass ends the Visit.
 
 mod common;
 
