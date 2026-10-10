@@ -139,6 +139,18 @@ fn a_portal_to_a_map_not_in_the_data_is_marked_as_such_with_the_name_osms_gives_
     );
 }
 
+/// OSMS lists one map with no name or street, which isn't in the map list: a portal to it
+/// leads to a map not in the data, named as OSMS's lookups name it, or else by its ID.
+#[test]
+fn a_portal_to_a_map_with_no_name_or_street_is_marked_as_to_a_map_not_in_the_data() {
+    let world = osms::game().with(map(100_000_001, "", "")).with(map(100_000_002, " ", " ")).naming(100_000_002, "Somewhere");
+
+    let state = on_field_in(world, |m| m.portal("in00", 2, 100_000_001).portal("in01", 2, 100_000_002));
+
+    let named: Vec<_> = marks(&state).iter().map(|m| (m.to_map_name.as_str(), m.to_street_name.as_str(), m.leads)).collect();
+    assert_eq!(named, [("100000001", "", Leads::MapNotInTheData), ("Somewhere", "", Leads::MapNotInTheData)]);
+}
+
 /// Each teleport within the map says where it lands, and at which mark: a pair lands at
 /// each other, and a teleport may land at another's mark without being landed at.
 #[test]
