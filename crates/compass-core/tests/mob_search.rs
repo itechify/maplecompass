@@ -6,7 +6,7 @@
 mod common;
 
 use common::world::{SEARCH, WorldMap, loaded, map, mob, orange, search_for, world};
-use compass_core::{Action, Compass, DensityTier, MEOWDB_CREDIT, Mob, PanelState, Request, SearchView};
+use compass_core::{Action, Compass, DensityTier, Mob, PanelState, Request, SearchView};
 
 fn mushroom_world() -> Vec<WorldMap> {
     vec![
@@ -262,7 +262,7 @@ fn every_map_the_picked_mob_spawns_on_is_a_result_with_its_density_spawn_share_a
     assert_eq!(field.spawn_share_percent, 40);
     assert_eq!(field.tier, DensityTier::High);
     assert_eq!(ranked(&state)[1], "Mushroom Hill: 400, Low");
-    assert_eq!(state.search.credit, Some(MEOWDB_CREDIT));
+    assert_eq!(state.search.credit, Some("Data: OSMS Data Explorer (osmsdataexplorer.com)"), "OSMS's data");
 }
 
 #[test]
