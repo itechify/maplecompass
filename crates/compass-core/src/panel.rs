@@ -139,6 +139,27 @@ pub enum Action {
     ToggleTeleportScrolls,
     /// A click on a section's heading: collapse the section to it, or open it again.
     ToggleSection(Section),
+    /// Open the settings view (the gear at the top of the panel). A collapsed panel
+    /// expands to show it, and an open search view closes: they take over the panel alike.
+    OpenSettings,
+    /// Esc or the back arrow in the settings view, or focus moving to another window: back
+    /// to the normal view. A rebinding under way is cancelled.
+    CloseSettings,
+    /// A hotkey's Change button in the settings view: wait for the player to press its new
+    /// combination ([`crate::Compass::rebind_key`]). The hotkeys aren't live meanwhile.
+    BeginRebind(crate::Hotkey),
+    /// Stop waiting for a new combination, changing nothing.
+    CancelRebind,
+    /// The waiting row's Turn off: the hotkey has no combination any more, and its action
+    /// stays on its button.
+    TurnOffHotkey,
+    /// Swap, after the player pressed another hotkey's combination: the hotkey being rebound
+    /// takes it, and the other takes its old keys.
+    SwapHotkeys,
+    /// The settings view's Restore defaults: every hotkey back to its default, and on.
+    ResetHotkeys,
+    /// Undo, after Restore defaults: the hotkeys from before it are back.
+    UndoResetHotkeys,
 }
 
 /// A section of the current map's facts that the player can collapse to its heading.
