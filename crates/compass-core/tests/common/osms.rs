@@ -229,6 +229,13 @@ impl Map {
         self
     }
 
+    /// The portal added last, moved to (`x`, `y`) in the map's picture.
+    pub fn at(mut self, x: i64, y: i64) -> Self {
+        let portal = self.portals.last_mut().expect("a portal to move");
+        (portal.x, portal.y) = (x, y);
+        self
+    }
+
     /// `exits` as given, whatever its portals.
     pub fn exits(mut self, exits: &[u64]) -> Self {
         self.exits = Some(exits.to_vec());

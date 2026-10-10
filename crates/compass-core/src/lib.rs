@@ -13,6 +13,7 @@ mod item_lookup;
 mod item_tooltip;
 mod map_data;
 mod map_index;
+mod map_preview;
 mod matcher;
 pub mod meowdb;
 mod mob_card;
@@ -45,6 +46,7 @@ pub use map_data::{
     Portal, PortalKind,
 };
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
+pub use map_preview::{Landing, Leads, MapPreview, PortalMark, PreviewImage};
 pub use mob_card::{DamageRange, Elements, HpPerExp, MobCard, MobDetails};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 pub use panel::{
@@ -179,6 +181,10 @@ pub struct PanelState {
     /// The shown map's Map Summary, mobs and Hidden Portals from OSMS's file set, or why they
     /// aren't there.
     pub data: MapDataStatus,
+    /// The shown map's Map Preview: its picture and every portal on it, marked. `None`
+    /// with no map shown, on a map without a picture, and while it isn't settled which
+    /// of the maps sharing a title the player is on.
+    pub map_preview: Option<MapPreview>,
     /// [`OSMS_CREDIT`] whenever a map is shown.
     pub credit: Option<&'static str>,
     /// The Mob Card of each mob the panel lists, in its order; empty while it lists none.
@@ -354,8 +360,8 @@ pub struct Compass {
     shown_map: ShownMap,
     /// The wall clock (ms since the Unix epoch), as the shell last told it.
     wall_clock: Option<u64>,
-    /// OSMS's pictures the panel asked for: the listed mobs' animations, for their Mob
-    /// Cards.
+    /// OSMS's pictures the panel asked for: the Map Preview's picture, and the listed
+    /// mobs' animations for their Mob Cards.
     pictures: Pictures,
     /// MeowDB's pace, kept by Item Lookup's searches.
     meowdb_pace: Pace,
@@ -523,12 +529,14 @@ impl Compass {
             self.sync_search();
         }
         self.state.candidates = self.set.as_ref().and_then(|set| self.shown_map.candidates(&set.maps));
-        self.sync_mob_cards();
+        self.sync_pictured();
         self.state.credit = self.state.map.as_ref().map(|_| OSMS_CREDIT);
     }
 
-    /// The listed mobs' Mob Cards, with the animations in so far.
-    fn sync_mob_cards(&mut self) {
+    /// What shows OSMS's pictures, with those in so far: the Map Preview and the listed
+    /// mobs' Mob Cards.
+    fn sync_pictured(&mut self) {
+        self.state.map_preview = self.set.as_ref().and_then(|set| self.shown_map.preview(&set.maps, &self.pictures));
         let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
         self.state.mob_cards = match &self.set {
             Some(set) => mob_card::cards(listed, &set.maps, &self.pictures),
@@ -536,13 +544,15 @@ impl Compass {
         };
     }
 
-    /// Ask for the pictures the panel wants, one at a time: the listed mobs' animations.
+    /// Ask for the pictures the panel wants, one at a time: the Map Preview's first, then
+    /// the listed mobs' animations.
     fn poll_pictures(&mut self, at_ms: u64) {
         let Some(set) = &self.set else { return };
+        let preview = self.state.map_preview.as_ref().map(|preview| map_preview::picture_path(&preview.picture));
         let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
-        let wanted = mob_card::animations(listed, &set.maps);
+        let wanted: Vec<String> = preview.into_iter().chain(mob_card::animations(listed, &set.maps)).collect();
         self.pictures.poll(&wanted, &mut *self.source, at_ms);
-        self.sync_mob_cards();
+        self.sync_pictured();
     }
 
     /// The game window moved, resized, appeared or went away (`None`: not found, or
