@@ -24,4 +24,10 @@ export type ExpTracking = {
   resetUndoable: boolean;
   /** The last EXP bar reading, which moves with every reading. */
   bar: ExpBar | null;
+  /** The Best row: the shown map's Personal Best from its history (EXP/h), from arriving;
+   *  none on a first Visit, or where no bests are kept. */
+  personalBest: number | null;
+  /** The star on the Last 5 min row: the core says when the Rolling Rate beats the Best
+   *  row's figure as both are written. */
+  newBest: boolean;
 };

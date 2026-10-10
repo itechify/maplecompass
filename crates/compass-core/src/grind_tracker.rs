@@ -20,8 +20,9 @@ pub struct GrindTrackerWindow {
     /// The player wants it open: the panel's Grind Tracker button shows as on.
     pub open: bool,
     /// Where it goes on screen; `None` while it is hidden: closed, with Grind Tracker
-    /// off (no EXP Bar Region, or no game window), or while setup is open. Never over the
-    /// Title Region or the EXP Bar Region: it shows in screen captures, ours included.
+    /// off (no EXP Bar Region, or no game window), while setup is open, or while another
+    /// app is in front (see [`crate::Layer`]). Never over the Title Region or the EXP Bar
+    /// Region: it shows in screen captures, ours included.
     pub placement: Option<ScreenRect>,
 }
 

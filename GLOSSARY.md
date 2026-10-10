@@ -108,7 +108,7 @@ The hunting figures for a map as a whole, such as the EXP-per-hour ceiling and m
 ### Tracking
 
 **Grind Tracker**:
-The window beside the panel, turned on at setup by marking the EXP Bar Region, that measures a Session from the EXP bar: Time to Level, the Rolling Rate and Session rates, and deaths. The player closes it with its ×, and opens it again from the panel; closing it doesn't stop the Session.
+The window beside the panel, turned on at setup by marking the EXP Bar Region, that measures a Session from the EXP bar: Time to Level, the Rolling Rate and Session rates, how the Rolling Rate compares with the Personal Best, and deaths. The player closes it with its ×, and opens it again from the panel; closing it doesn't stop the Session.
 _Avoid_: EXP tracking, EXP tracker
 
 **Session**:
@@ -122,6 +122,14 @@ _Avoid_: status bar region, EXP region
 **Rolling Rate**:
 A rate measured over the last few minutes of active play in a session, as opposed to the average over the whole session.
 _Avoid_: current rate, live rate
+
+**Personal Best**:
+The highest Rolling Rate, in EXP/h, the player has had over a full 5 minutes of active play on one map, shared by all their characters. A map keeps a history of its best Visits, from which the player can remove one that came from a bug. The Grind Tracker shows the best in the history and marks the Rolling Rate while it beats it.
+_Avoid_: record, high score, PB, max
+
+**Visit**:
+The stretch from the panel confirming a map until it confirms another. Losing the title for a while doesn't end it; closing MapleCompass does. Each map keeps a history of its best Visits, and its Personal Best is the best of them.
+_Avoid_: stay, trip
 
 **Time to Level**:
 How long the player would take to reach the next level at their net EXP rate.

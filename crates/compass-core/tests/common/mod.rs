@@ -2,11 +2,12 @@
 //! serving MeowDB's saved map index and map pages (personal-use test data, ADR 0003).
 #![allow(dead_code)]
 
+pub mod player;
 pub mod world;
 
 use compass_core::{
-    Compass, Fetched, Frame, ItemHit, MapData, MapDataSource, MapEntry, MobDetails, PanelState, Rect,
-    ScreenRect, Size, SourceError, TitleRegion, default_title_region, meowdb,
+    Compass, ExpBarRegion, Fetched, Frame, GameWindow, ItemHit, MapData, MapDataSource, MapEntry, MobDetails,
+    PanelState, Rect, ScreenRect, Settings, Size, SourceError, TitleRegion, default_title_region, meowdb,
 };
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -79,6 +80,25 @@ pub fn arrive(compass: &mut Compass, sample: &str, at_ms: u64) -> PanelState {
     compass.on_frame(sample_frame(sample, at_ms + 333)).clone()
 }
 
+/// A core with EXP tracking on: both regions kept, on a 1920x1200 game window.
+pub fn tracking() -> Compass {
+    tracking_with(FakeSource::meowdb())
+}
+
+/// As [`tracking`], with maps and their pages from `source`.
+pub fn tracking_with(source: FakeSource) -> Compass {
+    let client = Size { width: 1920, height: 1200 };
+    let mut compass = Compass::new(source);
+    compass.restore(Settings {
+        title_region: Some(TitleRegion { marked: Rect { x: 70, y: 40, width: 130, height: 48 }, client }),
+        exp_bar_region: Some(ExpBarRegion { marked: Rect { x: 1005, y: 1144, width: 240, height: 32 }, client }),
+        ..Settings::default()
+    });
+    let screen = ScreenRect { x: 0, y: 0, width: 1920, height: 1200 };
+    compass.on_game_window(Some(GameWindow { client: screen, frame: screen, screens: vec![screen] }));
+    compass
+}
+
 /// A Title Region marked around the minimap title of the Kerning City window sample,
 /// whose client area is 1916x1197.
 pub fn kerning_title_region() -> TitleRegion {
@@ -132,6 +152,36 @@ pub fn saved_page(id: &str) -> Option<String> {
         .filter_map(|e| e.ok())
         .find(|e| e.file_name().to_string_lossy().starts_with(&format!("{id}__")))?;
     Some(std::fs::read_to_string(file.path()).expect("fixture"))
+}
+
+/// Map `id`'s saved MeowDB page, read; unreachable without one.
+pub fn saved_map_page(id: &str) -> Result<MapData, SourceError> {
+    match saved_page(id) {
+        Some(html) => meowdb::read_map_page(&html, id),
+        None => Err(SourceError::Unreachable(format!("no saved page for {id}"))),
+    }
+}
+
+/// Sunset Sky's and the Construction Site's MeowDB map IDs: both have a Map Summary.
+pub const SUNSET_SKY_ID: &str = "010003070";
+pub const CONSTRUCTION_SITE_ID: &str = "010003080";
+
+/// MeowDB's saved index and pages, with the Construction Site and Sunset Sky sharing the
+/// Kerning City sample's title: the Construction Site, first in the map index, shows
+/// first.
+pub fn sharing_a_title() -> FakeSource {
+    FakeSource::with_index(index_with_title("Victoria Road", "Kerning City", &[CONSTRUCTION_SITE_ID, SUNSET_SKY_ID]))
+}
+
+/// The Northern Top of the Construction Site's MeowDB map ID: it has a Map Summary.
+pub const NORTHERN_TOP_ID: &str = "010003081";
+
+/// As [`sharing_a_title`], with the Northern Top of the Construction Site sharing the
+/// title too: three Candidates in map index order, the Northern Top first (shown first),
+/// then the Construction Site, then Sunset Sky.
+pub fn three_sharing_a_title() -> FakeSource {
+    let ids = [NORTHERN_TOP_ID, CONSTRUCTION_SITE_ID, SUNSET_SKY_ID];
+    FakeSource::with_index(index_with_title("Victoria Road", "Kerning City", &ids))
 }
 
 /// A MeowDB mob page saved on 2026-10-08:
@@ -235,7 +285,7 @@ impl FakeSource {
         Self {
             answers,
             index_requests: Arc::default(),
-            pages: Box::new(|id| Poll::Ready(read_saved_page(id))),
+            pages: Box::new(|id| Poll::Ready(saved_map_page(id))),
             map_requests: Arc::default(),
             crawl_requests: Arc::default(),
             crawl_uncached: false,
@@ -288,7 +338,7 @@ impl FakeSource {
     pub fn with_page(self, id: &str, html: String) -> Self {
         let id = id.to_string();
         self.with_pages(move |asked| {
-            Poll::Ready(if asked == id { meowdb::read_map_page(&html, asked) } else { read_saved_page(asked) })
+            Poll::Ready(if asked == id { meowdb::read_map_page(&html, asked) } else { saved_map_page(asked) })
         })
     }
 
@@ -304,7 +354,7 @@ impl FakeSource {
         self.with_pages(move |id| {
             let n = asked.entry(id.to_string()).or_default();
             *n += 1;
-            if *n < polls { Poll::Pending } else { Poll::Ready(read_saved_page(id)) }
+            if *n < polls { Poll::Pending } else { Poll::Ready(saved_map_page(id)) }
         })
     }
 
@@ -444,13 +494,6 @@ fn read_saved_search(name: &str) -> SearchAnswer {
     match saved_search(name) {
         Some(json) => meowdb::read_item_search(&json),
         None => Err(SourceError::Unreachable(format!("no saved search for {name:?}"))),
-    }
-}
-
-fn read_saved_page(id: &str) -> Result<MapData, SourceError> {
-    match saved_page(id) {
-        Some(html) => meowdb::read_map_page(&html, id),
-        None => Err(SourceError::Unreachable(format!("no saved page for {id}"))),
     }
 }
 

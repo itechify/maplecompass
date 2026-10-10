@@ -5,9 +5,9 @@
 //! deadlock on Windows. Every decision is the core's; this only shows windows and
 //! relays.
 //!
-//! Unlike the overlay (ADR 0001), the region window is always-on-top: it is our own,
-//! shown only while the player marks a region, and the overlay's z-order keeper
-//! ignores our own windows.
+//! Setup's window is an ordinary desktop window. The region window is always-on-top,
+//! like the overlay: it is our own, shown only while the player marks a region, and
+//! with it in front the overlay still shows (it is one of ours).
 
 use crate::gamewin;
 use crate::view::{LastView, ViewSender};
