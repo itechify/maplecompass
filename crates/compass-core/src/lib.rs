@@ -820,10 +820,9 @@ impl Compass {
     }
 
     /// The Personal Bests page now: every map's best as saved, with what OSMS's file set
-    /// says of the map.
+    /// held says of the map.
     fn bests_page(&self) -> BestsPage {
-        let set = self.set.as_ref().map(|held| &held.maps);
-        let map = |id: &str| (set.and_then(|s| s.entry(id)), set.and_then(|s| s.data(id)));
+        let map = |id: &str| self.set.as_ref().and_then(|held| held.maps.maps().find(|(entry, _)| entry.id == id));
         bests_page::page(&self.session.bests().saved(), map, certain_map(&self.state), self.wall_clock)
     }
 

@@ -67,15 +67,15 @@ pub struct ExpTracking {
     pub rolling: Option<ExpRate>,
     /// The average over the whole Session's active time. `None` as for `rolling`.
     pub session_average: Option<ExpRate>,
-    /// The Rolling Rate's EXP/h on the shown map, as a share of its MeowDB solo EXP/h
-    /// ceiling (its Map Summary), in hundredths of a percent: 7300 for "73%". It counts
+    /// The Rolling Rate's EXP/h on the shown map, as a share of its solo EXP/h ceiling
+    /// (its Map Summary), in hundredths of a percent: 7300 for "73%". It counts
     /// only the play since arriving on the map (the Visit's), once there has been
     /// [`WARM_UP_MS`] of it, so one map's EXP is never measured against another's
     /// ceiling, the same or not. `None` without a recognised map with a Map Summary,
     /// until then, or while the rate there is zero or negative.
     pub ceiling_share_hundredths: Option<i64>,
-    /// The ceiling the share is of: the shown map's MeowDB solo EXP/h, while there is a
-    /// share.
+    /// The ceiling the share is of: the shown map's solo EXP/h (its Map Summary), while
+    /// there is a share.
     pub solo_exp_ceiling: Option<u64>,
     /// Deaths this Session and what they cost: "deaths: 2 (−1.4%)".
     pub deaths: Deaths,
@@ -662,7 +662,7 @@ impl Session {
     }
 
     /// What the panel shows, with tracking on, on a map whose solo EXP/h ceiling is
-    /// `ceiling` (if it is known), and which is `map` (its MeowDB ID) if Personal Bests
+    /// `ceiling` (if it is known), and which is `map` (its 9-digit ID) if Personal Bests
     /// are kept there: the figures measured earlier in this [`REFRESH_MS`] stretch, unless
     /// an event since asks for them afresh; and the bar's last reading. A best is dated
     /// by `now_unix_ms`, the wall clock, if the shell has told it.
