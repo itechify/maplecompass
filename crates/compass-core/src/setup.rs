@@ -30,7 +30,7 @@ pub enum TestRead {
     Reading,
     /// The latest frame snapped to this real map.
     Recognised { map: CurrentMap },
-    /// The latest frame didn't match a real map confidently (or the map index couldn't
+    /// The latest frame didn't match a real map confidently (or the map list couldn't
     /// be had).
     Failed,
 }
@@ -117,8 +117,9 @@ pub struct ExpBarRegion {
 /// more than enough for a mark that takes in the taller "EXP." label too.
 const EXP_WIDTH_PER_MARKED_HEIGHT: u32 = 12;
 
-/// Before the map index is loaded, the longest name in it is taken to be as long as
-/// MeowDB's longest: "Physical Fitness Test <Normal Waiting Room>".
+/// Before the map list is loaded, the longest name in it is taken to be as long as the
+/// longest MeowDB listed, "Physical Fitness Test <Normal Waiting Room>": OSMS's longest
+/// is as long.
 const FALLBACK_LONGEST_NAME: usize = 43;
 
 /// Title width allowed per character, per px of marked height. On the samples the two
