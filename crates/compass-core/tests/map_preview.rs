@@ -1,4 +1,4 @@
-//! The Portals section shows a Map Preview: OSMS's picture of the shown map, named by its
+//! The Map section shows a Map Preview: OSMS's picture of the shown map, named by its
 //! content hash in `map_manifest.json`, with every portal marked where OSMS puts it in the
 //! picture's pixels. Each mark says where it leads (another map, within the map, or a map
 //! not in the data), what kind of portal it is by the Hidden Portal rule, the destination's
@@ -56,10 +56,12 @@ fn each_portal_is_marked_where_osms_puts_it_in_the_maps_picture() {
             at: PicturePoint { x: 1480, y: 612 },
             leads: Leads::AnotherMap,
             kind: PortalKind::Visible,
+            to_map_id: "010003000".into(),
             to_map_name: "Kerning City".into(),
             to_street_name: "Victoria Road".into(),
             lands_at: None,
             hidden_portal: None,
+            next_on_route: false,
         }]
     );
 }

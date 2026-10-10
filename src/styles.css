@@ -355,15 +355,15 @@ body {
   outline-offset: 2px;
 }
 
-#data,
-.facts {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+/* 10px between the map's notes and sections, a pixel more than the view's 9px: each after
+   the first that shows. (The Navigation section has no box: its heading takes the pixel.) */
+:is(.candidates, #note, .portals, .navigation):not([hidden]) ~ :is(#note, .portals, .map-mobs),
+:is(.candidates, #note, .portals):not([hidden]) ~ .navigation > h2 {
+  margin-top: 1px;
 }
 
-/* While the map shown isn't confirmed, its facts step back. */
-.not-sure .facts {
+/* While the map shown isn't confirmed, its facts (the Map and the Mobs) step back. */
+.not-sure :is(.portals, .map-mobs) {
   opacity: 0.7;
 }
 
@@ -406,8 +406,8 @@ h2 {
   color: var(--ink);
 }
 
-/* The current map's sections, marked with the minimap's legend: a portal ring for
-   Portals, a mob dot for Mobs. */
+/* The normal view's sections, each marked with a legend glyph: a portal ring for the Map,
+   the route's ring for Navigation, a mob dot for Mobs. */
 .portals h2,
 .map-mobs h2 {
   margin-bottom: 5px;
@@ -447,6 +447,14 @@ h2 {
   margin: 0 1px;
   background: var(--mob);
   box-shadow: 0 0 0 1px var(--mob-edge);
+}
+
+/* The ring the Map Preview puts around a portal the route takes next. */
+.navigation .section-toggle::before {
+  width: 10px;
+  height: 10px;
+  border: 2.5px solid var(--route);
+  background: #fff;
 }
 
 /* Collapsed, the heading says how many the section holds. */
@@ -509,6 +517,7 @@ h2 {
 
 /* Collapsed: the heading alone. */
 .portals.collapsed > :not(h2),
+.navigation.collapsed > :not(h2),
 .map-mobs.collapsed > :not(h2) {
   display: none !important;
 }
@@ -518,21 +527,17 @@ h2 {
   margin-bottom: 0;
 }
 
-/* Nothing to list (and, for Portals, no picture): the heading and "No hidden portals" or
-   "No mobs on this map" on one line. */
-.portals:has(> .none:not([hidden])):not(:has(> .map-preview:not([hidden]), > .note:not([hidden]))),
+/* Nothing to list: the heading and "No mobs on this map" on one line. */
 .map-mobs:has(> .none:not([hidden])):not(:has(> .summary:not([hidden]))) {
   display: flex;
   align-items: baseline;
   gap: 10px;
 }
 
-.portals:has(> .none:not([hidden])):not(:has(> .map-preview:not([hidden]), > .note:not([hidden]))) h2,
 .map-mobs:has(> .none:not([hidden])):not(:has(> .summary:not([hidden]))) h2 {
   margin: 0;
 }
 
-.portals .none,
 .map-mobs .none {
   font-size: 13px;
   color: var(--ink-2);
@@ -654,8 +659,9 @@ td:first-child {
   overflow: visible;
 }
 
-/* The Map Preview: OSMS's picture of the whole map on the minimap's paper, set into the
-   body as an inset box, fitted and centred within 180px, every portal ringed over it. */
+/* The Map Preview: OSMS's picture of the whole map on the minimap's paper, see-through as
+   the picture is, set into the body as an inset box, fitted and centred within 180px,
+   every portal ringed over it. */
 .map-preview {
   display: flex;
   align-items: center;
@@ -741,6 +747,24 @@ td:first-child {
 
 .ring.lit .lit-ring {
   display: inline;
+}
+
+/* Next on the Hunting Target's route: a wide Route Magenta ring around the portal's own,
+   outside where its lit ring goes, on a white halo of its own. Always shown, solid
+   whatever the portal's kind, under every ring. */
+.route-rings circle {
+  fill: none;
+  pointer-events: none;
+}
+
+.route-rings .route-halo {
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 4.5;
+}
+
+.route-rings .route-ring {
+  stroke: var(--route);
+  stroke-width: 2.25;
 }
 
 .ring .hit {
@@ -1068,7 +1092,7 @@ td:first-child {
    tall as the space where it is placed; the rest keeps its height. */
 .view > *,
 .step > *,
-.hunting > * {
+.navigation > * {
   flex-shrink: 0;
 }
 
@@ -1113,27 +1137,27 @@ td:first-child {
   z-index: 1;
 }
 
-/* The Hunting section: its own section at the bottom of the normal view, divided from
-   the current map's info by a rule, headed by the Hunting Target's mob and map. Its parts
-   sit in the view's own column, so its route gives way to everything else in the panel
-   (down to its floor) rather than the section shrinking past its parts. */
-.hunting {
+/* The Navigation section, between the Map and the Mobs while there is a Hunting Target:
+   its heading, then the target's mob (as OSMS animates it) and map, its figures and the
+   way there. Its parts sit in the view's own column, so its route gives way to everything
+   else in the panel (down to its floor) rather than the section shrinking past its parts. */
+.navigation {
   display: contents;
 }
 
 /* Over the parts' own margins (the figures', the route's). */
-.panel .hunting > * {
+.panel .navigation > * {
   margin-inline: 11px;
 }
 
-.hunting > .section-head {
-  padding-top: 8px;
-  border-top: 1px solid var(--rule);
+/* 6px apart within the section, not the view's 9px; 5px under its heading, as the Map
+   and the Mobs have. */
+.panel .navigation > * + * {
+  margin-top: -3px;
 }
 
-/* 6px apart within the section, not the view's 9px. */
-.panel .hunting > * + * {
-  margin-top: -3px;
+.panel .navigation > h2 + * {
+  margin-top: -4px;
 }
 
 .section-head,
@@ -1143,7 +1167,28 @@ td:first-child {
   gap: 6px;
 }
 
-.hunting h2,
+/* The mob's animation beside its name: a square of its own, the animation standing on
+   its floor at its own size (pixelated), or scaled down smoothly to fit, never up. */
+.target-sprite {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: end center;
+  margin-right: 2px;
+}
+
+.target-sprite img {
+  max-width: 40px;
+  max-height: 40px;
+  image-rendering: pixelated;
+}
+
+.target-sprite img.scaled {
+  image-rendering: auto;
+}
+
+.target-title,
 .search-view h2,
 .settings-view h2 {
   flex: 1;
@@ -1154,15 +1199,22 @@ td:first-child {
   white-space: nowrap;
 }
 
-.hunting h2 .hunting-mob,
-.hunting h2 .hunting-map {
+/* The mob in the Section Heading's size, the map under it, as a street sits under its
+   map. */
+.target-title {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.target-title .hunting-mob,
+.target-title .hunting-map {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* The map under the mob, as a street sits under its map. */
-.hunting h2 .hunting-map {
+.target-title .hunting-map {
   font-size: 12px;
   line-height: 15px;
   font-weight: 400;
@@ -1905,9 +1957,9 @@ body:has(#badge:not([hidden])) .icon .count {
   .portals .dest { flex-wrap: wrap; }
   /* The destination keeps its ring beside it, and its tags go under it. */
   .portals .to { flex-basis: calc(100% - 18px); white-space: normal; }
-  /* An empty section's heading stays on one line; "No hidden portals" or "No mobs on
-     this map" goes under it rather than losing its end. */
-  .portals, .map-mobs { flex-wrap: wrap; row-gap: 2px; }
-  .portals > h2, .map-mobs > h2 { flex: none; }
-  .portals > .none, .map-mobs > .none { flex: none; max-width: 100%; }
+  /* An empty Mobs section's heading stays on one line; "No mobs on this map" goes under
+     it rather than losing its end. */
+  .map-mobs { flex-wrap: wrap; row-gap: 2px; }
+  .map-mobs > h2 { flex: none; }
+  .map-mobs > .none { flex: none; max-width: 100%; }
 }

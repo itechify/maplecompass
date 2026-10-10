@@ -34,6 +34,20 @@ pub struct HuntingTarget {
     /// The way there as it stood when the player picked it; `None` when they picked the
     /// map they were on, or no route led there.
     pub trip: Option<Trip>,
+    /// Where the overlay loads OSMS's default animation of the mob from, as its Mob Card
+    /// does; `None` until it's in, if it can't be had, or if OSMS names none.
+    pub image: Option<String>,
+}
+
+impl HuntingTarget {
+    /// The next map on the route, when the route goes there from the map the panel shows
+    /// through a portal; `None` once the player has arrived, or when there is no route.
+    pub(crate) fn next_map_by_portal(&self) -> Option<&str> {
+        match self.map.route.get(1) {
+            Some(RouteStop { map_id, by: Some(Step::Portal), .. }) if !self.arrived => Some(map_id),
+            _ => None,
+        }
+    }
 }
 
 /// The way to a Hunting Target as it stood when the player picked it.
@@ -138,7 +152,7 @@ pub struct SearchState {
     pub credit: Option<&'static str>,
     /// What Distances count besides portals and ships (the checkboxes).
     pub travel: Travel,
-    /// The Hunting Target the panel's Hunting section shows, until the player leaves its
+    /// The Hunting Target the panel's Navigation section shows, until the player leaves its
     /// map having arrived, or clears it. Kept for this session only.
     pub hunting: Option<HuntingTarget>,
 }
@@ -286,7 +300,7 @@ impl MobSearch {
         self.highlighted_result = None;
     }
 
-    /// The Hunting section's ×: no Hunting Target any more.
+    /// The Navigation section's ×: no Hunting Target any more.
     pub fn clear(&mut self) {
         self.target = None;
     }
@@ -332,13 +346,20 @@ impl MobSearch {
     }
 
     /// The Hunting Target with its map's figures, ranked among the mob's maps, and its
-    /// route from the map the panel shows.
+    /// route from the map the panel shows. Without its mob's animation, which is a picture
+    /// ([`HuntingTarget::image`]).
     fn hunting(&self, searched: &Searched) -> Option<HuntingTarget> {
         let (target, set) = (self.target.as_ref()?, searched.set?);
         let map = results(&target.mob.id, set, searched.here, searched.travel)
             .into_iter()
             .find(|r| r.map_id == target.map_id)?;
-        Some(HuntingTarget { mob: target.mob.clone(), map, arrived: target.arrived, trip: target.trip.clone() })
+        Some(HuntingTarget {
+            mob: target.mob.clone(),
+            map,
+            arrived: target.arrived,
+            trip: target.trip.clone(),
+            image: None,
+        })
     }
 
     /// The picked mob's map list; none outside that step.

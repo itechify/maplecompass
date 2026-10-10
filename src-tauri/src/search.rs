@@ -107,13 +107,13 @@ pub fn search_escape(commands: State<'_, Sender<Command>>) {
     act(&commands, Action::SearchEscape);
 }
 
-/// The Hunting section's 🔍: the Hunting Target mob's map list, to pick another map.
+/// The Navigation section's 🔍: the Hunting Target mob's map list, to pick another map.
 #[tauri::command]
 pub fn hunting_reopen(commands: State<'_, Sender<Command>>) {
     act(&commands, Action::ReopenMapList);
 }
 
-/// The Hunting section's ×: clear the Hunting Target.
+/// The Navigation section's ×: clear the Hunting Target.
 #[tauri::command]
 pub fn hunting_clear(commands: State<'_, Sender<Command>>) {
     act(&commands, Action::ClearHuntingTarget);
@@ -131,7 +131,7 @@ pub fn search_toggle_teleport_scrolls(commands: State<'_, Sender<Command>>) {
     act(&commands, Action::ToggleTeleportScrolls);
 }
 
-/// A click on the Hidden Portals or Mobs heading: collapse that section, or open it.
+/// A click on the Map, Navigation or Mobs heading: collapse that section, or open it.
 #[tauri::command]
 pub fn panel_toggle_section(section: Section, commands: State<'_, Sender<Command>>) {
     act(&commands, Action::ToggleSection(section));
