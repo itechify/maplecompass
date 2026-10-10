@@ -34,7 +34,7 @@ use maplecompass_lib::{capture, capture_title_frame, gamewin, meowdb::MeowDbSour
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -67,6 +67,9 @@ fn main() {
     // Its own cache, outside the app's: the probe has no Tauri path resolver.
     let cache = std::env::temp_dir().join("maplecompass-probe-cache");
     let mut compass = Compass::new(MeowDbSource::new(cache).expect("HTTP client"));
+    // The core goes by the wall clock to tell whether the set saved is a day old.
+    let since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    compass.on_wall_clock(since_epoch.as_millis() as u64);
     let reader = TitleReader::bundled();
     let title = compass.panel_state().game_window_title.clone();
     gamewin::look_for(&title);

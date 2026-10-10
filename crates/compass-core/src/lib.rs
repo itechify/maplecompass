@@ -314,7 +314,11 @@ pub enum PanelControl {
 /// The game window's title, unless the player picked another by hand.
 pub const GAME_WINDOW_TITLE: &str = "MapleStory";
 
-/// How long a file set is used before OSMS is asked for it again (capture time): a day.
+/// How long a file set is used before it is fetched afresh: a day. Game data changes only
+/// on patch days, and a day is soon enough to catch one. At startup, a set saved under a
+/// day ago by the wall clock is used as it is; while running, the set is fetched afresh
+/// every day by capture time, however old the one held, so a set used at one daily ask is
+/// always fetched afresh at the next.
 const SET_RECHECK_MS: u64 = 24 * 60 * 60 * 1000;
 
 /// With no file set at all, how long to wait before asking again after OSMS couldn't be
@@ -325,8 +329,9 @@ const SET_RETRY_MS: u64 = 60_000;
 /// date: game data changes only on patch days, so a younger one says nothing.
 const SAVED_COPY_AFTER_MS: u64 = 7 * 24 * 60 * 60 * 1000;
 
-/// OSMS's file set as read, and when it was saved if it is a saved copy (ms since the
-/// Unix epoch); `None` when it is fresh.
+/// OSMS's file set as read, and when it was saved (ms since the Unix epoch): by an earlier
+/// launch, or as it was fetched in this one (the wall clock then); `None` if the wall
+/// clock wasn't known.
 struct HeldSet {
     maps: MapSet,
     saved_at_unix_ms: Option<u64>,
@@ -353,6 +358,12 @@ pub struct Compass {
     ask_osms_at: u64,
     /// The source is fetching OSMS's file set.
     osms_in_flight: bool,
+    /// The set an earlier launch saved has been looked at (on the first tick or frame).
+    saved_set_seen: bool,
+    /// The set an earlier launch saved, read, while a fresh one is fetched at startup
+    /// because it is too old to use as it is: what the panel falls back on if none can be
+    /// had.
+    fallback: Option<HeldSet>,
     /// What the file set is read with: [`PORTAL_OVERRIDES`], but for tests of the list.
     portal_overrides: Vec<PortalOverride>,
     /// Built from the map list, once there is one.
@@ -400,6 +411,8 @@ impl Compass {
             set: None,
             ask_osms_at: 0,
             osms_in_flight: false,
+            saved_set_seen: false,
+            fallback: None,
             portal_overrides: PORTAL_OVERRIDES.to_vec(),
             matcher: None,
             tracker: Tracker::default(),
@@ -1003,45 +1016,70 @@ impl Compass {
         self.sync_panel()
     }
 
-    /// Ask the source for OSMS's file set at startup (the first tick or frame) and every
-    /// [`SET_RECHECK_MS`] after, and with no set at all, a minute after OSMS couldn't be
-    /// reached. A set that reads replaces the one held whole; one that doesn't, or an
-    /// answer that is none, leaves the one held as it is.
+    /// OSMS's file set. At startup (the first tick or frame), the set an earlier launch
+    /// saved, if it was saved under [`SET_RECHECK_MS`] ago; otherwise, and every
+    /// [`SET_RECHECK_MS`] after, one the source fetches afresh, and with no set at all, a
+    /// minute after OSMS couldn't be reached. A fetched set that reads replaces the one
+    /// held whole. One that can't be had or doesn't read leaves the one held as it is, and
+    /// at startup falls back on the saved set, however old.
     fn load_osms(&mut self, at_ms: u64) {
-        if !self.osms_in_flight && at_ms < self.ask_osms_at {
-            return;
+        if !self.osms_in_flight {
+            if at_ms < self.ask_osms_at {
+                return;
+            }
+            if !self.saved_set_seen {
+                self.saved_set_seen = true;
+                if self.take_saved_set() {
+                    self.ask_osms_at = at_ms + SET_RECHECK_MS;
+                    return;
+                }
+            }
         }
-        let answer = match self.source.osms_files() {
+        let fetched = match self.source.fetch_osms_files() {
             Poll::Pending => {
                 self.osms_in_flight = true;
                 return;
             }
-            Poll::Ready(answer) => answer,
+            Poll::Ready(fetched) => fetched,
         };
         self.osms_in_flight = false;
         self.ask_osms_at = at_ms + SET_RECHECK_MS;
-        let read = answer.and_then(|fetched| match fetched {
-            Fetched::Fresh(files) => osms::read_with(&files, &self.portal_overrides).map(|maps| (maps, None)),
-            Fetched::SavedCopy { data, saved_at_unix_ms } => {
-                osms::read_with(&data, &self.portal_overrides).map(|maps| (maps, Some(saved_at_unix_ms)))
-            }
-        });
-        match read {
-            Ok((maps, saved_at_unix_ms)) => self.take_set(maps, saved_at_unix_ms),
-            Err(_) if self.set.is_some() => {}
-            Err(SourceError::Unreachable(_)) => {
+        let read = fetched.and_then(|files| osms::read_with(&files, &self.portal_overrides));
+        match (read, self.fallback.take()) {
+            // The source saved it as it fetched it: now.
+            (Ok(maps), _) => self.take_set(HeldSet { maps, saved_at_unix_ms: self.wall_clock }),
+            (Err(_), _) if self.set.is_some() => {}
+            (Err(_), Some(saved)) => self.take_set(saved),
+            (Err(SourceError::Unreachable(_)), None) => {
                 self.state.recognition = Recognition::Unavailable;
                 self.ask_osms_at = at_ms + SET_RETRY_MS;
             }
-            Err(SourceError::FormatChanged(_)) => self.state.recognition = Recognition::FormatChanged,
+            (Err(SourceError::FormatChanged(_)), None) => self.state.recognition = Recognition::FormatChanged,
         }
     }
 
-    /// Hold `maps`, a file set just read, in place of the one held: search and Distance
+    /// Take the set an earlier launch saved if it was saved under [`SET_RECHECK_MS`] ago by
+    /// the wall clock, or else keep it to fall back on; whether it was taken. Without the
+    /// wall clock its age is unknown, so it isn't taken as it is, and a set that doesn't
+    /// read is as good as none.
+    fn take_saved_set(&mut self) -> bool {
+        let Some(saved) = self.source.saved_osms_files() else { return false };
+        let Ok(maps) = osms::read_with(&saved.files, &self.portal_overrides) else { return false };
+        let held = HeldSet { maps, saved_at_unix_ms: Some(saved.saved_at_unix_ms) };
+        let age = self.wall_clock.and_then(|now| now.checked_sub(saved.saved_at_unix_ms));
+        if age.is_some_and(|age| age < SET_RECHECK_MS) {
+            self.take_set(held);
+            return true;
+        }
+        self.fallback = Some(held);
+        false
+    }
+
+    /// Hold `set`, a file set just read, in place of the one held: search and Distance
     /// work over it at once. A new map list is matched against from then on, and the map
     /// the player is on stays theirs.
-    fn take_set(&mut self, maps: MapSet, saved_at_unix_ms: Option<u64>) {
-        let entries = maps.entries();
+    fn take_set(&mut self, set: HeldSet) {
+        let entries = set.maps.entries();
         if self.set.as_ref().is_none_or(|held| held.maps.entries() != entries) {
             let matcher = Matcher::new(entries);
             if let Some(old) = &self.matcher {
@@ -1049,12 +1087,12 @@ impl Compass {
             }
             self.matcher = Some(matcher);
         }
-        self.set = Some(HeldSet { maps, saved_at_unix_ms });
+        self.set = Some(set);
         self.sync_search();
     }
 
-    /// When the file set held was saved, if it is a saved copy older than
-    /// [`SAVED_COPY_AFTER_MS`]: the panel says so, with its date.
+    /// When the file set held was saved, if that was over [`SAVED_COPY_AFTER_MS`] ago, so it
+    /// is a Saved Copy: no fresh one could be had since. The panel says so, with its date.
     fn saved_copy_from(&self) -> Option<u64> {
         let saved_at = self.set.as_ref()?.saved_at_unix_ms?;
         let now = self.wall_clock?;

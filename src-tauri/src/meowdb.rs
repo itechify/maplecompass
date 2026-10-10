@@ -13,7 +13,7 @@
 
 use crate::osms::OsmsSet;
 use crate::pictures::Pictures;
-use compass_core::osms::OsmsFiles;
+use compass_core::osms::{OsmsFiles, SavedFiles};
 use compass_core::{Fetched, ItemHit, MapDataSource, SourceError, meowdb};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
@@ -85,8 +85,12 @@ impl MeowDbSource {
 }
 
 impl MapDataSource for MeowDbSource {
-    fn osms_files(&mut self) -> Poll<Answer<OsmsFiles>> {
-        self.osms.poll()
+    fn saved_osms_files(&mut self) -> Option<SavedFiles> {
+        self.osms.saved()
+    }
+
+    fn fetch_osms_files(&mut self) -> Poll<Result<OsmsFiles, SourceError>> {
+        self.osms.fetch()
     }
 
     fn picture(&mut self, path: &str) -> Poll<Result<String, SourceError>> {

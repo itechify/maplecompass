@@ -2,35 +2,30 @@
 //! [`compass_core::osms::DATA_URL`], fetched with MapleCompass's own user agent, one
 //! request at a time and with no other pace. Nothing from OSMS is bundled.
 //!
-//! The set is saved on disk as one file, so it is swapped whole. The core asks at startup
-//! and every 24 hours after: a saved set younger than [`FRESH_FOR`] is answered as it is,
-//! at once; an older one (or none) is fetched afresh. A fetched set is saved only once the
-//! core's reader reads it. If any file fails, or the set doesn't read, the saved set is
-//! answered instead, as a saved copy with its date, and only with none saved is that an
-//! error. The core decides whether the panel says so.
+//! The set is saved on disk as one file, so it is swapped whole, and the file's
+//! modification time says when it was saved. The core decides when to fetch it afresh: it
+//! looks at the saved set at startup, and asks for a fresh one when that is too old, and
+//! every day after. A fetched set is saved only once the core's reader reads it. If any
+//! file fails, or the set doesn't read, nothing is saved, and the core keeps the set it
+//! has.
 
-use compass_core::osms::{self, OsmsFiles};
-use compass_core::{Fetched, SourceError};
+use compass_core::osms::{self, OsmsFiles, SavedFiles};
+use compass_core::SourceError;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::task::Poll;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-/// How long a saved set is used without fetching it again: game data changes only on
-/// patch days, and a day is soon enough to catch one. An hour short of the core's 24 hours
-/// between asks, so a set saved at one ask is always due at the next, whatever the clocks.
-const FRESH_FOR: Duration = Duration::from_secs(23 * 60 * 60);
+use std::time::UNIX_EPOCH;
 
 /// The saved set's file in the cache.
 const SET_FILE: &str = "osms-set.json";
 
-type Answer = Result<Fetched<OsmsFiles>, SourceError>;
+type Answer = Result<OsmsFiles, SourceError>;
 
-/// OSMS's file set: saved, and fetched when due.
+/// OSMS's file set: saved, and fetched when the core asks.
 pub struct OsmsSet {
     client: reqwest::Client,
     file: PathBuf,
-    /// The set being fetched (or read) in the background.
+    /// The set being fetched in the background.
     in_flight: Option<Receiver<Answer>>,
 }
 
@@ -40,9 +35,18 @@ impl OsmsSet {
         Self { client, file: cache_dir.join(SET_FILE), in_flight: None }
     }
 
-    /// The set, in the background: the first call starts reading or fetching it, later
+    /// The set saved, and when; `None` if none is, or it can't be read back.
+    pub fn saved(&self) -> Option<SavedFiles> {
+        let json = std::fs::read(&self.file).ok()?;
+        let files = serde_json::from_slice(&json).ok()?;
+        let saved_at = std::fs::metadata(&self.file).and_then(|m| m.modified()).ok()?;
+        let since_epoch = saved_at.duration_since(UNIX_EPOCH).unwrap_or_default();
+        Some(SavedFiles { files, saved_at_unix_ms: since_epoch.as_millis() as u64 })
+    }
+
+    /// A set fetched afresh, in the background: the first call starts fetching it, later
     /// ones collect it.
-    pub fn poll(&mut self) -> Poll<Answer> {
+    pub fn fetch(&mut self) -> Poll<Answer> {
         if let Some(arriving) = &self.in_flight {
             let answer = match arriving.try_recv() {
                 Err(TryRecvError::Empty) => return Poll::Pending,
@@ -58,40 +62,19 @@ impl OsmsSet {
         let (tx, rx) = mpsc::channel();
         let (client, file) = (self.client.clone(), self.file.clone());
         tauri::async_runtime::spawn(async move {
-            let _ = tx.send(settle(&client, &file).await);
+            let _ = tx.send(fetch_and_save(&client, &file).await);
         });
         self.in_flight = Some(rx);
         Poll::Pending
     }
 }
 
-/// The saved set if it is fresh enough; otherwise a set fetched now, saved once it reads;
-/// failing that, the saved set as a saved copy.
-async fn settle(client: &reqwest::Client, file: &Path) -> Answer {
-    let saved = saved_set(file);
-    if let Some((files, saved_at)) = &saved
-        && SystemTime::now().duration_since(*saved_at).is_ok_and(|age| age < FRESH_FOR)
-    {
-        return Ok(Fetched::Fresh(files.clone()));
-    }
-    let error = match fetch(client).await {
-        Ok(files) => match osms::read(&files) {
-            Ok(_) => {
-                save(file, &files);
-                return Ok(Fetched::Fresh(files));
-            }
-            Err(e) => e,
-        },
-        Err(why) => SourceError::Unreachable(why),
-    };
-    eprintln!("OSMS: {error}");
-    match saved {
-        Some((data, saved_at)) => {
-            let since_epoch = saved_at.duration_since(UNIX_EPOCH).unwrap_or_default();
-            Ok(Fetched::SavedCopy { data, saved_at_unix_ms: since_epoch.as_millis() as u64 })
-        }
-        None => Err(error),
-    }
+/// Fetch OSMS's five files, and save them at `file` once they read.
+async fn fetch_and_save(client: &reqwest::Client, file: &Path) -> Answer {
+    let files = fetch(client).await.map_err(SourceError::Unreachable)?;
+    osms::read(&files)?;
+    save(file, &files);
+    Ok(files)
 }
 
 /// Fetch OSMS's five files, one after another: the first that fails fails the set.
@@ -117,14 +100,6 @@ pub fn fetch_live() -> Result<OsmsFiles, String> {
     tauri::async_runtime::block_on(fetch(&client))
 }
 
-/// The set saved at `file`, and when it was saved.
-fn saved_set(file: &Path) -> Option<(OsmsFiles, SystemTime)> {
-    let json = std::fs::read(file).ok()?;
-    let files = serde_json::from_slice(&json).ok()?;
-    let saved_at = std::fs::metadata(file).and_then(|m| m.modified()).ok()?;
-    Some((files, saved_at))
-}
-
 /// Save `files` at `file`, in place of the set saved there, whole.
 fn save(file: &Path, files: &OsmsFiles) {
     let written = serde_json::to_vec(files)
@@ -132,5 +107,32 @@ fn save(file: &Path, files: &OsmsFiles) {
         .and_then(|json| crate::files::write_atomically(file, &json));
     if let Err(e) = written {
         eprintln!("OSMS: couldn't save {}: {e}", file.display());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn the_saved_set_is_read_back_with_when_it_was_saved() {
+        let dir = std::env::temp_dir().join(format!("maplecompass-osms-set-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let set = OsmsSet::new(reqwest::Client::new(), &dir);
+        assert_eq!(set.saved(), None);
+
+        let files = OsmsFiles { maps: "{}".into(), ..OsmsFiles::default() };
+        save(&dir.join(SET_FILE), &files);
+        let saved_at = UNIX_EPOCH + Duration::from_millis(1_790_812_800_000);
+        let file = std::fs::File::options().write(true).open(dir.join(SET_FILE)).unwrap();
+        file.set_modified(saved_at).unwrap();
+        drop(file);
+
+        assert_eq!(set.saved(), Some(SavedFiles { files, saved_at_unix_ms: 1_790_812_800_000 }));
+        std::fs::write(dir.join(SET_FILE), b"not json").unwrap();
+        assert_eq!(set.saved(), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
