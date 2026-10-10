@@ -167,11 +167,13 @@ impl MapDataStatus {
 
 impl MapData {
     /// Whether the panel would show the same for both maps: the same Map Summary, mobs
-    /// and Hidden Portals. (Mobs sorted as the panel sorts them.)
+    /// and Hidden Portals, those by destination and kind. (Mobs sorted as the panel sorts
+    /// them.)
     pub(crate) fn shows_same_as(&self, other: &MapData) -> bool {
-        self.summary == other.summary
-            && self.mobs == other.mobs
-            && self.hidden_portals == other.hidden_portals
+        let portals = |data: &MapData| -> Vec<(String, bool)> {
+            data.hidden_portals.iter().map(|p| (p.to_map_id.clone(), p.quest)).collect()
+        };
+        self.summary == other.summary && self.mobs == other.mobs && portals(self) == portals(other)
     }
 }
 
