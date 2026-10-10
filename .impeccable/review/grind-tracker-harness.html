@@ -81,9 +81,11 @@
         switchedWarmingUp: tracking({ state: "warmingUp", ...early, activeS: 30, rollingS: 30, timeToLevelBadge: null, rolling: { expPerHour: 2160, percentPerHourHundredths: null }, characterSwitched: true, bar: { exp: 175, percentHundredths: 105 } }),
         losing: tracking({ timeToLevelS: null, timeToLevelBadge: null, rolling: { expPerHour: -3400, percentPerHourHundredths: -72 }, ceilingShareHundredths: null, soloExpCeiling: null, deaths: { count: 3, expLost: 9000, percentLostHundredths: 1930 } }),
         // The Personal Best: a first Visit has no history, so no Best row; back on the map,
-        // the Best row from arriving, under Session (or right under Last 5 min, early on);
-        // the star while Last 5 min beats it, held with the figures while paused.
+        // the Best row from arriving, alone under the waiting note before the first gain,
+        // then under Session (or right under Last 5 min, early on); the star while Last 5
+        // min beats it, held with the figures while paused.
         firstVisit: tracking(),
+        bestWaiting: tracking({ state: "waiting", ...empty, ...best }),
         best: tracking(best),
         bestEarly: tracking({ ...early, ...best }),
         bestStar: tracking(beaten),
