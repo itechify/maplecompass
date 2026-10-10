@@ -1723,17 +1723,40 @@ td:first-child {
   color: var(--ink-2);
 }
 
+/* The credit as a small info glyph at the right, its words in its tooltip: one short line
+   under the rule instead of two or three of 12px text. */
 footer {
   display: flex;
-  justify-content: space-between;
-  gap: 4px 8px;
-  flex-wrap: wrap;
-  padding-top: 6px;
+  justify-content: flex-end;
+  padding-top: 4px;
   border-top: 1px solid var(--rule);
-  font-size: 12px;
-  line-height: 15px;
   color: var(--ink-3);
-  overflow-wrap: anywhere;
+}
+
+.credit {
+  display: block;
+  width: 14px;
+  height: 14px;
+  cursor: help;
+}
+
+.credit svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.credit svg .dot {
+  fill: currentColor;
+  stroke: none;
+}
+
+.credit:hover {
+  color: var(--ink-2);
 }
 
 /* Collapsed: the app icon, the gold compass, with the map's Hidden Portal count on a

@@ -113,7 +113,7 @@ fn the_shown_map_credits_osms_for_its_data_and_meowdb_for_its_pages() {
     let state = arrive(&mut compass, KERNING, 0);
 
     assert_eq!(state.credit, Some(OSMS_AND_MEOWDB_CREDIT));
-    assert_eq!(OSMS_AND_MEOWDB_CREDIT, "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com)");
+    assert_eq!(OSMS_AND_MEOWDB_CREDIT, "Data: OSMS Data Explorer (osmsdataexplorer.com) · Pages: NiaMeowDB (meowdb.com)");
 }
 
 #[test]
