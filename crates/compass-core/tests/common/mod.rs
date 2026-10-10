@@ -1,6 +1,5 @@
 //! Shared test inputs: minimap samples turned into frames, and a fake data source serving
-//! made-up worlds in OSMS's shape (ADR 0008), with MeowDB's saved search answers
-//! (personal-use test data, ADR 0003) until #62.
+//! made-up worlds in OSMS's shape (ADR 0008) and whatever item searches a test gives it.
 #![allow(dead_code)]
 
 pub mod osms;
@@ -10,7 +9,7 @@ pub mod world;
 use compass_core::osms::OsmsFiles;
 use compass_core::{
     Compass, ExpBarRegion, Fetched, Frame, GameWindow, ItemHit, MapDataSource, PanelState, Rect,
-    ScreenRect, Settings, Size, SourceError, TitleRegion, default_title_region, meowdb,
+    ScreenRect, Settings, Size, SourceError, TitleRegion, default_title_region,
 };
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -132,27 +131,6 @@ pub fn three_sharing_a_title() -> FakeSource {
     FakeSource::with_world(osms::game().titled("Victoria Road", "Kerning City", &ids))
 }
 
-/// A file-name form of a name, as the probe names samples: lower case, apostrophes
-/// dropped, anything else but letters and digits as one `-` ("Hero's Gladius" ->
-/// "heros-gladius").
-pub fn slug(name: &str) -> String {
-    let mut out = String::new();
-    for c in name.chars().filter(|c| !matches!(c, '\'' | '’')) {
-        if c.is_alphanumeric() {
-            out.extend(c.to_lowercase());
-        } else if !out.is_empty() && !out.ends_with('-') {
-            out.push('-');
-        }
-    }
-    out.trim_end_matches('-').to_string()
-}
-
-/// MeowDB's search's answer for `name`, saved on 2026-10-09:
-/// `tests/fixtures/meowdb-search/<slug>.json`.
-pub fn saved_search(name: &str) -> Option<String> {
-    std::fs::read_to_string(fixtures_dir().join("meowdb-search").join(format!("{}.json", slug(name)))).ok()
-}
-
 type PictureAnswer = Result<String, SourceError>;
 type SearchAnswer = Result<Vec<ItemHit>, SourceError>;
 pub type OsmsAnswer = Poll<Result<Fetched<OsmsFiles>, SourceError>>;
@@ -176,8 +154,7 @@ pub struct FakeSource {
     picture_polls: usize,
     /// The picture fetch in flight, its answer, and how many more polls it takes.
     picture_in_flight: Option<(String, PictureAnswer, usize)>,
-    /// Answers an item search for a name. Defaults to MeowDB's saved answers, read with the
-    /// core's MeowDB reader; a name without a saved answer is unreachable.
+    /// Answers an item search for a name. Defaults to an answer with no items.
     item_searches: Box<dyn FnMut(&str) -> SearchAnswer + Send>,
     /// The name of every item search started, in order.
     pub item_requests: Arc<Mutex<Vec<String>>>,
@@ -197,7 +174,7 @@ impl FakeSource {
             picture_requests: Arc::default(),
             picture_polls: 0,
             picture_in_flight: None,
-            item_searches: Box::new(read_saved_search),
+            item_searches: Box::new(|_| Ok(Vec::new())),
             item_requests: Arc::default(),
             item_polls: 0,
             item_in_flight: None,
@@ -247,7 +224,7 @@ impl FakeSource {
         Self { picture_polls: polls, ..self }
     }
 
-    /// Answer item searches with `searches` instead of MeowDB's saved answers.
+    /// Answer item searches with `searches`, by name.
     pub fn with_item_searches(mut self, searches: impl FnMut(&str) -> SearchAnswer + Send + 'static) -> Self {
         self.item_searches = Box::new(searches);
         self
@@ -295,13 +272,6 @@ fn one_at_a_time<T>(
         return Poll::Pending;
     }
     Poll::Ready(answer)
-}
-
-fn read_saved_search(name: &str) -> SearchAnswer {
-    match saved_search(name) {
-        Some(json) => meowdb::read_item_search(&json),
-        None => Err(SourceError::Unreachable(format!("no saved search for {name:?}"))),
-    }
 }
 
 /// A fresh answer of OSMS's file set: `world`'s files.
