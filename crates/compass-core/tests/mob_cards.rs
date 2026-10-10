@@ -1,21 +1,20 @@
 //! Each mob the panel lists has a Mob Card, shown when the player hovers its name: its
-//! image and the figures from its MeowDB page that the row doesn't show. Once the shown
-//! map's own page is in, its listed mobs' pages (MeowDB) and images (maplestory.io) are
-//! asked for one at a time, ahead of the world crawl and paced like it, and each only
+//! image and the figures from its MeowDB page that the row doesn't show (until #58). Once
+//! the shown map lists them, its listed mobs' pages (MeowDB) and images (maplestory.io)
+//! are asked for one at a time, ahead of the world crawl and paced like it, and each only
 //! once. Clicking a mob's name opens its MeowDB page.
 
 mod common;
 
+use common::osms;
 use common::{FakeSource, arrive, requests_for, saved_mob_ids, saved_mob_page};
 use compass_core::{
-    Compass, DamageRange, Elements, HpPerExp, MapData, MapDataStatus, Mob, MobCard, MobDetails, MobPage,
-    PanelState, Request, SourceError,
+    Compass, DamageRange, Elements, HpPerExp, MapDataStatus, MobCard, MobDetails, MobPage, OSMS_AND_IMAGES_CREDIT,
+    OSMS_CREDIT, PanelState, Request, SourceError,
 };
 use std::sync::{Arc, Mutex};
-use std::task::Poll;
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
-const SUNSET_SKY: &str = "010003070";
 const KERNING: &str = "victoria-road__kerning-city--window";
 const CONSTRUCTION_SITE: &str = "victoria-road__construction-site-north-of-kerning-city--window";
 
@@ -49,34 +48,17 @@ fn listed_ids(state: &PanelState) -> Vec<String> {
     data.listed_mobs.iter().map(|m| m.id.clone()).collect()
 }
 
-/// A map page listing these mobs (by ID) and nothing else.
-fn map_with_mobs(ids: &[String]) -> MapData {
-    let mobs = ids
-        .iter()
-        .enumerate()
-        .map(|(i, id)| Mob {
-            id: id.clone(),
-            name: format!("Mob {id}"),
-            level: 10 + i as u32,
-            hp: 100,
-            exp: 10,
-            spawn_count: 4,
-            spawn_share_percent: 100 / ids.len() as u32,
-        })
-        .collect();
-    MapData { mobs, ..MapData::default() }
-}
-
-/// Sunset Sky's page lists these mobs instead of its own.
+/// The made-up game world, but Sunset Sky lists these mobs (by ID) and nothing else:
+/// each "Mob <id>" on 4 spawn points, levels 10 up in the order given.
 fn sunset_listing<S: ToString>(ids: &[S]) -> FakeSource {
-    let ids: Vec<String> = ids.iter().map(S::to_string).collect();
-    FakeSource::osms().with_pages(move |id| {
-        Poll::Ready(if id == SUNSET_SKY {
-            Ok(map_with_mobs(&ids))
-        } else {
-            Err(SourceError::Unreachable("only Sunset Sky".into()))
-        })
-    })
+    let ids: Vec<u64> = ids.iter().map(|id| id.to_string().parse().unwrap()).collect();
+    let mut world = osms::game().changing(osms::SUNSET_SKY, |m| osms::Map { spawns: Vec::new(), ..m });
+    for (i, &id) in ids.iter().enumerate() {
+        world = world
+            .with_mob(osms::mob(id, &format!("Mob {id}"), 10 + i as u32, 100, 10))
+            .changing(osms::SUNSET_SKY, |m| m.spawns(id, 4));
+    }
+    FakeSource::with_world(world)
 }
 
 #[test]
@@ -350,11 +332,6 @@ fn without_a_map_or_its_mobs_there_are_no_cards() {
     let state = arrive(&mut compass, KERNING, 100);
     assert!(matches!(state.data, MapDataStatus::Ready(_)));
     assert!(state.mob_cards.is_empty());
-
-    let mut compass = Compass::new(FakeSource::osms().with_pages_offline());
-    let state = arrive(&mut compass, SUNSET, 0);
-    assert_eq!(state.data, MapDataStatus::Unavailable);
-    assert!(state.mob_cards.is_empty());
 }
 
 #[test]
@@ -375,8 +352,8 @@ fn the_panel_credits_maplestory_io_for_the_mob_images() {
     let mut compass = Compass::new(FakeSource::osms());
 
     let state = arrive(&mut compass, SUNSET, 0);
-    assert_eq!(state.credit, Some("NiaMeowDB (meowdb.com) · images: maplestory.io"));
+    assert_eq!(state.credit, Some(OSMS_AND_IMAGES_CREDIT));
 
     let state = arrive(&mut compass, KERNING, 1_000);
-    assert_eq!(state.credit, Some("NiaMeowDB (meowdb.com)"));
+    assert_eq!(state.credit, Some(OSMS_CREDIT));
 }
