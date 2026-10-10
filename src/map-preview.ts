@@ -60,8 +60,13 @@ const byId = (id: string) => document.getElementById(id)!;
 
 const preview = byId("map-preview");
 const picture = byId("map-picture");
-const image = byId("map-image") as HTMLImageElement;
 const marksSvg = byId("map-marks") as unknown as SVGSVGElement;
+/** The picture, under its rings; given a source once the shell has saved it. */
+const image = document.createElement("img");
+image.alt = "";
+image.draggable = false;
+image.hidden = true;
+picture.prepend(image);
 const loading = byId("map-loading");
 const failed = byId("map-failed");
 const rows = byId("portal-rows");
@@ -179,18 +184,22 @@ export function renderMapPreview(next: MapPreview | null, name: string): boolean
     image.src = url;
   }
   if (!url) image.removeAttribute("src");
-  layOut();
+  layOutMapPreview();
   return true;
 }
 
-/** The picture fitted and centred, its rings drawn over it; or the placeholder while it loads. */
-function layOut() {
+/**
+ * The picture fitted and centred, its rings drawn over it; or the placeholder while it
+ * loads. Again whenever the section opens or the panel changes width.
+ */
+export function layOutMapPreview() {
   const ready = !!shown && image.hasAttribute("src") && image.complete && image.naturalWidth > 0;
   preview.classList.toggle("loading", !ready);
   loading.hidden = ready;
   picture.hidden = !ready;
   image.hidden = !ready;
-  if (!ready || !shown) return;
+  // Collapsed, the box has no width to fit the picture to.
+  if (!ready || !shown || preview.clientWidth === 0) return;
   const room = preview.clientWidth - 2 * PAPER;
   const scale = Math.min(room / image.naturalWidth, MAX_PICTURE_HEIGHT / image.naturalHeight);
   const width = Math.round(image.naturalWidth * scale);
@@ -358,7 +367,7 @@ rows.addEventListener("mouseover", (e) => {
 rows.addEventListener("mouseleave", () => hoverMark(null));
 
 image.addEventListener("load", () => {
-  layOut();
+  layOutMapPreview();
   laidOut();
 });
 // The overlay couldn't load the picture the source saved: as if it couldn't be had.
@@ -370,5 +379,5 @@ image.addEventListener("error", () => {
 });
 // The player resized the panel: the picture is fitted again.
 window.addEventListener("resize", () => {
-  if (shown && !preview.hidden) layOut();
+  if (shown && !preview.hidden) layOutMapPreview();
 });

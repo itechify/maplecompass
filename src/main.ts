@@ -3,7 +3,14 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { dayText } from "./dates";
 import type { ExpTracking } from "./exp-tracking";
-import { initMapPreview, renderMapPreview, renderPortalRows, type HiddenPortal, type MapPreview } from "./map-preview";
+import {
+  initMapPreview,
+  layOutMapPreview,
+  renderMapPreview,
+  renderPortalRows,
+  type HiddenPortal,
+  type MapPreview,
+} from "./map-preview";
 import {
   HOTKEY_NAMES,
   KEY_ONLY,
@@ -407,6 +414,8 @@ function renderData(panel: PanelState) {
   const mobCount = (ready?.listedMobs.length ?? 0) + (ready?.moreMobs?.count ?? 0);
   foldSection(portals, portalsToggle, panel.collapsedSections.hiddenPortals, hiddenPortals.length, pictured);
   foldSection(mapMobs, mobsToggle, panel.collapsedSections.mobs, mobCount);
+  // Opened again, the picture is fitted to the section.
+  layOutMapPreview();
 
   credit.textContent = panel.credit ?? "";
 }
