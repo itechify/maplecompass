@@ -93,9 +93,9 @@ fn a_first_visits_best_is_on_the_page_with_the_maps_names_levels_and_share_marke
                 url: meowdb::map_url(SUNSET_SKY_ID),
                 mob_levels: Some(SUNSET_SKY_LEVELS),
                 exp_per_hour: 7200,
-                // Of its solo ceiling, 223,928 EXP/h: 3.22%.
-                solo_exp_ceiling: Some(223_928),
-                ceiling_share_hundredths: Some(322),
+                // Of its solo ceiling, 213,571 EXP/h: 3.37%.
+                solo_exp_ceiling: Some(213_571),
+                ceiling_share_hundredths: Some(337),
                 set_at_unix_ms: set,
                 here: true,
             }],
@@ -114,11 +114,11 @@ fn maps_are_highest_first_and_only_the_one_the_player_is_on_is_marked_here() {
 
     let page = open_page(&mut player).expect("a page");
     assert_eq!(rows(&page), [(CONSTRUCTION_SITE_ID, 10_800, true), (SUNSET_SKY_ID, 7200, false)]);
-    // Of its solo ceiling, 297,499 EXP/h: 3.63%.
+    // Of its solo ceiling, 281,786 EXP/h: 3.83%.
     let site = row(&page, CONSTRUCTION_SITE_ID);
     assert_eq!(
         (site.mob_levels, site.solo_exp_ceiling, site.ceiling_share_hundredths),
-        (Some(CONSTRUCTION_SITE_LEVELS), Some(297_499), Some(363))
+        (Some(CONSTRUCTION_SITE_LEVELS), Some(281_786), Some(383))
     );
 }
 
@@ -143,7 +143,7 @@ fn a_map_the_player_is_not_on_has_its_levels_and_share_once_the_crawl_has_read_i
     let sunset = row(&crawled, SUNSET_SKY_ID);
     assert_eq!(
         (sunset.mob_levels, sunset.solo_exp_ceiling, sunset.ceiling_share_hundredths),
-        (Some(SUNSET_SKY_LEVELS), Some(223_928), Some(322))
+        (Some(SUNSET_SKY_LEVELS), Some(213_571), Some(337))
     );
 }
 
@@ -261,8 +261,8 @@ fn the_shell_gets_the_page_and_the_button_as_the_browser_and_window_render_them(
     assert_eq!(sunset["url"], meowdb::map_url(SUNSET_SKY_ID));
     assert_eq!(sunset["mobLevels"], serde_json::json!({ "lowest": 2, "highest": 14 }));
     assert_eq!(sunset["expPerHour"], 7200);
-    assert_eq!(sunset["soloExpCeiling"], 223_928);
-    assert_eq!(sunset["ceilingShareHundredths"], 322);
+    assert_eq!(sunset["soloExpCeiling"], 213_571);
+    assert_eq!(sunset["ceilingShareHundredths"], 337);
     assert!(sunset["setAtUnixMs"].is_u64());
     assert_eq!(sunset["here"], true);
 }
