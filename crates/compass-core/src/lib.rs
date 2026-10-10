@@ -9,6 +9,7 @@ mod bests_page;
 mod crawl;
 mod exp_bar;
 mod grind_tracker;
+mod hotkey_settings;
 mod item_lookup;
 mod item_tooltip;
 mod map_data;
@@ -37,6 +38,7 @@ pub use bests_page::{BestsPage, BestsPageMap};
 pub use crawl::CrawlProgress;
 pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use grind_tracker::{ClientOffset, GrindTrackerWindow};
+pub use hotkey_settings::{KeyPress, RebindProblem, SettingsNotice, SettingsView};
 pub use item_lookup::{ItemChoice, ItemHit, ItemLookup, ItemLookupLine, OurWindow};
 pub use item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReader, ItemTooltipReading};
 pub use map_data::{
@@ -55,7 +57,7 @@ pub use personal_best::{BESTS_VERSION, MapBests, SavedBests, VisitBest};
 pub use saved_world::{SavedMap, SavedMapData, SavedWorld, WORLD_VERSION};
 pub use search::{DensityTier, HuntingTarget, MobChoice, RouteStop, SearchResult, SearchState, SearchView, Trip};
 pub use session::{Deaths, ExpRate, ExpTracking, TrackingState};
-pub use settings::{Hotkeys, Settings};
+pub use settings::{Hotkey, Hotkeys, Settings};
 pub use setup::{
     ExpBarRegion, ExpBarTestRead, MarkTarget, SelectionDirection, SetupReason, SetupState, TestRead,
     TitleRegion,
@@ -65,6 +67,7 @@ pub use world::{Distance, Step, Travel};
 
 use crawl::Crawl;
 use grind_tracker::GrindTracker;
+use hotkey_settings::HotkeySettings;
 use item_lookup::ItemLookups;
 use search::{MobSearch, Searched};
 use shown_map::ShownMap;
@@ -226,7 +229,11 @@ pub struct PanelState {
     pub invalid_hotkeys: Vec<String>,
     /// The shell keeps the hotkeys registered only while this is set: while the game or
     /// one of our windows is in front. Other apps keep their own Ctrl+Shift shortcuts.
+    /// Not while the player rebinds one: the combination they press must reach the overlay.
     pub hotkeys_live: bool,
+    /// The settings view, which takes over the panel while it is open; `None` while it
+    /// is closed. Like the search view, it has the keyboard while it is open.
+    pub settings_view: Option<SettingsView>,
     /// The player closed first-run setup: with no Title Region there is nothing to
     /// read, so the app quits.
     pub quit: bool,
@@ -260,8 +267,8 @@ pub enum Request {
 }
 
 /// Something the player can do with a hotkey or with the matching icon at the top of
-/// the panel, or with an icon at the top of the Grind Tracker's window (which have no
-/// hotkeys). Either way it goes through [`Compass::press`].
+/// the panel, or with the panel's settings icon or an icon at the top of the Grind
+/// Tracker's window (which have no hotkeys). Either way it goes through [`Compass::press`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PanelControl {
@@ -271,12 +278,14 @@ pub enum PanelControl {
     CyclePlacement,
     /// Open the shown map's MeowDB page in the browser.
     OpenMeowdbPage,
-    /// Help & setup: open setup again.
+    /// Help & Setup: open setup again.
     Setup,
     /// Show the next of the maps sharing the shown map's title.
     ChooseCandidate,
     /// Open the search view.
     Search,
+    /// Open the settings view, to rebind the hotkeys.
+    Settings,
     /// Open the Grind Tracker's window, or close it.
     ToggleGrindTracker,
     /// The Grind Tracker window's reset button: start the Session afresh, back to waiting
@@ -340,6 +349,8 @@ pub struct Compass {
     meowdb_pace: Pace,
     /// What the player typed, highlighted and picked in mob search.
     search: MobSearch,
+    /// The settings view, and the hotkey being rebound in it.
+    hotkey_settings: HotkeySettings,
     /// Reads captures fed to [`Compass::on_item_capture`]; loaded on the first one.
     item_reader: Option<ItemTooltipReader>,
     /// The latest Item Lookup.
@@ -379,6 +390,7 @@ impl Compass {
             mob_cards: MobCards::default(),
             meowdb_pace: Pace::default(),
             search: MobSearch::default(),
+            hotkey_settings: HotkeySettings::default(),
             item_reader: None,
             item_lookups: ItemLookups::default(),
             item_lookup_size: Size { width: 0, height: 0 },
@@ -532,10 +544,11 @@ impl Compass {
         match action {
             Action::ToggleExpanded => {
                 self.panel.expanded = !self.panel.expanded;
-                // The query box goes with the panel: like Esc.
+                // The query box goes with the panel: like Esc. So does the settings view.
                 if !self.panel.expanded {
                     self.search.escape();
                     self.sync_search();
+                    self.hotkey_settings.close();
                 }
             }
             Action::PanelMoved { x, y } => self.panel.moved_to(x, y),
@@ -600,13 +613,15 @@ impl Compass {
                 }
             }
             Action::OpenSearch => {
-                // The search view is on the expanded panel.
+                // The search view is on the expanded panel, in the settings view's place.
                 self.panel.expanded = true;
+                self.hotkey_settings.close();
                 self.search.open();
                 self.sync_search();
             }
             Action::ReopenMapList => {
                 self.panel.expanded = true;
+                self.hotkey_settings.close();
                 self.search.reopen();
                 self.sync_search();
             }
@@ -639,8 +654,58 @@ impl Compass {
             Action::ToggleSection(section) => {
                 self.settings.collapsed_sections = self.settings.collapsed_sections.toggled(section);
             }
+            Action::OpenSettings => {
+                // On the expanded panel, in the search view's place.
+                self.panel.expanded = true;
+                self.search.escape();
+                self.sync_search();
+                self.hotkey_settings.open();
+            }
+            Action::CloseSettings => self.hotkey_settings.close(),
+            Action::BeginRebind(hotkey) => self.hotkey_settings.begin(hotkey),
+            Action::CancelRebind => self.hotkey_settings.cancel(),
+            Action::TurnOffHotkey => {
+                if self.hotkey_settings.turn_off(&mut self.settings.hotkeys) {
+                    self.forget_unbound_hotkeys();
+                }
+            }
+            Action::SwapHotkeys => {
+                if self.hotkey_settings.swap(&mut self.settings.hotkeys) {
+                    self.forget_unbound_hotkeys();
+                }
+            }
+            Action::ResetHotkeys => {
+                if self.hotkey_settings.restore(&mut self.settings.hotkeys) {
+                    self.forget_unbound_hotkeys();
+                }
+            }
+            Action::UndoResetHotkeys => {
+                if self.hotkey_settings.undo_restore(&mut self.settings.hotkeys) {
+                    self.forget_unbound_hotkeys();
+                }
+            }
         }
         self.sync_panel()
+    }
+
+    /// The player pressed a key on the settings view: while a hotkey waits for its new
+    /// combination, that may be it, or Backspace or Delete to turn it off (see
+    /// [`SettingsView`]). Saved with the settings, and registered in place of the old one
+    /// once the hotkeys are live again.
+    pub fn rebind_key(&mut self, press: KeyPress) -> &PanelState {
+        if self.hotkey_settings.press(&press, &mut self.settings.hotkeys) {
+            self.forget_unbound_hotkeys();
+        }
+        self.sync_panel()
+    }
+
+    /// The combinations no hotkey has any more aren't unavailable: the shell reports on
+    /// the new ones when it registers them.
+    fn forget_unbound_hotkeys(&mut self) {
+        let hotkeys = &self.settings.hotkeys;
+        let bound = |combination: &String| hotkeys.all().iter().any(|hotkey| same_hotkey(hotkey, combination));
+        self.state.unavailable_hotkeys.retain(bound);
+        self.state.invalid_hotkeys.retain(bound);
     }
 
     /// The player typed in the search view: `query` is everything in the query box.
@@ -714,6 +779,7 @@ impl Compass {
             // opening it.
             PanelControl::Search if self.search.is_open() => return Some(Request::RaiseOverlay),
             PanelControl::Search => Action::OpenSearch,
+            PanelControl::Settings => Action::OpenSettings,
             PanelControl::OpenMeowdbPage => {
                 return self.state.map.as_ref().map(|map| Request::OpenInBrowser { url: map.url.clone() });
             }
@@ -797,7 +863,6 @@ impl Compass {
     /// Tracker's window and the Item Lookup alert show (with the game), while the game or
     /// one of our windows is in front, and nowhere else (see [`Layer`]).
     pub fn on_foreground(&mut self, foreground: Foreground) -> &PanelState {
-        self.state.hotkeys_live = foreground != Foreground::OtherApp;
         self.panel.foreground = Some(foreground);
         self.sync_panel()
     }
@@ -997,6 +1062,9 @@ impl Compass {
         self.sync_grind_tracker();
         self.sync_item_lookup();
         self.state.hotkeys = self.settings.hotkeys.clone();
+        let in_front = self.panel.foreground.is_some_and(|foreground| foreground != Foreground::OtherApp);
+        self.state.hotkeys_live = in_front && !self.hotkey_settings.is_rebinding();
+        self.state.settings_view = self.hotkey_settings.state(&self.settings.hotkeys);
         self.state.game_window_title =
             self.settings.game_window_title.clone().unwrap_or_else(|| GAME_WINDOW_TITLE.into());
         &self.state
@@ -1089,11 +1157,12 @@ fn certain_map(state: &PanelState) -> Option<&str> {
 }
 
 /// Whether two accelerator strings name the same keys ("Ctrl+Shift+C", "shift + ctrl + c").
-fn same_hotkey(a: &str, b: &str) -> bool {
+/// An empty one, a hotkey turned off, names none.
+pub(crate) fn same_hotkey(a: &str, b: &str) -> bool {
     let keys = |s: &str| {
         let mut keys: Vec<String> = s.split('+').map(|k| k.trim().to_lowercase()).collect();
         keys.sort();
         keys
     };
-    keys(a) == keys(b)
+    !a.trim().is_empty() && keys(a) == keys(b)
 }
