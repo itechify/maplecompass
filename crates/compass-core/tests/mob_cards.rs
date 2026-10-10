@@ -297,6 +297,29 @@ fn animations_are_asked_for_one_at_a_time_with_no_other_pace() {
 }
 
 #[test]
+fn an_animation_on_its_way_when_the_player_leaves_its_map_is_seen_through_before_the_next() {
+    // Each takes a second to come (20 polls at 50 ms).
+    let source = FakeSource::osms().pictures_taking(20);
+    let requests = source.picture_requests.clone();
+    let mut compass = Compass::new(source);
+    arrive(&mut compass, CONSTRUCTION_SITE, 0);
+    compass.tick(400);
+    let first = requests.lock().unwrap().clone();
+    assert_eq!(first.len(), 1, "{first:?}");
+
+    arrive(&mut compass, SUNSET, 450);
+    let mut starts = vec![400];
+    for at in (800..=20_000).step_by(50) {
+        let before = requests.lock().unwrap().len();
+        compass.tick(at);
+        starts.extend(std::iter::repeat_n(at, requests.lock().unwrap().len() - before));
+    }
+
+    assert!(starts.windows(2).all(|w| w[1] - w[0] >= 1_000), "one at a time: {starts:?}");
+    assert_eq!(requests_for(&requests, &first[0]), 1);
+}
+
+#[test]
 fn only_the_listed_mobs_animations_are_asked_for_and_each_only_once() {
     let source = FakeSource::osms();
     let requests = source.picture_requests.clone();
