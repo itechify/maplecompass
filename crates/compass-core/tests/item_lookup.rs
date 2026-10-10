@@ -4,8 +4,8 @@
 //! browser. A name MeowDB doesn't clearly have opens nothing, and the panel says why.
 //!
 //! The readings here stand for what the Item Tooltip reader made of a capture (its own
-//! samples are in `item_tooltip_samples.rs`); MeowDB's answers are its search's, saved on
-//! 2026-10-09.
+//! samples are in `item_tooltip_samples.rs`); MeowDB's answers are made up in its search's
+//! shape ([`made_up_search`]).
 //!
 //! Worked example, as in `grind_tracker_window.rs`: the game's client area at (812,110),
 //! 1920x1200 physical px, on one 3440x1440 monitor; an expanded panel of 340x72, so at
@@ -14,7 +14,7 @@
 
 mod common;
 
-use common::{FakeSource, saved_search};
+use common::FakeSource;
 use compass_core::{
     Action, Compass, ExpBarRegion, Foreground, GameWindow, ItemChoice, ItemHit, ItemLookup, ItemTooltip,
     ItemTooltipReading, OurWindow, PanelSizes, PanelState, Rect, Request, ScreenRect, Settings, Size, SourceError,
@@ -54,15 +54,101 @@ fn started_with(source: FakeSource, settings: Settings) -> Compass {
     compass
 }
 
-/// MeowDB's saved answers, as soon as asked (from the cache).
-fn started() -> Compass {
-    started_with(FakeSource::osms_offline(), settings())
+/// MeowDB's search, made up: for each name these tests look up, an answer in its search's
+/// shape (up to six close items, closest first, each with MeowDB's own ID and its category
+/// as `sub`), read with the core's MeowDB reader. The IDs are invented, and so are most
+/// of the other items. A name without an answer here can't be reached.
+fn made_up_search(query: &str) -> Result<Vec<ItemHit>, SourceError> {
+    let answer = match query {
+        // Other ores, but no Bronze Ore.
+        "Orihalcon Ore" => {
+            r#"{"items":[
+                {"id":101,"name":"Orihalcon Ore","sub":"Ore"},
+                {"id":102,"name":"Silver Ore","sub":"Ore"},
+                {"id":103,"name":"Steel Ore","sub":"Ore"},
+                {"id":104,"name":"Adamantium Ore","sub":"Ore"},
+                {"id":105,"name":"Garnet Ore","sub":"Gem"},
+                {"id":106,"name":"Lidium Ore","sub":null}
+            ]}"#
+        }
+        "Orihalcon Oro" => {
+            r#"{"items":[
+                {"id":101,"name":"Orihalcon Ore","sub":"Ore"},
+                {"id":111,"name":"Orihalcon Plate","sub":"Ore"},
+                {"id":112,"name":"Orihalcon Helmet","sub":"Hat"},
+                {"id":113,"name":"Orihalcon Shield","sub":"Shield"}
+            ]}"#
+        }
+        // A chair: no category.
+        "The Green Relaxer" => {
+            r#"{"items":[
+                {"id":201,"name":"The Green Relaxer","sub":null},
+                {"id":202,"name":"Green Cushion","sub":null},
+                {"id":203,"name":"Relaxing Bench","sub":null}
+            ]}"#
+        }
+        "Soap Bubbles" => {
+            r#"{"items":[
+                {"id":301,"name":"Soap Bubbles","sub":"Weather Effect"},
+                {"id":302,"name":"Bubble Wand","sub":"Toy"},
+                {"id":303,"name":"Soap Dish","sub":null}
+            ]}"#
+        }
+        "Ribboned Pig Headband" => {
+            r#"{"items":[
+                {"id":401,"name":"Ribboned Pig Headband","sub":"Hat"},
+                {"id":402,"name":"Pink Ribbon","sub":"Hat"},
+                {"id":403,"name":"Pig Doll","sub":"Toy"}
+            ]}"#
+        }
+        "Mithril Guards" => {
+            r#"{"items":[
+                {"id":501,"name":"Mithril Guards","sub":"Claw"},
+                {"id":502,"name":"Mithril Plate","sub":"Ore"},
+                {"id":503,"name":"Mithril Shield","sub":"Shield"}
+            ]}"#
+        }
+        // Two items share the name; a quest of that name isn't an item.
+        "Hero's Gladius" => {
+            r#"{"items":[
+                {"id":601,"name":"Hero's Gladius","sub":"Quest Item"},
+                {"id":602,"name":"Hero's Gladius","sub":"One-Handed Sword"},
+                {"id":603,"name":"Gladius","sub":"One-Handed Sword"},
+                {"id":604,"name":"Hero's Cape","sub":"Cape"}
+            ],"quests":[
+                {"id":"9001","name":"Hero's Gladius","sub":"A quest"}
+            ]}"#
+        }
+        // Six items share the name, as many as an answer holds.
+        "Omok Table" => {
+            r#"{"items":[
+                {"id":701,"name":"Omok Table","sub":"Quest Item"},
+                {"id":702,"name":"Omok Table","sub":"Quest Item"},
+                {"id":703,"name":"Omok Table","sub":"Quest Item"},
+                {"id":704,"name":"Omok Table","sub":"Quest Item"},
+                {"id":705,"name":"Omok Table","sub":"Quest Item"},
+                {"id":706,"name":"Omok Table","sub":"Quest Item"}
+            ]}"#
+        }
+        "Zqxv Nothing" => r#"{"items":[]}"#,
+        _ => return Err(SourceError::Unreachable(format!("no made-up answer for {query:?}"))),
+    };
+    meowdb::read_item_search(answer)
 }
 
-/// MeowDB's search answers whatever is asked with its saved answer for `query`.
+/// MeowDB's search answers with its made-up answers, as soon as asked (from the cache).
+fn made_up_meowdb() -> FakeSource {
+    FakeSource::osms_offline().with_item_searches(made_up_search)
+}
+
+/// MeowDB's made-up answers, as soon as asked.
+fn started() -> Compass {
+    started_with(made_up_meowdb(), settings())
+}
+
+/// MeowDB's search answers whatever is asked with its made-up answer for `query`.
 fn answering(query: &'static str) -> FakeSource {
-    let json = saved_search(query).expect("saved answer");
-    FakeSource::osms_offline().with_item_searches(move |_| meowdb::read_item_search(&json))
+    FakeSource::osms_offline().with_item_searches(move |_| made_up_search(query))
 }
 
 /// MeowDB's search answers whatever is asked with these items.
@@ -148,18 +234,18 @@ fn a_name_meowdb_has_opens_its_page() {
 
     let state = look_up(&mut compass, "Orihalcon Ore", 1_000);
 
-    assert_eq!(line(&state), opened("Orihalcon Ore", "418"));
-    assert_eq!(requests(&mut compass), [open("418")]);
+    assert_eq!(line(&state), opened("Orihalcon Ore", "101"));
+    assert_eq!(requests(&mut compass), [open("101")]);
 }
 
 #[test]
 fn every_seed_item_opens_its_own_page() {
     for (name, id) in [
-        ("Orihalcon Ore", "418"),
-        ("The Green Relaxer", "522"),
-        ("Soap Bubbles", "1552"),
-        ("Ribboned Pig Headband", "808"),
-        ("Mithril Guards", "690"),
+        ("Orihalcon Ore", "101"),
+        ("The Green Relaxer", "201"),
+        ("Soap Bubbles", "301"),
+        ("Ribboned Pig Headband", "401"),
+        ("Mithril Guards", "501"),
     ] {
         let mut compass = started();
         let state = look_up(&mut compass, name, 1_000);
@@ -170,7 +256,7 @@ fn every_seed_item_opens_its_own_page() {
 
 #[test]
 fn while_meowdb_is_asked_the_panel_shows_the_name_read_and_the_page_opens_when_it_answers() {
-    let mut compass = started_with(FakeSource::osms_offline().items_taking(2), settings());
+    let mut compass = started_with(made_up_meowdb().items_taking(2), settings());
 
     let state = look_up(&mut compass, "Orihalcon Ore", 1_000);
     assert_eq!(line(&state), Some(ItemLookup::LookingUp { read: "Orihalcon Ore".into() }));
@@ -179,13 +265,13 @@ fn while_meowdb_is_asked_the_panel_shows_the_name_read_and_the_page_opens_when_i
     compass.tick(1_100);
     let state = compass.tick(1_200).clone();
 
-    assert_eq!(line(&state), opened("Orihalcon Ore", "418"));
-    assert_eq!(requests(&mut compass), [open("418")]);
+    assert_eq!(line(&state), opened("Orihalcon Ore", "101"));
+    assert_eq!(requests(&mut compass), [open("101")]);
 }
 
 #[test]
 fn meowdb_is_asked_once_per_lookup() {
-    let source = FakeSource::osms_offline().items_taking(2);
+    let source = made_up_meowdb().items_taking(2);
     let asked = source.item_requests.clone();
     let mut compass = started_with(source, settings());
 
@@ -200,7 +286,7 @@ fn meowdb_is_asked_once_per_lookup() {
 #[test]
 fn meowdb_is_asked_no_more_than_once_every_2_seconds() {
     // Each search goes over the network, answering on the poll after it started.
-    let source = FakeSource::osms_offline().items_taking(1);
+    let source = made_up_meowdb().items_taking(1);
     let asked = source.item_requests.clone();
     let mut compass = started_with(source, settings());
     look_up(&mut compass, "Orihalcon Ore", 1_000);
@@ -216,15 +302,15 @@ fn meowdb_is_asked_no_more_than_once_every_2_seconds() {
     let state = compass.tick(3_100).clone();
 
     assert_eq!(*asked.lock().unwrap(), ["Orihalcon Ore", "Soap Bubbles"]);
-    assert_eq!(line(&state), opened("Soap Bubbles", "1552"));
+    assert_eq!(line(&state), opened("Soap Bubbles", "301"));
 }
 
 #[test]
 fn letters_the_recogniser_confuses_and_case_still_find_the_item() {
-    for read in ["0rihalcon 0re", "Orihalc0n Ore", "orihalcon ore", "Orihalcon  Ore"] {
+    for read in ["0rihalcon 0re", "Orihalc0n Ore", "Oriha1con Ore", "orihalcon ore", "Orihalcon  Ore"] {
         let mut compass = started_with(answering("Orihalcon Ore"), settings());
         let state = look_up(&mut compass, read, 1_000);
-        assert_eq!(line(&state), opened("Orihalcon Ore", "418"), "{read:?}");
+        assert_eq!(line(&state), opened("Orihalcon Ore", "101"), "{read:?}");
     }
     let mut compass = started_with(answering("Hero's Gladius"), settings());
     let state = look_up(&mut compass, "Heros GIadius", 1_000);
@@ -233,13 +319,12 @@ fn letters_the_recogniser_confuses_and_case_still_find_the_item() {
 
 #[test]
 fn a_name_one_letter_off_opens_the_item_far_closer_than_any_other() {
-    // MeowDB's real answer to "Orihalcon Oro": Orihalcon Ore, then Orihalcon Ingot and
-    // other Orihalcon items.
+    // Orihalcon Ore, then other Orihalcon items.
     let mut compass = started();
 
     let state = look_up(&mut compass, "Orihalcon Oro", 1_000);
 
-    assert_eq!(line(&state), opened("Orihalcon Ore", "418"));
+    assert_eq!(line(&state), opened("Orihalcon Ore", "101"));
 }
 
 #[test]
@@ -275,7 +360,7 @@ fn the_exact_name_wins_over_a_neighbour_one_letter_away() {
 
 #[test]
 fn a_name_meowdb_answers_only_with_other_items_opens_none() {
-    // Opal Ore, Iron Ore, Gold Ore and others, but no Bronze Ore.
+    // Silver Ore, Steel Ore and other ores, but no Bronze Ore.
     let mut compass = started_with(answering("Orihalcon Ore"), settings());
 
     let state = look_up(&mut compass, "Bronze Ore", 1_000);
@@ -310,14 +395,14 @@ fn a_name_several_items_share_lists_them_with_their_categories_to_pick_from() {
         line(&state),
         Some(ItemLookup::Choose {
             read: "Hero's Gladius".into(),
-            items: vec![choice("465", "Quest Item"), choice("556", "One-Handed Sword")],
+            items: vec![choice("601", "Quest Item"), choice("602", "One-Handed Sword")],
         }),
-        "not Gladius or Old Gladius"
+        "not Gladius, Hero's Cape or the quest"
     );
     assert!(requests(&mut compass).is_empty(), "nothing opens until the player picks");
 
-    assert_eq!(compass.pick_item("556"), Some(open("556")));
-    assert_eq!(line(compass.panel_state()), opened("Hero's Gladius", "556"));
+    assert_eq!(compass.pick_item("602"), Some(open("602")));
+    assert_eq!(line(compass.panel_state()), opened("Hero's Gladius", "602"));
 }
 
 #[test]
@@ -325,7 +410,7 @@ fn only_an_item_on_the_list_can_be_picked() {
     let mut compass = started();
     look_up(&mut compass, "Hero's Gladius", 1_000);
 
-    assert_eq!(compass.pick_item("551"), None, "Gladius isn't on the list");
+    assert_eq!(compass.pick_item("603"), None, "Gladius isn't on the list");
 }
 
 #[test]
@@ -336,7 +421,7 @@ fn six_items_sharing_a_name_are_all_listed() {
 
     let Some(ItemLookup::Choose { items, .. }) = line(&state) else { panic!("a list: {state:?}") };
     let ids: Vec<&str> = items.iter().map(|item| item.id.as_str()).collect();
-    assert_eq!(ids, ["484", "487", "490", "493", "496", "499"]);
+    assert_eq!(ids, ["701", "702", "703", "704", "705", "706"]);
 }
 
 #[test]
@@ -355,8 +440,8 @@ fn the_next_lookup_replaces_the_list() {
 
     let state = look_up(&mut compass, "Orihalcon Ore", 2_000);
 
-    assert_eq!(line(&state), opened("Orihalcon Ore", "418"));
-    assert_eq!(compass.pick_item("556"), None, "the list has gone");
+    assert_eq!(line(&state), opened("Orihalcon Ore", "101"));
+    assert_eq!(compass.pick_item("602"), None, "the list has gone");
 }
 
 #[test]
@@ -372,7 +457,7 @@ fn meowdb_unreachable_says_so() {
 
 #[test]
 fn a_search_answer_in_another_shape_says_lookup_is_unavailable() {
-    for answer in ["<!DOCTYPE html><html></html>", r#"{"results":[]}"#, r#"{"items":[{"id":418}]}"#] {
+    for answer in ["<!DOCTYPE html><html></html>", r#"{"results":[]}"#, r#"{"items":[{"id":101}]}"#] {
         let source = FakeSource::osms_offline().with_item_searches(move |_| meowdb::read_item_search(answer));
         let mut compass = started_with(source, settings());
         let state = look_up(&mut compass, "Orihalcon Ore", 1_000);
@@ -450,14 +535,14 @@ fn the_grind_tracker_over_the_name_says_so() {
 
 #[test]
 fn a_scrolled_items_upgrade_count_isnt_looked_up_with_its_name() {
-    let source = FakeSource::osms_offline();
+    let source = made_up_meowdb();
     let asked = source.item_requests.clone();
     let mut compass = started_with(source, settings());
 
     let state = look_up(&mut compass, "Mithril Guards (+3)", 1_000);
 
     assert_eq!(*asked.lock().unwrap(), ["Mithril Guards"]);
-    assert_eq!(line(&state), opened("Mithril Guards", "690"));
+    assert_eq!(line(&state), opened("Mithril Guards", "501"));
 }
 
 #[test]
