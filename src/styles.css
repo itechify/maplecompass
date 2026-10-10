@@ -705,17 +705,6 @@ td:first-child {
   gap: 6px;
 }
 
-.portals li {
-  display: grid;
-  grid-template-columns: 47px minmax(0, 1fr);
-  align-items: center;
-  column-gap: 9px;
-}
-
-.portals li > div {
-  min-width: 0;
-}
-
 .portals .dest {
   display: flex;
   align-items: baseline;
@@ -737,57 +726,6 @@ td:first-child {
   border-color: #98c58a;
   background: #dff0d8;
   color: #2b6a20;
-}
-
-.portals .where {
-  display: block;
-  font-size: 12px;
-  line-height: 15px;
-  color: var(--ink-2);
-}
-
-.portals .where::first-letter {
-  text-transform: uppercase;
-}
-
-/* The minimap in miniature: its 5x3 grid, the portal's cell lit, the game's ring in it. */
-.minimap {
-  display: block;
-  width: 47px;
-  height: 29px;
-}
-
-.minimap .field {
-  fill: #eef3fb;
-}
-
-.minimap .frame {
-  fill: none;
-  stroke: #50648c;
-  stroke-width: 1;
-}
-
-.minimap .grid {
-  stroke: #b8c7e1;
-  stroke-width: 0.6;
-}
-
-.minimap .cell {
-  fill: #a9c3ec;
-}
-
-.minimap .ring {
-  fill: none;
-  stroke: var(--portal);
-  stroke-width: 1.7;
-}
-
-.minimap .core {
-  fill: var(--portal);
-}
-
-.minimap.unknown .frame {
-  stroke-dasharray: 2 1.5;
 }
 
 /* EXP and mobs per hour, each figure beside its party size. */
