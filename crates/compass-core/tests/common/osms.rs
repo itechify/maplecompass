@@ -211,6 +211,21 @@ impl World {
         self
     }
 
+    /// The same world with the title `street` / `name` given to the maps `ids` and to no
+    /// other, those listed last, in the order given. A minimap sample showing that title
+    /// then stands in for those maps': there are no samples of titles maps really share.
+    pub fn titled(mut self, street: &str, name: &str, ids: &[u64]) -> Self {
+        let same = |m: &Map| m.street_name.trim() == street && m.name.trim() == name;
+        self.maps.retain(|m| !same(m) || ids.contains(&m.id));
+        for &id in ids {
+            let at = self.maps.iter().position(|m| m.id == id).unwrap_or_else(|| panic!("no map {id}"));
+            let mut map = self.maps.remove(at);
+            (map.street_name, map.name) = (street.into(), name.into());
+            self.maps.push(map);
+        }
+        self
+    }
+
     /// The same world, with `lookups.json` naming map `id`, which isn't in it.
     pub fn naming(mut self, id: u64, name: &str) -> Self {
         self.other_maps.push((id, name.into()));
