@@ -110,7 +110,7 @@ pub struct Rect {
 ///
 /// On the samples (1920x1200 client, default UI size) the title band is 66 px tall at
 /// client (0..4, 31). The region keeps ~15 px of slack above and below it, and is wide
-/// enough for the longest map name MeowDB listed ("Physical Fitness Test <Normal Waiting
+/// enough for the longest name in the map list ("Physical Fitness Test <Normal Waiting
 /// Room>", ~470 px of panel). The core trims each frame where the panel ends, so a
 /// narrow minimap's surroundings are never read. Clamped to the client area.
 pub fn default_title_region(client_width: u32, client_height: u32) -> Rect {
@@ -761,7 +761,7 @@ impl Compass {
     }
 
     /// The player clicked one of the search view's items: the mob (in the suggestions)
-    /// or the map (in the map list) with this MeowDB ID. Like Enter on it.
+    /// or the map (in the map list) with this ID. Like Enter on it.
     pub fn search_pick(&mut self, id: &str) -> &PanelState {
         self.search.pick(id, &searched(&self.set, &self.state, &self.settings));
         self.sync_search();

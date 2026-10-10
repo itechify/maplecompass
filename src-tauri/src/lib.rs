@@ -80,9 +80,9 @@ pub(crate) enum Command {
     SearchQuery(String),
     /// The player pressed this key on the settings view, for the core.
     RebindKey(KeyPress),
-    /// The player clicked the search view's mob or map with this MeowDB ID.
+    /// The player clicked the search view's mob or map with this ID.
     SearchPick(String),
-    /// The player clicked the name of the listed mob with this MeowDB ID in the panel.
+    /// The player clicked the name of the listed mob with this ID in the panel.
     OpenMobPage(String),
     /// The player picked the item with this MeowDB ID from the ones an Item Lookup found
     /// sharing the name it read.

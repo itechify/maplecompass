@@ -1,10 +1,10 @@
 # OSMS Data Explorer as the data source in place of MeowDB
 
-Checked on 10 October 2026, against OSMS's `data/current` (its "Public Release" set, dated 6 October 2026), the MeowDB pages in `crates/compass-core/tests/fixtures` (saved 7 October), and three live MeowDB pages.
+Checked on 10 October 2026, against OSMS's `data/current` (its "Public Release" set, dated 6 October 2026), the MeowDB pages then kept in `crates/compass-core/tests/fixtures` (saved 7 October, since removed), and three live MeowDB pages. The decisions it led to, and what shipped, are in ADR 0008.
 
 ## Answer
 
-OSMS Data Explorer can supply nearly everything MapleCompass reads from MeowDB, and it doesn't have MeowDB's scraping problem in the same form. It is a static site that loads a handful of plain JSON files. No terms forbid fetching them, and the whole world is about 1.3 MB in one go, not about 420 map pages and the listed mobs' pages, fetched one every 2 seconds. Most of the panel's data maps over directly, the Map Summary can be computed exactly, and three Mob Card figures can be derived with fitted rules. Two things have no OSMS equivalent: minimap bounds, which place Hidden Portals, and whether a mob jumps between floors. Item Lookup can keep opening MeowDB pages, but it still needs one MeowDB search per press to find the page.
+OSMS Data Explorer can supply nearly everything MapleCompass reads from MeowDB, and it doesn't have MeowDB's scraping problem in the same form. It is a static site that loads a handful of plain JSON files. No terms forbid fetching them, and the five files the whole world needs are about 0.8 MB in one go, not about 420 map pages and the listed mobs' pages, fetched one every 2 seconds. Most of the panel's data maps over directly, the Map Summary can be computed exactly, and three Mob Card figures can be derived with fitted rules. Two things have no OSMS equivalent: minimap bounds, which place Hidden Portals, and whether a mob jumps between floors. Item Lookup can keep opening MeowDB pages, but it still needs one MeowDB search per press to find the page.
 
 ## What OSMS is
 
@@ -81,7 +81,7 @@ Each mob in `monsters.json` names its animations (`move`, `stand`, `fly`, `attac
 
 ### Item Lookup (ADR 0007)
 
-OSMS has every item's name with its game ID (7,431 in `lookups.json`), straight from the game's data. A reading could be matched offline against that list, so ADR 0007's problem of MeowDB's list missing 68 items goes away. "Hat MP Scroll: Greater", ADR 0007's example of a missing item, is in it, as are all 54 item names in the `meowdb-search` fixtures. But MeowDB's item pages are numbered by MeowDB's own IDs, and OSMS doesn't carry them. Opening the right MeowDB page still needs one request per press to MeowDB's search, as now. Otherwise Item Lookup could open OSMS's own listing, which needs no request to anyone. OSMS has no page per item. Its Items tab (consumables, etc., setup, scrolls) and Equipment tab take a search in the link, such as `#items?q=<name>` or `id:<game ID>`, which its own cross-links use. That wasn't tried for the Equipment tab.
+OSMS has every item's name with its game ID (7,431 in `lookups.json`), straight from the game's data. A reading could be matched offline against that list, so ADR 0007's problem of MeowDB's list missing 68 items goes away. "Hat MP Scroll: Greater", ADR 0007's example of a missing item, is in it, as are all 54 item names in the MeowDB search answers the tests then kept. But MeowDB's item pages are numbered by MeowDB's own IDs, and OSMS doesn't carry them. Opening the right MeowDB page still needs one request per press to MeowDB's search, as now. Otherwise Item Lookup could open OSMS's own listing, which needs no request to anyone. OSMS has no page per item. Its Items tab (consumables, etc., setup, scrolls) and Equipment tab take a search in the link, such as `#items?q=<name>` or `id:<game ID>`, which its own cross-links use. That wasn't tried for the Equipment tab.
 
 ## Coverage and freshness
 
@@ -98,7 +98,9 @@ OSMS has every item's name with its game ID (7,431 in `lookups.json`), straight 
 
 ## What a switch would change
 
-- **No world crawl.** One fetch of about 1.3 MB gives the whole world's portal graph, mobs and Mob Rates, so ADR 0004's crawl of about 420 pages at 2-second intervals, its week-old refreshes and the "Mapping the world" progress all go. Search and Distance work from the first launch, and offline after the first fetch.
+As foreseen before the switch; ADR 0008 records what changed.
+
+- **No world crawl.** One fetch of the five files, about 0.8 MB, gives the whole world's portal graph, mobs and Mob Rates, so ADR 0004's crawl of about 420 pages at 2-second intervals, its week-old refreshes and the "Mapping the world" progress all go. Search and Distance work from the first launch, and offline after the first fetch.
 - **No Mob Card fetches.** Every mob's figures arrive with the rest, so ADR 0006's per-mob page fetches go.
 - **The core's interface barely moves.** `MapData`, `Mob`, `Portal`, `MobDetails` and `PanelState` stay as they are. The `meowdb` module's HTML and flight readers become a JSON reader of OSMS's files. Clicking a mob's name can still open its MeowDB page, since MeowDB's mob IDs are the game's (`mob_url` is unchanged).
 - **Tests.** New fixtures would be OSMS JSON files, and the MeowDB HTML fixtures would go. AGENTS.md's rule for `tests/fixtures/meowdb-monsters` would move to the new fixtures.
@@ -107,10 +109,11 @@ OSMS has every item's name with its game ID (7,431 in `lookups.json`), straight 
 
 Recorded in ADR 0008:
 
-1. **Hidden Portal positions:** neither. The panel shows OSMS's picture of the map as a Map Preview, with the Hidden Portals marked. Hovering a mark shows where it leads, and hovering a row shows where the portal is. OSMS's portal positions are already in that picture's pixels, so no minimap bounds are needed.
+1. **Hidden Portal positions:** neither. The panel shows OSMS's picture of the map as a Map Preview, with every portal marked and the Hidden Portals set apart. Hovering a mark shows where it leads, and hovering a row shows where the portal is. OSMS's portal positions are already in that picture's pixels, so no minimap bounds are needed.
 2. **Mob movement:** the Mob Card drops the line.
-3. **Item Lookup:** for now it keeps opening MeowDB pages through MeowDB's search (ADR 0007), the one MeowDB request left, which MeowDB's terms very likely cover. Pointing the browser at a MeowDB search instead was checked and isn't possible: `/msclassic/search?q=` is a 404, and `/msclassic/item-db?q=` loads the item database without applying the query. OSMS may supply an item card on hover later.
+3. **Item Lookup:** for now it keeps opening MeowDB pages through MeowDB's search (ADR 0007), the one MeowDB request left. The letter of MeowDB's terms arguably covers it, so it's a grey area to raise with MeowDB, but not a bar to release. Pointing the browser at a MeowDB search instead was checked and isn't possible: `/msclassic/search?q=` is a 404, and `/msclassic/item-db?q=` loads the item database without applying the query. OSMS may supply an item card on hover later.
 4. **Asking @ohmi:** not needed, since nothing restricts fetching. MapleCompass fetches the files and doesn't bundle them.
+5. **Tests:** no OSMS file is committed. The tests run on made-up worlds in OSMS's shape, title recognition on a committed list of the game's map names (IDs, streets, names and regions only), and `probe osms` reads the live set in full by hand. The MeowDB fixtures go.
 
 ## How this was checked
 

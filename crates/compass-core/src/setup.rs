@@ -118,8 +118,7 @@ pub struct ExpBarRegion {
 const EXP_WIDTH_PER_MARKED_HEIGHT: u32 = 12;
 
 /// Before the map list is loaded, the longest name in it is taken to be as long as the
-/// longest MeowDB listed, "Physical Fitness Test <Normal Waiting Room>": OSMS's longest
-/// is as long.
+/// longest in OSMS's map list, "Physical Fitness Test <Normal Waiting Room>".
 const FALLBACK_LONGEST_NAME: usize = 43;
 
 /// Title width allowed per character, per px of marked height. On the samples the two

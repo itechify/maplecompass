@@ -9,7 +9,7 @@ publish = false
 
 [dependencies]
 serde = { workspace = true }
-# Reads the data embedded in MeowDB map pages.
+# Reads OSMS Data Explorer's files and MeowDB's search answers.
 serde_json = { workspace = true }
 image = { workspace = true }
 # ocrs 0.13.1 needs rten 0.26 (it does not accept 0.27).
