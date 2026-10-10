@@ -6,10 +6,11 @@
 mod common;
 
 use common::osms;
-use common::{FakeSource, arrive, requests_for};
+use common::{FakeSource, arrive, fresh_files, requests_for};
+use compass_core::osms::OsmsFiles;
 use compass_core::{
-    Compass, DamageRange, HpPerExp, MapDataStatus, MobCard, MobDetails, OSMS_AND_IMAGES_CREDIT, OSMS_CREDIT, PanelState,
-    Request, SourceError,
+    Compass, DamageRange, Elements, HpPerExp, MapDataStatus, MobCard, MobDetails, OSMS_AND_IMAGES_CREDIT,
+    OSMS_CREDIT, PanelState, Recognition, Request, SourceError,
 };
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
@@ -86,6 +87,39 @@ fn a_listed_mobs_card_shows_its_figures_from_the_set_as_soon_as_the_map_is_shown
 }
 
 #[test]
+fn touch_dmg_runs_from_1_1_times_p_atk_rounded_down_to_1_5_times_rounded_up_less_1() {
+    let p_atks = [7, 11, 34, 54];
+    let mobs = p_atks.iter().map(|&p| osms::mob(9000 + p, &format!("P.ATK {p}"), p as u32, 100, 10).p_atk(p));
+    let mut compass = Compass::new(sunset_listing(mobs.collect()));
+
+    let state = arrive(&mut compass, SUNSET, 0);
+
+    let touch = |p: u64| details(&state, &(9000 + p).to_string()).touch_damage;
+    assert_eq!(touch(7), Some(DamageRange { min: 7, max: 10 }));
+    assert_eq!(touch(11), Some(DamageRange { min: 12, max: 16 }));
+    assert_eq!(touch(34), Some(DamageRange { min: 37, max: 50 }));
+    assert_eq!(touch(54), Some(DamageRange { min: 59, max: 80 }));
+}
+
+#[test]
+fn a_figure_a_mob_lacks_or_has_as_0_shows_as_none_and_speed_without_one_is_normal() {
+    let mut compass = Compass::new(sunset_listing(vec![
+        osms::mob(9001, "Nothing", 10, 100, 10),
+        osms::mob(9002, "Zeros", 11, 100, 10).p_atk(0).p_def(0).m_def(0).mp(0).acc(0).avoid(0).speed(0),
+    ]));
+
+    let state = arrive(&mut compass, SUNSET, 0);
+
+    for id in ["9001", "9002"] {
+        let mob = details(&state, id);
+        assert_eq!(mob.touch_damage, None, "{id}");
+        assert_eq!((mob.mp, mob.accuracy, mob.avoid), (None, None, None), "{id}");
+        assert_eq!((mob.physical_defense, mob.magic_defense), (None, None), "{id}");
+        assert_eq!(mob.speed, "Normal", "{id}");
+    }
+}
+
+#[test]
 fn hp_per_exp_is_ranked_among_all_the_sets_mobs() {
     let mut compass = Compass::new(sunset_listing(vec![
         // 0.125, rounded half up.
@@ -108,6 +142,39 @@ fn hp_per_exp_is_ranked_among_all_the_sets_mobs() {
     assert_eq!(hp_per_exp("9003"), Some(HpPerExp { hundredths: 200, rank: 2, ranked }));
     assert_eq!(hp_per_exp("700000"), Some(HpPerExp { hundredths: 10129, rank: ranked - 1, ranked }));
     assert_eq!(hp_per_exp("9004"), None);
+}
+
+#[test]
+fn a_cards_elements_read_as_weak_strong_and_immune() {
+    let mut compass = Compass::new(sunset_listing(vec![
+        osms::mob(9001, "Ice Sentinel", 30, 100, 10).element("Fire", "Weak").element("Ice", "Strong"),
+        osms::mob(9002, "Green Mushroom", 15, 100, 10).element("Poison", "Immune"),
+        osms::mob(9003, "Plain Mushroom", 10, 100, 10),
+    ]));
+
+    let state = arrive(&mut compass, SUNSET, 0);
+
+    let names = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+    let elements = |id: &str| details(&state, id).elements.clone();
+    assert_eq!(elements("9001"), Elements { weak: names(&["Fire"]), strong: names(&["Ice"]), immune: vec![] });
+    assert_eq!(elements("9002"), Elements { weak: vec![], strong: vec![], immune: names(&["Poison"]) });
+    assert_eq!(elements("9003"), Elements::default());
+}
+
+#[test]
+fn a_mob_record_not_as_expected_reads_as_a_changed_format_never_as_a_partial_card() {
+    let odd_affinity = osms::mob(9001, "Odd", 10, 100, 10).element("Fire", "Absorbs");
+    let files = osms::game().with_mob(osms::mob(9002, "Odd", 10, 100, 10).acc(39)).files();
+    let acc_as_text = OsmsFiles { monsters: files.monsters.replace(r#""acc":39"#, r#""acc":"39""#), ..files };
+    assert_ne!(acc_as_text.monsters, osms::game().files().monsters);
+
+    for source in [sunset_listing(vec![odd_affinity]), FakeSource::answering_osms(vec![fresh_files(acc_as_text)])] {
+        let mut compass = Compass::new(source);
+
+        let state = compass.tick(0).clone();
+
+        assert_eq!(state.recognition, Recognition::FormatChanged);
+    }
 }
 
 #[test]
