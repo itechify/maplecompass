@@ -64,10 +64,10 @@ pub enum Fetched<T> {
 /// Where the core gets OSMS's file set and pictures, and MeowDB's search. The shell
 /// supplies one that fetches over HTTP with a disk cache; tests supply fakes.
 ///
-/// Every ask may take a while over the network, and the core never waits for
-/// them: on the first call start the fetch and answer [`Poll::Pending`]; the core asks
-/// again (each tick and frame) until the answer is ready. A source should answer at
-/// once when it can (from a cache, say).
+/// Every ask but the saved file set's (which is on disk) may take a while over the
+/// network, and the core never waits for them: on the first call start the fetch and
+/// answer [`Poll::Pending`]; the core asks again (each tick and frame) until the answer is
+/// ready. A source should answer at once when it can (from a cache, say).
 pub trait MapDataSource {
     /// OSMS Data Explorer's file set as it was last saved (ADR 0008), unread, and when;
     /// `None` when none is, or it can't be read back. The core asks once, at startup, and
