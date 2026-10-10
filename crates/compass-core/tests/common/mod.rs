@@ -225,6 +225,14 @@ pub struct FakeSource {
     /// How many polls an item search takes, as `mob_polls` for mob pages.
     item_polls: usize,
     item_in_flight: Option<(String, SearchAnswer, usize)>,
+    /// Answers a picture request for a path under OSMS's data. Defaults to
+    /// `"picture:<path>"`.
+    pictures: Box<dyn FnMut(&str) -> ImageAnswer + Send>,
+    /// The path of every picture fetch started, in order.
+    pub picture_requests: Arc<Mutex<Vec<String>>>,
+    /// How many polls a picture takes, as `mob_polls` for mob pages.
+    picture_polls: usize,
+    picture_in_flight: Option<(String, ImageAnswer, usize)>,
 }
 
 impl FakeSource {
@@ -264,6 +272,10 @@ impl FakeSource {
             item_requests: Arc::default(),
             item_polls: 0,
             item_in_flight: None,
+            pictures: Box::new(|path| Ok(format!("picture:{path}"))),
+            picture_requests: Arc::default(),
+            picture_polls: 0,
+            picture_in_flight: None,
         }
     }
 
@@ -359,6 +371,18 @@ impl FakeSource {
     /// `polls`th poll after it started.
     pub fn items_taking(self, polls: usize) -> Self {
         Self { item_polls: polls, ..self }
+    }
+
+    /// Answer picture requests with `pictures`.
+    pub fn with_pictures(mut self, pictures: impl FnMut(&str) -> ImageAnswer + Send + 'static) -> Self {
+        self.pictures = Box::new(pictures);
+        self
+    }
+
+    /// Pictures come over the network, not from the cache: each arrives on the `polls`th
+    /// poll after its fetch started.
+    pub fn pictures_taking(self, polls: usize) -> Self {
+        Self { picture_polls: polls, ..self }
     }
 }
 
@@ -470,6 +494,10 @@ impl MapDataSource for FakeSource {
 
     fn mob_image(&mut self, id: &str) -> Poll<Result<String, SourceError>> {
         one_at_a_time(id, &mut self.image_in_flight, &self.image_requests, self.mob_polls, &mut self.images)
+    }
+
+    fn picture(&mut self, path: &str) -> Poll<Result<String, SourceError>> {
+        one_at_a_time(path, &mut self.picture_in_flight, &self.picture_requests, self.picture_polls, &mut self.pictures)
     }
 
     fn item_search(&mut self, name: &str) -> Poll<Result<Fetched<Vec<ItemHit>>, SourceError>> {
