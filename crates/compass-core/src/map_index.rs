@@ -2,7 +2,7 @@
 //! Data Explorer's file set and pictures (ADR 0008), and MeowDB's search (ADR 0007).
 
 use crate::item_lookup::ItemHit;
-use crate::osms::OsmsFiles;
+use crate::osms::{OsmsFiles, SavedFiles};
 use std::task::Poll;
 
 /// One map in the map list.
@@ -64,18 +64,25 @@ pub enum Fetched<T> {
 /// Where the core gets OSMS's file set and pictures, and MeowDB's search. The shell
 /// supplies one that fetches over HTTP with a disk cache; tests supply fakes.
 ///
-/// Every ask may take a while over the network, and the core never waits for
-/// them: on the first call start the fetch and answer [`Poll::Pending`]; the core asks
-/// again (each tick and frame) until the answer is ready. A source should answer at
-/// once when it can (from a cache, say).
+/// Every ask but the saved file set's (which is on disk) may take a while over the
+/// network, and the core never waits for them: on the first call start the fetch and
+/// answer [`Poll::Pending`]; the core asks again (each tick and frame) until the answer is
+/// ready. A source should answer at once when it can (from a cache, say).
 pub trait MapDataSource {
-    /// OSMS Data Explorer's file set (ADR 0008), unread: the core reads it. The core asks
-    /// at startup and every 24 hours after, and a minute after asking found nothing at
-    /// all. Fetch the set when the one saved is over a day old (or there is none), and
-    /// answer it fresh once it reads with [`crate::osms::read`], saving it whole. Answer the
-    /// saved set fresh, at once, while it is younger; and as a saved copy, with when it
-    /// was saved, when a file can't be fetched or the set fetched doesn't read.
-    fn osms_files(&mut self) -> Poll<Result<Fetched<OsmsFiles>, SourceError>>;
+    /// OSMS Data Explorer's file set as it was last saved (ADR 0008), unread, and when;
+    /// `None` when none is, or it can't be read back. The core asks once, at startup, and
+    /// decides whether to fetch it afresh: it uses a set saved under a day ago as it is, and
+    /// falls back on an older one when a fresh one can't be had. It is on disk, so answer
+    /// at once.
+    fn saved_osms_files(&mut self) -> Option<SavedFiles>;
+
+    /// OSMS Data Explorer's file set fetched afresh (ADR 0008), unread: the core reads it.
+    /// The core asks at startup unless the saved set is under a day old, every 24 hours
+    /// after, and a minute after asking found nothing at all. Save the set fetched whole,
+    /// in place of the one saved, once it reads with [`crate::osms::read`]:
+    /// [`SourceError::FormatChanged`] when it doesn't, and [`SourceError::Unreachable`]
+    /// when a file can't be fetched. Either way the core keeps the set it has.
+    fn fetch_osms_files(&mut self) -> Poll<Result<OsmsFiles, SourceError>>;
 
     /// Where the overlay can load one of OSMS's pictures from (ADR 0008): a mob's
     /// animation or a map's picture, by its `path` below

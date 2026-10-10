@@ -10,7 +10,7 @@
 mod common;
 
 use common::osms::{self, CONSTRUCTION_SITE, KERNING_CITY, SUNSET_SKY, mob};
-use common::{FakeSource, arrive, black_frame, sample_frame, saved_copy};
+use common::{FakeSource, arrive, black_frame, sample_frame};
 use compass_core::{Action, Compass, LevelRange, MapDataStatus, Outline, PanelState};
 
 /// The titles OSMS's map list gives to more than one map: Maple Road / Mushroom Town and
@@ -210,7 +210,7 @@ fn coming_from_a_map_connected_to_just_one_of_them_shows_that_one() {
 #[test]
 fn coming_from_a_connected_map_settles_it_from_a_saved_copy_too() {
     const SAVED_AT: u64 = 1_790_812_800_000;
-    let source = FakeSource::answering_osms(vec![saved_copy(kerning_city_and_northern_top(), SAVED_AT)]);
+    let source = FakeSource::osms_offline().with_saved_set(kerning_city_and_northern_top(), SAVED_AT);
     let mut compass = Compass::new(source);
     compass.on_wall_clock(SAVED_AT + 8 * 24 * 60 * 60 * 1000);
     arrive(&mut compass, SUNSET, 0);

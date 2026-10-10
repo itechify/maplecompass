@@ -67,7 +67,7 @@ fn render(page: &BestsPage) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use compass_core::{BestsPageMap, LevelRange, OSMS_CREDIT};
+    use compass_core::{BestsPageMap, LevelRange, OSMS_AND_MEOWDB_CREDIT};
 
     /// A page of one map, named `map_name`, with made-up figures.
     fn page_of(map_name: &str) -> BestsPage {
@@ -86,7 +86,7 @@ mod tests {
                 set_at_unix_ms: None,
                 here: true,
             }],
-            credit: OSMS_CREDIT,
+            credit: OSMS_AND_MEOWDB_CREDIT,
         }
     }
 

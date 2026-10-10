@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { dayText } from "./dates";
+import { byId, cardTop, span } from "./dom";
+import { LOADING_MAP_LIST, recognitionProblem, type Recognition } from "./recognition";
 import type { ExpTracking } from "./exp-tracking";
 import {
   initMapPreview,
@@ -93,11 +95,6 @@ type MobDetails = {
 /** Mirror of `compass_core::MobCard`: one listed mob's Mob Card. */
 type MobCard = { id: string; url: string; image: string | null } & MobDetails;
 
-/** Mirror of `compass_core::Recognition`. */
-type Recognition =
-  | { status: "starting" | "ready" | "unavailable" | "formatChanged" }
-  | { status: "savedCopy"; savedAtUnixMs: number };
-
 /** Mirror of `compass_core::Outline`. */
 type Outline = {
   mobLevels: { lowest: number; highest: number } | null;
@@ -154,7 +151,6 @@ type PanelState = {
   search: SearchState;
 };
 
-const byId = (id: string) => document.getElementById(id)!;
 const panelEl = byId("panel");
 const street = byId("street");
 const map = byId("map");
@@ -274,13 +270,6 @@ function cell(text: string): HTMLTableCellElement {
   const td = document.createElement("td");
   td.textContent = text;
   return td;
-}
-
-function span(className: string, text: string): HTMLSpanElement {
-  const el = document.createElement("span");
-  el.className = className;
-  el.textContent = text;
-  return el;
 }
 
 /** Keep player-recognizable clues ahead of the secondary map ID. */
@@ -932,21 +921,10 @@ function renderMobCard() {
     mobCardShown = shown;
   }
   mobCardEl.hidden = false;
-  const frame = panelEl.getBoundingClientRect();
   const row = (button.closest("tr") ?? button).getBoundingClientRect();
-  const bar = normalView.querySelector(".window-bar")?.getBoundingClientRect();
-  const height = mobCardEl.offsetHeight;
-  const highest = (bar ? bar.bottom - frame.top : 0) + MOB_CARD_GAP;
-  const lowest = panelEl.clientHeight - MOB_CARD_GAP - height;
-  const below = row.bottom - frame.top + MOB_CARD_GAP;
-  const above = row.top - frame.top - MOB_CARD_GAP - height;
-  const roomBelow = panelEl.clientHeight - MOB_CARD_GAP - below;
-  const roomAbove = row.top - frame.top - MOB_CARD_GAP - highest;
-  let top: number;
-  if (below <= lowest) top = below;
-  else if (above >= highest) top = above;
-  else top = roomBelow >= roomAbove ? below : above;
-  mobCardEl.style.top = `${Math.max(highest, Math.min(top, lowest))}px`;
+  const bar = normalView.querySelector(".window-bar");
+  const top = cardTop(panelEl, bar, row, mobCardEl.offsetHeight, MOB_CARD_GAP, "below");
+  mobCardEl.style.top = `${top}px`;
 }
 
 // Resting on a listed mob's name shows its Mob Card; clicking it opens its MeowDB page.
@@ -1000,6 +978,7 @@ function render(panel: PanelState) {
   recovery.textContent = "";
   let problem = false;
   street.textContent = "";
+  const unrecognisable = recognitionProblem(recognition);
   if (!panel.gameFound) {
     map.textContent = `Looking for ${panel.gameWindowTitle}…`;
   } else if (panel.setup.needed === "firstRun" || panel.setup.needed === "resolutionChanged") {
@@ -1008,14 +987,9 @@ function render(panel: PanelState) {
       panel.setup.needed === "firstRun" ? "Finish setup to start" : "The game window changed size";
     recovery.textContent = `Mark the minimap title. ${setupHint}`;
     problem = panel.setup.needed === "resolutionChanged";
-  } else if (recognition.status === "unavailable") {
+  } else if (unrecognisable) {
     map.textContent = "Map recognition unavailable";
-    recovery.textContent =
-      "Couldn't load the map list from OSMS Data Explorer. Check your connection. The map list retries every minute.";
-    problem = true;
-  } else if (recognition.status === "formatChanged") {
-    map.textContent = "Map recognition unavailable";
-    recovery.textContent = "OSMS Data Explorer's data has changed format. MapleCompass needs an update to read it.";
+    recovery.textContent = unrecognisable;
     problem = true;
   } else if (current) {
     street.textContent = current.streetName;
@@ -1026,7 +1000,7 @@ function render(panel: PanelState) {
   } else {
     map.textContent = "Reading the minimap title…";
     recovery.textContent = recognition.status === "starting"
-      ? "Loading the map list from OSMS Data Explorer…"
+      ? LOADING_MAP_LIST
       : `Keep the minimap open with both title lines visible. If this persists, ${setupHint.charAt(0).toLowerCase() + setupHint.slice(1)}`;
   }
   recovery.hidden = recovery.textContent === "";

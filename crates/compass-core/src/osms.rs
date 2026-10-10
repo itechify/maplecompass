@@ -4,9 +4,10 @@
 
 use crate::map_data::{MapData, MapSummary, Mob, PerParty};
 use crate::map_index::{MapEntry, SourceError};
+use crate::map_preview::PicturePoint;
 use crate::mob_card::{DamageRange, Elements, HpPerExp, MobDetails};
 use crate::portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
-use crate::portals::{self, Exit, MapFacts};
+use crate::portals::{self, Destination, Exit, MapFacts};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
@@ -38,6 +39,15 @@ pub struct OsmsFiles {
 impl OsmsFiles {
     /// The files' names under [`DATA_URL`], in the order of the fields.
     pub const NAMES: [&str; 5] = ["maps.json", "portals.json", "monsters.json", "map_manifest.json", "lookups.json"];
+}
+
+/// OSMS's file set as the source saved it, at an earlier launch or earlier in this one,
+/// and when.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SavedFiles {
+    pub files: OsmsFiles,
+    /// When it was saved (ms since the Unix epoch).
+    pub saved_at_unix_ms: u64,
 }
 
 /// Every map's data from OSMS's file set: the map list, each listed map's figures, and
@@ -90,7 +100,8 @@ impl MapSet {
 /// reader expects, is [`SourceError::FormatChanged`], never partial figures.
 ///
 /// Map IDs are zero-padded to 9 digits, and names trimmed. A map with no name or no
-/// street can't be told by its title, so it is left out.
+/// street can't be told by its title, so it is left out, and a portal to it leads to a
+/// map not in the data.
 ///
 /// A map's portals to other maps, with their kinds, and its Hidden Portals follow the
 /// Hidden Portal rule and the app's hand-kept [`PORTAL_OVERRIDES`]. Teleports within the
@@ -125,13 +136,20 @@ fn read_set(files: &OsmsFiles, overrides: &[PortalOverride]) -> Result<MapSet, S
         };
         listed.push((entry, map));
     }
-    let names: HashMap<&str, &MapEntry> = listed.iter().map(|(entry, _)| (entry.id.as_str(), entry)).collect();
+    // A map with no name or no street can't be told by its title.
+    let titled = |entry: &MapEntry| !entry.street_name.is_empty() && !entry.map_name.is_empty();
+    let names: HashMap<&str, &MapEntry> =
+        listed.iter().filter(|(entry, _)| titled(entry)).map(|(entry, _)| (entry.id.as_str(), entry)).collect();
     // A map's name and street, and whether it is in the map list; from the map list,
     // else lookups.json, else its ID.
-    let name_of = |id: &str| match (names.get(id), lookups.map_names.get(id)) {
-        (Some(entry), _) => (entry.map_name.clone(), entry.street_name.clone(), true),
-        (None, Some(name)) => (name.trim().to_string(), String::new(), false),
-        (None, None) => (id.to_string(), String::new(), false),
+    let looked_up = |id: &str| lookups.map_names.get(id).map(|name| name.trim()).filter(|name| !name.is_empty());
+    let name_of = |id: &str| match (names.get(id), looked_up(id)) {
+        (Some(entry), _) => {
+            Destination { map_name: entry.map_name.clone(), street_name: entry.street_name.clone(), known: true }
+        }
+        (None, name) => {
+            Destination { map_name: name.unwrap_or(id).to_string(), street_name: String::new(), known: false }
+        }
     };
 
     let mut set = Vec::new();
@@ -139,7 +157,7 @@ fn read_set(files: &OsmsFiles, overrides: &[PortalOverride]) -> Result<MapSet, S
         let mut data = map_data(entry, map, portals.get(&entry.id), &mobs, &name_of, overrides)
             .map_err(|why| format!("map {}: {why}", entry.id))?;
         data.picture = pictures.get(&entry.id).cloned();
-        if !entry.street_name.is_empty() && !entry.map_name.is_empty() {
+        if titled(entry) {
             set.push((entry.clone(), data));
         }
     }
@@ -215,7 +233,7 @@ fn map_data(
     map: &OsmsMap,
     portals: Option<&Vec<OsmsPortal>>,
     mobs: &HashMap<u64, &OsmsMob>,
-    name_of: &impl Fn(&str) -> (String, String, bool),
+    name_of: &impl Fn(&str) -> Destination,
     overrides: &[PortalOverride],
 ) -> Result<MapData, String> {
     let (summary, mobs) = spawns(map, mobs)?;
@@ -224,18 +242,17 @@ fn map_data(
         .iter()
         .map(|p| {
             let to_map_id = map_id(p.dest_map.trim().parse().map_err(|_| format!("dest_map {:?}", p.dest_map))?)?;
-            let (to_map_name, to_street_name, to_known) = name_of(&to_map_id);
             Ok(Exit {
                 name: p.name.trim().to_string(),
                 kind: p.kind,
+                to: name_of(&to_map_id),
                 to_map_id,
-                to_map_name,
-                to_street_name,
-                to_known,
                 within_map: p.intra_map,
                 landing: p.dest_portal.trim().to_string(),
-                x: pixel(p.x).ok_or_else(|| format!("portal {} x {}", p.name, p.x))?,
-                y: pixel(p.y).ok_or_else(|| format!("portal {} y {}", p.name, p.y))?,
+                at: PicturePoint {
+                    x: pixel(p.x).ok_or_else(|| format!("portal {} x {}", p.name, p.x))?,
+                    y: pixel(p.y).ok_or_else(|| format!("portal {} y {}", p.name, p.y))?,
+                },
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
@@ -246,9 +263,9 @@ fn map_data(
         Some(rate) if rate >= 0.0 && rate.is_finite() => (rate * 100.0).round() as u32,
         Some(rate) => return Err(format!("mob_rate {rate} isn't a rate")),
     };
-    let nearest_town = match map.return_map_id {
-        Some(DEAD_END) => None,
-        Some(town) => Some(map_id(town)?),
+    let nearest_town = match map.return_map_id.map(map_id).transpose()? {
+        Some(town) if town == portals::DEAD_END => None,
+        Some(town) => Some(town),
         None if map.is_town => Some(entry.id.clone()),
         None => None,
     };
@@ -343,15 +360,13 @@ fn parse<T: serde::de::DeserializeOwned>(text: &str, file: &str) -> Result<T, St
     serde_json::from_str(text).map_err(|e| format!("{file}: {e}"))
 }
 
-/// The dead end: where a portal that goes nowhere leads.
-const DEAD_END: u64 = 999_999_999;
-
 /// A map ID as MapleCompass writes it: 9 digits, zero padding kept.
 fn map_id(id: u64) -> Result<String, String> {
-    if id > 999_999_999 {
+    let padded = format!("{id:09}");
+    if padded.len() > 9 {
         return Err(format!("map ID {id} has more than 9 digits"));
     }
-    Ok(format!("{id:09}"))
+    Ok(padded)
 }
 
 /// `maps.json`.

@@ -6,7 +6,7 @@ pub mod osms;
 pub mod player;
 pub mod world;
 
-use compass_core::osms::OsmsFiles;
+use compass_core::osms::{OsmsFiles, SavedFiles};
 use compass_core::{
     Compass, ExpBarRegion, Fetched, Frame, GameWindow, ItemHit, MapDataSource, PanelState, Rect,
     ScreenRect, Settings, Size, SourceError, TitleRegion, default_title_region,
@@ -133,16 +133,18 @@ pub fn three_sharing_a_title() -> FakeSource {
 
 type PictureAnswer = Result<String, SourceError>;
 type SearchAnswer = Result<Vec<ItemHit>, SourceError>;
-pub type OsmsAnswer = Poll<Result<Fetched<OsmsFiles>, SourceError>>;
+pub type OsmsAnswer = Poll<Result<OsmsFiles, SourceError>>;
 
 /// A data source that answers from memory and counts what it is asked.
 pub struct FakeSource {
-    /// Answers for successive asks for OSMS's file set; the last one repeats.
+    /// Answers for successive fetches of OSMS's file set; the last one repeats.
     osms_answers: Vec<OsmsAnswer>,
-    /// How many times OSMS's file set was asked for.
+    /// How many times OSMS's file set was fetched.
     pub osms_requests: Arc<AtomicU32>,
-    /// The sites are unreachable and the answers are copies saved at this time (ms since
-    /// the Unix epoch); `None`: they are fresh.
+    /// The set an earlier launch saved; `None`: none was.
+    saved_set: Option<SavedFiles>,
+    /// MeowDB is unreachable and item searches are answered with copies saved at this time
+    /// (ms since the Unix epoch); `None`: they are fresh.
     saved_at: Option<u64>,
     /// Answers a picture request for a path under OSMS's data folder. Defaults to
     /// `"picture:<path>"`.
@@ -169,6 +171,7 @@ impl FakeSource {
         Self {
             osms_answers: answers,
             osms_requests: Arc::default(),
+            saved_set: None,
             saved_at: None,
             pictures: Box::new(|path| Ok(format!("picture:{path}"))),
             picture_requests: Arc::default(),
@@ -192,13 +195,25 @@ impl FakeSource {
         Self::with_world(osms::game())
     }
 
-    /// OSMS can't be reached, and no set is saved.
+    /// OSMS can't be reached, and no set is saved (unless one is added with
+    /// [`FakeSource::with_saved_set`]).
     pub fn osms_offline() -> Self {
         Self::answering_osms(vec![Poll::Ready(Err(unreachable()))])
     }
 
-    /// The sites can't be reached, and every answer is a copy saved at
-    /// `saved_at_unix_ms`: OSMS's file set and item searches.
+    /// A set of `world`'s files was saved at `saved_at_unix_ms` (ms since the Unix epoch),
+    /// at an earlier launch.
+    pub fn with_saved_set(self, world: osms::World, saved_at_unix_ms: u64) -> Self {
+        self.with_saved_files(world.files(), saved_at_unix_ms)
+    }
+
+    /// These files were saved as OSMS's set at `saved_at_unix_ms`, at an earlier launch.
+    pub fn with_saved_files(self, files: OsmsFiles, saved_at_unix_ms: u64) -> Self {
+        Self { saved_set: Some(SavedFiles { files, saved_at_unix_ms }), ..self }
+    }
+
+    /// MeowDB can't be reached, and every item search is answered with a copy saved at
+    /// `saved_at_unix_ms`.
     pub fn serving_saved_copies(self, saved_at_unix_ms: u64) -> Self {
         Self { saved_at: Some(saved_at_unix_ms), ..self }
     }
@@ -274,31 +289,24 @@ fn one_at_a_time<T>(
     Poll::Ready(answer)
 }
 
-/// A fresh answer of OSMS's file set: `world`'s files.
+/// OSMS's file set fetched afresh: `world`'s files.
 pub fn fresh(world: osms::World) -> OsmsAnswer {
-    Poll::Ready(Ok(Fetched::Fresh(world.files())))
+    Poll::Ready(Ok(world.files()))
 }
 
-/// A fresh answer of OSMS's file set: these files, as they are.
+/// OSMS's file set fetched afresh: these files, as they are.
 pub fn fresh_files(files: OsmsFiles) -> OsmsAnswer {
-    Poll::Ready(Ok(Fetched::Fresh(files)))
-}
-
-/// A saved copy of `world`'s files, saved at `saved_at_unix_ms`.
-pub fn saved_copy(world: osms::World, saved_at_unix_ms: u64) -> OsmsAnswer {
-    Poll::Ready(Ok(Fetched::SavedCopy { data: world.files(), saved_at_unix_ms }))
+    Poll::Ready(Ok(files))
 }
 
 impl MapDataSource for FakeSource {
-    fn osms_files(&mut self) -> Poll<Result<Fetched<OsmsFiles>, SourceError>> {
+    fn saved_osms_files(&mut self) -> Option<SavedFiles> {
+        self.saved_set.clone()
+    }
+
+    fn fetch_osms_files(&mut self) -> Poll<Result<OsmsFiles, SourceError>> {
         let n = self.osms_requests.fetch_add(1, Ordering::SeqCst) as usize;
-        let answer = self.osms_answers[n.min(self.osms_answers.len() - 1)].clone();
-        match (answer, self.saved_at) {
-            (Poll::Ready(Ok(Fetched::Fresh(data))), Some(saved_at_unix_ms)) => {
-                Poll::Ready(Ok(Fetched::SavedCopy { data, saved_at_unix_ms }))
-            }
-            (answer, _) => answer,
-        }
+        self.osms_answers[n.min(self.osms_answers.len() - 1)].clone()
     }
 
     fn picture(&mut self, path: &str) -> Poll<Result<String, SourceError>> {

@@ -1,22 +1,16 @@
-//! The shell's data source: OSMS Data Explorer's file set and pictures (ADR 0008, in
-//! [`crate::osms`] and [`crate::pictures`]), and MeowDB's search (ADR 0007), fetched over
-//! HTTPS with an honest user agent and kept in a disk cache. Reading them is left to the
-//! core. No MeowDB page is fetched.
+//! MeowDB's search (ADR 0007), MapleCompass's only request to MeowDB: fetched over HTTPS
+//! with an honest user agent and kept in a disk cache. Reading it is left to the core. No
+//! MeowDB page is fetched.
 //!
-//! Item Lookup (ADR 0007): the core asks MeowDB's search for an item's name once per
-//! lookup the player makes. An answer is cached for [`ITEM_SEARCH_FRESH_FOR`] (a week),
-//! so looking the same item up again asks MeowDB nothing. Every answer MeowDB gives is
-//! cached, even one the core can't read.
-//!
-//! Fetches run on the async runtime and never block the caller: the first call starts
-//! one and answers `Pending`, later calls collect it.
+//! Item Lookup: the core asks MeowDB's search for an item's name once per lookup the
+//! player makes. An answer is cached for [`ITEM_SEARCH_FRESH_FOR`] (a week), so looking
+//! the same item up again asks MeowDB nothing. Every answer MeowDB gives is cached, even
+//! one the core can't read.
 
-use crate::osms::OsmsSet;
-use crate::pictures::Pictures;
-use compass_core::osms::OsmsFiles;
-use compass_core::{Fetched, ItemHit, MapDataSource, SourceError, meowdb};
+use crate::http;
+use compass_core::{Fetched, ItemHit, SourceError, meowdb};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::mpsc::Receiver;
 use std::task::Poll;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -24,80 +18,30 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 /// name finds hardly change.
 const ITEM_SEARCH_FRESH_FOR: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
-/// Who is asking: name, version, purpose and where to find out more. Never a browser UA.
-const USER_AGENT: &str = concat!(
-    "MapleCompass/",
-    env!("CARGO_PKG_VERSION"),
-    " (personal-use map helper; +https://github.com/itechify/maplecompass)"
-);
+type Answer = Result<Fetched<Vec<ItemHit>>, SourceError>;
 
-type Answer<T> = Result<Fetched<T>, SourceError>;
-
-/// An HTTP client that says who is asking, with MapleCompass's timeouts.
-pub(crate) fn client() -> reqwest::Result<reqwest::Client> {
-    reqwest::Client::builder()
-        .user_agent(USER_AGENT)
-        .connect_timeout(Duration::from_secs(5))
-        .timeout(Duration::from_secs(15))
-        .build()
-}
-
-pub struct MeowDbSource {
+/// MeowDB's search: cached, and fetched when an answer isn't.
+pub struct ItemSearch {
     client: reqwest::Client,
     cache_dir: PathBuf,
-    /// OSMS's file set.
-    osms: OsmsSet,
-    /// OSMS's pictures.
-    pictures: Pictures,
     /// The item name being searched for, and where MeowDB's items will arrive.
-    item_search_in_flight: Option<(String, Receiver<Answer<Vec<ItemHit>>>)>,
+    in_flight: Option<(String, Receiver<Answer>)>,
 }
 
-impl MeowDbSource {
-    /// A source caching under `cache_dir` (created when first written).
-    pub fn new(cache_dir: PathBuf) -> reqwest::Result<Self> {
-        let client = client()?;
-        Ok(Self {
-            osms: OsmsSet::new(client.clone(), &cache_dir),
-            pictures: Pictures::new(client.clone(), &cache_dir),
-            client,
-            cache_dir,
-            item_search_in_flight: None,
-        })
+impl ItemSearch {
+    /// A search caching under `cache_dir` (created when first written), fetched with
+    /// `client`.
+    pub fn new(client: reqwest::Client, cache_dir: &Path) -> Self {
+        Self { client, cache_dir: cache_dir.to_path_buf(), in_flight: None }
     }
 
-    /// In the background: fetch `url` and cache it at `path`. What `read` makes of it
-    /// (or of the saved copy, if MeowDB can't be reached) arrives on the receiver.
-    fn fetch<T: Send + 'static>(
-        &self,
-        url: String,
-        path: PathBuf,
-        read: impl Fn(&str) -> Result<T, SourceError> + Send + 'static,
-    ) -> Receiver<Answer<T>> {
-        let (tx, rx) = mpsc::channel();
-        let client = self.client.clone();
-        tauri::async_runtime::spawn(async move {
-            let fetched = fetch(&client, &url).await;
-            let _ = tx.send(settle(&path, &url, fetched, read));
-        });
-        rx
-    }
-}
-
-impl MapDataSource for MeowDbSource {
-    fn osms_files(&mut self) -> Poll<Answer<OsmsFiles>> {
-        self.osms.poll()
-    }
-
-    fn picture(&mut self, path: &str) -> Poll<Result<String, SourceError>> {
-        self.pictures.poll(path)
-    }
-
-    fn item_search(&mut self, name: &str) -> Poll<Answer<Vec<ItemHit>>> {
-        if let Some((asked, arriving)) = &self.item_search_in_flight {
+    /// The items MeowDB's search gives for `name`: at once from the cache, otherwise once
+    /// fetched, in the background.
+    pub fn poll(&mut self, name: &str) -> Poll<Answer> {
+        if let Some((asked, arriving)) = &self.in_flight {
             if asked == name {
-                let Poll::Ready(items) = collect(arriving) else { return Poll::Pending };
-                self.item_search_in_flight = None;
+                let Poll::Ready(items) = http::collect(arriving) else { return Poll::Pending };
+                self.in_flight = None;
                 if let Err(e) = &items {
                     eprintln!("item search {name:?}: {e}");
                 }
@@ -105,7 +49,7 @@ impl MapDataSource for MeowDbSource {
             }
         }
         // Read here, so a cached answer is given at once and the page opens right away.
-        let path = self.item_search_file(name);
+        let path = self.file(name);
         if let Some(answer) = cached(&path, ITEM_SEARCH_FRESH_FOR) {
             return Poll::Ready(meowdb::read_item_search(&answer).map(Fetched::Fresh));
         }
@@ -113,26 +57,16 @@ impl MapDataSource for MeowDbSource {
             Ok(url) => url.to_string(),
             Err(e) => return Poll::Ready(Err(SourceError::FormatChanged(format!("search URL: {e}")))),
         };
-        let arriving = self.fetch(url, path, meowdb::read_item_search);
-        self.item_search_in_flight = Some((name.to_string(), arriving));
+        let client = self.client.clone();
+        let arriving = http::in_background(async move { settle(&path, http::text(&client, &url).await) });
+        self.in_flight = Some((name.to_string(), arriving));
         Poll::Pending
     }
-}
 
-impl MeowDbSource {
-    fn item_search_file(&self, name: &str) -> PathBuf {
+    fn file(&self, name: &str) -> PathBuf {
         // The name as hex: any name makes a safe file name, and no two share one.
         let key: String = name.to_lowercase().bytes().map(|b| format!("{b:02x}")).collect();
         self.cache_dir.join(format!("item-search-{key}.json"))
-    }
-}
-
-/// What a background fetch sent, if it has finished.
-fn collect<T>(arriving: &Receiver<Result<T, SourceError>>) -> Poll<Result<T, SourceError>> {
-    match arriving.try_recv() {
-        Err(TryRecvError::Empty) => Poll::Pending,
-        Ok(answer) => Poll::Ready(answer),
-        Err(TryRecvError::Disconnected) => Poll::Ready(Err(SourceError::Unreachable("fetch abandoned".into()))),
     }
 }
 
@@ -154,23 +88,10 @@ fn saved_copy(path: &Path) -> Option<(String, u64)> {
     Some((page, since_epoch.as_millis() as u64))
 }
 
-async fn fetch(client: &reqwest::Client, url: &str) -> Result<String, String> {
-    let response = client.get(url).send().await.and_then(|r| r.error_for_status());
-    let page = match response {
-        Ok(response) => response.text().await,
-        Err(e) => Err(e),
-    };
-    page.map_err(|e| e.to_string())
-}
-
 /// After a fetch: cache and read what MeowDB served, or if it couldn't be reached,
 /// read the copy saved at `path` if there is one.
-fn settle<T>(
-    path: &Path,
-    url: &str,
-    fetched: Result<String, String>,
-    read: impl Fn(&str) -> Result<T, SourceError>,
-) -> Answer<T> {
+fn settle(path: &Path, fetched: Result<String, String>) -> Answer {
+    let read = meowdb::read_item_search;
     match fetched {
         Ok(page) => {
             if let Err(e) = crate::files::write_atomically(path, page.as_bytes()) {
@@ -179,7 +100,7 @@ fn settle<T>(
             read(&page).map(Fetched::Fresh)
         }
         Err(e) => {
-            eprintln!("MeowDB: {url}: {e}");
+            eprintln!("MeowDB: {e}");
             match saved_copy(path) {
                 Some((page, saved_at_unix_ms)) => read(&page).map(|data| Fetched::SavedCopy { data, saved_at_unix_ms }),
                 None => Err(SourceError::Unreachable(e)),
