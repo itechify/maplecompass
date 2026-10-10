@@ -67,8 +67,10 @@ impl MapSet {
 ///
 /// A map's portals to other maps, with their kinds, and its Hidden Portals follow the
 /// Hidden Portal rule and the app's hand-kept [`PORTAL_OVERRIDES`]. Teleports within the
-/// map (`intra_map`) are neither. A destination outside the map list is named from
-/// `lookups.json`, with no street, or else by its ID.
+/// map (`intra_map`) are neither, but they are marked on the Map Preview with every other
+/// portal not to the dead end, at its position in the map's picture (named in
+/// `map_manifest.json`). A destination outside the map list is named from `lookups.json`,
+/// with no street, or else by its ID.
 pub fn read(files: &OsmsFiles) -> Result<MapSet, SourceError> {
     read_with(files, PORTAL_OVERRIDES)
 }
@@ -82,8 +84,7 @@ fn read_set(files: &OsmsFiles, overrides: &[PortalOverride]) -> Result<MapSet, S
     let maps: MapsFile = parse(&files.maps, "maps.json")?;
     let portals: HashMap<String, Vec<OsmsPortal>> = parse(&files.portals, "portals.json")?;
     let monsters: MonstersFile = parse(&files.monsters, "monsters.json")?;
-    // Map pictures: the Map Preview's (#60).
-    let _pictures: HashMap<String, String> = parse(&files.map_manifest, "map_manifest.json")?;
+    let pictures: HashMap<String, String> = parse(&files.map_manifest, "map_manifest.json")?;
     let lookups: LookupsFile = parse(&files.lookups, "lookups.json")?;
     let mobs: HashMap<u64, &OsmsMob> = monsters.monsters.iter().map(|mob| (mob.id, mob)).collect();
 
@@ -98,17 +99,19 @@ fn read_set(files: &OsmsFiles, overrides: &[PortalOverride]) -> Result<MapSet, S
         listed.push((entry, map));
     }
     let names: HashMap<&str, &MapEntry> = listed.iter().map(|(entry, _)| (entry.id.as_str(), entry)).collect();
-    // A map's name and street, from the map list, else lookups.json, else its ID.
+    // A map's name and street, and whether it is in the map list; from the map list,
+    // else lookups.json, else its ID.
     let name_of = |id: &str| match (names.get(id), lookups.map_names.get(id)) {
-        (Some(entry), _) => (entry.map_name.clone(), entry.street_name.clone()),
-        (None, Some(name)) => (name.trim().to_string(), String::new()),
-        (None, None) => (id.to_string(), String::new()),
+        (Some(entry), _) => (entry.map_name.clone(), entry.street_name.clone(), true),
+        (None, Some(name)) => (name.trim().to_string(), String::new(), false),
+        (None, None) => (id.to_string(), String::new(), false),
     };
 
     let mut set = Vec::new();
     for (entry, map) in &listed {
-        let data = map_data(entry, map, portals.get(&entry.id), &mobs, &name_of, overrides)
+        let mut data = map_data(entry, map, portals.get(&entry.id), &mobs, &name_of, overrides)
             .map_err(|why| format!("map {}: {why}", entry.id))?;
+        data.picture = pictures.get(&entry.id).cloned();
         if !entry.street_name.is_empty() && !entry.map_name.is_empty() {
             set.push((entry.clone(), data));
         }
@@ -122,22 +125,32 @@ fn map_data(
     map: &OsmsMap,
     portals: Option<&Vec<OsmsPortal>>,
     mobs: &HashMap<u64, &OsmsMob>,
-    name_of: &impl Fn(&str) -> (String, String),
+    name_of: &impl Fn(&str) -> (String, String, bool),
     overrides: &[PortalOverride],
 ) -> Result<MapData, String> {
     let (summary, mobs) = spawns(map, mobs)?;
     let exits = portals
         .map_or(&[][..], Vec::as_slice)
         .iter()
-        .filter(|p| !p.intra_map)
         .map(|p| {
             let to_map_id = map_id(p.dest_map.trim().parse().map_err(|_| format!("dest_map {:?}", p.dest_map))?)?;
-            let (to_map_name, to_street_name) = name_of(&to_map_id);
-            Ok(Exit { name: p.name.trim().to_string(), kind: p.kind, to_map_id, to_map_name, to_street_name })
+            let (to_map_name, to_street_name, to_known) = name_of(&to_map_id);
+            Ok(Exit {
+                name: p.name.trim().to_string(),
+                kind: p.kind,
+                to_map_id,
+                to_map_name,
+                to_street_name,
+                to_known,
+                within_map: p.intra_map,
+                landing: p.dest_portal.trim().to_string(),
+                x: pixel(p.x).ok_or_else(|| format!("portal {} x {}", p.name, p.x))?,
+                y: pixel(p.y).ok_or_else(|| format!("portal {} y {}", p.name, p.y))?,
+            })
         })
         .collect::<Result<Vec<_>, String>>()?;
     let facts = MapFacts { id: &entry.id, is_town: map.is_town };
-    let (portals, hidden_portals) = portals::portals(&facts, exits, overrides);
+    let sorted = portals::portals(&facts, exits, overrides);
     let mob_rate_percent = match map.mob_rate {
         None => 100,
         Some(rate) if rate >= 0.0 && rate.is_finite() => (rate * 100.0).round() as u32,
@@ -153,12 +166,13 @@ fn map_data(
     Ok(MapData {
         summary,
         mobs,
-        hidden_portals,
+        hidden_portals: sorted.hidden_portals,
         connected_maps,
-        portals,
+        portals: sorted.portals,
         mob_rate_percent,
         nearest_town,
-        // The panel picks these out when it shows the data.
+        marks: sorted.marks,
+        // The panel picks these out when it shows the data; the reader adds the picture.
         ..MapData::default()
     })
 }
@@ -283,6 +297,12 @@ struct OsmsMap {
     mob_positions: Vec<SpawnPoint>,
 }
 
+/// A pixel of a map's picture, as OSMS gives a portal's position: whole, though read
+/// as any number.
+fn pixel(at: f64) -> Option<i32> {
+    (at.is_finite() && at.abs() < f64::from(i32::MAX)).then(|| at.round() as i32)
+}
+
 /// A portal in `portals.json`.
 #[derive(Deserialize)]
 struct OsmsPortal {
@@ -291,6 +311,12 @@ struct OsmsPortal {
     kind: u64,
     /// The destination's ID as text, without zero padding.
     dest_map: String,
+    /// The portal it lands at on its destination, by name; empty to the dead end.
+    #[serde(default)]
+    dest_portal: String,
+    /// Where it is, in the pixels of the map's picture.
+    x: f64,
+    y: f64,
     /// A teleport within the map.
     #[serde(default)]
     intra_map: bool,

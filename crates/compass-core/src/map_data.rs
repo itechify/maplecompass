@@ -1,5 +1,6 @@
 //! One map's hunting information, and how the panel shows it.
 
+use crate::map_preview::PortalMark;
 use crate::shown_map::LevelRange;
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +32,14 @@ pub struct MapData {
     /// rendered.
     #[serde(skip_serializing)]
     pub nearest_town: Option<String>,
+    /// The content-hash name of OSMS's picture of the map, from `map_manifest.json`;
+    /// `None` when it has none. Rendered in the Map Preview, not here.
+    #[serde(skip_serializing)]
+    pub picture: Option<String>,
+    /// Every portal on the map but those to the dead end, marked as the Map Preview marks
+    /// them, in the source's order. Rendered in the Map Preview, not here.
+    #[serde(skip_serializing)]
+    pub marks: Vec<PortalMark>,
     /// In the panel, the mobs it lists: the [`LISTED_MOBS`] with the largest spawn
     /// share, sorted as `mobs` is. From a source, empty.
     pub listed_mobs: Vec<Mob>,

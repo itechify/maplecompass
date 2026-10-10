@@ -155,10 +155,17 @@ fn portals(
                 to_map_id: text(&p["toMapId"], "toMapId")?,
                 to_map_name: text(&p["toMapName"], "toMapName")?,
                 to_street_name: text(&p["toStreetName"], "toStreetName")?,
+                // Only OSMS marks portals on a picture.
+                to_known: true,
+                within_map: false,
+                landing: String::new(),
+                x: 0,
+                y: 0,
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
-    Ok(portals::portals(&facts, exits, overrides))
+    let sorted = portals::portals(&facts, exits, overrides);
+    Ok((sorted.portals, sorted.hidden_portals))
 }
 
 /// The endpoint MeowDB's own search box asks (ADR 0007): `?q=<text>&locale=en` answers
