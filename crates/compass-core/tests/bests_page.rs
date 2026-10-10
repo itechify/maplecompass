@@ -10,7 +10,7 @@ mod common;
 use common::player::Player;
 use common::{CONSTRUCTION_SITE_ID, FakeSource, SUNSET_SKY_ID, osms, sharing_a_title, tracking, tracking_with};
 use compass_core::{
-    BESTS_VERSION, BestsPage, BestsPageMap, LevelRange, MapBests, OSMS_CREDIT, PanelControl, PanelState, Request,
+    BESTS_VERSION, BestsPage, BestsPageMap, LevelRange, MapBests, OSMS_AND_MEOWDB_CREDIT, PanelControl, PanelState, Request,
     SavedBests, VisitBest, meowdb,
 };
 
@@ -107,7 +107,7 @@ fn a_first_visits_best_is_on_the_page_with_the_maps_names_levels_and_share_marke
                 set_at_unix_ms: set,
                 here: true,
             }],
-            credit: OSMS_CREDIT,
+            credit: OSMS_AND_MEOWDB_CREDIT,
         }
     );
 }
@@ -278,7 +278,7 @@ fn the_shell_gets_the_page_and_the_button_as_the_browser_and_window_render_them(
 
     let page = serde_json::to_value(open_page(&mut player).expect("a page")).unwrap();
     assert_eq!(page["asOfUnixMs"], player.wall_clock().unwrap());
-    assert_eq!(page["credit"], OSMS_CREDIT);
+    assert_eq!(page["credit"], OSMS_AND_MEOWDB_CREDIT);
     let sunset = &page["maps"][0];
     assert_eq!(sunset["id"], SUNSET_SKY_ID);
     assert_eq!(sunset["streetName"], "Victoria Road");

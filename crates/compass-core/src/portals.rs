@@ -2,13 +2,14 @@
 //! player can't see; and the marks on the Map Preview that follow from it.
 
 use crate::map_data::{HiddenPortal, Portal, PortalKind};
-use crate::map_preview::{Landing, Leads, PortalMark};
+use crate::map_preview::{Landing, Leads, PicturePoint, PortalMark};
 use crate::portal_overrides::PortalOverride;
 
 /// The street name of a Hidden Street.
 const HIDDEN_STREET: &str = "Hidden Street";
 
-/// The dead-end destination: a portal that goes nowhere (spawn points).
+/// The dead end: where a portal that goes nowhere leads (spawn points), and the nearest
+/// town of a map that has none.
 pub(crate) const DEAD_END: &str = "999999999";
 
 /// Portal types, the game's numbers as OSMS's files (and MeowDB's pages) give them.
@@ -21,18 +22,30 @@ pub(crate) struct Exit {
     pub name: String,
     pub kind: u64,
     pub to_map_id: String,
-    pub to_map_name: String,
-    pub to_street_name: String,
-    /// The destination is in the map list.
-    pub to_known: bool,
+    pub to: Destination,
     /// The source marks it as a teleport within the map.
     pub within_map: bool,
     /// The name of the portal it lands at on its destination; for a teleport within the
     /// map, another of the map's own.
     pub landing: String,
     /// Where it is in the map's picture.
-    pub x: i32,
-    pub y: i32,
+    pub at: PicturePoint,
+}
+
+/// A portal's destination as the player knows it.
+pub(crate) struct Destination {
+    pub map_name: String,
+    pub street_name: String,
+    /// It is in the map list.
+    pub known: bool,
+}
+
+/// A portal a teleport within the map may land at.
+struct Spot {
+    name: String,
+    at: PicturePoint,
+    /// Its mark; a portal to the dead end (a spawn point) has none.
+    mark: Option<usize>,
 }
 
 /// What the rule needs to know of the map itself.
@@ -62,19 +75,20 @@ pub(crate) struct MapPortals {
 /// A teleport within the map (or a portal into the map itself) is marked, but is
 /// neither an edge nor a Hidden Portal. It is never a Door, which leads into a building,
 /// so an invisible one is hidden on a Town too. It lands where the portal it names is,
-/// at that portal's mark if it has one (a spawn point, to the dead end, has none).
+/// at that portal's mark if it has one (a spawn point, to the dead end, has none). Two
+/// that land at each other's marks are a pair, both ways.
 pub(crate) fn portals(map: &MapFacts, exits: Vec<Exit>, overrides: &[PortalOverride]) -> MapPortals {
     let mut sorted = MapPortals { portals: Vec::new(), hidden_portals: Vec::new(), marks: Vec::new() };
-    // Each portal's name, where it is and its mark, for the teleports to land at.
-    let mut spots: Vec<(String, i32, i32, Option<usize>)> = Vec::new();
+    // Every portal, for the teleports to land at.
+    let mut spots: Vec<Spot> = Vec::new();
     // The teleports' marks, and the portals they land at.
     let mut teleports: Vec<(usize, String)> = Vec::new();
     for e in exits {
         if e.to_map_id == DEAD_END {
-            spots.push((e.name, e.x, e.y, None));
+            spots.push(Spot { name: e.name, at: e.at, mark: None });
             continue;
         }
-        spots.push((e.name.clone(), e.x, e.y, Some(sorted.marks.len())));
+        spots.push(Spot { name: e.name.clone(), at: e.at, mark: Some(sorted.marks.len()) });
         let within = e.within_map || e.to_map_id == map.id;
         let overridden = overrides.iter().find(|o| o.map_id == map.id && o.portal == e.name);
         let hidden = match (overridden, e.kind) {
@@ -89,19 +103,18 @@ pub(crate) fn portals(map: &MapFacts, exits: Vec<Exit>, overrides: &[PortalOverr
             INVISIBLE if map.is_town && !within => PortalKind::Door,
             _ => PortalKind::Visible,
         };
-        let leads = match (within, e.to_known) {
+        let leads = match (within, e.to.known) {
             (true, _) => Leads::WithinTheMap,
             (false, true) => Leads::AnotherMap,
             (false, false) => Leads::MapNotInTheData,
         };
         let row = (hidden && !within).then_some(sorted.hidden_portals.len());
         sorted.marks.push(PortalMark {
-            x: e.x,
-            y: e.y,
+            at: e.at,
             leads,
             kind,
-            to_map_name: e.to_map_name.clone(),
-            to_street_name: e.to_street_name.clone(),
+            to_map_name: e.to.map_name.clone(),
+            to_street_name: e.to.street_name.clone(),
             lands_at: None,
             hidden_portal: row,
         });
@@ -112,20 +125,29 @@ pub(crate) fn portals(map: &MapFacts, exits: Vec<Exit>, overrides: &[PortalOverr
         sorted.portals.push(Portal { name: e.name.clone(), to_map_id: e.to_map_id.clone(), kind });
         if row.is_some() {
             sorted.hidden_portals.push(HiddenPortal {
-                to_hidden_street: e.to_street_name == HIDDEN_STREET,
+                to_hidden_street: e.to.street_name == HIDDEN_STREET,
                 quest: e.kind == SCRIPT,
                 name: e.name,
                 to_map_id: e.to_map_id,
-                to_map_name: e.to_map_name,
-                to_street_name: e.to_street_name,
+                to_map_name: e.to.map_name,
+                to_street_name: e.to.street_name,
             });
         }
     }
-    for (mark, landing) in teleports {
-        sorted.marks[mark].lands_at = spots
+    for (mark, landing) in &teleports {
+        sorted.marks[*mark].lands_at = spots
             .iter()
-            .find(|(name, ..)| *name == landing)
-            .map(|&(_, x, y, mark)| Landing { x, y, mark });
+            .find(|spot| spot.name == *landing)
+            .map(|spot| Landing { at: spot.at, mark: spot.mark, both_ways: false });
+    }
+    // A pair: each lands at the other's mark.
+    let lands_at_mark = |from: usize| sorted.marks[from].lands_at.and_then(|landing| landing.mark);
+    let pairs: Vec<usize> =
+        teleports.iter().map(|&(mark, _)| mark).filter(|&mark| lands_at_mark(mark).and_then(lands_at_mark) == Some(mark)).collect();
+    for mark in pairs {
+        if let Some(landing) = &mut sorted.marks[mark].lands_at {
+            landing.both_ways = true;
+        }
     }
     sorted
 }

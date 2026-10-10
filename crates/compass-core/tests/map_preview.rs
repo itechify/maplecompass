@@ -13,8 +13,8 @@ mod common;
 use common::osms::{self, CONSTRUCTION_SITE, DEAD_END, KERNING_CITY, NORTHERN_TOP, SUNSET_SKY, map};
 use common::{FakeSource, arrive, fresh_files};
 use compass_core::{
-    Compass, Landing, Leads, MapDataStatus, MapPreview, PanelState, PortalKind, PortalMark, PreviewImage, SourceError,
-    TitleLines, TitleReading,
+    Compass, Landing, Leads, MapDataStatus, MapPreview, PanelState, PicturePoint, PortalKind, PortalMark, PreviewImage,
+    SourceError, TitleLines, TitleReading,
 };
 
 /// A made-up map whose portals the tests give, on a street of its own.
@@ -53,8 +53,7 @@ fn each_portal_is_marked_where_osms_puts_it_in_the_maps_picture() {
     assert_eq!(
         marks(&state),
         [PortalMark {
-            x: 1480,
-            y: 612,
+            at: PicturePoint { x: 1480, y: 612 },
             leads: Leads::AnotherMap,
             kind: PortalKind::Visible,
             to_map_name: "Kerning City".into(),
@@ -139,8 +138,20 @@ fn a_portal_to_a_map_not_in_the_data_is_marked_as_such_with_the_name_osms_gives_
     );
 }
 
+/// OSMS lists one map with no name or street, which isn't in the map list: a portal to it
+/// leads to a map not in the data, named as OSMS's lookups name it, or else by its ID.
+#[test]
+fn a_portal_to_a_map_with_no_name_or_street_is_marked_as_to_a_map_not_in_the_data() {
+    let world = osms::game().with(map(100_000_001, "", "")).with(map(100_000_002, " ", " ")).naming(100_000_002, "Somewhere");
+
+    let state = on_field_in(world, |m| m.portal("in00", 2, 100_000_001).portal("in01", 2, 100_000_002));
+
+    let named: Vec<_> = marks(&state).iter().map(|m| (m.to_map_name.as_str(), m.to_street_name.as_str(), m.leads)).collect();
+    assert_eq!(named, [("100000001", "", Leads::MapNotInTheData), ("Somewhere", "", Leads::MapNotInTheData)]);
+}
+
 /// Each teleport within the map says where it lands, and at which mark: a pair lands at
-/// each other, and a teleport may land at another's mark without being landed at.
+/// each other, both ways, and a teleport may land at another's mark without being landed at.
 #[test]
 fn a_teleport_within_the_map_lands_at_the_mark_of_the_portal_it_names() {
     let state = on_field(|m| {
@@ -151,11 +162,24 @@ fn a_teleport_within_the_map_lands_at_the_mark_of_the_portal_it_names() {
     assert_eq!(
         landings,
         [
-            (Leads::WithinTheMap, Some(Landing { x: 340, y: 640, mark: Some(1) })),
-            (Leads::WithinTheMap, Some(Landing { x: 300, y: 1200, mark: Some(0) })),
-            (Leads::WithinTheMap, Some(Landing { x: 340, y: 640, mark: Some(1) })),
+            (Leads::WithinTheMap, Some(Landing { at: PicturePoint { x: 340, y: 640 }, mark: Some(1), both_ways: true })),
+            (Leads::WithinTheMap, Some(Landing { at: PicturePoint { x: 300, y: 1200 }, mark: Some(0), both_ways: true })),
+            (Leads::WithinTheMap, Some(Landing { at: PicturePoint { x: 340, y: 640 }, mark: Some(1), both_ways: false })),
         ]
     );
+}
+
+/// The overlay gets the panel state as JSON: each mark's spot beside the rest, and each
+/// landing's spot, its mark, and whether the teleport is one of a pair.
+#[test]
+fn the_overlay_receives_where_a_teleport_lands_and_whether_it_is_one_of_a_pair() {
+    let state = on_field(|m| m.teleport("hide01", "hide02").at(300, 1200).teleport("hide02", "hide01").at(340, 640));
+
+    let json = serde_json::to_value(&state).unwrap();
+
+    let mark = &json["mapPreview"]["marks"][0];
+    assert_eq!((&mark["x"], &mark["y"]), (&serde_json::json!(300), &serde_json::json!(1200)));
+    assert_eq!(mark["landsAt"], serde_json::json!({ "x": 340, "y": 640, "mark": 1, "bothWays": true }));
 }
 
 /// Many teleports land on a spawn point, which leads to the dead end and so has no mark:
@@ -168,7 +192,7 @@ fn a_teleport_landing_on_an_unmarked_point_lands_where_it_is_and_one_landing_now
     });
 
     let landings: Vec<_> = marks(&state).iter().map(|m| m.lands_at).collect();
-    assert_eq!(landings, [Some(Landing { x: 520, y: 940, mark: None }), None]);
+    assert_eq!(landings, [Some(Landing { at: PicturePoint { x: 520, y: 940 }, mark: None, both_ways: false }), None]);
 }
 
 /// A teleport within the map is to the map itself, named as it is; never a Hidden Portal
@@ -205,7 +229,7 @@ fn a_hidden_teleport_is_marked_hidden_within_the_map_but_has_no_row_even_on_a_to
 fn a_portal_off_the_pictures_edge_is_marked_where_osms_puts_it() {
     let state = on_field(|m| m.portal_at("west00", 2, SUNSET_SKY, -12, 1810));
 
-    assert_eq!((marks(&state)[0].x, marks(&state)[0].y), (-12, 1810));
+    assert_eq!(marks(&state)[0].at, PicturePoint { x: -12, y: 1810 });
 }
 
 #[test]

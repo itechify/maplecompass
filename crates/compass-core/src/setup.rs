@@ -3,10 +3,10 @@
 
 use crate::panel::{ScreenRect, Size};
 use crate::{CurrentMap, ExpBar, Rect, default_title_region};
+use serde::{Deserialize, Serialize};
 
 /// The credit for a recognised test read: the names it shows are OSMS Data Explorer's.
 const MAP_NAMES_CREDIT: &str = "Map names from OSMS Data Explorer";
-use serde::{Deserialize, Serialize};
 
 /// Why the player needs to (re)do setup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

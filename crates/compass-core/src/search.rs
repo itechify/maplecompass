@@ -2,7 +2,7 @@
 //! highlights) and the Hunting Target it sets, as the overlay renders them, over every map
 //! in OSMS's file set.
 
-use crate::OSMS_DATA_CREDIT;
+use crate::OSMS_ONLY_CREDIT;
 use crate::map_data::Mob;
 use crate::map_index::MapEntry;
 use crate::osms::MapSet;
@@ -134,7 +134,7 @@ pub struct SearchState {
     /// tier (of those equally near, the densest). `None` with no map shown or no route
     /// to any.
     pub nearest: Option<usize>,
-    /// [`crate::OSMS_DATA_CREDIT`] whenever there are results or a Hunting Target.
+    /// [`crate::OSMS_ONLY_CREDIT`] whenever there are results or a Hunting Target.
     pub credit: Option<&'static str>,
     /// What Distances count besides portals and ships (the checkboxes).
     pub travel: Travel,
@@ -321,7 +321,7 @@ impl MobSearch {
             highlighted: highlight_in(&suggestions, &self.highlighted, MobChoice::key),
             picked: self.picked.clone(),
             suggestions,
-            credit: (!results.is_empty() || hunting.is_some()).then_some(OSMS_DATA_CREDIT),
+            credit: (!results.is_empty() || hunting.is_some()).then_some(OSMS_ONLY_CREDIT),
             nearest: nearest(&results),
             highlighted_result: highlight_in(&results, &self.highlighted_result, SearchResult::key),
             only_on_event_maps,

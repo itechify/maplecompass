@@ -9,7 +9,7 @@ use common::osms;
 use common::{FakeSource, arrive, fresh_files, requests_for};
 use compass_core::osms::OsmsFiles;
 use compass_core::{
-    Compass, DamageRange, Elements, HpPerExp, MapDataStatus, MobCard, MobDetails, OSMS_CREDIT, PanelState,
+    Compass, DamageRange, Elements, HpPerExp, MapDataStatus, MobCard, MobDetails, OSMS_AND_MEOWDB_CREDIT, PanelState,
     Recognition, Request, SourceError,
 };
 
@@ -387,6 +387,6 @@ fn with_mob_cards_the_panel_credits_only_osms_and_meowdb() {
     let state = compass.tick(400).clone();
 
     assert!(state.mob_cards.iter().all(|c| c.image.is_some()));
-    assert_eq!(state.credit, Some(OSMS_CREDIT));
-    assert_eq!(OSMS_CREDIT, "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com)");
+    assert_eq!(state.credit, Some(OSMS_AND_MEOWDB_CREDIT));
+    assert_eq!(OSMS_AND_MEOWDB_CREDIT, "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com)");
 }

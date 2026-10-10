@@ -1,13 +1,14 @@
-//! OSMS's file set is asked for at startup and every 24 hours after, and swapped whole
-//! when a new one reads. When OSMS can't be reached the source answers with the set it
-//! saved, and the panel says so, with its date, only once that is over 7 days old: game
-//! data changes only on patch days. A set that doesn't read keeps the one in use, and
-//! the panel says the format changed only when there is none.
+//! OSMS's file set is fetched at startup, unless the set saved at an earlier launch is
+//! under a day old, and every 24 hours after; a new one is swapped in whole once it reads.
+//! When OSMS can't be reached the panel falls back on the set saved, and says so, with
+//! its date, only once that is over 7 days old: game data changes only on patch days. A
+//! set that doesn't read keeps the one in use, and the panel says the format changed only
+//! when there is none.
 
 mod common;
 
 use common::osms::{self, SUNSET_SKY, map};
-use common::{FakeSource, OsmsAnswer, arrive, fresh, fresh_files, sample_frame, saved_copy};
+use common::{FakeSource, OsmsAnswer, arrive, fresh, fresh_files, sample_frame};
 use compass_core::osms::OsmsFiles;
 use compass_core::{Compass, MapDataStatus, PanelState, Recognition, SourceError};
 use std::sync::atomic::Ordering;
@@ -28,9 +29,19 @@ fn changed_format() -> OsmsAnswer {
     fresh_files(OsmsFiles { maps: "<html>".into(), ..osms::game().files() })
 }
 
+/// OSMS can't be reached, and the game world was saved at [`SAVED_AT`].
+fn saved_and_offline() -> FakeSource {
+    FakeSource::osms_offline().with_saved_set(osms::game(), SAVED_AT)
+}
+
 /// On Sunset Sky, with the wall clock at `now_unix_ms`.
 fn on_sunset_sky(answers: Vec<OsmsAnswer>, now_unix_ms: u64) -> (Compass, PanelState) {
-    let mut compass = Compass::new(FakeSource::answering_osms(answers));
+    on_sunset_sky_from(FakeSource::answering_osms(answers), now_unix_ms)
+}
+
+/// On Sunset Sky, with the file set from `source` and the wall clock at `now_unix_ms`.
+fn on_sunset_sky_from(source: FakeSource, now_unix_ms: u64) -> (Compass, PanelState) {
+    let mut compass = Compass::new(source);
     compass.on_wall_clock(now_unix_ms);
     let state = arrive(&mut compass, SUNSET, 0);
     (compass, state)
@@ -50,9 +61,110 @@ fn with_blue_snails(points: u32) -> osms::World {
     })
 }
 
+/// Game data changes only on patch days: a set saved under a day ago, at an earlier
+/// launch, is used as it is, and OSMS isn't asked for it.
+#[test]
+fn a_set_saved_under_a_day_ago_is_used_at_launch_without_fetching_it() {
+    let source = FakeSource::with_world(with_blue_snails(9)).with_saved_set(with_blue_snails(6), SAVED_AT);
+    let requests = source.osms_requests.clone();
+
+    let (_, state) = on_sunset_sky_from(source, SAVED_AT + DAY_MS - 60_000);
+
+    assert_eq!(requests.load(Ordering::SeqCst), 0);
+    assert_eq!(state.recognition, Recognition::Ready);
+    assert_eq!(blue_snails(&state), Some(6));
+}
+
+#[test]
+fn a_set_saved_over_a_day_ago_is_fetched_afresh_at_launch() {
+    let source = FakeSource::with_world(with_blue_snails(9)).with_saved_set(with_blue_snails(6), SAVED_AT);
+    let requests = source.osms_requests.clone();
+
+    let (_, state) = on_sunset_sky_from(source, SAVED_AT + DAY_MS + 60_000);
+
+    assert_eq!(requests.load(Ordering::SeqCst), 1);
+    assert_eq!(blue_snails(&state), Some(9));
+}
+
+/// The set used at launch is fetched afresh a day later, whatever the wall clock says by
+/// then: a set used at one daily ask is always fetched afresh at the next.
+#[test]
+fn a_set_used_at_launch_is_fetched_afresh_at_the_next_daily_ask() {
+    let source = FakeSource::with_world(with_blue_snails(9)).with_saved_set(with_blue_snails(6), SAVED_AT);
+    let requests = source.osms_requests.clone();
+    let (mut compass, _) = on_sunset_sky_from(source, SAVED_AT + 60_000);
+
+    compass.tick(DAY_MS);
+    let state = compass.on_frame(sample_frame(SUNSET, DAY_MS + 333));
+
+    assert_eq!(requests.load(Ordering::SeqCst), 1);
+    assert_eq!(blue_snails(state), Some(9));
+}
+
+/// Without the wall clock, how old the saved set is can't be told, so it is fetched
+/// afresh.
+#[test]
+fn without_the_wall_clock_a_saved_set_is_fetched_afresh() {
+    let source = FakeSource::with_world(with_blue_snails(9)).with_saved_set(with_blue_snails(6), SAVED_AT);
+    let requests = source.osms_requests.clone();
+    let mut compass = Compass::new(source);
+
+    let state = arrive(&mut compass, SUNSET, 0);
+
+    assert_eq!(requests.load(Ordering::SeqCst), 1);
+    assert_eq!(blue_snails(&state), Some(9));
+}
+
+/// Fetching afresh takes a while. Meanwhile the panel waits for it rather than showing
+/// the old set, and shows that only if no fresh one can be had.
+#[test]
+fn while_a_set_saved_over_a_day_ago_is_fetched_afresh_the_panel_waits_for_it() {
+    let source = FakeSource::answering_osms(vec![Poll::Pending, fresh(with_blue_snails(9))])
+        .with_saved_set(with_blue_snails(6), SAVED_AT);
+    let mut compass = Compass::new(source);
+    compass.on_wall_clock(SAVED_AT + 2 * DAY_MS);
+
+    let state = compass.tick(0);
+    assert_eq!(state.recognition, Recognition::Starting);
+    compass.tick(400);
+
+    let state = arrive(&mut compass, SUNSET, 500);
+    assert_eq!(blue_snails(&state), Some(9));
+}
+
+/// The set saved is fallen back on whether OSMS can't be reached or its set doesn't read.
+#[test]
+fn a_set_saved_over_a_day_ago_is_used_when_a_fresh_one_cannot_be_had_or_does_not_read() {
+    for (how, fetched) in [("OSMS unreachable", unreachable()), ("format changed", changed_format())] {
+        let source = FakeSource::answering_osms(vec![fetched]).with_saved_set(with_blue_snails(6), SAVED_AT);
+
+        let (_, state) = on_sunset_sky_from(source, SAVED_AT + 2 * DAY_MS);
+
+        assert_eq!(state.recognition, Recognition::Ready, "{how}");
+        assert_eq!(blue_snails(&state), Some(6), "{how}");
+    }
+}
+
+/// A saved set that doesn't read (MapleCompass was updated, say) is as good as none: a
+/// fresh one is fetched, however young the saved one, and with none to be had there is
+/// no map list.
+#[test]
+fn a_saved_set_that_does_not_read_is_as_good_as_none() {
+    let unreadable = OsmsFiles { maps: "<html>".into(), ..osms::game().files() };
+    for (fetched, recognition) in [(fresh(osms::game()), Recognition::Ready), (unreachable(), Recognition::Unavailable)] {
+        let source = FakeSource::answering_osms(vec![fetched]).with_saved_files(unreadable.clone(), SAVED_AT);
+        let requests = source.osms_requests.clone();
+
+        let (_, state) = on_sunset_sky_from(source, SAVED_AT + 60_000);
+
+        assert_eq!(requests.load(Ordering::SeqCst), 1);
+        assert_eq!(state.recognition, recognition);
+    }
+}
+
 #[test]
 fn a_saved_copy_under_7_days_old_is_shown_without_a_notice() {
-    let (_, state) = on_sunset_sky(vec![saved_copy(osms::game(), SAVED_AT)], SAVED_AT + 6 * DAY_MS);
+    let (_, state) = on_sunset_sky_from(saved_and_offline(), SAVED_AT + 6 * DAY_MS);
 
     assert_eq!(state.recognition, Recognition::Ready);
     assert!(matches!(&state.data, MapDataStatus::Ready(data) if data.mobs.len() == 5));
@@ -60,7 +172,7 @@ fn a_saved_copy_under_7_days_old_is_shown_without_a_notice() {
 
 #[test]
 fn a_saved_copy_over_7_days_old_is_shown_with_its_date() {
-    let (_, state) = on_sunset_sky(vec![saved_copy(osms::game(), SAVED_AT)], SAVED_AT + 8 * DAY_MS);
+    let (_, state) = on_sunset_sky_from(saved_and_offline(), SAVED_AT + 8 * DAY_MS);
 
     assert_eq!(state.recognition, Recognition::SavedCopy { saved_at_unix_ms: SAVED_AT });
     let MapDataStatus::SavedCopy { data, saved_at_unix_ms } = &state.data else { panic!("{:?}", state.data) };
@@ -71,7 +183,7 @@ fn a_saved_copy_over_7_days_old_is_shown_with_its_date() {
 /// A long session: the saved copy turns 7 days old while the player plays.
 #[test]
 fn a_saved_copy_that_turns_7_days_old_while_running_gets_its_notice_then() {
-    let (mut compass, state) = on_sunset_sky(vec![saved_copy(osms::game(), SAVED_AT)], SAVED_AT + 7 * DAY_MS - 1000);
+    let (mut compass, state) = on_sunset_sky_from(saved_and_offline(), SAVED_AT + 7 * DAY_MS - 1000);
     assert_eq!(state.recognition, Recognition::Ready);
 
     compass.on_wall_clock(SAVED_AT + 7 * DAY_MS + 1000);
@@ -85,7 +197,7 @@ fn a_saved_copy_that_turns_7_days_old_while_running_gets_its_notice_then() {
 /// status and date beside it, and the map list says so with its date.
 #[test]
 fn the_overlay_receives_a_saved_copy_with_its_date_beside_the_data() {
-    let (_, state) = on_sunset_sky(vec![saved_copy(osms::game(), SAVED_AT)], SAVED_AT + 8 * DAY_MS);
+    let (_, state) = on_sunset_sky_from(saved_and_offline(), SAVED_AT + 8 * DAY_MS);
 
     let json = serde_json::to_value(&state).unwrap();
 
