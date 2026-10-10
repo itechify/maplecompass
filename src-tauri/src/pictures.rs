@@ -8,10 +8,11 @@
 //! touched whenever it is reused or served, and one untouched for [`KEPT_FOR`] (30 days)
 //! is deleted at launch ([`sweep`]).
 
+use crate::http;
 use compass_core::SourceError;
 use compass_core::osms::PICTURES_URL;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::mpsc::Receiver;
 use std::task::Poll;
 use std::time::{Duration, SystemTime};
 
@@ -50,12 +51,7 @@ impl Pictures {
         };
         if let Some((asked, arriving)) = &self.in_flight {
             let mine = asked == path;
-            let answer = match arriving.try_recv() {
-                Err(TryRecvError::Empty) => Poll::Pending,
-                Ok(answer) => Poll::Ready(answer),
-                Err(TryRecvError::Disconnected) => Poll::Ready(Err(SourceError::Unreachable("fetch abandoned".into()))),
-            };
-            match (answer, mine) {
+            match (http::collect(arriving), mine) {
                 (Poll::Pending, true) => return Poll::Pending,
                 (Poll::Pending, false) => {}
                 (Poll::Ready(answer), true) => {
@@ -76,12 +72,9 @@ impl Pictures {
         if self.in_flight.is_some() {
             return Poll::Pending;
         }
-        let (tx, rx) = mpsc::channel();
         let (client, owned) = (self.client.clone(), path.to_string());
-        tauri::async_runtime::spawn(async move {
-            let _ = tx.send(fetch(&client, &owned, &file).await);
-        });
-        self.in_flight = Some((path.to_string(), rx));
+        let arriving = http::in_background(async move { fetch(&client, &owned, &file).await });
+        self.in_flight = Some((path.to_string(), arriving));
         Poll::Pending
     }
 }

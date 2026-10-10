@@ -14,8 +14,9 @@ mod files;
 mod grind_tracker;
 mod hotkey_settings;
 mod hotkeys;
+mod http;
 mod item_lookup;
-pub mod meowdb;
+mod meowdb;
 mod old_caches;
 pub mod osms;
 mod pictures;
@@ -23,6 +24,7 @@ mod search;
 mod settings;
 mod setup;
 mod sizemove;
+pub mod source;
 mod tray;
 mod view;
 
@@ -31,7 +33,7 @@ use compass_core::{
     ItemTooltipReading, KeyPress, Layer, MIN_PANEL_WIDTH, PanelControl, PanelSizes, PlacementMode, PanelState, Request,
     ScreenPoint, ScreenRect, Size, TitleReader, TitleReading, default_title_region,
 };
-use meowdb::MeowDbSource;
+use source::WebSource;
 use grind_tracker::GrindTrackerWindow;
 use item_lookup::ItemLookupWindow;
 use setup::{Bridge, SetupWindows};
@@ -197,7 +199,7 @@ pub fn run() {
                 old_caches::delete(&swept);
                 pictures::sweep(&swept);
             })?;
-            let source = MeowDbSource::new(cache)?;
+            let source = WebSource::new(cache)?;
             let mut compass = Compass::new(source);
             let settings_path = settings::path(app.handle())?;
             // The core brings older settings up to date (hotkeys included).
@@ -603,7 +605,8 @@ fn compass_loop(
         if let Some((taken, invalid)) = hotkeys.sync(&app, &state.hotkeys, state.hotkeys_live) {
             compass.hotkeys_unavailable(taken, invalid);
         }
-        // Fetches in flight (map index, map pages) are checked on, never waited for.
+        // Fetches in flight (OSMS's file set and pictures, MeowDB's search) are checked on,
+        // never waited for.
         compass.on_wall_clock(unix_now_ms());
         compass.tick(reader.now_ms());
         // An Item Lookup's page, once MeowDB has answered.
