@@ -257,19 +257,13 @@ fn restored_toggles_count_in_the_distances_at_once() {
     assert_eq!(distances(state), ["Perion: 1", "Near Field: 2"]);
 }
 
-/// The same map, with `town` as its nearest town.
-fn with_nearest_town(mut map: WorldMap, town: &str) -> WorldMap {
-    map.page.nearest_town = Some(town.into());
-    map
-}
-
 #[test]
 fn a_nearest_town_scroll_takes_the_player_to_their_own_maps_nearest_town() {
     let mut compass = searched_from_sunset_sky(vec![
-        with_nearest_town(map("100000000", "Sunset Sky", 100, vec![]), "100000010"),
+        map("100000000", "Sunset Sky", 100, vec![]).returning_to("100000010"),
         map("100000010", "Amherst", 100, vec![orange(10)]),
         // Another map's nearest town is no nearer.
-        with_nearest_town(map("100000030", "Far Field", 100, vec![]), "100000020"),
+        map("100000030", "Far Field", 100, vec![]).returning_to("100000020"),
         map("100000020", "Other Town", 100, vec![orange(10)]),
     ]);
     assert_eq!(distances(compass.panel_state()), ["Amherst: NoRoute", "Other Town: NoRoute"]);
@@ -282,11 +276,25 @@ fn a_nearest_town_scroll_takes_the_player_to_their_own_maps_nearest_town() {
     assert_eq!(nearest(&state).unwrap().map_name, "Amherst");
 }
 
+/// OSMS gives no nearest town for a few maps that aren't Towns: a nearest-town scroll
+/// takes the player nowhere from them.
+#[test]
+fn from_a_map_osms_gives_no_nearest_town_a_nearest_town_scroll_goes_nowhere() {
+    let mut compass = searched_from_sunset_sky(vec![
+        map("100000000", "Sunset Sky", 100, vec![]),
+        map("100000010", "Amherst", 100, vec![orange(10)]),
+    ]);
+
+    let state = compass.act(Action::ToggleTeleportScrolls).clone();
+
+    assert_eq!(distances(&state), ["Amherst: NoRoute"]);
+}
+
 #[test]
 fn a_nearest_town_scroll_can_be_read_partway_along_a_route() {
     let mut compass = searched_from_sunset_sky(vec![
-        with_nearest_town(map("100000000", "Sunset Sky", 100, vec![]), "100000000").to(&["100000001"]),
-        with_nearest_town(map("100000001", "Deep Cave", 100, vec![]), "100000010"),
+        map("100000000", "Sunset Sky", 100, vec![]).returning_to("100000000").to(&["100000001"]),
+        map("100000001", "Deep Cave", 100, vec![]).returning_to("100000010"),
         map("100000010", "Amherst", 100, vec![]).to(&["100000011"]),
         map("100000011", "Amherst Field", 100, vec![orange(10)]),
     ]);

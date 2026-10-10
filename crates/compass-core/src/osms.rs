@@ -138,7 +138,29 @@ fn map_data(
         .collect::<Result<Vec<_>, String>>()?;
     let facts = MapFacts { id: &entry.id, is_town: map.is_town };
     let (portals, hidden_portals) = portals::portals(&facts, exits, overrides);
-    Ok(MapData { summary, mobs, hidden_portals, portals, ..MapData::default() })
+    let mob_rate_percent = match map.mob_rate {
+        None => 100,
+        Some(rate) if rate >= 0.0 && rate.is_finite() => (rate * 100.0).round() as u32,
+        Some(rate) => return Err(format!("mob_rate {rate} isn't a rate")),
+    };
+    let nearest_town = match map.return_map_id {
+        Some(DEAD_END) => None,
+        Some(town) => Some(map_id(town)?),
+        None if map.is_town => Some(entry.id.clone()),
+        None => None,
+    };
+    let connected_maps = map.exits.iter().map(|&id| map_id(id)).collect::<Result<_, _>>()?;
+    Ok(MapData {
+        summary,
+        mobs,
+        hidden_portals,
+        connected_maps,
+        portals,
+        mob_rate_percent,
+        nearest_town,
+        // The panel picks these out when it shows the data.
+        ..MapData::default()
+    })
 }
 
 /// How long the game takes to respawn a mob on an untimed spawn point, in seconds: a
@@ -217,6 +239,9 @@ fn parse<T: serde::de::DeserializeOwned>(text: &str, file: &str) -> Result<T, St
     serde_json::from_str(text).map_err(|e| format!("{file}: {e}"))
 }
 
+/// The dead end: where a portal that goes nowhere leads.
+const DEAD_END: u64 = 999_999_999;
+
 /// A map ID as MapleCompass writes it: 9 digits, zero padding kept.
 fn map_id(id: u64) -> Result<String, String> {
     if id > 999_999_999 {
@@ -245,6 +270,14 @@ struct OsmsMap {
     region: String,
     #[serde(default)]
     is_town: bool,
+    /// Its nearest town; absent on some Towns (meaning the Town itself) and a few other
+    /// maps (meaning none).
+    return_map_id: Option<u64>,
+    /// Absent: ×1.
+    mob_rate: Option<f64>,
+    /// The maps its portals lead to.
+    #[serde(default)]
+    exits: Vec<u64>,
     /// One per spawn point.
     #[serde(default)]
     mob_positions: Vec<SpawnPoint>,
