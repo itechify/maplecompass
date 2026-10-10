@@ -1090,11 +1090,20 @@ impl Compass {
         }
     }
 
-    /// Hold `maps`, a file set just read, in place of the one held.
+    /// Hold `maps`, a file set just read, in place of the one held. A new map list is
+    /// matched against from then on, and the map the player is on stays theirs; the crawl
+    /// starts over it, from what it knew.
     fn take_set(&mut self, maps: MapSet, saved_at_unix_ms: Option<u64>) {
         let entries = maps.entries();
-        self.crawl = Some(Crawl::new(entries.clone(), &self.saved_world));
-        self.matcher = Some(Matcher::new(entries));
+        if self.set.as_ref().is_none_or(|held| held.maps.entries() != entries) {
+            let matcher = Matcher::new(entries.clone());
+            if let Some(old) = &self.matcher {
+                self.tracker.remap(|at| matcher.index_of(&old.map(at).id));
+            }
+            let known = self.crawl.as_ref().map_or_else(|| self.saved_world.clone(), Crawl::saved);
+            self.crawl = Some(Crawl::new(entries, &known));
+            self.matcher = Some(matcher);
+        }
         self.set = Some(HeldSet { maps, saved_at_unix_ms });
         self.sync_search();
     }

@@ -46,6 +46,13 @@ impl Tracker {
         self.unconfirmed()
     }
 
+    /// The map list changed: each map known by its index in the old list, by its index
+    /// in the new one (`None`: no longer listed).
+    pub fn remap(&mut self, index: impl Fn(usize) -> Option<usize>) {
+        self.current = self.current.and_then(&index);
+        self.pending = self.pending.and_then(|(at, reads)| Some((index(at)?, reads)));
+    }
+
     fn unconfirmed(&self) -> Tracked {
         Tracked { current: self.current, confidence: 0.0, not_sure: true }
     }
