@@ -1,7 +1,7 @@
-//! Ships: a ride between regions (Ellinia ↔ Orbis) is always one map change, so maps
-//! in Ossyria have a Distance from Victoria Island and the other way round. Each result
-//! has its route (the maps in order, each with how it is reached) and says which kinds
-//! of travel besides portals that route uses.
+//! Ships: a ride between regions (Southperry → Lith Harbor) is always one map change, so
+//! maps past it have a Distance from Maple Island. Each result has its route (the maps in
+//! order, each with how it is reached) and says which kinds of travel besides portals
+//! that route uses. No ship sails into Ossyria while it isn't in the game.
 //!
 //! The ships run between the real stations (by their map IDs), so the hand-built
 //! worlds here use those IDs for the stations.
@@ -16,9 +16,9 @@ use compass_core::{Compass, Distance, PanelState, PortalKind, SearchResult, Step
 const SUNSET: &str = "victoria-road__sunset-sky--window";
 const KERNING: &str = "victoria-road__kerning-city--window";
 
-const ELLINIA: &str = "010002000";
+const SOUTHPERRY: &str = "000000060";
+const LITH_HARBOR: &str = "010000000";
 const ELLINIA_STATION: &str = "010002090";
-const ORBIS: &str = "020000000";
 const ORBIS_TICKETING_BOOTH: &str = "020000010";
 
 /// A core over `maps`, its file set in hand, with the player arrived on the map named
@@ -26,7 +26,6 @@ const ORBIS_TICKETING_BOOTH: &str = "020000010";
 fn searched_from_sunset_sky(maps: Vec<WorldMap>) -> PanelState {
     let mut compass = Compass::new(common::world::world(maps));
     compass.tick(0);
-    compass.tick(50);
     arrive(&mut compass, SUNSET, 100);
     search_for(&mut compass, "orange")
 }
@@ -44,18 +43,22 @@ fn distances(state: &PanelState) -> Vec<String> {
         .collect()
 }
 
-#[test]
-fn a_ship_ride_from_ellinia_to_orbis_is_one_map_change() {
-    let state = searched_from_sunset_sky(vec![
-        map("100000000", "Sunset Sky", 100, vec![]).to(&[ELLINIA]),
-        map(ELLINIA, "Ellinia", 100, vec![]).to(&[ELLINIA_STATION]),
-        map(ELLINIA_STATION, "Ellinia Station", 100, vec![]).to(&[ELLINIA]),
-        map(ORBIS_TICKETING_BOOTH, "Orbis Ticketing Booth", 100, vec![]).to(&[ORBIS]),
-        map(ORBIS, "Orbis", 100, vec![]).to(&["200000001"]),
-        map("200000001", "Cloud Park", 100, vec![orange(10)]),
-    ]);
+/// Sunset Sky leads to Southperry; Shanks sails on to Lith Harbor, next to the Mushroom
+/// Field.
+fn by_ship_to_the_mushroom_field() -> Vec<WorldMap> {
+    vec![
+        map("100000000", "Sunset Sky", 100, vec![]).to(&[SOUTHPERRY]),
+        map(SOUTHPERRY, "Southperry", 100, vec![]),
+        map(LITH_HARBOR, "Lith Harbor", 100, vec![]).to(&["100000001"]),
+        map("100000001", "Mushroom Field", 100, vec![orange(10)]),
+    ]
+}
 
-    assert_eq!(distances(&state), ["Cloud Park: 5"]);
+#[test]
+fn a_ship_ride_is_one_map_change() {
+    let state = searched_from_sunset_sky(by_ship_to_the_mushroom_field());
+
+    assert_eq!(distances(&state), ["Mushroom Field: 3"]);
 }
 
 /// A result's route as "Start, portal: Next, ship: Then…".
@@ -73,135 +76,50 @@ fn route(result: &SearchResult) -> String {
 
 #[test]
 fn a_result_reached_by_ship_has_its_route_and_says_it_takes_a_ship() {
-    let state = searched_from_sunset_sky(vec![
-        map("100000000", "Sunset Sky", 100, vec![]).to(&[ELLINIA]),
-        map(ELLINIA, "Ellinia", 100, vec![]).to(&[ELLINIA_STATION]),
-        map(ELLINIA_STATION, "Ellinia Station", 100, vec![]).to(&[ELLINIA]),
-        map(ORBIS_TICKETING_BOOTH, "Orbis Ticketing Booth", 100, vec![]).to(&[ORBIS]),
-        map(ORBIS, "Orbis", 100, vec![]).to(&["200000001"]),
-        map("200000001", "Cloud Park", 100, vec![orange(10)]),
-    ]);
+    let state = searched_from_sunset_sky(by_ship_to_the_mushroom_field());
 
     let result = &state.search.results[0];
-    assert_eq!(
-        route(result),
-        "Sunset Sky, Portal: Ellinia, Portal: Ellinia Station, Ship: Orbis Ticketing Booth, \
-         Portal: Orbis, Portal: Cloud Park"
-    );
+    assert_eq!(route(result), "Sunset Sky, Portal: Southperry, Ship: Lith Harbor, Portal: Mushroom Field");
     assert_eq!(result.travel, [Step::Ship]);
 }
 
 #[test]
-fn the_ship_from_orbis_takes_the_player_back_to_victoria_island() {
-    let state = searched_from_sunset_sky(vec![
-        map("200000002", "Sunset Sky", 100, vec![]).to(&[ORBIS]),
-        map(ORBIS, "Orbis", 100, vec![]).to(&[ORBIS_TICKETING_BOOTH]),
-        map(ORBIS_TICKETING_BOOTH, "Orbis Ticketing Booth", 100, vec![]).to(&[ORBIS]),
-        map(ELLINIA_STATION, "Ellinia Station", 100, vec![]).to(&[ELLINIA]),
-        map(ELLINIA, "Ellinia", 100, vec![]).to(&["100000001"]),
-        map("100000001", "Mushroom Field", 100, vec![orange(10)]),
-    ]);
-
-    let result = &state.search.results[0];
-    assert_eq!(result.distance, Distance::MapChanges(5));
-    assert_eq!(
-        route(result),
-        "Sunset Sky, Portal: Orbis, Portal: Orbis Ticketing Booth, Ship: Ellinia Station, \
-         Portal: Ellinia, Portal: Mushroom Field"
-    );
-    assert_eq!(result.travel, [Step::Ship]);
-}
-
-/// The game's map list (the map names fixture), with Orbis's maps added back: the
-/// Founder's Access client OSMS mines holds no Ossyria.
-fn game_with_orbis() -> osms::World {
-    [
-        (20_000_000, "Orbis", "Orbis"),
-        (20_000_001, "Orbis", "Orbis Weapon Store"),
-        (20_000_010, "Orbis", "Orbis Ticketing Booth"),
-        (20_000_098, "Orbis", "Orbis Tower <8th Floor>"),
-    ]
-    .into_iter()
-    .fold(osms::map_names(), |world, (id, street, name)| world.with(osms::map(id, street, name).in_region("Ossyria")))
-}
-
-/// A core over `world`, whose maps `ids` have visible exits to the maps `to` and
-/// `oranges` Orange Mushrooms (and the rest nothing), with the player arrived
-/// on the Kerning City sample and the Orange Mushroom picked.
-fn searched_in(world: osms::World, maps: &[(&str, &[&str], u32)]) -> PanelState {
-    let mut world = world.with_mob(osms::mob(9, "Orange Mushroom", 8, 0, 0));
-    for &(id, to, oranges) in maps {
-        world = world.changing(id.parse().unwrap(), |mut m| {
-            for to in to {
-                m = m.portal(&format!("to{to}"), 2, to.parse().unwrap());
-            }
-            if oranges > 0 { m.spawns(9, oranges) } else { m }
-        });
-    }
+fn the_ship_runs_from_the_real_southperry_to_the_real_lith_harbor() {
+    // The game's map list (the map names fixture), with a made-up portal from Kerning
+    // City to Southperry to keep the route short, and Orange Mushrooms in Lith Harbor.
+    let world = osms::map_names()
+        .with_mob(osms::mob(9, "Orange Mushroom", 8, 0, 0))
+        .changing(10_003_000, |m| m.portal("toSouthperry", 2, 60))
+        .changing(10_000_000, |m| m.spawns(9, 10));
     let mut compass = Compass::new(FakeSource::with_world(world));
     compass.tick(0);
     arrive(&mut compass, KERNING, 100);
-    search_for(&mut compass, "orange")
-}
 
-#[test]
-fn the_ships_run_between_the_real_stations() {
-    // Made-up portals from Kerning City to Ellinia and from Orbis to Orbis Tower 8F, to
-    // keep the route short.
-    let state = searched_in(
-        game_with_orbis(),
-        &[
-            ("010003000", &[ELLINIA], 0),
-            (ELLINIA, &[ELLINIA_STATION], 0),
-            (ELLINIA_STATION, &[ELLINIA], 0),
-            (ORBIS_TICKETING_BOOTH, &[ORBIS], 0),
-            (ORBIS, &[ORBIS_TICKETING_BOOTH, "020000098"], 0),
-            ("020000098", &[], 10),
-        ],
-    );
+    let state = search_for(&mut compass, "orange");
 
     let result = &state.search.results[0];
-    assert_eq!(result.map_name, "Orbis Tower <8th Floor>");
-    assert_eq!(result.distance, Distance::MapChanges(5));
-    assert_eq!(
-        route(result),
-        "Kerning City, Portal: Ellinia, Portal: Ellinia Station, Ship: Orbis Ticketing Booth, \
-         Portal: Orbis, Portal: Orbis Tower <8th Floor>"
-    );
+    assert_eq!(result.distance, Distance::MapChanges(2));
+    assert_eq!(route(result), "Kerning City, Portal: Southperry, Ship: Lith Harbor");
     assert_eq!(result.travel, [Step::Ship]);
 }
 
 #[test]
-fn the_ship_from_the_real_orbis_station_reaches_victoria_island() {
-    // The player is in the Orbis Weapon Store, given the Kerning City title so the
-    // sample arrives there.
-    let world = game_with_orbis().without(10_003_000).with(osms::map(20_000_001, "Victoria Road", "Kerning City"));
-    let state = searched_in(
-        world,
-        &[
-            ("020000001", &[ORBIS], 0),
-            (ORBIS, &[ORBIS_TICKETING_BOOTH], 0),
-            (ORBIS_TICKETING_BOOTH, &[ORBIS], 0),
-            (ELLINIA_STATION, &[ELLINIA], 0),
-            (ELLINIA, &["010002010"], 0),
-            ("010002010", &[], 10),
-        ],
-    );
+fn no_ship_sails_between_ellinia_station_and_orbis_while_ossyria_is_out_of_the_game() {
+    let state = searched_from_sunset_sky(vec![
+        map(ELLINIA_STATION, "Sunset Sky", 100, vec![]),
+        map(ORBIS_TICKETING_BOOTH, "Orbis Ticketing Booth", 100, vec![orange(10)]),
+    ]);
+    assert_eq!(distances(&state), ["Orbis Ticketing Booth: NoRoute"]);
 
-    let result = &state.search.results[0];
-    assert_eq!(result.distance, Distance::MapChanges(5));
-    assert_eq!(
-        route(result),
-        "Kerning City, Portal: Orbis, Portal: Orbis Ticketing Booth, Ship: Ellinia Station, \
-         Portal: Ellinia, Portal: The Field South of Ellinia"
-    );
-    assert_eq!(result.travel, [Step::Ship]);
+    let state = searched_from_sunset_sky(vec![
+        map(ORBIS_TICKETING_BOOTH, "Sunset Sky", 100, vec![]),
+        map(ELLINIA_STATION, "Ellinia Station", 100, vec![orange(10)]),
+    ]);
+    assert_eq!(distances(&state), ["Ellinia Station: NoRoute"]);
 }
 
 #[test]
 fn shanks_sails_from_southperry_to_lith_harbor_and_no_ship_sails_back() {
-    const SOUTHPERRY: &str = "000000060";
-    const LITH_HARBOR: &str = "010000000";
     let state = searched_from_sunset_sky(vec![
         map(SOUTHPERRY, "Sunset Sky", 100, vec![orange(10)]),
         map(LITH_HARBOR, "Lith Harbor", 100, vec![orange(10)]),
@@ -231,15 +149,14 @@ fn a_result_reached_by_portals_alone_has_its_route_and_no_travel_marker() {
 
 #[test]
 fn of_two_equally_short_routes_the_one_by_portals_is_taken() {
-    // Ellinia Station leads straight to the Orbis Ticketing Booth by ship, and by a
-    // (made-up) portal too.
+    // Southperry leads straight to Lith Harbor by ship, and by a (made-up) portal too.
     let state = searched_from_sunset_sky(vec![
-        map(ELLINIA_STATION, "Sunset Sky", 100, vec![]).to(&[ORBIS_TICKETING_BOOTH]),
-        map(ORBIS_TICKETING_BOOTH, "Orbis Ticketing Booth", 100, vec![orange(10)]),
+        map(SOUTHPERRY, "Sunset Sky", 100, vec![]).to(&[LITH_HARBOR]),
+        map(LITH_HARBOR, "Lith Harbor", 100, vec![orange(10)]),
     ]);
 
     let result = &state.search.results[0];
-    assert_eq!(route(result), "Sunset Sky, Portal: Orbis Ticketing Booth");
+    assert_eq!(route(result), "Sunset Sky, Portal: Lith Harbor");
     assert_eq!(result.travel, []);
 }
 
@@ -265,15 +182,14 @@ fn a_map_with_no_route_or_only_a_quest_route_has_no_route_shown() {
 #[test]
 fn with_no_map_recognised_no_route_is_shown() {
     let mut compass = Compass::new(common::world::world(vec![
-        map(ELLINIA_STATION, "Ellinia Station", 100, vec![]),
-        map(ORBIS_TICKETING_BOOTH, "Orbis Ticketing Booth", 100, vec![orange(10)]),
+        map(SOUTHPERRY, "Southperry", 100, vec![]),
+        map(LITH_HARBOR, "Lith Harbor", 100, vec![orange(10)]),
     ]));
     compass.tick(0);
-    compass.tick(50);
 
     let state = search_for(&mut compass, "orange");
 
-    assert_eq!(distances(&state), ["Orbis Ticketing Booth: Unknown"]);
+    assert_eq!(distances(&state), ["Lith Harbor: Unknown"]);
     assert!(state.search.results[0].route.is_empty());
     assert!(state.search.results[0].travel.is_empty());
 }

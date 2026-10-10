@@ -3,8 +3,8 @@
 //! account straight away.
 //!
 //! The taxis run between the Victoria Island towns and the scrolls go to the named
-//! towns, by their real MeowDB IDs, so the hand-built worlds here use those IDs for
-//! the towns.
+//! towns, by their real map IDs, so the hand-built worlds here use those IDs for the
+//! towns. No scroll goes to Orbis or El Nath while Ossyria isn't in the game.
 
 mod common;
 
@@ -189,8 +189,6 @@ fn a_teleport_scroll_takes_the_player_from_any_map_to_each_named_town_only_while
         (KERNING_CITY, "Kerning City"),
         (LITH_HARBOR, "Lith Harbor"),
         (SLEEPYWOOD, "Sleepywood"),
-        (ORBIS, "Orbis"),
-        (EL_NATH, "El Nath"),
     ];
     let mut maps = vec![map("100000000", "Sunset Sky", 100, vec![])];
     maps.extend(towns.iter().map(|&(id, name)| map(id, name, 100, vec![orange(10)])));
@@ -212,6 +210,19 @@ fn a_teleport_scroll_takes_the_player_from_any_map_to_each_named_town_only_while
     let state = compass.act(Action::ToggleTeleportScrolls);
 
     assert!(state.search.results.iter().all(|r| r.distance == Distance::NoRoute && r.travel.is_empty()));
+}
+
+#[test]
+fn no_teleport_scroll_goes_to_orbis_or_el_nath_while_ossyria_is_out_of_the_game() {
+    let mut compass = searched_from_sunset_sky(vec![
+        map("100000000", "Sunset Sky", 100, vec![]),
+        map(ORBIS, "Orbis", 100, vec![orange(10)]),
+        map(EL_NATH, "El Nath", 100, vec![orange(10)]),
+    ]);
+
+    let state = compass.act(Action::ToggleTeleportScrolls);
+
+    assert_eq!(distances(state), ["El Nath: NoRoute", "Orbis: NoRoute"]);
 }
 
 /// Near Field is two roads from Sunset Sky; Perion is four.
