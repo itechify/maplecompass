@@ -1,15 +1,16 @@
 //! The Personal Bests page (GLOSSARY): every map's Personal Best side by side, opened in
 //! the player's browser from the Grind Tracker's window bar, to compare maps. The core
 //! hands the shell the page as plain data, one map a row, highest EXP/h first: the bests
-//! as saved, the Visit under way's included, with each map's names, mob levels and share
-//! of its solo EXP/h ceiling, and the map the player is on marked.
+//! as saved, the Visit under way's included, with each map's names, region, mob levels
+//! and share of its solo EXP/h ceiling from OSMS's file set, and the map the player is
+//! on marked.
 
 mod common;
 
 use common::player::Player;
 use common::{CONSTRUCTION_SITE_ID, FakeSource, SUNSET_SKY_ID, osms, sharing_a_title, tracking, tracking_with};
 use compass_core::{
-    BESTS_VERSION, BestsPage, BestsPageMap, LevelRange, MEOWDB_CREDIT, MapBests, PanelControl, PanelState, Request,
+    BESTS_VERSION, BestsPage, BestsPageMap, LevelRange, MapBests, OSMS_CREDIT, PanelControl, PanelState, Request,
     SavedBests, VisitBest, meowdb,
 };
 
@@ -48,10 +49,8 @@ fn row<'a>(page: &'a BestsPage, map: &str) -> &'a BestsPageMap {
 
 /// Bests saved at an earlier launch: one Visit's, with no date, on each map.
 fn bests_of(maps: &[(&str, u64)]) -> SavedBests {
-    let maps = maps
-        .iter()
-        .map(|&(id, exp_per_hour)| MapBests { id: id.into(), visits: vec![VisitBest { exp_per_hour, set_at_unix_ms: None }] })
-        .collect();
+    let visit = |exp_per_hour| vec![VisitBest { exp_per_hour, set_at_unix_ms: None }];
+    let maps = maps.iter().map(|&(id, exp)| MapBests { id: id.into(), visits: visit(exp) }).collect();
     SavedBests { version: BESTS_VERSION, maps }
 }
 
@@ -62,10 +61,11 @@ const HENESYS_HUNTING_GROUND_I_ID: &str = "010001010";
 const MAPLE_HILL: u64 = 90_000_000;
 const MAPLE_HILL_ID: &str = "090000000";
 
-/// Sunset Sky's mob levels, from its saved page: Blue Snail to Green Mushroom.
+/// Sunset Sky's mob levels in the made-up game world: Blue Snail to Green Mushroom.
 const SUNSET_SKY_LEVELS: LevelRange = LevelRange { lowest: 2, highest: 14 };
 
-/// The Construction Site's mob levels, from its saved page: Red Snail to Blue Mushroom.
+/// The Construction Site's mob levels in the made-up game world: Red Snail to Blue
+/// Mushroom.
 const CONSTRUCTION_SITE_LEVELS: LevelRange = LevelRange { lowest: 4, highest: 19 };
 
 #[test]
@@ -107,7 +107,7 @@ fn a_first_visits_best_is_on_the_page_with_the_maps_names_levels_and_share_marke
                 set_at_unix_ms: set,
                 here: true,
             }],
-            credit: MEOWDB_CREDIT,
+            credit: OSMS_CREDIT,
         }
     );
 }
@@ -216,14 +216,10 @@ fn while_candidates_wait_for_a_choice_no_map_is_marked_here() {
 }
 
 #[test]
-fn a_best_on_a_map_the_map_index_no_longer_has_goes_by_its_id() {
+fn a_best_on_a_map_not_in_the_map_list_is_kept_and_goes_by_its_id() {
     let gone = "999999999";
-    let bests = SavedBests {
-        version: BESTS_VERSION,
-        maps: vec![MapBests { id: gone.into(), visits: vec![VisitBest { exp_per_hour: 5000, set_at_unix_ms: None }] }],
-    };
     let mut compass = tracking();
-    compass.restore_bests(bests);
+    compass.restore_bests(bests_of(&[(gone, 5000)]));
     let mut player = Player::clocked(compass);
     player.arrive(SUNSET);
 
@@ -282,7 +278,7 @@ fn the_shell_gets_the_page_and_the_button_as_the_browser_and_window_render_them(
 
     let page = serde_json::to_value(open_page(&mut player).expect("a page")).unwrap();
     assert_eq!(page["asOfUnixMs"], player.wall_clock().unwrap());
-    assert_eq!(page["credit"], MEOWDB_CREDIT);
+    assert_eq!(page["credit"], OSMS_CREDIT);
     let sunset = &page["maps"][0];
     assert_eq!(sunset["id"], SUNSET_SKY_ID);
     assert_eq!(sunset["streetName"], "Victoria Road");

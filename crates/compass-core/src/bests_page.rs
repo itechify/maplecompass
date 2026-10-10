@@ -7,18 +7,18 @@
 //!   the Best row there, which shows only the earlier Visits'.
 //! - One row a map, its Personal Best, highest EXP/h first. The page re-sorts as the
 //!   player likes; the core gives the figures, never text.
-//! - Each map's names from the map index; its mob levels and its solo EXP/h ceiling from
-//!   its MeowDB page: the shown map's own, or else the crawl's. Bests are shared by all
-//!   the player's characters and record no level, so the levels and the share of the
-//!   ceiling say what a best was worth. A map whose page isn't known has neither, and one
-//!   without a Map Summary has no ceiling.
+//! - Each map's names, region, mob levels and solo EXP/h ceiling (its Map Summary, worked
+//!   out as NiaMeowDB does) from OSMS's file set (ADR 0008), the same for every map. Bests
+//!   are shared by all the player's characters and record no level, so the levels and the
+//!   share of the ceiling say what a best was worth. A best on a map not in the map list
+//!   is kept, with none of these, and a map without mobs has no levels or ceiling.
 //! - The map the player is on is marked: only while the panel is certain of it.
 
 use crate::map_data::MapData;
 use crate::map_index::MapEntry;
 use crate::personal_best::SavedBests;
 use crate::shown_map::LevelRange;
-use crate::{MEOWDB_CREDIT, meowdb};
+use crate::{OSMS_CREDIT, meowdb};
 use serde::Serialize;
 
 /// The Personal Bests page, as the shell renders it into a page for the browser.
@@ -30,7 +30,8 @@ pub struct BestsPage {
     pub as_of_unix_ms: Option<u64>,
     /// Every map with a Personal Best, highest EXP/h first.
     pub maps: Vec<BestsPageMap>,
-    /// [`MEOWDB_CREDIT`]: the names, levels and ceilings are MeowDB's.
+    /// [`OSMS_CREDIT`]: the names, levels and ceilings are from OSMS's data, and the rows
+    /// open MeowDB's pages.
     pub credit: &'static str,
 }
 
@@ -38,25 +39,26 @@ pub struct BestsPage {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BestsPageMap {
-    /// MeowDB's 9-digit map ID.
+    /// The 9-digit map ID.
     pub id: String,
-    /// The map's names and region from the map index; empty while it hasn't arrived, or
-    /// if it no longer has the map: the page goes by the ID.
+    /// The map's names and region, as OSMS's map list gives them; empty while no file set
+    /// has arrived, or if the map isn't in the list: the page goes by the ID.
     pub street_name: String,
     pub map_name: String,
     pub region: String,
     /// The map's MeowDB page.
     pub url: String,
-    /// The lowest and highest of its mobs' levels; `None` while its page isn't known.
+    /// The lowest and highest of its mobs' levels; `None` if it isn't in the map list, or
+    /// has no mobs.
     pub mob_levels: Option<LevelRange>,
     /// Its Personal Best: the Rolling Rate's EXP/h, as the Visit's best was set.
     pub exp_per_hour: u64,
-    /// The map's MeowDB solo EXP/h ceiling (its Map Summary), what the share is of; `None`
-    /// while its page isn't known, or it has no Map Summary.
+    /// The map's solo EXP/h ceiling (its Map Summary), what the share is of; `None` if it
+    /// isn't in the map list, or has no Map Summary.
     pub solo_exp_ceiling: Option<u64>,
-    /// The best as a share of the map's MeowDB solo EXP/h ceiling (its Map Summary), in
+    /// The best as a share of the map's solo EXP/h ceiling (its Map Summary), in
     /// hundredths of a percent, as the Grind Tracker writes its share: 322 for "3.2%".
-    /// `None` while its page isn't known.
+    /// `None` with no ceiling.
     pub ceiling_share_hundredths: Option<u64>,
     /// When it was set, by the wall clock (ms since the Unix epoch); `None` if the shell
     /// hadn't told the wall clock by then.
@@ -97,11 +99,11 @@ pub(crate) fn page<'a>(
         })
         .collect();
     maps.sort_by(|a, b| b.exp_per_hour.cmp(&a.exp_per_hour).then_with(|| a.id.cmp(&b.id)));
-    BestsPage { as_of_unix_ms: now_unix_ms, maps, credit: MEOWDB_CREDIT }
+    BestsPage { as_of_unix_ms: now_unix_ms, maps, credit: OSMS_CREDIT }
 }
 
-/// The lowest and highest of the map's mobs' levels. A page's mobs come from a source in
-/// any order (only the panel's are sorted).
+/// The lowest and highest of the map's mobs' levels. A map's mobs are read in any order
+/// (only the panel's are sorted).
 fn mob_levels(data: &MapData) -> Option<LevelRange> {
     let lowest = data.mobs.iter().map(|m| m.level).min()?;
     let highest = data.mobs.iter().map(|m| m.level).max()?;
