@@ -1,37 +1,24 @@
-//! The shell's data source: OSMS Data Explorer's file set (ADR 0008, in [`crate::osms`]),
-//! and MeowDB's mob pages and search (ADR 0003), fetched over HTTPS with an honest user
-//! agent and kept in a disk cache. Reading them is left to the core. No MeowDB map page is
-//! fetched. Every page MeowDB serves is cached, even one the core can't read.
-//!
-//! Mob Cards (ADR 0006, until #58): the core asks for the shown map's listed mobs' MeowDB
-//! pages, one at a time and paced with Item Lookup, and for their images from maplestory.io.
-//! A cached mob page is good for [`MOB_FRESH_FOR`] (a week), an image for
-//! [`IMAGE_FRESH_FOR`] (30 days). Each has its own slot. Images are saved as files and
-//! served to the overlay from them ([`serve_mob_image`]): the webview never asks
-//! maplestory.io itself.
+//! The shell's data source: OSMS Data Explorer's file set and pictures (ADR 0008, in
+//! [`crate::osms`] and [`crate::pictures`]), and MeowDB's search (ADR 0007), fetched over
+//! HTTPS with an honest user agent and kept in a disk cache. Reading them is left to the
+//! core. No MeowDB page is fetched.
 //!
 //! Item Lookup (ADR 0007): the core asks MeowDB's search for an item's name once per
 //! lookup the player makes. An answer is cached for [`ITEM_SEARCH_FRESH_FOR`] (a week),
-//! so looking the same item up again asks MeowDB nothing.
+//! so looking the same item up again asks MeowDB nothing. Every answer MeowDB gives is
+//! cached, even one the core can't read.
 //!
 //! Fetches run on the async runtime and never block the caller: the first call starts
-//! one and answers `Pending`, later calls collect it. Only the few mob pages a map lists,
-//! and cached search answers, are read on the caller's thread.
+//! one and answers `Pending`, later calls collect it.
 
 use crate::osms::OsmsSet;
+use crate::pictures::Pictures;
 use compass_core::osms::OsmsFiles;
-use compass_core::{Fetched, ItemHit, MapDataSource, MobDetails, SourceError, meowdb};
+use compass_core::{Fetched, ItemHit, MapDataSource, SourceError, meowdb};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::task::Poll;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-/// How long a cached mob page is used without asking MeowDB again (ADR 0006).
-const MOB_FRESH_FOR: Duration = Duration::from_secs(7 * 24 * 60 * 60);
-
-/// How long a cached mob image is used without asking maplestory.io again: sprites
-/// practically never change.
-const IMAGE_FRESH_FOR: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
 /// How long a cached answer of MeowDB's search is used without asking again: the items a
 /// name finds hardly change.
@@ -60,10 +47,8 @@ pub struct MeowDbSource {
     cache_dir: PathBuf,
     /// OSMS's file set.
     osms: OsmsSet,
-    /// The mob page being fetched for a Mob Card, and where its figures will arrive.
-    mob_page_in_flight: Option<(String, Receiver<Answer<MobDetails>>)>,
-    /// The mob image being fetched from maplestory.io, and where its address will arrive.
-    mob_image_in_flight: Option<(String, Receiver<Result<String, SourceError>>)>,
+    /// OSMS's pictures.
+    pictures: Pictures,
     /// The item name being searched for, and where MeowDB's items will arrive.
     item_search_in_flight: Option<(String, Receiver<Answer<Vec<ItemHit>>>)>,
 }
@@ -74,10 +59,9 @@ impl MeowDbSource {
         let client = client()?;
         Ok(Self {
             osms: OsmsSet::new(client.clone(), &cache_dir),
+            pictures: Pictures::new(client.clone(), &cache_dir),
             client,
             cache_dir,
-            mob_page_in_flight: None,
-            mob_image_in_flight: None,
             item_search_in_flight: None,
         })
     }
@@ -105,53 +89,8 @@ impl MapDataSource for MeowDbSource {
         self.osms.poll()
     }
 
-    fn mob_page(&mut self, id: &str) -> Poll<Answer<MobDetails>> {
-        if let Some((asked, arriving)) = &self.mob_page_in_flight {
-            if asked == id {
-                let Poll::Ready(details) = collect(arriving) else { return Poll::Pending };
-                self.mob_page_in_flight = None;
-                if let Err(e) = &details {
-                    eprintln!("mob {id}: {e}");
-                }
-                return Poll::Ready(details);
-            }
-        }
-        // A new mob: an earlier fetch still in flight finishes into the cache unheard.
-        // Read here, so a cached page is answered at once and doesn't wait out the pace.
-        let path = self.cache_dir.join(format!("mob-{id}.html"));
-        if let Some(page) = cached(&path, MOB_FRESH_FOR) {
-            return Poll::Ready(meowdb::read_mob_page(&page).map(Fetched::Fresh));
-        }
-        let arriving = self.fetch(meowdb::mob_url(id), path, meowdb::read_mob_page);
-        self.mob_page_in_flight = Some((id.to_string(), arriving));
-        Poll::Pending
-    }
-
-    fn mob_image(&mut self, id: &str) -> Poll<Result<String, SourceError>> {
-        if let Some((asked, arriving)) = &self.mob_image_in_flight {
-            if asked == id {
-                let Poll::Ready(image) = collect(arriving) else { return Poll::Pending };
-                self.mob_image_in_flight = None;
-                if let Err(e) = &image {
-                    eprintln!("mob {id}'s image: {e}");
-                }
-                return Poll::Ready(image);
-            }
-        }
-        if !is_mob_id(id) {
-            return Poll::Ready(Err(SourceError::FormatChanged(format!("mob ID {id:?}"))));
-        }
-        let path = mob_image_file(&self.cache_dir, id);
-        if age(&path).is_some_and(|age| age < IMAGE_FRESH_FOR) {
-            return Poll::Ready(Ok(mob_image_url(id)));
-        }
-        let (tx, rx) = mpsc::channel();
-        let (client, owned) = (self.client.clone(), id.to_string());
-        tauri::async_runtime::spawn(async move {
-            let _ = tx.send(fetch_mob_image(&client, &owned, &path).await);
-        });
-        self.mob_image_in_flight = Some((id.to_string(), rx));
-        Poll::Pending
+    fn picture(&mut self, path: &str) -> Poll<Result<String, SourceError>> {
+        self.pictures.poll(path)
     }
 
     fn item_search(&mut self, name: &str) -> Poll<Answer<Vec<ItemHit>>> {
@@ -186,88 +125,6 @@ impl MeowDbSource {
         let key: String = name.to_lowercase().bytes().map(|b| format!("{b:02x}")).collect();
         self.cache_dir.join(format!("item-search-{key}.json"))
     }
-}
-
-/// The URL scheme the overlay loads mob images from: our saved copies of maplestory.io's.
-pub const MOB_IMAGE_SCHEME: &str = "mobimage";
-
-/// Where the overlay loads mob `id`'s image from; [`serve_mob_image`] answers it.
-fn mob_image_url(id: &str) -> String {
-    if cfg!(windows) {
-        format!("http://{MOB_IMAGE_SCHEME}.localhost/{id}")
-    } else {
-        format!("{MOB_IMAGE_SCHEME}://localhost/{id}")
-    }
-}
-
-/// maplestory.io's still image of mob `id` standing, from MapleStory Classic World's CBT2
-/// data, whose mob IDs are MeowDB's.
-fn maplestory_io_url(id: &str) -> String {
-    format!("https://maplestory.io/api/MCW/CBT2/mob/{id}/render/stand")
-}
-
-/// Whether `id` looks like a mob ID: digits only, so it is safe in a file name.
-fn is_mob_id(id: &str) -> bool {
-    !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit())
-}
-
-fn mob_image_file(cache_dir: &Path, id: &str) -> PathBuf {
-    cache_dir.join(format!("mob-{id}.gif"))
-}
-
-/// How long ago the file at `path` was saved; `None` if there is none.
-fn age(path: &Path) -> Option<Duration> {
-    let saved_at = std::fs::metadata(path).and_then(|m| m.modified()).ok()?;
-    Some(SystemTime::now().duration_since(saved_at).unwrap_or_default())
-}
-
-/// Fetch mob `id`'s image from maplestory.io and save it at `path`. If maplestory.io
-/// can't be reached, an older saved image still does: sprites practically never change.
-async fn fetch_mob_image(client: &reqwest::Client, id: &str, path: &Path) -> Result<String, SourceError> {
-    let response = match client.get(maplestory_io_url(id)).send().await {
-        Ok(response) => response,
-        Err(e) => return saved_mob_image(id, path, e.to_string()),
-    };
-    let status = response.status();
-    let is_image = response
-        .headers()
-        .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|t| t.to_str().ok())
-        .is_some_and(|t| t.starts_with("image/"));
-    // maplestory.io answers 404 for a mob it doesn't have.
-    if status.is_client_error() || (status.is_success() && !is_image) {
-        return Err(SourceError::FormatChanged(format!("maplestory.io has no image ({status})")));
-    }
-    let bytes = match response.error_for_status() {
-        Ok(response) => response.bytes().await,
-        Err(e) => Err(e),
-    };
-    match bytes {
-        Ok(bytes) => match crate::files::write_atomically(path, &bytes) {
-            Ok(()) => Ok(mob_image_url(id)),
-            Err(e) => Err(SourceError::Unreachable(format!("couldn't save {}: {e}", path.display()))),
-        },
-        Err(e) => saved_mob_image(id, path, e.to_string()),
-    }
-}
-
-/// maplestory.io couldn't be reached: the image saved earlier, if there is one.
-fn saved_mob_image(id: &str, path: &Path, why: String) -> Result<String, SourceError> {
-    eprintln!("maplestory.io: mob {id}: {why}");
-    if path.exists() { Ok(mob_image_url(id)) } else { Err(SourceError::Unreachable(why)) }
-}
-
-/// Answer the overlay's request for a mob image ([`mob_image_url`]) from the images
-/// saved under `cache_dir`.
-pub fn serve_mob_image(cache_dir: &Path, request: &tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
-    use tauri::http::{Response, StatusCode, header};
-    let id = request.uri().path().trim_start_matches('/');
-    let image = if is_mob_id(id) { std::fs::read(mob_image_file(cache_dir, id)).ok() } else { None };
-    let response = match image {
-        Some(bytes) => Response::builder().header(header::CONTENT_TYPE, "image/gif").body(bytes),
-        None => Response::builder().status(StatusCode::NOT_FOUND).body(Vec::new()),
-    };
-    response.unwrap_or_default()
 }
 
 /// What a background fetch sent, if it has finished.

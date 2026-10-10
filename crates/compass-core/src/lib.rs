@@ -20,6 +20,7 @@ pub mod osms;
 mod pace;
 mod panel;
 mod personal_best;
+mod pictures;
 mod portal_overrides;
 mod portals;
 mod prep;
@@ -44,7 +45,7 @@ pub use map_data::{
     Portal, PortalKind,
 };
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
-pub use mob_card::{DamageRange, Elements, HpPerExp, MobCard, MobDetails, MobPage};
+pub use mob_card::{DamageRange, Elements, HpPerExp, MobCard, MobDetails};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 pub use panel::{
     Action, CollapsedSections, DEFAULT_PANEL_WIDTH, Foreground, GameWindow, InsideOffset, Layer, MIN_PANEL_WIDTH, PanelSizes,
@@ -68,8 +69,8 @@ use item_lookup::ItemLookups;
 use search::{MobSearch, Searched};
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
-use mob_card::MobCards;
 use pace::Pace;
+use pictures::Pictures;
 use panel::Panel;
 use session::Session;
 use setup::Setup;
@@ -138,11 +139,6 @@ pub const OSMS_DATA_CREDIT: &str = "Data: OSMS Data Explorer (osmsdataexplorer.c
 /// mobs' names open NiaMeowDB's pages.
 pub const OSMS_CREDIT: &str = "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com)";
 
-/// The panel's credit when it lists mobs: their Mob Cards show images from maplestory.io
-/// (ADR 0006).
-pub const OSMS_AND_IMAGES_CREDIT: &str =
-    "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com) · images: maplestory.io";
-
 /// Whether minimap titles can be recognised as real maps.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
@@ -183,7 +179,7 @@ pub struct PanelState {
     /// The shown map's Map Summary, mobs and Hidden Portals from OSMS's file set, or why they
     /// aren't there.
     pub data: MapDataStatus,
-    /// [`OSMS_CREDIT`] whenever a map is shown; with Mob Cards, [`OSMS_AND_IMAGES_CREDIT`].
+    /// [`OSMS_CREDIT`] whenever a map is shown.
     pub credit: Option<&'static str>,
     /// The Mob Card of each mob the panel lists, in its order; empty while it lists none.
     pub mob_cards: Vec<MobCard>,
@@ -358,9 +354,10 @@ pub struct Compass {
     shown_map: ShownMap,
     /// The wall clock (ms since the Unix epoch), as the shell last told it.
     wall_clock: Option<u64>,
-    /// The listed mobs' pages and images, for their Mob Cards.
-    mob_cards: MobCards,
-    /// MeowDB's pace, kept by the Mob Cards' pages and Item Lookup's searches together.
+    /// OSMS's pictures the panel asked for: the listed mobs' animations, for their Mob
+    /// Cards.
+    pictures: Pictures,
+    /// MeowDB's pace, kept by Item Lookup's searches.
     meowdb_pace: Pace,
     /// What the player typed, highlighted and picked in mob search.
     search: MobSearch,
@@ -401,7 +398,7 @@ impl Compass {
             tracker: Tracker::default(),
             shown_map: ShownMap::default(),
             wall_clock: None,
-            mob_cards: MobCards::default(),
+            pictures: Pictures::default(),
             meowdb_pace: Pace::default(),
             search: MobSearch::default(),
             hotkey_settings: HotkeySettings::default(),
@@ -526,11 +523,26 @@ impl Compass {
             self.sync_search();
         }
         self.state.candidates = self.set.as_ref().and_then(|set| self.shown_map.candidates(&set.maps));
+        self.sync_mob_cards();
+        self.state.credit = self.state.map.as_ref().map(|_| OSMS_CREDIT);
+    }
+
+    /// The listed mobs' Mob Cards, with the animations in so far.
+    fn sync_mob_cards(&mut self) {
         let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
-        self.mob_cards.list(listed);
-        self.state.mob_cards = self.mob_cards.cards();
-        let credit = if self.state.mob_cards.is_empty() { OSMS_CREDIT } else { OSMS_AND_IMAGES_CREDIT };
-        self.state.credit = self.state.map.as_ref().map(|_| credit);
+        self.state.mob_cards = match &self.set {
+            Some(set) => mob_card::cards(listed, &set.maps, &self.pictures),
+            None => Vec::new(),
+        };
+    }
+
+    /// Ask for the pictures the panel wants, one at a time: the listed mobs' animations.
+    fn poll_pictures(&mut self, at_ms: u64) {
+        let Some(set) = &self.set else { return };
+        let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
+        let wanted = mob_card::animations(listed, &set.maps);
+        self.pictures.poll(&wanted, &mut *self.source, at_ms);
+        self.sync_mob_cards();
     }
 
     /// The game window moved, resized, appeared or went away (`None`: not found, or
@@ -969,9 +981,7 @@ impl Compass {
         self.load_osms(at_ms);
         if self.set.is_some() {
             self.sync_shown_map();
-            // Once the shown map's page lists its mobs.
-            self.mob_cards.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
-            self.state.mob_cards = self.mob_cards.cards();
+            self.poll_pictures(at_ms);
         }
         // An Item Lookup's search, which the player waits on.
         let open = self.item_lookups.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);

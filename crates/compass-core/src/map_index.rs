@@ -1,8 +1,7 @@
 //! The map list's entries, and the injected data source the core's data comes from: OSMS
-//! Data Explorer's file set (ADR 0008), and MeowDB's pages and search (ADR 0003).
+//! Data Explorer's file set and pictures (ADR 0008), and MeowDB's search (ADR 0007).
 
 use crate::item_lookup::ItemHit;
-use crate::mob_card::MobDetails;
 use crate::osms::OsmsFiles;
 use std::task::Poll;
 
@@ -62,9 +61,8 @@ pub enum Fetched<T> {
     SavedCopy { data: T, saved_at_unix_ms: u64 },
 }
 
-/// Where the core gets OSMS's file set, MeowDB's pages and search, and maplestory.io's
-/// mob images. The shell supplies one that fetches over HTTP with a disk cache; tests
-/// supply fakes.
+/// Where the core gets OSMS's file set and pictures, and MeowDB's search. The shell
+/// supplies one that fetches over HTTP with a disk cache; tests supply fakes.
 ///
 /// Every ask may take a while over the network, and the core never waits for
 /// them: on the first call start the fetch and answer [`Poll::Pending`]; the core asks
@@ -79,20 +77,20 @@ pub trait MapDataSource {
     /// was saved, when a file can't be fetched or the set fetched doesn't read.
     fn osms_files(&mut self) -> Poll<Result<Fetched<OsmsFiles>, SourceError>>;
 
-    /// One mob's figures from its MeowDB page, by MeowDB's mob ID (ADR 0006): the core
-    /// asks for each mob the shown map lists, one at a time. A cached copy up to 7 days
-    /// old may be used as it is; answer at once when it is.
-    fn mob_page(&mut self, id: &str) -> Poll<Result<Fetched<MobDetails>, SourceError>>;
-
-    /// Where the overlay can load one mob's image from, by mob ID: the shell's copy of
-    /// maplestory.io's (ADR 0006), asked for like [`MapDataSource::mob_page`] but kept
-    /// apart from it, since it comes from another site. A cached image up to 30 days old
-    /// may be used as it is. [`SourceError::FormatChanged`] when maplestory.io has none.
-    fn mob_image(&mut self, id: &str) -> Poll<Result<String, SourceError>>;
+    /// Where the overlay can load one of OSMS's pictures from (ADR 0008): a mob's
+    /// animation or a map's picture, by its `path` below
+    /// [`crate::osms::PICTURES_URL`], such as `images/monsters/<hash>.webp` or
+    /// `maps/<hash>.webp`. The core asks for the pictures the panel wants one at a time,
+    /// with no other pace. Fetch it to keep on disk, and serve it to the overlay from
+    /// there through MapleCompass's own URL scheme. A path names a picture by its
+    /// content, so a saved one never goes stale: answer it at once.
+    /// [`SourceError::FormatChanged`] when OSMS has no such picture.
+    fn picture(&mut self, path: &str) -> Poll<Result<String, SourceError>>;
 
     /// The items MeowDB's search ([`crate::meowdb::ITEM_SEARCH_URL`]) gives for `name`, an
     /// item's name as read from an Item Tooltip, closest first (ADR 0007): the core asks
-    /// once per Item Lookup, and keeps to MeowDB's pace after it. Read with [`crate::meowdb::read_item_search`]. A cached answer may be used as
-    /// it is; answer at once when it is.
+    /// once per Item Lookup, and keeps to MeowDB's pace after it. Read with
+    /// [`crate::meowdb::read_item_search`]. A cached answer may be used as it is; answer at
+    /// once when it is.
     fn item_search(&mut self, name: &str) -> Poll<Result<Fetched<Vec<ItemHit>>, SourceError>>;
 }
