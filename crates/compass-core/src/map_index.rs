@@ -19,14 +19,15 @@ pub struct MapEntry {
     pub region: String,
 }
 
-/// The region of event maps.
-const EVENT_REGION: &str = "Event";
+/// The regions of maps the player can't normally enter: event maps, and the developers'
+/// map (The Manager's Room).
+const LEFT_OUT_REGIONS: [&str; 2] = ["Event", "Dev"];
 
 impl MapEntry {
-    /// An Event map: the player can't normally enter it, so mob search neither lists
-    /// it nor routes through it.
-    pub(crate) fn is_event(&self) -> bool {
-        self.region == EVENT_REGION
+    /// An Event or Dev map: the player can't normally enter it, so mob search neither
+    /// lists it nor routes through it.
+    pub(crate) fn is_left_out(&self) -> bool {
+        LEFT_OUT_REGIONS.contains(&self.region.as_str())
     }
 }
 
