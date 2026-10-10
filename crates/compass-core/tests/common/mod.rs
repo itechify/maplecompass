@@ -532,6 +532,11 @@ pub fn fresh(world: osms::World) -> OsmsAnswer {
     Poll::Ready(Ok(Fetched::Fresh(world.files())))
 }
 
+/// A fresh answer of OSMS's file set: these files, as they are.
+pub fn fresh_files(files: OsmsFiles) -> OsmsAnswer {
+    Poll::Ready(Ok(Fetched::Fresh(files)))
+}
+
 /// A saved copy of `world`'s files, saved at `saved_at_unix_ms`.
 pub fn saved_copy(world: osms::World, saved_at_unix_ms: u64) -> OsmsAnswer {
     Poll::Ready(Ok(Fetched::SavedCopy { data: world.files(), saved_at_unix_ms }))

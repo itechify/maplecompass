@@ -1,126 +1,144 @@
-//! Once the panel is sure of a map, it fills in that map's hunting information from its
-//! MeowDB page: the Map Summary and the mobs, sorted by level. Pages are the ones saved
-//! on 2026-10-07 (personal-use test data, ADR 0003), served by a fake map data source.
+//! Once the panel is sure of a map, it fills in that map's hunting information from
+//! OSMS's file set: the mobs, sorted by level, and the Map Summary, worked out as MeowDB
+//! works it out. Served from made-up worlds in OSMS's shape.
 
 mod common;
 
-use common::{FakeSource, arrive, saved_index, saved_page};
+use common::osms::{self, HENESYS_HUNTING_GROUND_I, map, mob};
+use common::{FakeSource, arrive};
 use compass_core::{
-    Compass, MapDataStatus, MapEntry, MapSummary, Mob, PerParty,
+    Compass, MapData, MapDataStatus, MapSummary, Mob, PanelState, PerParty, Recognition, TitleLines, TitleReading,
 };
 
-const SUNSET: &str = "victoria-road__sunset-sky--window";
 const KERNING: &str = "victoria-road__kerning-city--window";
-const SUNSET_SKY: &str = "010003070";
-const DEAD_MINE_IV: &str = "020001067";
 
-fn mob(id: &str, name: &str, level: u32, hp: u64, exp: u64, spawn_count: u32, spawn_share_percent: u32) -> Mob {
+fn read_as(street: &str, map: &str, at_ms: u64) -> TitleReading {
+    TitleReading { lines: Some(TitleLines { street: street.into(), map: map.into() }), at_ms }
+}
+
+/// Two confident readings of a title the minimap samples don't show.
+fn arrive_at(world: osms::World, street: &str, name: &str) -> PanelState {
+    let mut compass = Compass::new(FakeSource::with_world(world));
+    compass.on_reading(read_as(street, name, 0));
+    compass.on_reading(read_as(street, name, 333)).clone()
+}
+
+fn data(state: &PanelState) -> &MapData {
+    match &state.data {
+        MapDataStatus::Ready(data) => data,
+        other => panic!("no map data: {other:?}"),
+    }
+}
+
+fn mob_row(id: &str, name: &str, level: u32, hp: u64, exp: u64, spawn_count: u32, spawn_share_percent: u32) -> Mob {
     Mob { id: id.into(), name: name.into(), level, hp, exp, spawn_count, spawn_share_percent }
 }
 
+fn summary(solo: (u64, u64), full_party: (u64, u64)) -> Option<MapSummary> {
+    Some(MapSummary {
+        mobs_per_hour: PerParty { solo: solo.0, full_party: full_party.0 },
+        exp_per_hour: PerParty { solo: solo.1, full_party: full_party.1 },
+    })
+}
+
+/// Henesys Hunting Ground I's spawn points, untimed: Blue Snail 4, Shroom 10, Red Snail
+/// 6, Stump 4, Slime 5, Orange Mushroom 5 and Green Mushroom 5, of 39. Spawn Shares are
+/// rounded half up.
 #[test]
-fn arriving_on_sunset_sky_shows_its_map_summary_and_mobs_sorted_by_level() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+fn a_maps_mobs_are_its_spawn_points_grouped_by_mob_with_their_figures_from_the_mobs_record() {
+    let state = arrive_at(osms::game(), "Victoria Road", "Henesys Hunting Ground I");
 
-    let state = arrive(&mut compass, SUNSET, 0);
-
-    let MapDataStatus::Ready(data) = &state.data else { panic!("{:?}", state.data) };
     assert_eq!(
-        data.summary,
-        Some(MapSummary {
-            mobs_per_hour: PerParty { solo: 15714, full_party: 20952 },
-            exp_per_hour: PerParty { solo: 223928, full_party: 298572 },
-        })
-    );
-    assert_eq!(
-        data.mobs,
+        data(&state).mobs,
         [
-            mob("3", "Blue Snail", 2, 51, 4, 7, 16),
-            mob("6", "Stump", 5, 133, 10, 15, 34),
-            mob("9", "Orange Mushroom", 8, 142, 15, 8, 18),
-            mob("11", "Dark Stump", 11, 236, 21, 7, 16),
-            mob("13", "Green Mushroom", 14, 233, 26, 7, 16),
+            mob_row("3", "Blue Snail", 2, 50, 4, 4, 10),
+            mob_row("4", "Shroom", 2, 80, 6, 10, 26),
+            mob_row("5", "Red Snail", 4, 68, 8, 6, 15),
+            mob_row("6", "Stump", 5, 133, 10, 4, 10),
+            mob_row("7", "Slime", 6, 120, 12, 5, 13),
+            mob_row("9", "Orange Mushroom", 8, 142, 15, 5, 13),
+            mob_row("13", "Green Mushroom", 14, 233, 26, 5, 13),
         ]
     );
 }
 
+/// The spec's example. An untimed spawn point gives a full party 3600 / 7.56 mobs an
+/// hour, and a player alone 0.75 of that. Each mob's figures are rounded (Blue Snail's 4
+/// points: 1,429 and 1,905 mobs, 5,714 and 7,619 EXP), and the map's are their sums, so
+/// 13,930 mobs alone rather than the 13,929 that 39 points would round to. The map's ×1.5
+/// Mob Rate isn't applied.
 #[test]
-fn arriving_on_construction_site_north_of_kerning_city_shows_its_map_summary_and_mobs() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+fn the_map_summary_counts_every_untimed_spawn_point_as_meowdb_does() {
+    let state = arrive_at(osms::game(), "Victoria Road", "Henesys Hunting Ground I");
 
-    let state = arrive(&mut compass, "victoria-road__construction-site-north-of-kerning-city--window", 0);
+    assert_eq!(data(&state).summary, summary((13_930, 153_216), (18_572, 204_285)));
+}
 
-    let MapDataStatus::Ready(data) = &state.data else { panic!("{:?}", state.data) };
-    assert_eq!(
-        data.summary,
-        Some(MapSummary {
-            mobs_per_hour: PerParty { solo: 19285, full_party: 25714 },
-            exp_per_hour: PerParty { solo: 297499, full_party: 396667 },
-        })
+/// Henesys Hunting Ground I, with an Iron Hog (EXP 52) on a spawn point timed to an hour:
+/// one more mob and 52 more EXP an hour, alone or in a party.
+#[test]
+fn a_timed_spawn_point_gives_3600_over_its_timer_mobs_an_hour_alone_or_in_a_party() {
+    let world = osms::game()
+        .with_mob(mob(1_100_000, "Iron Hog", 27, 1000, 52))
+        .changing(HENESYS_HUNTING_GROUND_I, |m| m.timed(1_100_000, 1, "3600.00"));
+
+    let state = arrive_at(world, "Victoria Road", "Henesys Hunting Ground I");
+
+    assert_eq!(data(&state).summary, summary((13_931, 153_268), (18_573, 204_337)));
+}
+
+/// For a ranged timer OSMS gives the average in brackets: 2 points on 180–1800 s,
+/// averaging 720 s, give 10 Ghost Stumps (EXP 100) an hour; 3 on 20–60 s, averaging
+/// 41.76 s, give 258.6 Pigs (EXP 7), rounded to 259 and 1,810 EXP.
+#[test]
+fn a_ranged_timer_counts_as_the_average_osms_gives() {
+    let world = osms::world(
+        vec![
+            map(100_000_000, "Made-up Street", "Ghost Field")
+                .timed(20, 2, "180.00-1800.00 [720.00]")
+                .timed(21, 3, "20.00-60.00 [41.76]"),
+        ],
+        vec![mob(20, "Ghost Stump", 19, 300, 100), mob(21, "Pig", 7, 80, 7)],
     );
-    assert_eq!(
-        data.mobs,
-        [
-            mob("5", "Red Snail", 4, 68, 8, 23, 43),
-            mob("9", "Orange Mushroom", 8, 142, 15, 9, 17),
-            mob("11", "Dark Stump", 11, 236, 21, 11, 20),
-            mob("12", "Octopus", 12, 191, 23, 8, 15),
-            mob("15", "Axe Stump", 17, 371, 32, 2, 4),
-            mob("16", "Blue Mushroom", 19, 342, 35, 1, 2),
-        ]
-    );
+
+    let state = arrive_at(world, "Made-up Street", "Ghost Field");
+
+    assert_eq!(data(&state).summary, summary((269, 2810), (269, 2810)));
 }
 
 #[test]
 fn a_town_has_no_mobs_and_no_map_summary_which_is_not_an_error() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     let state = arrive(&mut compass, KERNING, 0);
 
-    let MapDataStatus::Ready(data) = &state.data else { panic!("{:?}", state.data) };
+    let data = data(&state);
     assert_eq!(data.summary, None);
     assert_eq!(data.mobs, []);
 }
 
-/// Dead Mine IV has no minimap sample, so the index here files the Sunset Sky title
-/// under Dead Mine IV's ID.
+/// Never partial figures: a file set whose mobs aren't as the reader expects isn't read
+/// at all.
 #[test]
-fn hp_in_the_thousands_is_read_in_full() {
-    let index = saved_index()
-        .into_iter()
-        .map(|m| if m.map_name == "Sunset Sky" { MapEntry { id: DEAD_MINE_IV.into(), ..m } } else { m })
-        .collect();
-    let mut compass = Compass::new(FakeSource::with_index(index));
-
-    let state = arrive(&mut compass, SUNSET, 0);
-
-    let MapDataStatus::Ready(data) = &state.data else { panic!("{:?}", state.data) };
-    assert_eq!(
-        data.mobs,
-        vec![mob("1032", "Flyeye", 41, 1419, 99, 18, 64), mob("1059", "Minor Zombie", 58, 3619, 197, 10, 36)]
-    );
-}
-
-#[test]
-fn a_page_whose_format_changed_is_reported_as_such_with_no_partial_data_and_the_map_still_shown() {
-    let page = saved_page(SUNSET_SKY).unwrap();
-    let half = (0..=page.len() / 2).rev().find(|&n| page.is_char_boundary(n)).unwrap();
+fn a_file_set_whose_mobs_are_not_as_expected_is_a_format_change_with_no_map_shown() {
+    let unlisted_mob = osms::game().changing(HENESYS_HUNTING_GROUND_I, |m| m.spawns(99_999, 2));
+    let not_a_timer = osms::game().changing(HENESYS_HUNTING_GROUND_I, |m| m.timed(3, 1, "soon"));
+    let no_timer = osms::game().changing(HENESYS_HUNTING_GROUND_I, |m| m.timed(3, 1, "0.00"));
+    let files = osms::game().files();
     let altered = [
-        ("no embedded data", page.replace("self.__next_f.push(", "self.__next_f.add(")),
-        ("summary's mob figures renamed", page.replace("perMob", "mobFigures")),
-        ("no Map Summary although mobs spawn", page.replace(r#"\"rates\""#, r#"\"yields\""#)),
-        ("no Monsters table", page.replace(">Monsters (", ">Mobs (")),
-        ("connected maps renamed", page.replace("connectedMaps", "linkedMaps")),
-        ("a mob's HP not a number", page.replace(">133<", ">lots<")),
-        ("cut off halfway", page[..half].to_string()),
-        ("another map's page", saved_page("010003080").unwrap()),
+        ("a spawn point of a mob monsters.json doesn't have", unlisted_mob.files()),
+        ("a timer that isn't one", not_a_timer.files()),
+        ("a timer of nothing", no_timer.files()),
+        ("monsters.json isn't JSON", compass_core::osms::OsmsFiles { monsters: "<html>".into(), ..files.clone() }),
+        ("a mob's EXP renamed", compass_core::osms::OsmsFiles { monsters: files.monsters.replace("\"exp\"", "\"xp\""), ..files.clone() }),
+        ("a spawn point's mob renamed", compass_core::osms::OsmsFiles { maps: files.maps.replace("{\"id\":3,", "{\"mob\":3,"), ..files.clone() }),
     ];
-    for (how, html) in altered {
-        let mut compass = Compass::new(FakeSource::meowdb().with_page(SUNSET_SKY, html));
+    for (how, files) in altered {
+        let mut compass = Compass::new(FakeSource::answering_osms(vec![common::fresh_files(files)]));
 
-        let state = arrive(&mut compass, SUNSET, 0);
+        let state = arrive(&mut compass, KERNING, 0);
 
-        assert_eq!(state.data, MapDataStatus::FormatChanged, "{how}");
-        assert_eq!(state.map.as_ref().map(|m| m.map_name.as_str()), Some("Sunset Sky"), "{how}");
+        assert_eq!(state.recognition, Recognition::FormatChanged, "{how}");
+        assert_eq!(state.map, None, "{how}");
     }
 }

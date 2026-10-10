@@ -2,9 +2,10 @@
 //! [`DATA_URL`], and the reader that turns them into every map's data. Credit "OSMS Data
 //! Explorer (osmsdataexplorer.com)".
 
-use crate::map_data::MapData;
+use crate::map_data::{MapData, MapSummary, Mob, PerParty};
 use crate::map_index::{MapEntry, SourceError};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Where OSMS Data Explorer publishes its current data set: each of [`OsmsFiles::NAMES`]
 /// is a file under it.
@@ -67,6 +68,8 @@ pub fn read(files: &OsmsFiles) -> Result<MapSet, SourceError> {
 
 fn read_set(files: &OsmsFiles) -> Result<MapSet, String> {
     let maps: MapsFile = parse(&files.maps, "maps.json")?;
+    let monsters: MonstersFile = parse(&files.monsters, "monsters.json")?;
+    let mobs: HashMap<u64, &OsmsMob> = monsters.monsters.iter().map(|mob| (mob.id, mob)).collect();
     let mut set = Vec::new();
     for region in maps.regions {
         for map in region.maps {
@@ -74,15 +77,87 @@ fn read_set(files: &OsmsFiles) -> Result<MapSet, String> {
                 id: map_id(map.id)?,
                 street_name: map.street_name.trim().to_string(),
                 map_name: map.name.trim().to_string(),
-                region: map.region,
+                region: map.region.clone(),
             };
+            let (summary, mobs) = spawns(&map, &mobs).map_err(|why| format!("map {}: {why}", entry.id))?;
             if entry.street_name.is_empty() || entry.map_name.is_empty() {
                 continue;
             }
-            set.push((entry, MapData::default()));
+            set.push((entry, MapData { summary, mobs, ..MapData::default() }));
         }
     }
     Ok(MapSet { maps: set })
+}
+
+/// How long the game takes to respawn a mob on an untimed spawn point, in seconds: a
+/// full party kills each as soon as it spawns.
+const RESPAWN_SECONDS: f64 = 7.56;
+
+/// The share of a full party's kills a player alone gets on untimed spawn points.
+const SOLO_SHARE: f64 = 0.75;
+
+/// A map's mobs, from its spawn points grouped by mob, with their figures from the mobs'
+/// records; and its Map Summary, worked out as MeowDB works it out (`None` without mobs).
+///
+/// An untimed spawn point gives a full party `3600 / 7.56` mobs an hour, and a player
+/// alone 0.75 of that. A timed one gives `3600 / timer`, alone or in a party; a ranged
+/// timer, the average OSMS gives. Each mob's EXP an hour is its EXP times its mobs an
+/// hour. Each mob's figures are rounded, the map's are their sums, and the map's Mob
+/// Rate isn't applied.
+fn spawns(map: &OsmsMap, mobs: &HashMap<u64, &OsmsMob>) -> Result<(Option<MapSummary>, Vec<Mob>), String> {
+    let mut points: Vec<(u64, u64)> = Vec::new();
+    for point in &map.mob_positions {
+        match points.iter_mut().find(|(mob, _)| *mob == point.id) {
+            Some((_, count)) => *count += 1,
+            None => points.push((point.id, 1)),
+        }
+    }
+    let total: u64 = points.iter().map(|(_, count)| count).sum();
+    let mut sums = [0u64; 4];
+    let mut listed = Vec::new();
+    for (id, count) in points {
+        let mob = mobs.get(&id).ok_or_else(|| format!("mob {id} isn't in monsters.json"))?;
+        let timer = mob.maps.iter().find(|on| on.id == map.id).and_then(|on| on.mob_time.as_deref());
+        let (solo, full_party) = match timer.map(seconds).transpose()? {
+            Some(timer) => (3600.0 / timer, 3600.0 / timer),
+            None => (SOLO_SHARE * 3600.0 / RESPAWN_SECONDS, 3600.0 / RESPAWN_SECONDS),
+        };
+        let (solo, full_party) = (count as f64 * solo, count as f64 * full_party);
+        let exp = mob.exp as f64;
+        for (sum, figure) in sums.iter_mut().zip([solo, full_party, solo * exp, full_party * exp]) {
+            *sum += figure.round() as u64;
+        }
+        listed.push(Mob {
+            id: id.to_string(),
+            name: mob.name.trim().to_string(),
+            level: mob.level,
+            hp: mob.hp,
+            exp: mob.exp,
+            spawn_count: u32::try_from(count).map_err(|e| e.to_string())?,
+            // Rounded half up, as MeowDB shows it.
+            spawn_share_percent: ((count * 200 + total) / (2 * total)) as u32,
+        });
+    }
+    let [mobs_solo, mobs_party, exp_solo, exp_party] = sums;
+    let summary = (!listed.is_empty()).then_some(MapSummary {
+        mobs_per_hour: PerParty { solo: mobs_solo, full_party: mobs_party },
+        exp_per_hour: PerParty { solo: exp_solo, full_party: exp_party },
+    });
+    Ok((summary, listed))
+}
+
+/// A spawn timer in seconds: `"300.00"`, or for a ranged timer the average in brackets,
+/// `"180.00-1800.00 [720.00]"`.
+fn seconds(timer: &str) -> Result<f64, String> {
+    let number = |s: &str| s.trim().parse::<f64>().ok().filter(|n| n.is_finite() && *n > 0.0);
+    let average = match timer.split_once('[') {
+        Some((range, average)) => {
+            let bounds = range.split_once('-').and_then(|(low, high)| Some((number(low)?, number(high)?)));
+            bounds.and(average.strip_suffix(']')).and_then(number)
+        }
+        None => number(timer),
+    };
+    average.ok_or_else(|| format!("mob_time {timer:?} isn't a timer"))
 }
 
 /// One of the set's files, read into `T`.
@@ -116,4 +191,39 @@ struct OsmsMap {
     name: String,
     street_name: String,
     region: String,
+    /// One per spawn point.
+    #[serde(default)]
+    mob_positions: Vec<SpawnPoint>,
+}
+
+#[derive(Deserialize)]
+struct SpawnPoint {
+    /// The mob's ID.
+    id: u64,
+}
+
+/// `monsters.json`.
+#[derive(Deserialize)]
+struct MonstersFile {
+    monsters: Vec<OsmsMob>,
+}
+
+/// A mob in `monsters.json`.
+#[derive(Deserialize)]
+struct OsmsMob {
+    id: u64,
+    name: String,
+    level: u32,
+    hp: u64,
+    exp: u64,
+    /// The maps it spawns on; absent for a mob on none.
+    #[serde(default)]
+    maps: Vec<MobOnMap>,
+}
+
+#[derive(Deserialize)]
+struct MobOnMap {
+    id: u64,
+    /// Its spawn points' timer on the map, if they're timed.
+    mob_time: Option<String>,
 }
