@@ -29,8 +29,8 @@
   color: var(--ink);
 }
 
-/* A reset can be undone until the next EXP gain: its note carries the button. */
-.panel .tracking .note.reset {
+/* A reset can be undone until the next EXP gain: the note carries the button. */
+.panel .tracking .note.undo {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -109,7 +109,8 @@
 }
 
 /* The rates over the last 5 minutes and the whole Session, the panel's summary in
-   miniature: each figure beside its unit, the figures right-aligned in their columns. */
+   miniature: each figure beside its unit, the figures right-aligned in their columns.
+   Under them, the map's Personal Best from its history, its × where the percentages go. */
 .rates {
   display: grid;
   grid-template-columns: auto auto auto auto auto;
@@ -141,6 +142,38 @@
   color: var(--ink);
 }
 
+/* Last 5 min is a new best on the map: a star after the period, the player's own You
+   Yellow as the minimap's dot for them is, lit up and to the left and ringed in its dark
+   gold. Its room is kept while it's off, so the figures never shift as it comes and goes. */
+.rates .star {
+  width: 11px;
+  height: 11px;
+  margin-left: 4px;
+  vertical-align: -1px;
+  visibility: hidden;
+  fill: var(--you);
+  stroke: var(--you-edge);
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+}
+
+.rates .star.on {
+  visibility: visible;
+}
+
+.rates .star .lit {
+  fill: var(--you-light);
+  stroke: none;
+}
+
+/* The Best row's ×: the light body button, as the reset's is, never the window bar's blue
+   ×. Level with the row, and kept from making it taller. */
+.rates .best .icon-button {
+  align-self: center;
+  justify-self: start;
+  margin: -1px 0;
+}
+
 .rates .unit {
   padding: 0 10px 0 4px;
 }
@@ -160,9 +193,10 @@
 
 /* Rates still settling, held while paused, or held while the bar can't be read (the note
    above says why): the figures show in the light weight, a step back from the bold they
-   stand in when they move. Never faded: they stay as legible as ever. */
+   stand in when they move. Never faded: they stay as legible as ever. The Best row's
+   figure doesn't move, so it stays bold. */
 .tracking.held .time-to-level,
-.tracking.held .rates .value {
+.tracking.held .rates .row:not(.best) .value {
   font-weight: 400;
 }
 

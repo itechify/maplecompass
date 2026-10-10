@@ -28,13 +28,24 @@
 //!   frames at all, as while the game window is minimised, is no evidence either way.)
 //! - The player's reset can be undone until the EXP next changes, which starts the new
 //!   Session; a character switch ends the old one for good.
+//! - Each map the panel confirms starts a Visit (GLOSSARY), which Sessions don't end:
+//!   the share of the map's solo ceiling counts only the play since. The title going
+//!   unread for a while doesn't end it, nor does the map's page coming later, nor the
+//!   player choosing among Candidates (they haven't moved).
 //! - The figures shown hold still for each [`REFRESH_MS`] of capture time, rather than
 //!   jumping with every kill. Events show at once: the state changing (the Session
 //!   starting, warming up, pausing, resuming, or the bar going unread), the first figures
-//!   there are, a death, a level-up, a reset or its undoing, a character switch, and a
-//!   map with another ceiling. The bar's last reading shows as it comes.
+//!   there are, a death, a level-up, a reset or its undoing, a character switch, a new
+//!   Visit, a map with another ceiling or Personal Best, and a best removed from the
+//!   history. The bar's last reading shows as it comes.
+//! - The Rolling Rate as shown afresh, over a full 5 minutes of the Visit's play, counts
+//!   towards the Visit's Personal Best on the map (see [`crate::personal_best`]), unless
+//!   the bar can't be read. The core says which map that is, if any: one it is certain
+//!   of, with a Map Summary. Maps that share a title but would show the same count as the
+//!   first of them, the one the panel shows. Bests outlast Sessions, as Visits do.
 
 use crate::ExpBar;
+use crate::personal_best::{Bests, SavedBests};
 use serde::Serialize;
 
 /// What EXP tracking shows: everything the panel's tracking section and the collapsed
@@ -58,10 +69,10 @@ pub struct ExpTracking {
     pub session_average: Option<ExpRate>,
     /// The Rolling Rate's EXP/h on the shown map, as a share of its MeowDB solo EXP/h
     /// ceiling (its Map Summary), in hundredths of a percent: 7300 for "73%". It counts
-    /// only the play since the map was shown, once there has been [`WARM_UP_MS`] of it,
-    /// so a map change never measures one map's EXP against another's ceiling. `None`
-    /// without a recognised map with a Map Summary, until then, or while the rate there
-    /// is zero or negative.
+    /// only the play since arriving on the map (the Visit's), once there has been
+    /// [`WARM_UP_MS`] of it, so one map's EXP is never measured against another's
+    /// ceiling, the same or not. `None` without a recognised map with a Map Summary,
+    /// until then, or while the rate there is zero or negative.
     pub ceiling_share_hundredths: Option<i64>,
     /// The ceiling the share is of: the shown map's MeowDB solo EXP/h, while there is a
     /// share.
@@ -85,6 +96,16 @@ pub struct ExpTracking {
     /// reading rather than holding with the figures, so the player sees it being read.
     /// `None` until one is.
     pub bar: Option<ExpBar>,
+    /// The Best row: the shown map's Personal Best from its history, the best of the
+    /// earlier Visits, in EXP/h, from arriving. `None` on a first Visit there, and where no
+    /// bests are kept: a map without a Map Summary, or Candidates waiting for a choice.
+    pub personal_best: Option<u64>,
+    /// The star on the Rolling Rate's row: its EXP/h is higher than `personal_best`'s, as
+    /// the Grind Tracker writes both (3 significant figures), over a full 5 minutes of
+    /// active play on the map with the bar read, as a best counts. It goes as soon as the
+    /// rate drops back. It is of the Rolling Rate shown, so it holds with it between
+    /// refreshes.
+    pub new_best: bool,
 }
 
 /// The deaths in a Session: drops in EXP within the level.
@@ -240,8 +261,21 @@ pub(crate) struct Session {
     unread_since: Option<u64>,
     /// The Session the player's reset ended, until the EXP next changes.
     undo: Option<Undo>,
-    /// The shown map's solo EXP/h ceiling, as last measured against.
-    ceiling: Option<u64>,
+    /// The Visit under way. It outlasts Sessions: a reset or a character switch doesn't
+    /// move the player.
+    visit: Visit,
+    /// Every map's Personal Bests, which outlast Sessions too.
+    bests: Bests,
+}
+
+/// A Visit (GLOSSARY): from the panel confirming a map until it confirms another.
+#[derive(Debug, Default, Clone, Copy)]
+struct Visit {
+    /// Which Visit it is, to tell it from the others: one more with each map the panel
+    /// confirms, 0 before the first.
+    id: u64,
+    /// When it started: the latest capture time seen then.
+    at: u64,
 }
 
 /// What the player's reset set aside, to bring back if they undo it.
@@ -251,8 +285,8 @@ struct Undo {
     largest_gain_hundredths: u32,
     level_ups: u32,
     character_switched: bool,
-    /// The ceiling then: on another map since, the share starts over.
-    ceiling: Option<u64>,
+    /// The Visit then (its id): on another map since, the share counts from arriving there.
+    visit: u64,
 }
 
 /// The figures the panel shows, held for the rest of the [`REFRESH_MS`] stretch they
@@ -261,11 +295,22 @@ struct Undo {
 struct Shown {
     /// Which stretch of capture time they were measured in.
     stretch: u64,
-    /// The solo ceiling they were measured against.
-    ceiling: Option<u64>,
+    against: Against,
     /// The Session's level-ups by then.
     level_ups: u32,
     tracking: ExpTracking,
+}
+
+/// Where figures were measured, and against what: on another Visit, or against another
+/// ceiling or Personal Best, they are measured afresh.
+#[derive(Debug, PartialEq)]
+struct Against {
+    /// The Visit (its id).
+    visit: u64,
+    /// The shown map's solo ceiling.
+    ceiling: Option<u64>,
+    /// The map whose Personal Best the Best row shows.
+    map: Option<String>,
 }
 
 /// Where a started Session stood at an EXP change.
@@ -324,9 +369,9 @@ struct Figures {
     /// The Session has had [`WARM_UP_MS`] of active time at some point. A break later
     /// takes active time back, but not this.
     warmed_up: bool,
-    /// Active time when the shown map's ceiling last changed: the share of it counts
-    /// only the play since.
-    ceiling_from: u64,
+    /// Active time when the Visit under way started: the share of the map's ceiling, and
+    /// the Visit's Personal Best, count only the play since.
+    visit_from: u64,
 }
 
 impl Figures {
@@ -339,7 +384,7 @@ impl Figures {
             marks: vec![Mark { active: 0, gained: 0 }],
             deaths: Deaths::default(),
             warmed_up: false,
-            ceiling_from: 0,
+            visit_from: 0,
         }
     }
 
@@ -526,7 +571,7 @@ impl Session {
                 largest_gain_hundredths: self.largest_gain_hundredths,
                 level_ups: self.level_ups,
                 character_switched: self.character_switched,
-                ceiling: self.ceiling,
+                visit: self.visit.id,
             }),
             None => self.undo.take(),
         };
@@ -539,8 +584,10 @@ impl Session {
     pub fn undo_reset(&mut self) {
         let Some(undo) = self.undo.take() else { return };
         let mut figures = undo.figures;
-        if undo.ceiling != self.ceiling {
-            figures.ceiling_from = figures.active(self.now);
+        if undo.visit != self.visit.id {
+            // Reset on another map: the EXP hasn't changed since, so the time from then
+            // to arriving here counts as it would have.
+            figures.visit_from = figures.active(self.visit.at);
         }
         self.figures = Some(figures);
         self.largest_gain_hundredths = undo.largest_gain_hundredths;
@@ -548,6 +595,34 @@ impl Session {
         self.character_switched = undo.character_switched;
         self.misfits = None;
         self.shown = None;
+    }
+
+    /// The player removed `map`'s Personal Best from its history: what is shown is
+    /// measured afresh against the next best, at once.
+    pub fn remove_best(&mut self, map: &str) {
+        self.bests.remove(map);
+        self.shown = None;
+    }
+
+    /// The panel confirmed another map: a new Visit starts, as of the latest time seen.
+    /// The share of the map's ceiling counts only the play since.
+    pub fn arrive(&mut self) {
+        let now = self.now;
+        self.visit = Visit { id: self.visit.id + 1, at: now };
+        self.bests.end_visit();
+        if let Some(figures) = &mut self.figures {
+            figures.visit_from = figures.active(now);
+        }
+    }
+
+    /// Every map's Personal Bests.
+    pub fn bests(&self) -> &Bests {
+        &self.bests
+    }
+
+    /// Take back the Personal Bests an earlier launch saved.
+    pub fn restore_bests(&mut self, saved: SavedBests) {
+        self.bests.restore(saved);
     }
 
     /// Time passed without a reading.
@@ -587,24 +662,20 @@ impl Session {
     }
 
     /// What the panel shows, with tracking on, on a map whose solo EXP/h ceiling is
-    /// `ceiling` (if it is known): the figures measured earlier in this [`REFRESH_MS`]
-    /// stretch, unless an event since asks for them afresh; and the bar's last reading.
-    pub fn tracking(&mut self, ceiling: Option<u64>) -> ExpTracking {
-        if ceiling != self.ceiling {
-            // Another map, or its page come: its share counts from here.
-            self.ceiling = ceiling;
-            let now = self.now;
-            if let Some(figures) = &mut self.figures {
-                figures.ceiling_from = figures.active(now);
-            }
-        }
-        let fresh = self.measure(ceiling);
+    /// `ceiling` (if it is known), and which is `map` (its MeowDB ID) if Personal Bests
+    /// are kept there: the figures measured earlier in this [`REFRESH_MS`] stretch, unless
+    /// an event since asks for them afresh; and the bar's last reading. A best is dated
+    /// by `now_unix_ms`, the wall clock, if the shell has told it.
+    pub fn tracking(&mut self, ceiling: Option<u64>, map: Option<&str>, now_unix_ms: Option<u64>) -> ExpTracking {
+        let mut fresh = self.measure(ceiling);
         let stretch = self.now / REFRESH_MS;
         // While the bar can't be read nothing new is known: the figures shown stay as
-        // they were, unless the map changes.
+        // they were, unless the player arrives on another map or the share would be of
+        // another ceiling or best (the map's page come, or another Candidate chosen).
         let unreadable = fresh.state == TrackingState::Unreadable;
+        let against = Against { visit: self.visit.id, ceiling, map: map.map(String::from) };
         let holds = self.shown.as_ref().is_some_and(|shown| {
-            shown.ceiling == ceiling
+            shown.against == against
                 && (unreadable
                     || shown.stretch == stretch
                         && shown.level_ups == self.level_ups
@@ -620,7 +691,23 @@ impl Session {
         });
         match &mut self.shown {
             Some(shown) if holds => shown.tracking.state = fresh.state,
-            _ => self.shown = Some(Shown { stretch, ceiling, level_ups: self.level_ups, tracking: fresh }),
+            _ => {
+                if let Some(map) = map {
+                    // The Rolling Rate shown over a full 5 minutes of active play here
+                    // counts towards this Visit's best, unless nothing is known of the EXP.
+                    let here = self.figures.as_ref().map(|f| f.rolling_since(self.now, f.visit_from));
+                    let full = here.filter(|h| h.over_ms >= ROLLING_MS && h.exp > 0);
+                    let counted = full.filter(|_| !unreadable).map(|here| here.per_hour(1, 1) as u64);
+                    self.bests.on_shown(map, counted, now_unix_ms);
+                    // Over a full 5 minutes here, the Rolling Rate shown is the one counted.
+                    let best = self.bests.history_best(map).map(|best| best.exp_per_hour);
+                    fresh.personal_best = best;
+                    fresh.new_best = counted
+                        .zip(best)
+                        .is_some_and(|(rate, best)| three_figures(rate) > three_figures(best));
+                }
+                self.shown = Some(Shown { stretch, against, level_ups: self.level_ups, tracking: fresh });
+            }
         }
         let held = self.shown.as_ref().map(|shown| shown.tracking.clone()).unwrap_or_default();
         ExpTracking { bar: self.last, ..held }
@@ -660,7 +747,7 @@ impl Session {
             _ => None,
         };
         // The share counts only the play on the shown map, once there is enough of it.
-        let here = figures.rolling_since(now, figures.ceiling_from);
+        let here = figures.rolling_since(now, figures.visit_from);
         let ceiling = ceiling.filter(|&c| c > 0 && here.exp > 0 && here.over_ms >= WARM_UP_MS);
         let average = figures.average(now);
         ExpTracking {
@@ -677,8 +764,23 @@ impl Session {
             rolling_s: rolling.over_ms / 1000,
             reset_undoable: false,
             bar: None,
+            personal_best: None,
+            new_best: false,
         }
     }
+}
+
+/// An EXP rate as the Grind Tracker writes it, to 3 significant figures, halves up:
+/// 66,523 is 66,500, and 66,550 is 66,600. It must agree with `rate()` in
+/// `src/grind-tracker.ts`, which writes Last 5 min and the Best row: the star compares
+/// the two through this, so it never shows beside two figures that read the same
+/// (`the_star_compares_the_rates_as_the_grind_tracker_writes_them`).
+fn three_figures(exp_per_hour: u64) -> u64 {
+    let mut step = 1;
+    while exp_per_hour / step >= 1000 {
+        step *= 10;
+    }
+    (exp_per_hour + step / 2) / step * step
 }
 
 /// Whether `bar` carries on from `last` as the same level could: the percentage moved

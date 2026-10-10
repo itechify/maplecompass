@@ -9,29 +9,21 @@
 
 mod common;
 
-use common::{FakeSource, arrive};
+use common::{
+    CONSTRUCTION_SITE_ID, FakeSource, SUNSET_SKY_ID, arrive, black_frame, saved_map_page, sharing_a_title, tracking,
+    tracking_with,
+};
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::task::Poll;
 use compass_core::{
-    Action, Compass, Deaths, ExpBar, ExpBarReading, ExpBarRegion, ExpRate, ExpTracking, GameWindow, PanelControl, PanelState, Rect,
-    ScreenRect, Settings, Size, TitleRegion, TrackingState,
+    Action, Compass, Deaths, ExpBar, ExpBarReading, ExpRate, ExpTracking, GameWindow, MapDataStatus, PanelControl,
+    PanelState, ScreenRect, TrackingState,
 };
 
 const S: u64 = 1000;
 const MIN: u64 = 60 * S;
-
-/// A core with EXP tracking on: both regions kept, on a 1920x1200 game window.
-fn tracking() -> Compass {
-    let client = Size { width: 1920, height: 1200 };
-    let mut compass = Compass::new(FakeSource::meowdb());
-    compass.restore(Settings {
-        title_region: Some(TitleRegion { marked: Rect { x: 70, y: 40, width: 130, height: 48 }, client }),
-        exp_bar_region: Some(ExpBarRegion { marked: Rect { x: 1005, y: 1144, width: 240, height: 32 }, client }),
-        ..Settings::default()
-    });
-    let screen = ScreenRect { x: 0, y: 0, width: 1920, height: 1200 };
-    compass.on_game_window(Some(GameWindow { client: screen, frame: screen, screens: vec![screen] }));
-    compass
-}
 
 /// The EXP bar read as `exp [percent_hundredths / 100 %]` at `at_ms`.
 fn read(compass: &mut Compass, at_ms: u64, exp: u64, percent_hundredths: u32) -> PanelState {
@@ -547,6 +539,8 @@ fn the_overlay_gets_tracking_as_the_panel_renders_it() {
             "rollingS": 0,
             "resetUndoable": false,
             "bar": { "exp": 266, "percentHundredths": 633 },
+            "personalBest": null,
+            "newBest": false,
         })
     );
 
@@ -569,6 +563,8 @@ fn the_overlay_gets_tracking_as_the_panel_renders_it() {
             "rollingS": 60,
             "resetUndoable": false,
             "bar": { "exp": 335, "percentHundredths": 798 },
+            "personalBest": null,
+            "newBest": false,
         })
     );
     let died = serde_json::to_value(read(&mut compass, 75 * S, 266, 633)).unwrap();
@@ -621,6 +617,116 @@ fn the_rate_on_a_map_is_compared_with_its_solo_ceiling_after_a_minute_of_play_th
     let on = read(&mut compass, 150 * S, 410, 976);
     assert_eq!(on.exp_tracking.state, TrackingState::Active);
     assert_eq!(exp_per_hour(&on), (Some(3703), Some(3703)), "144 EXP in 140 s");
+}
+
+/// MeowDB's saved index and pages, but for each `(map, stand_in)` the map's page is the
+/// stand-in's: to give two maps the same solo ceiling, or a ceiling of choice.
+fn standing_in(source: FakeSource, stand_ins: &[(&'static str, &'static str)]) -> FakeSource {
+    let stand_ins = stand_ins.to_vec();
+    source.with_pages(move |id| {
+        let page = stand_ins.iter().find(|(map, _)| *map == id).map_or(id, |&(_, stand_in)| stand_in);
+        Poll::Ready(saved_map_page(page))
+    })
+}
+
+#[test]
+fn on_the_second_of_two_maps_with_the_same_ceiling_the_share_counts_only_play_since_arriving() {
+    // The Construction Site with Sunset Sky's page: the same 223,928 solo ceiling.
+    let mut compass = tracking_with(standing_in(FakeSource::meowdb(), &[(CONSTRUCTION_SITE_ID, SUNSET_SKY_ID)]));
+    arrive(&mut compass, SUNSET, 0);
+    read(&mut compass, 0, 160, 381);
+    read(&mut compass, 10 * S, 266, 633);
+    let sunset = read(&mut compass, 70 * S, 335, 798);
+    assert_eq!(sunset.exp_tracking.ceiling_share_hundredths, Some(185), "4,140 EXP/h of 223,928");
+
+    // Straight on to the Construction Site: nothing has been earned there yet, though its
+    // ceiling is the same. Sunset Sky's minute is never measured against it.
+    let site = arrive(&mut compass, CONSTRUCTION_SITE, 70 * S);
+    assert_eq!(site.exp_tracking.ceiling_share_hundredths, None);
+    assert_eq!(site.exp_tracking.solo_exp_ceiling, None);
+    assert_eq!(read(&mut compass, 100 * S, 360, 857).exp_tracking.ceiling_share_hundredths, None);
+
+    // A minute there, 65 EXP: 3,900 EXP/h of 223,928, 1.74%.
+    let there = read(&mut compass, 130 * S, 400, 952);
+    assert_eq!(there.exp_tracking.ceiling_share_hundredths, Some(174));
+    assert_eq!(there.exp_tracking.solo_exp_ceiling, Some(223_928));
+}
+
+#[test]
+fn a_map_whose_page_arrives_after_the_player_counts_play_from_arriving() {
+    // MeowDB's pages are held back until `page_in` lets them through.
+    let page_in = Arc::new(AtomicBool::new(false));
+    let source = FakeSource::meowdb().with_pages({
+        let page_in = page_in.clone();
+        move |id| if page_in.load(Ordering::SeqCst) { Poll::Ready(saved_map_page(id)) } else { Poll::Pending }
+    });
+    let mut compass = tracking_with(source);
+    read(&mut compass, 0, 160, 381);
+    read(&mut compass, 10 * S, 266, 633);
+    read(&mut compass, 70 * S, 335, 798);
+    let arrived = arrive(&mut compass, SUNSET, 70 * S);
+    assert_eq!(arrived.data, MapDataStatus::Loading);
+
+    // The minimap covered a moment (a loading screen) doesn't end the Visit.
+    compass.on_frame(black_frame(90 * S));
+    arrive(&mut compass, SUNSET, 91 * S);
+    read(&mut compass, 100 * S, 360, 857);
+
+    // Sunset Sky's page comes 40 s after the player did.
+    page_in.store(true, Ordering::SeqCst);
+    let paged = compass.tick(110 * S).clone();
+    assert_eq!(paged.data.solo_exp_ceiling(), Some(223_928));
+    assert_eq!(paged.exp_tracking.ceiling_share_hundredths, None, "40 s there");
+
+    // A minute after arriving, not after the page: 65 EXP, 3,900 EXP/h of 223,928.
+    let there = read(&mut compass, 130 * S, 400, 952);
+    assert_eq!(there.exp_tracking.ceiling_share_hundredths, Some(174));
+}
+
+#[test]
+fn choosing_among_candidates_with_the_hotkey_counts_play_since_arriving_for_the_map_chosen() {
+    // The Construction Site and Sunset Sky share the Kerning City sample's title here.
+    // The first in the map index, the Construction Site, shows first.
+    let mut compass = tracking_with(sharing_a_title());
+    arrive(&mut compass, KERNING, 0);
+    read(&mut compass, 0, 160, 381);
+    read(&mut compass, 10 * S, 266, 633);
+    let first = read(&mut compass, 70 * S, 335, 798);
+    assert_eq!(first.map.map(|m| m.id).as_deref(), Some(CONSTRUCTION_SITE_ID));
+    assert_eq!(first.exp_tracking.ceiling_share_hundredths, Some(139), "4,140 EXP/h of 297,499");
+
+    // The player hasn't moved: the play since arriving counts for the map they choose.
+    // 69 EXP in 70 s is 3,549 EXP/h, of Sunset Sky's 223,928.
+    compass.tick(80 * S);
+    compass.on_hotkey("ctrl+shift+n");
+    let chosen = compass.panel_state();
+    assert_eq!(chosen.map.as_ref().map(|m| m.id.as_str()), Some(SUNSET_SKY_ID));
+    assert_eq!(chosen.exp_tracking.ceiling_share_hundredths, Some(158));
+    assert_eq!(chosen.exp_tracking.solo_exp_ceiling, Some(223_928));
+}
+
+#[test]
+fn undoing_a_reset_made_on_another_map_counts_the_share_from_arriving_on_this_one() {
+    let mut compass = tracking();
+    arrive(&mut compass, SUNSET, 0);
+    read(&mut compass, 0, 160, 381);
+    read(&mut compass, 10 * S, 266, 633);
+    read(&mut compass, 70 * S, 335, 798);
+    compass.tick(75 * S);
+    compass.press(PanelControl::ResetSession);
+
+    // On to the Construction Site at 80 s, then the reset undone at 90 s: Sunset Sky's
+    // minute comes back, but not into the share here.
+    compass.tick(80 * S);
+    arrive(&mut compass, CONSTRUCTION_SITE, 80 * S);
+    compass.tick(90 * S);
+    let undone = press(&mut compass, PanelControl::UndoReset);
+    assert_eq!(exp_per_hour(&undone).1, Some(3105), "69 EXP in the Session's 80 s");
+    assert_eq!(undone.exp_tracking.ceiling_share_hundredths, None);
+
+    // A minute from arriving, 25 EXP: 1,500 EXP/h of the Construction Site's 297,499.
+    let there = read(&mut compass, 140 * S, 360, 857);
+    assert_eq!(there.exp_tracking.ceiling_share_hundredths, Some(50));
 }
 
 #[test]

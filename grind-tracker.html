@@ -24,27 +24,30 @@
           <div class="notes" aria-live="polite">
             <p class="note problem" id="tracking-unreadable" hidden>Can't read the EXP bar. Move whatever covers it, or mark it again from Help &amp; setup.</p>
             <p class="note" id="tracking-switched" hidden>You switched character, so this is a new Session.</p>
-            <p class="note reset" id="tracking-reset" hidden>
+            <p class="note undo" id="tracking-reset" hidden>
               <span>Session reset.</span>
               <button type="button" class="text-button" data-control="undoReset">Undo</button>
             </p>
-            <p class="note" id="tracking-waiting">Waiting for EXP: the Session starts at your next gain.</p>
+            <p class="note" id="tracking-waiting">Waiting for EXP</p>
           </div>
           <div class="figures" id="tracking-figures" hidden>
-            <div class="headline">
+            <div class="headline" id="tracking-headline">
               <p class="headline-text">
                 <span class="label">Time to Level</span>
                 <span class="time-to-level" id="time-to-level"></span>
-                <span class="tag" id="tracking-tag" hidden></span>
+                <span class="tag paused" id="tracking-tag" hidden>paused</span>
               </p>
               <button type="button" class="icon-button light" data-control="resetSession" aria-label="Reset the Session" title="Reset the Session: measure EXP afresh from your next gain">
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.3 6.2A5 5 0 1 1 3 9.5M2.8 2.8v3.6h3.6" /></svg>
               </button>
             </div>
             <!-- Meso and item rows come later, from the Pickup Log. -->
+            <!-- The Best row is the map's Personal Best from its history, from arriving on
+                 the map: until the Session starts it is all the figures hold. The star
+                 marks Last 5 min while it beats it. -->
             <div class="rates">
-              <div class="row">
-                <span class="period">Last 5 min</span>
+              <div class="row" id="rolling-row">
+                <span class="period">Last 5 min<svg class="star" id="rolling-star" viewBox="0 0 16 16" role="img" aria-label="New best on this map"><title>New best on this map</title><path d="M8 1.5L9.76 6.07L14.66 6.34L10.85 9.43L12.11 14.16L8 11.5L3.89 14.16L5.15 9.43L1.34 6.34L6.24 6.07Z" /><ellipse class="lit" cx="7.1" cy="6.9" rx="1.5" ry="1.1" /></svg></span>
                 <span class="value" id="rolling-exp"></span><span class="unit">EXP/h</span>
                 <span class="value" id="rolling-percent"></span><span class="unit per">/h</span>
               </div>
@@ -52,6 +55,13 @@
                 <span class="period">Session <span class="length" id="session-length"></span></span>
                 <span class="value" id="session-exp"></span><span class="unit">EXP/h</span>
                 <span class="value" id="session-percent"></span><span class="unit per">/h</span>
+              </div>
+              <div class="row best" id="best-row" hidden>
+                <span class="period">Best</span>
+                <span class="value" id="best-exp"></span><span class="unit">EXP/h</span>
+                <button type="button" class="icon-button light" data-control="removeBest" aria-label="Remove this best from your history" title="Remove this best from your history">
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+                </button>
               </div>
             </div>
             <p class="line" id="tracking-share" hidden></p>

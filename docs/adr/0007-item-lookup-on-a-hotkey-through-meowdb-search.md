@@ -16,7 +16,7 @@ MeowDB's item pages are numbered by MeowDB's own IDs (`/msclassic/item-db/418`),
 
 ## An alert at the top centre of the game window
 
-What a lookup comes to (looking up, opened, why nothing opened, or the items to pick from) shows in an alert of its own at the top centre of the game window, where the player is looking when they press the hotkey, for a few seconds. The panel is left as it is, collapsed or not. The alert is a window of ours like the Grind Tracker's (ADR 0001): no-activate, kept just above the game, and clear of the captured regions. Clicks pass through it to the game, except while it lists items to pick from. Like our other windows it shows in our captures, so an alert still showing over the next tooltip's name is reported as covering it.
+What a lookup comes to (looking up, opened, why nothing opened, or the items to pick from) shows in an alert of its own at the top centre of the game window, where the player is looking when they press the hotkey, for a few seconds. The panel is left as it is, collapsed or not. The alert is a window of ours like the Grind Tracker's (ADR 0001): no-activate, on top of everything only while the game or one of our windows is in front, and clear of the captured regions. Clicks pass through it to the game, except while it lists items to pick from. Like our other windows it shows in our captures, so an alert still showing over the next tooltip's name is reported as covering it.
 
 ## Considered options
 

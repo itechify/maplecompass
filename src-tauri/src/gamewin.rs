@@ -1,13 +1,14 @@
-//! Game window locator and z-order keeper (Windows). Reads window-manager state only:
-//! it never sends the game a message, opens its process or hooks it, and the only
-//! window it ever changes is our own overlay (ADR 0001).
+//! Game window locator, foreground check, and the switch that puts our windows on top of
+//! everything or out of sight (Windows). Reads window-manager state only: it never sends
+//! the game a message, opens its process or hooks it, and the only windows it ever
+//! changes are our own (ADR 0001).
 
 use compass_core::{Foreground, ScreenRect};
 
 /// The game window as found on screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Game {
-    /// The window handle as a number, only used to stack our overlay against it.
+    /// The window handle as a number, only used to tell whether it is in front.
     pub handle: isize,
     /// The client area (what the game draws in) in physical screen pixels.
     pub client: ScreenRect,
@@ -34,7 +35,8 @@ pub fn looking_for() -> String {
 
 #[cfg(windows)]
 pub use win::{
-    cursor_position, find_game, foreground, foreground_is_ours, keep_above, monitor_work_areas, window_under_cursor,
+    Stacking, cursor_position, find_game, foreground, foreground_is_ours, monitor_work_areas, restack,
+    window_under_cursor,
 };
 
 #[cfg(not(windows))]
@@ -85,10 +87,9 @@ mod win {
     };
     use windows::Win32::System::Threading::GetCurrentProcessId;
     use windows::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GA_ROOT, GW_HWNDPREV, GWL_EXSTYLE, GetAncestor, GetClientRect, GetCursorPos,
-        GetForegroundWindow, GetWindow, GetWindowLongPtrW, GetWindowTextW, GetWindowThreadProcessId, HWND_NOTOPMOST,
-        HWND_TOP, HWND_TOPMOST, IsIconic, IsWindowVisible, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-        SetWindowPos, WS_EX_TOPMOST, WindowFromPoint,
+        EnumWindows, GA_ROOT, GWL_EXSTYLE, GetAncestor, GetClientRect, GetCursorPos, GetForegroundWindow,
+        GetWindowLongPtrW, GetWindowTextW, GetWindowThreadProcessId, HWND_BOTTOM, HWND_NOTOPMOST, HWND_TOPMOST, IsIconic,
+        IsWindowVisible, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, WS_EX_TOPMOST, WindowFromPoint,
     };
     use windows::core::BOOL;
 
@@ -150,7 +151,7 @@ mod win {
     fn is_game_window(hwnd: HWND, title: &str) -> bool {
         unsafe {
             // Ours first: reading the caption of one of our own windows sends it a message
-            // and waits for our main thread, which the z-order keeper must never do.
+            // and waits for our main thread, which the on-top watchers must never do.
             if !IsWindowVisible(hwnd).as_bool() || is_ours(hwnd) {
                 return false;
             }
@@ -254,60 +255,48 @@ mod win {
         !foreground.is_invalid() && is_ours(foreground)
     }
 
-    /// Keep our `overlay` just above the game in the z-order: an app in front of the
-    /// game then covers the overlay too. Only our own window is moved, only when the
-    /// order is wrong, and never relative to the game's own windows (Windows refuses
-    /// that when the game runs elevated). Returns whether it had to move the overlay.
+    /// Where [`restack`] puts one of our windows in the z-order.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum Stacking {
+        /// On top of every other window, in the topmost band. Any process may make its
+        /// own window topmost, so this works while the game has the foreground (Windows
+        /// silently ignores a background process raising a normal window above the
+        /// foreground one).
+        OnTop,
+        /// Out of sight: the bottom of the z-order, under every other window, which also
+        /// takes it out of the topmost band. (`HWND_NOTOPMOST` alone would put it at the
+        /// top of the normal windows, over the app in front.)
+        Bottom,
+    }
+
+    /// Put our `window` on top of every other window, or send it to the bottom, out of
+    /// sight (`to`). Only our own window is moved, and only when it may not be where it
+    /// should be: its style says otherwise, or the caller last put it elsewhere
+    /// (`set_before`). (Tao rewrites our windows' extended style from its own flags
+    /// whenever one of them changes, without `WS_EX_TOPMOST`, so the style alone can say
+    /// a window on top isn't.) Returns whether it moved it.
     ///
-    /// While the game is the foreground window the overlay joins the topmost band:
-    /// Windows silently ignores a background process raising a normal window above
-    /// the foreground one (`HWND_TOP` returns success and does nothing), but any
-    /// process may make its window topmost. Once another app takes the foreground,
-    /// the overlay leaves the topmost band again and sits just above the game.
+    /// Put on top, the window first leaves the topmost band, then joins it. Coming back
+    /// from the bottom as it shows again (another app in front, then the game), Windows
+    /// can ignore a plain `HWND_TOPMOST` for it, returning success and leaving it under
+    /// the game, and goes on ignoring it however often it is asked, from the window's own
+    /// thread too; going by `HWND_NOTOPMOST` first puts it on top every time. Seen on
+    /// whichever of our windows the player clicked last.
     ///
     /// No owner/parent link to the game (that would attach input queues across the
     /// processes, ADR 0001) and no event hook: the caller polls this.
-    pub fn keep_above(overlay: HWND, game: isize) -> windows::core::Result<bool> {
-        let game = HWND(game as *mut _);
-        unsafe {
-            let foreground = GetForegroundWindow();
-            if foreground == game || (!foreground.is_invalid() && is_ours(foreground)) {
-                if is_topmost(overlay) {
-                    return Ok(false);
-                }
-                SetWindowPos(overlay, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE)?;
-                return Ok(true);
-            }
-            let game_topmost = is_topmost(game);
-            // Walk up from the game. Invisible windows (the game's IME windows sit
-            // right above it) and our own helper windows don't count: the overlay
-            // must come before any other visible window, and only counts as in place
-            // when it is in the game's band (a topmost overlay left over from when
-            // the game had the foreground would float above every other app).
-            let mut above = GetWindow(game, GW_HWNDPREV).ok();
-            let mut first_other = None;
-            for _ in 0..1024 {
-                let Some(w) = above else { break };
-                if w == overlay && is_topmost(overlay) == game_topmost {
-                    return Ok(false);
-                }
-                if w != overlay && IsWindowVisible(w).as_bool() && !is_ours(w) {
-                    first_other = Some(w);
-                    break;
-                }
-                above = GetWindow(w, GW_HWNDPREV).ok();
-            }
-            // Inserting after that window puts ours between it and the game. If it is
-            // topmost and the game isn't, the game leads its band, so go to the top of
-            // the band: HWND_TOP, or HWND_NOTOPMOST to bring a topmost overlay down.
-            let after = match first_other {
-                Some(w) if is_topmost(w) == game_topmost => w,
-                _ if game_topmost => HWND_TOPMOST,
-                _ if is_topmost(overlay) => HWND_NOTOPMOST,
-                _ => HWND_TOP,
-            };
-            SetWindowPos(overlay, Some(after), 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE)?;
-            Ok(true)
+    pub fn restack(window: HWND, to: Stacking, set_before: Option<Stacking>) -> windows::core::Result<bool> {
+        if is_topmost(window) == (to == Stacking::OnTop) && set_before == Some(to) {
+            return Ok(false);
         }
+        let flags = SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE;
+        match to {
+            Stacking::OnTop => unsafe {
+                SetWindowPos(window, Some(HWND_NOTOPMOST), 0, 0, 0, 0, flags)?;
+                SetWindowPos(window, Some(HWND_TOPMOST), 0, 0, 0, 0, flags)?;
+            },
+            Stacking::Bottom => unsafe { SetWindowPos(window, Some(HWND_BOTTOM), 0, 0, 0, 0, flags)? },
+        }
+        Ok(true)
     }
 }
