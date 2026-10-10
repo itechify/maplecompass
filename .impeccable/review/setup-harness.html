@@ -15,8 +15,7 @@
         recognition: { status: "ready" },
         game: { width: 1920, height: 1200 },
         gameTitle: "MapleStory",
-        hotkeys: { togglePanel: "ctrl+shift+c", cyclePlacement: "ctrl+shift+p", openMeowdbPage: "ctrl+shift+m", setup: "ctrl+shift+s", chooseCandidate: "ctrl+shift+n", search: "ctrl+shift+f", grindTracker: "ctrl+shift+g" },
-        settingsPath: "%APPDATA%\com.itechify.maplecompass\settings.json",
+        hotkeys: { togglePanel: "ctrl+shift+c", cyclePlacement: "ctrl+shift+p", openMeowdbPage: "ctrl+shift+m", setup: "ctrl+shift+s", chooseCandidate: "ctrl+shift+n", search: "ctrl+shift+f", grindTracker: "ctrl+shift+g", itemLookup: "ctrl+shift+i" },
       };
       const views = {
         missing: { game: null },
@@ -25,6 +24,11 @@
         unavailable: { setup: { ...base.setup, testRead: { status: "failed" } }, recognition: { status: "unavailable" } },
         resized: { setup: { ...base.setup, needed: "resolutionChanged" }, unavailableHotkeys: ["ctrl+shift+m", "ctrl+shift+banana"], invalidHotkeys: ["ctrl+shift+banana"] },
         requested: { setup: { ...base.setup, needed: "requested" } },
+        // The Overlay Guide, with its Change hotkeys button; without the game it can't be
+        // used; and with two hotkeys turned off.
+        guide: { setup: { ...base.setup, needed: "requested" } },
+        guidenogame: { setup: { ...base.setup, needed: "requested" }, game: null },
+        guideoff: { setup: { ...base.setup, needed: "requested" }, hotkeys: { ...base.hotkeys, itemLookup: "", setup: "" } },
       };
       window.__view = { ...base, ...(views[s] ?? {}) };
       const cbs = {};
@@ -59,6 +63,7 @@
       }
       if (s === "recognised") document.getElementById("finish").focus();
       if (s === "focus") { next(); document.querySelector("section:not([hidden]) [data-action=next]").focus(); }
+      if (s.startsWith("guide")) document.getElementById("guide-open").click();
     </script>
   </body>
 </html>

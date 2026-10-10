@@ -132,21 +132,25 @@
 
       <section data-step="guide" hidden>
         <h2 tabindex="-1">Using the overlay</h2>
-        <p>Clicking the panel never takes the keyboard from the game. Use these shortcuts while you play.</p>
+        <p>Clicking the panel never takes the keyboard from the game. Use these shortcuts while you play. To change one, or turn it off, use Change hotkeys below or the gear at the top of the panel.</p>
         <dl class="shortcuts">
           <dt>Collapse / expand</dt><dd data-shortcut="togglePanel"></dd>
           <dt>Move</dt><dd>Drag the panel's header</dd>
           <dt>Change placement</dt><dd data-shortcut="cyclePlacement"></dd>
-          <dt>Next Candidate</dt><dd data-shortcut="chooseCandidate"></dd>
-          <dt>Open MeowDB page</dt><dd data-shortcut="openMeowdbPage"></dd>
+          <dt>Next map with this title</dt><dd data-shortcut="chooseCandidate"></dd>
+          <dt>Open the map's MeowDB page</dt><dd data-shortcut="openMeowdbPage"></dd>
           <dt>Search a mob</dt><dd data-shortcut="search"></dd>
-          <dt>Open the hovered item's MeowDB page</dt><dd data-shortcut="itemLookup"></dd>
+          <dt>Look up the hovered item</dt><dd data-shortcut="itemLookup"></dd>
           <dt>Show / hide the Grind Tracker</dt><dd data-shortcut="grindTracker"></dd>
-          <dt>Help & setup</dt><dd data-shortcut="setup"></dd>
+          <dt>Help & Setup</dt><dd data-shortcut="setup"></dd>
         </dl>
-        <p>Drag the panel by its header to move it, Inside or Detached; Docked panels stay beside the game. Placement cycles through Inside, Docked right, Docked left, and Detached. The magnifier at the top of the panel, or the search shortcut, finds a mob and the maps it spawns on; pick one to make it your Hunting Target, and the panel shows the way there until you arrive. To look an item up, hover it in the game until its tooltip shows and press the item shortcut: its MeowDB page opens in your browser.</p>
+        <p>Drag the panel by its header to move it, Inside or Detached; Docked panels stay beside the game. Placement cycles through Inside, Docked Right, Docked Left, and Detached. The magnifier at the top of the panel, or the search shortcut, finds a mob and the maps it spawns on; pick one to make it your Hunting Target, and the panel shows the way there until you arrive. To look an item up, hover it in the game until its tooltip shows and press the item shortcut: its MeowDB page opens in your browser.</p>
         <p class="muted"><strong>Map Summary:</strong> 6+ means a party of six or more players. Share is a mob's share of all spawns on the Map.</p>
-        <footer><button id="guide-back">Back to setup</button></footer>
+        <p class="muted" id="change-hotkeys-note" role="status" hidden></p>
+        <footer>
+          <button class="secondary" id="change-hotkeys">Change hotkeys</button>
+          <button id="guide-back">Back to setup</button>
+        </footer>
       </section>
     </main>
   </body>

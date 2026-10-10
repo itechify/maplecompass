@@ -58,7 +58,8 @@
         confidence: 96, notSure: false, candidates: null, data: construction,
         credit: "NiaMeowDB (meowdb.com)", expanded: true, editMode: false, gameFound: true,
         placementMode: "inside", layer: "onTop", draggable: false, setup: { needed: null },
-        hotkeys: { togglePanel: "ctrl+shift+c", cyclePlacement: "ctrl+shift+p", openMeowdbPage: "ctrl+shift+m", setup: "ctrl+shift+s", chooseCandidate: "ctrl+shift+n", search: "ctrl+shift+f", grindTracker: "ctrl+shift+g" },
+        hotkeys: { togglePanel: "ctrl+shift+c", cyclePlacement: "ctrl+shift+p", openMeowdbPage: "ctrl+shift+m", setup: "ctrl+shift+s", chooseCandidate: "ctrl+shift+n", search: "ctrl+shift+f", grindTracker: "ctrl+shift+g", itemLookup: "ctrl+shift+i" },
+        settingsView: null,
         hotkeysLive: true, expBarRegion: null, expBar: null,
         expTracking: { state: "off", timeToLevelS: null, timeToLevelBadge: null, rolling: null, sessionAverage: null, ceilingShareHundredths: null, deaths: { count: 0, expLost: 0, percentLostHundredths: 0 }, characterSwitched: false },
         grindTracker: { open: true, placement: null },
@@ -133,6 +134,23 @@
         foldedtown: base({ map: { id: "010003000", streetName: "Victoria Road", mapName: "Kerning City", url: "" }, data: { status: "ready", summary: null, mobs: [], listedMobs: [], moreMobs: null, hiddenPortals: [] }, collapsedSections: { hiddenPortals: true, mobs: true } }),
         // The Grind Tracker on, before the first EXP gain.
         waiting: base({ map: { id: "010003000", streetName: "Victoria Road", mapName: "Kerning City", url: "" }, data: { status: "ready", summary: null, mobs: [], listedMobs: [], moreMobs: null, hiddenPortals: [] }, expTracking: { state: "waiting", timeToLevelS: null, timeToLevelBadge: null, rolling: null, sessionAverage: null, ceilingShareHundredths: null, deaths: { count: 0, expLost: 0, percentLostHundredths: 0 } } }),
+        // The settings view; a hotkey waiting for its new combination; one refused as
+        // another's (Swap), as without Ctrl, Alt or Win, and as a key no hotkey can use;
+        // one another app has, one that isn't a combination, and a long one; two turned off
+        // (Item Lookup has no button), just saved; and every hotkey just restored (Undo).
+        settings: base({ settingsView: { rebinding: null, problem: null, notice: null, atDefaults: true } }),
+        rebinding: base({ settingsView: { rebinding: "search", problem: null, notice: null, atDefaults: true }, hotkeysLive: false }),
+        rebindproblem: base({ settingsView: { rebinding: "togglePanel", problem: { kind: "inUse", pressed: "ctrl+shift+f", by: "search" }, notice: null, atDefaults: true }, hotkeysLive: false }),
+        rebindmodifier: base({ settingsView: { rebinding: "setup", problem: { kind: "noModifier", pressed: "shift+k" }, notice: null, atDefaults: true }, hotkeysLive: false }),
+        rebindkey: base({ settingsView: { rebinding: "grindTracker", problem: { kind: "unsupportedKey", code: "CapsLock" }, notice: null, atDefaults: true }, hotkeysLive: false }),
+        settingstaken: base({
+          settingsView: { rebinding: null, problem: null, notice: null, atDefaults: false },
+          hotkeys: { togglePanel: "ctrl+shift+c", cyclePlacement: "ctrl+shift+p", openMeowdbPage: "super+ctrl+alt+shift+numpadenter", setup: "ctrl+shift+s", chooseCandidate: "ctrl+shift+n", search: "alt+bracketleft", grindTracker: "ctrl+shift+g", itemLookup: "ctrl+shift+banana" },
+          unavailableHotkeys: ["ctrl+shift+n", "ctrl+shift+banana", "super+ctrl+alt+shift+numpadenter"], invalidHotkeys: ["ctrl+shift+banana"] }),
+        settingsoff: base({
+          settingsView: { rebinding: null, problem: null, notice: { kind: "saved", hotkey: "itemLookup", swappedWith: null }, atDefaults: false },
+          hotkeys: { togglePanel: "ctrl+shift+c", cyclePlacement: "", openMeowdbPage: "ctrl+shift+m", setup: "ctrl+shift+s", chooseCandidate: "ctrl+shift+n", search: "ctrl+shift+f", grindTracker: "ctrl+shift+g", itemLookup: "" } }),
+        settingsrestored: base({ settingsView: { rebinding: null, problem: null, notice: { kind: "restored" }, atDefaults: true } }),
       };
       const s = new URLSearchParams(location.search).get("s") ?? "normal";
       // ?w=: the panel resized to this width (CSS px).
