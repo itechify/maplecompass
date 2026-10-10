@@ -69,6 +69,11 @@ impl MapSet {
         self.maps.iter().find(|(entry, _)| entry.id == id).map(|(_, data)| data)
     }
 
+    /// Map `id`'s entry in the map list, if it is in it.
+    pub(crate) fn entry(&self, id: &str) -> Option<&MapEntry> {
+        self.maps.iter().find(|(entry, _)| entry.id == id).map(|(entry, _)| entry)
+    }
+
     /// Mob `id`'s Mob Card figures. Every mob a map lists has them.
     pub(crate) fn mob(&self, id: &str) -> Option<&MobDetails> {
         self.mobs.get(id)

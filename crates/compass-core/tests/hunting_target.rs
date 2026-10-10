@@ -33,7 +33,7 @@ fn mushroom_roads() -> Vec<WorldMap> {
     ]
 }
 
-/// A core over `maps`, crawled, with the player arrived on Sunset Sky.
+/// A core over `maps`, its file set in hand, with the player arrived on Sunset Sky.
 fn on_sunset_sky(maps: Vec<WorldMap>) -> Compass {
     let mut compass = Compass::new(world(maps));
     compass.tick(0);
