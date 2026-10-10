@@ -46,14 +46,6 @@ fn row<'a>(page: &'a BestsPage, map: &str) -> &'a BestsPageMap {
     page.maps.iter().find(|m| m.id == map).unwrap_or_else(|| panic!("no row for {map}"))
 }
 
-/// Time passes with the player standing still, long enough for the world crawl to read
-/// every saved page (each is at hand, so taken at once).
-fn crawl_the_world(player: &mut Player) {
-    for _ in 0..60 {
-        player.compass.tick(player.at);
-    }
-}
-
 /// Sunset Sky's mob levels, from its saved page: Blue Snail to Green Mushroom.
 const SUNSET_SKY_LEVELS: LevelRange = LevelRange { lowest: 2, highest: 14 };
 
@@ -123,27 +115,18 @@ fn maps_are_highest_first_and_only_the_one_the_player_is_on_is_marked_here() {
 }
 
 #[test]
-fn a_map_the_player_is_not_on_has_its_levels_and_share_once_the_crawl_has_read_its_page() {
+fn a_map_the_player_is_not_on_has_its_levels_and_share_at_once() {
     let mut player = Player::clocked(tracking());
     player.arrive(SUNSET);
     player.hunt(6 * MIN, 20);
     player.arrive(CONSTRUCTION_SITE);
     player.hunt(MIN, 30);
 
-    // The crawl hasn't got to Sunset Sky: its names, but no levels or share.
-    let early = open_page(&mut player).expect("a page");
-    let sunset = row(&early, SUNSET_SKY_ID);
+    let page = open_page(&mut player).expect("a page");
+    let sunset = row(&page, SUNSET_SKY_ID);
     assert_eq!(
         (sunset.map_name.as_str(), sunset.mob_levels, sunset.solo_exp_ceiling, sunset.ceiling_share_hundredths),
-        ("Sunset Sky", None, None, None)
-    );
-
-    crawl_the_world(&mut player);
-    let crawled = open_page(&mut player).expect("a page");
-    let sunset = row(&crawled, SUNSET_SKY_ID);
-    assert_eq!(
-        (sunset.mob_levels, sunset.solo_exp_ceiling, sunset.ceiling_share_hundredths),
-        (Some(SUNSET_SKY_LEVELS), Some(213_571), Some(337))
+        ("Sunset Sky", Some(SUNSET_SKY_LEVELS), Some(213_571), Some(337))
     );
 }
 

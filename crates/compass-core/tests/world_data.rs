@@ -1,7 +1,7 @@
 //! OSMS's file set also gives what mob search needs about the world: each mob's ID, each
 //! map's Mob Rate, every exit to another map with its portal kind, and each map's nearest
-//! town. They show in Density, Distance and routes. The world crawl, which reads MeowDB's
-//! pages until #57, is served the same maps.
+//! town. They show in Density, Distance and routes from the first launch, with the set in
+//! hand.
 //!
 //! In the made-up game world Kerning City leads to Sunset Sky and the Construction Site,
 //! and the Construction Site's invisible exit (type 1, off a Town, so a Hidden Portal) is
@@ -10,19 +10,18 @@
 mod common;
 
 use common::osms::{self, CONSTRUCTION_SITE, DEAD_END, HENESYS_HUNTING_GROUND_I, NORTHERN_TOP};
-use common::world::{search_for, tick_through};
+use common::world::search_for;
 use common::{FakeSource, arrive, fresh_files};
 use compass_core::osms::OsmsFiles;
 use compass_core::{Action, Compass, Distance, PanelState, Recognition, SearchResult, Step, TitleLines, TitleReading};
 
 const KERNING: &str = "victoria-road__kerning-city--window";
 
-/// `world` crawled, the player arrived on Kerning City, and `mob` searched for.
+/// OSMS serving `world`, the player arrived on Kerning City as the set comes, and `mob`
+/// searched for.
 fn searched_from_kerning(world: osms::World, mob: &str) -> (Compass, PanelState) {
     let mut compass = Compass::new(FakeSource::with_world(world));
-    // The maps answer at once, a few each tick: the whole list in under 3 s.
-    tick_through(&mut compass, 0, 3_000);
-    arrive(&mut compass, KERNING, 3_100);
+    arrive(&mut compass, KERNING, 0);
     let state = search_for(&mut compass, mob);
     (compass, state)
 }

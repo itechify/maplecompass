@@ -2,7 +2,6 @@
 //! Data Explorer's file set (ADR 0008), and MeowDB's pages and search (ADR 0003).
 
 use crate::item_lookup::ItemHit;
-use crate::map_data::MapData;
 use crate::mob_card::MobDetails;
 use crate::osms::OsmsFiles;
 use std::task::Poll;
@@ -79,14 +78,6 @@ pub trait MapDataSource {
     /// was saved, when a file can't be fetched or the set fetched doesn't read.
     fn osms_files(&mut self) -> Poll<Result<Fetched<OsmsFiles>, SourceError>>;
 
-    /// One map's data for the world crawl (ADR 0004), which asks for each map it doesn't
-    /// know, and for each it knows once its data is a week old, one at a time. The core
-    /// keeps what the crawl learns and decides when to ask, so fetch it from MeowDB
-    /// (falling back on a saved copy when MeowDB can't be reached); an answer given at
-    /// once doesn't wait out the crawl's pace. The crawl goes with #57, OSMS's set
-    /// knowing every map.
-    fn crawl_data(&mut self, id: &str) -> Poll<Result<Fetched<MapData>, SourceError>>;
-
     /// One mob's figures from its MeowDB page, by MeowDB's mob ID (ADR 0006): the core
     /// asks for each mob the shown map lists, one at a time. A cached copy up to 7 days
     /// old may be used as it is; answer at once when it is.
@@ -100,8 +91,7 @@ pub trait MapDataSource {
 
     /// The items MeowDB's search ([`crate::meowdb::ITEM_SEARCH_URL`]) gives for `name`, an
     /// item's name as read from an Item Tooltip, closest first (ADR 0007): the core asks
-    /// once per Item Lookup, ahead of the world crawl, and keeps to MeowDB's pace after
-    /// it. Read with [`crate::meowdb::read_item_search`]. A cached answer may be used as
+    /// once per Item Lookup, and keeps to MeowDB's pace after it. Read with [`crate::meowdb::read_item_search`]. A cached answer may be used as
     /// it is; answer at once when it is.
     fn item_search(&mut self, name: &str) -> Poll<Result<Fetched<Vec<ItemHit>>, SourceError>>;
 }

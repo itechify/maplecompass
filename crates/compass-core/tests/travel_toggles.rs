@@ -14,8 +14,8 @@ use compass_core::{Action, Compass, Distance, PanelState, SearchResult, Settings
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
 
-/// A core over `maps`, crawled, with the player arrived on the map named Sunset Sky
-/// and the Orange Mushroom picked.
+/// A core over `maps`, its file set in hand, with the player arrived on the map named
+/// Sunset Sky and the Orange Mushroom picked.
 fn searched_from_sunset_sky(maps: Vec<WorldMap>) -> Compass {
     let mut compass = Compass::new(world(maps));
     compass.tick(0);

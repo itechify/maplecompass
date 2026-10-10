@@ -1,8 +1,7 @@
 //! Each mob the panel lists has a Mob Card, shown when the player hovers its name: its
 //! image and the figures from its MeowDB page that the row doesn't show (until #58). Once
 //! the shown map lists them, its listed mobs' pages (MeowDB) and images (maplestory.io)
-//! are asked for one at a time, ahead of the world crawl and paced like it, and each only
-//! once. Clicking a mob's name opens its MeowDB page.
+//! are asked for one at a time, each site's paced, and each only once. Clicking a mob's name opens its MeowDB page.
 
 mod common;
 
@@ -275,52 +274,21 @@ fn fetch_starts(
 }
 
 #[test]
-fn mob_pages_come_one_at_a_time_ahead_of_the_crawl_and_every_meowdb_request_is_paced() {
-    let source = FakeSource::osms().crawling_uncached().mobs_uncached();
-    let logs = [
-        ("crawl", &source.crawl_requests.clone()),
-        ("mob", &source.mob_requests.clone()),
-        ("image", &source.image_requests.clone()),
-    ];
-    let mut compass = Compass::new(source);
-    // The crawl is under way when the player arrives.
-    let before = fetch_starts(&mut compass, &logs, 0, 5_000);
-    assert!(before.iter().any(|(_, kind)| *kind == "crawl"));
-    let state = arrive(&mut compass, SUNSET, 5_050);
-    let listed = listed_ids(&state).len();
-
-    let starts = fetch_starts(&mut compass, &logs, 5_400, 40_000);
-
-    let meowdb: Vec<_> = before.iter().chain(&starts).filter(|(_, kind)| *kind != "image").collect();
-    assert!(meowdb.windows(2).all(|w| w[1].0 - w[0].0 >= 2_000), "MeowDB paced: {meowdb:?}");
-    let first_mobs: Vec<_> = starts.iter().filter(|(_, kind)| *kind != "image").take(listed).collect();
-    assert!(first_mobs.iter().all(|(_, kind)| *kind == "mob"), "mob pages first: {starts:?}");
-    let images: Vec<_> = starts.iter().filter(|(_, kind)| *kind == "image").collect();
-    assert_eq!(images.len(), listed);
-    assert!(images.windows(2).all(|w| w[1].0 - w[0].0 >= 2_000), "maplestory.io paced: {images:?}");
-    assert!(starts.iter().any(|(_, kind)| *kind == "crawl"), "the crawl carries on after");
-}
-
-#[test]
-fn the_crawl_waits_while_a_slow_mob_page_is_on_its_way() {
-    // Each mob page takes about 5 seconds to come (100 polls at 50 ms).
-    let source = FakeSource::osms().crawling_uncached().mobs_taking(100);
-    let logs = [
-        ("crawl", &source.crawl_requests.clone()),
-        ("mob", &source.mob_requests.clone()),
-        ("image", &source.image_requests.clone()),
-    ];
+fn mob_pages_come_one_at_a_time_and_every_meowdb_request_is_paced() {
+    let source = FakeSource::osms().mobs_uncached();
+    let logs = [("mob", &source.mob_requests.clone()), ("image", &source.image_requests.clone())];
     let mut compass = Compass::new(source);
     let state = arrive(&mut compass, SUNSET, 0);
     let listed = listed_ids(&state).len();
 
-    let starts = fetch_starts(&mut compass, &logs, 50, 60_000);
+    let starts = fetch_starts(&mut compass, &logs, 400, 40_000);
 
-    // One MeowDB request at a time: the mob pages, one after another, then the crawl.
-    let meowdb: Vec<_> = starts.iter().filter(|(_, kind)| *kind != "image").collect();
-    assert!(meowdb[..listed].iter().all(|(_, kind)| *kind == "mob"), "{meowdb:?}");
-    assert!(meowdb.windows(2).take(listed).all(|w| w[1].0 - w[0].0 >= 5_000), "{meowdb:?}");
-    assert!(meowdb.len() > listed, "the crawl carries on after: {meowdb:?}");
+    let meowdb: Vec<_> = starts.iter().filter(|(_, kind)| *kind == "mob").collect();
+    assert_eq!(meowdb.len(), listed);
+    assert!(meowdb.windows(2).all(|w| w[1].0 - w[0].0 >= 2_000), "MeowDB paced: {meowdb:?}");
+    let images: Vec<_> = starts.iter().filter(|(_, kind)| *kind == "image").collect();
+    assert_eq!(images.len(), listed);
+    assert!(images.windows(2).all(|w| w[1].0 - w[0].0 >= 2_000), "maplestory.io paced: {images:?}");
 }
 
 #[test]

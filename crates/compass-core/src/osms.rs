@@ -57,6 +57,11 @@ impl MapSet {
     pub(crate) fn data(&self, id: &str) -> Option<&MapData> {
         self.maps.iter().find(|(entry, _)| entry.id == id).map(|(_, data)| data)
     }
+
+    /// Map `id`'s entry in the map list, if it is in it.
+    pub(crate) fn entry(&self, id: &str) -> Option<&MapEntry> {
+        self.maps.iter().find(|(entry, _)| entry.id == id).map(|(entry, _)| entry)
+    }
 }
 
 /// Read OSMS's file set. All or nothing: a file that isn't JSON, or isn't shaped as the
