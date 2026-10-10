@@ -7,6 +7,8 @@
  * row; hovering a row lights its ring. A click does nothing.
  */
 
+import { byId, cardTop, span } from "./dom";
+
 /** Mirror of `compass_core::HiddenPortal`. */
 export type HiddenPortal = {
   name: string;
@@ -59,7 +61,6 @@ const LIT_RING = 7.5;
 const CARD_GAP = 6;
 
 const SVG = "http://www.w3.org/2000/svg";
-const byId = (id: string) => document.getElementById(id)!;
 
 const preview = byId("map-preview");
 const picture = byId("map-picture");
@@ -133,13 +134,6 @@ function rowRing(mark: PortalMark | undefined): SVGSVGElement {
     hiddenPortal: null,
   };
   el.append(ring(leads, 6, 6));
-  return el;
-}
-
-function span(className: string, text: string): HTMLSpanElement {
-  const el = document.createElement("span");
-  el.className = className;
-  el.textContent = text;
   return el;
 }
 
@@ -345,17 +339,12 @@ function renderCard() {
   }
   card.replaceChildren(...parts);
   card.hidden = false;
-  const frame = panelEl.getBoundingClientRect();
   const spot = target.getBoundingClientRect();
-  const bar = panelEl.querySelector(".window-bar")?.getBoundingClientRect();
   const { offsetWidth: width, offsetHeight: height } = card;
-  const centre = spot.left + spot.width / 2 - frame.left;
+  const centre = spot.left + spot.width / 2 - panelEl.getBoundingClientRect().left;
   const left = Math.max(8, Math.min(centre - width / 2, panelEl.clientWidth - 8 - width));
-  const highest = (bar ? bar.bottom - frame.top : 0) + CARD_GAP;
-  const above = spot.top - frame.top - CARD_GAP - height;
-  const below = spot.bottom - frame.top + CARD_GAP;
   card.style.left = `${left}px`;
-  card.style.top = `${above >= highest ? above : below}px`;
+  card.style.top = `${cardTop(panelEl, panelEl.querySelector(".window-bar"), spot, height, CARD_GAP, "above")}px`;
 }
 
 // Resting on a ring lights it and its row and shows its card; on a row, lights its ring.

@@ -1,13 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { byId } from "./dom";
 import type { ExpRate, ExpTracking } from "./exp-tracking";
 
 /** What the shell sends: the figures, whether the window shows at all, and whether some
  *  map has a Personal Best (the Personal Bests button shows). */
 type TrackerView = { shown: boolean; tracking: ExpTracking; personalBests: boolean };
 
-const byId = (id: string) => document.getElementById(id)!;
 const panelEl = byId("panel");
 const openBests = byId("open-bests");
 const tracking = byId("tracking");

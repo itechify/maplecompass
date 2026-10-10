@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { byId, span } from "./dom";
 import { keyLabel } from "./hotkeys";
 
 /** Mirror of `compass_core::ItemChoice`: one of several MeowDB items sharing a name. */
@@ -28,7 +29,6 @@ type AlertView = { shown: boolean; line: ItemLookupLine | null; hotkey: string }
 const LINE_MS = 6_000;
 const CHOICES_MS = 30_000;
 
-const byId = (id: string) => document.getElementById(id)!;
 const alertEl = byId("alert");
 const lineEl = byId("line");
 const choices = byId("choices");
@@ -57,13 +57,6 @@ function sentence(line: ItemLookupLine, key: string): [string, boolean] {
     case "formatChanged":
       return ["Item Lookup is unavailable: MeowDB's search has changed.", true];
   }
-}
-
-function span(className: string, text: string): HTMLSpanElement {
-  const el = document.createElement("span");
-  el.className = className;
-  el.textContent = text;
-  return el;
 }
 
 /** One of the items sharing the name read: a link to its MeowDB page, with its category. */
