@@ -939,8 +939,16 @@ pub(crate) fn keep_on_top(window: &WebviewWindow, name: &str, commands: Sender<C
 }
 
 /// Every `WINDOW_TICK`, put our window (its handle) on top of everything if `shows` is
-/// set and the game or one of our windows is in front, and out of sight if not. Nothing
-/// here waits on the main thread.
+/// set and the game or one of our windows is in front, and at the bottom, out of sight,
+/// if not. Nothing here waits on the main thread.
+///
+/// The core alone decides what shows (`Panel::layer` in compass-core's panel.rs: a game
+/// window, and the game or one of ours in front), and `shows` is its last word. The
+/// watcher restates that rule against what is in front now, as a fast path: the compass
+/// loop reports the foreground to the core every tick but can stall (setting window
+/// sizes and positions), and a window on top of everything must not sit over another
+/// app while it does. So the rule here must agree with the core's: never show what the
+/// core wouldn't. Should they part, change both.
 #[cfg(windows)]
 fn keep_on_top_while_in_front(window: isize, shows: Arc<AtomicBool>, commands: Sender<Command>) {
     use compass_core::Foreground;
@@ -953,7 +961,8 @@ fn keep_on_top_while_in_front(window: isize, shows: Arc<AtomicBool>, commands: S
     loop {
         std::thread::sleep(WINDOW_TICK);
         let shows = shows.load(Ordering::Relaxed);
-        // As the core decides it, from what is in front now rather than at its last check.
+        // The core's rule (`Panel::layer`), from what is in front now rather than at the
+        // compass loop's last report, which a stall can leave behind.
         let in_front = || {
             gamewin::find_game().is_some_and(|game| gamewin::foreground(Some(game.handle)) != Foreground::OtherApp)
         };

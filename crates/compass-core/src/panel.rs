@@ -322,6 +322,8 @@ impl Panel {
         }
     }
 
+    /// See [`Layer`]. The shell's window watcher (`keep_on_top_while_in_front`) restates
+    /// this rule as a fast path while its main loop stalls: change both together.
     pub fn layer(&self) -> Layer {
         let in_front = self.foreground != Some(Foreground::OtherApp);
         if self.game.is_some() && in_front { Layer::OnTop } else { Layer::Hidden }
