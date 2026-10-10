@@ -90,7 +90,8 @@ impl MapSet {
 /// reader expects, is [`SourceError::FormatChanged`], never partial figures.
 ///
 /// Map IDs are zero-padded to 9 digits, and names trimmed. A map with no name or no
-/// street can't be told by its title, so it is left out.
+/// street can't be told by its title, so it is left out, and a portal to it leads to a
+/// map not in the data.
 ///
 /// A map's portals to other maps, with their kinds, and its Hidden Portals follow the
 /// Hidden Portal rule and the app's hand-kept [`PORTAL_OVERRIDES`]. Teleports within the
@@ -125,12 +126,16 @@ fn read_set(files: &OsmsFiles, overrides: &[PortalOverride]) -> Result<MapSet, S
         };
         listed.push((entry, map));
     }
-    let names: HashMap<&str, &MapEntry> = listed.iter().map(|(entry, _)| (entry.id.as_str(), entry)).collect();
+    // A map with no name or no street can't be told by its title.
+    let titled = |entry: &MapEntry| !entry.street_name.is_empty() && !entry.map_name.is_empty();
+    let names: HashMap<&str, &MapEntry> =
+        listed.iter().filter(|(entry, _)| titled(entry)).map(|(entry, _)| (entry.id.as_str(), entry)).collect();
     // A map's name and street, and whether it is in the map list; from the map list,
     // else lookups.json, else its ID.
-    let name_of = |id: &str| match (names.get(id), lookups.map_names.get(id)) {
+    let looked_up = |id: &str| lookups.map_names.get(id).map(|name| name.trim()).filter(|name| !name.is_empty());
+    let name_of = |id: &str| match (names.get(id), looked_up(id)) {
         (Some(entry), _) => (entry.map_name.clone(), entry.street_name.clone(), true),
-        (None, Some(name)) => (name.trim().to_string(), String::new(), false),
+        (None, Some(name)) => (name.to_string(), String::new(), false),
         (None, None) => (id.to_string(), String::new(), false),
     };
 
@@ -139,7 +144,7 @@ fn read_set(files: &OsmsFiles, overrides: &[PortalOverride]) -> Result<MapSet, S
         let mut data = map_data(entry, map, portals.get(&entry.id), &mobs, &name_of, overrides)
             .map_err(|why| format!("map {}: {why}", entry.id))?;
         data.picture = pictures.get(&entry.id).cloned();
-        if !entry.street_name.is_empty() && !entry.map_name.is_empty() {
+        if titled(entry) {
             set.push((entry.clone(), data));
         }
     }
