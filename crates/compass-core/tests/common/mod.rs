@@ -1,6 +1,6 @@
 //! Shared test inputs: minimap samples turned into frames, and a fake data source serving
-//! made-up worlds in OSMS's shape (ADR 0008), with MeowDB's saved mob pages and search
-//! answers (personal-use test data, ADR 0003) until #58 and #62.
+//! made-up worlds in OSMS's shape (ADR 0008), with MeowDB's saved search answers
+//! (personal-use test data, ADR 0003) until #62.
 #![allow(dead_code)]
 
 pub mod osms;
@@ -9,8 +9,8 @@ pub mod world;
 
 use compass_core::osms::OsmsFiles;
 use compass_core::{
-    Compass, ExpBarRegion, Fetched, Frame, GameWindow, ItemHit, MapDataSource, MobDetails,
-    PanelState, Rect, ScreenRect, Settings, Size, SourceError, TitleRegion, default_title_region, meowdb,
+    Compass, ExpBarRegion, Fetched, Frame, GameWindow, ItemHit, MapDataSource, PanelState, Rect,
+    ScreenRect, Settings, Size, SourceError, TitleRegion, default_title_region, meowdb,
 };
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -87,7 +87,7 @@ pub fn tracking() -> Compass {
     tracking_with(FakeSource::osms())
 }
 
-/// As [`tracking`], with maps and their pages from `source`.
+/// As [`tracking`], with OSMS's file set from `source`.
 pub fn tracking_with(source: FakeSource) -> Compass {
     let client = Size { width: 1920, height: 1200 };
     let mut compass = Compass::new(source);
@@ -132,17 +132,6 @@ pub fn three_sharing_a_title() -> FakeSource {
     FakeSource::with_world(osms::game().titled("Victoria Road", "Kerning City", &ids))
 }
 
-/// A MeowDB mob page saved on 2026-10-08:
-/// `tests/fixtures/meowdb-monsters/<7-digit id>__<slug>.html`.
-pub fn saved_mob_page(id: &str) -> Option<String> {
-    let dir = fixtures_dir().join("meowdb-monsters");
-    let file = std::fs::read_dir(dir)
-        .expect("fixture dir")
-        .filter_map(|e| e.ok())
-        .find(|e| e.file_name().to_string_lossy().starts_with(&format!("{id:0>7}__")))?;
-    Some(std::fs::read_to_string(file.path()).expect("fixture"))
-}
-
 /// A file-name form of a name, as the probe names samples: lower case, apostrophes
 /// dropped, anything else but letters and digits as one `-` ("Hero's Gladius" ->
 /// "heros-gladius").
@@ -164,19 +153,7 @@ pub fn saved_search(name: &str) -> Option<String> {
     std::fs::read_to_string(fixtures_dir().join("meowdb-search").join(format!("{}.json", slug(name)))).ok()
 }
 
-/// The ID of every saved mob page, in file name order.
-pub fn saved_mob_ids() -> Vec<String> {
-    let mut names: Vec<String> = std::fs::read_dir(fixtures_dir().join("meowdb-monsters"))
-        .expect("fixture dir")
-        .filter_map(|e| e.ok())
-        .map(|e| e.file_name().to_string_lossy().into_owned())
-        .collect();
-    names.sort();
-    names.iter().map(|n| n[..n.find("__").expect("<id>__<slug>")].trim_start_matches('0').to_string()).collect()
-}
-
-type MobAnswer = Result<MobDetails, SourceError>;
-type ImageAnswer = Result<String, SourceError>;
+type PictureAnswer = Result<String, SourceError>;
 type SearchAnswer = Result<Vec<ItemHit>, SourceError>;
 pub type OsmsAnswer = Poll<Result<Fetched<OsmsFiles>, SourceError>>;
 
@@ -189,28 +166,22 @@ pub struct FakeSource {
     /// The sites are unreachable and the answers are copies saved at this time (ms since
     /// the Unix epoch); `None`: they are fresh.
     saved_at: Option<u64>,
-    /// Answers a mob page request for a mob ID. Defaults to the saved mob pages, read
-    /// with the core's MeowDB reader; a mob without a saved page is unreachable.
-    mob_pages: Box<dyn FnMut(&str) -> MobAnswer + Send>,
-    /// Answers a mob image request for a mob ID. Defaults to `"image:<id>"`.
-    images: Box<dyn FnMut(&str) -> ImageAnswer + Send>,
-    /// The mob ID of every mob page fetch started, in order.
-    pub mob_requests: Arc<Mutex<Vec<String>>>,
-    /// The mob ID of every mob image fetch started, in order.
-    pub image_requests: Arc<Mutex<Vec<String>>>,
-    /// How many polls a mob page or image answer takes: 0 when it's in the cache (answered
-    /// at once), otherwise it arrives on the `n`th poll after its fetch started, as from
-    /// the network.
-    mob_polls: usize,
-    /// The mob page fetch in flight, its answer, and how many more polls it takes.
-    mob_in_flight: Option<(String, MobAnswer, usize)>,
-    image_in_flight: Option<(String, ImageAnswer, usize)>,
+    /// Answers a picture request for a path under OSMS's data folder. Defaults to
+    /// `"picture:<path>"`.
+    pictures: Box<dyn FnMut(&str) -> PictureAnswer + Send>,
+    /// The path of every picture fetch started, in order.
+    pub picture_requests: Arc<Mutex<Vec<String>>>,
+    /// How many polls a picture takes: 0 when it's saved (answered at once), otherwise it
+    /// arrives on the `n`th poll after its fetch started, as from the network.
+    picture_polls: usize,
+    /// The picture fetch in flight, its answer, and how many more polls it takes.
+    picture_in_flight: Option<(String, PictureAnswer, usize)>,
     /// Answers an item search for a name. Defaults to MeowDB's saved answers, read with the
     /// core's MeowDB reader; a name without a saved answer is unreachable.
     item_searches: Box<dyn FnMut(&str) -> SearchAnswer + Send>,
     /// The name of every item search started, in order.
     pub item_requests: Arc<Mutex<Vec<String>>>,
-    /// How many polls an item search takes, as `mob_polls` for mob pages.
+    /// How many polls an item search takes, as `picture_polls` for pictures.
     item_polls: usize,
     item_in_flight: Option<(String, SearchAnswer, usize)>,
 }
@@ -222,13 +193,10 @@ impl FakeSource {
             osms_answers: answers,
             osms_requests: Arc::default(),
             saved_at: None,
-            mob_pages: Box::new(read_saved_mob_page),
-            images: Box::new(|id| Ok(format!("image:{id}"))),
-            mob_requests: Arc::default(),
-            image_requests: Arc::default(),
-            mob_polls: 0,
-            mob_in_flight: None,
-            image_in_flight: None,
+            pictures: Box::new(|path| Ok(format!("picture:{path}"))),
+            picture_requests: Arc::default(),
+            picture_polls: 0,
+            picture_in_flight: None,
             item_searches: Box::new(read_saved_search),
             item_requests: Arc::default(),
             item_polls: 0,
@@ -253,7 +221,7 @@ impl FakeSource {
     }
 
     /// The sites can't be reached, and every answer is a copy saved at
-    /// `saved_at_unix_ms`: OSMS's file set, mob pages and item searches.
+    /// `saved_at_unix_ms`: OSMS's file set and item searches.
     pub fn serving_saved_copies(self, saved_at_unix_ms: u64) -> Self {
         Self { saved_at: Some(saved_at_unix_ms), ..self }
     }
@@ -267,36 +235,16 @@ impl FakeSource {
         })
     }
 
-    /// Answer mob page requests with `pages` instead of the saved mob pages.
-    pub fn with_mob_pages(mut self, pages: impl FnMut(&str) -> MobAnswer + Send + 'static) -> Self {
-        self.mob_pages = Box::new(pages);
+    /// Answer picture requests with `pictures`, by path.
+    pub fn with_pictures(mut self, pictures: impl FnMut(&str) -> PictureAnswer + Send + 'static) -> Self {
+        self.pictures = Box::new(pictures);
         self
     }
 
-    /// Serve `html` as the MeowDB page of mob `id`, and the saved pages for other mobs.
-    pub fn with_mob_page(self, id: &str, html: String) -> Self {
-        let id = id.to_string();
-        self.with_mob_pages(move |asked| {
-            if asked == id { meowdb::read_mob_page(&html) } else { read_saved_mob_page(asked) }
-        })
-    }
-
-    /// Answer mob image requests with `images`.
-    pub fn with_images(mut self, images: impl FnMut(&str) -> ImageAnswer + Send + 'static) -> Self {
-        self.images = Box::new(images);
-        self
-    }
-
-    /// Mob pages and images come over the network, not from the cache: each arrives on
-    /// the poll after its fetch started.
-    pub fn mobs_uncached(self) -> Self {
-        self.mobs_taking(1)
-    }
-
-    /// Mob pages and images come over a slow network: each arrives on the `polls`th poll
-    /// after its fetch started.
-    pub fn mobs_taking(self, polls: usize) -> Self {
-        Self { mob_polls: polls, ..self }
+    /// Pictures aren't saved yet, and come over the network: each arrives on the
+    /// `polls`th poll after its fetch started.
+    pub fn pictures_taking(self, polls: usize) -> Self {
+        Self { picture_polls: polls, ..self }
     }
 
     /// Answer item searches with `searches` instead of MeowDB's saved answers.
@@ -319,13 +267,6 @@ fn unreachable() -> SourceError {
 /// How many of `requests` (a [`FakeSource`]'s log) were for `id`.
 pub fn requests_for(requests: &Mutex<Vec<String>>, id: &str) -> usize {
     requests.lock().unwrap().iter().filter(|r| *r == id).count()
-}
-
-fn read_saved_mob_page(id: &str) -> MobAnswer {
-    match saved_mob_page(id) {
-        Some(html) => meowdb::read_mob_page(&html),
-        None => Err(SourceError::Unreachable(format!("no saved page for mob {id}"))),
-    }
 }
 
 /// One fetch at a time: the answer for `id` if its fetch is the one in flight and it has
@@ -390,14 +331,8 @@ impl MapDataSource for FakeSource {
         }
     }
 
-    fn mob_page(&mut self, id: &str) -> Poll<Result<Fetched<MobDetails>, SourceError>> {
-        let answer =
-            one_at_a_time(id, &mut self.mob_in_flight, &self.mob_requests, self.mob_polls, &mut self.mob_pages);
-        self.fetched(answer)
-    }
-
-    fn mob_image(&mut self, id: &str) -> Poll<Result<String, SourceError>> {
-        one_at_a_time(id, &mut self.image_in_flight, &self.image_requests, self.mob_polls, &mut self.images)
+    fn picture(&mut self, path: &str) -> Poll<Result<String, SourceError>> {
+        one_at_a_time(path, &mut self.picture_in_flight, &self.picture_requests, self.picture_polls, &mut self.pictures)
     }
 
     fn item_search(&mut self, name: &str) -> Poll<Result<Fetched<Vec<ItemHit>>, SourceError>> {

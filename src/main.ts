@@ -79,7 +79,7 @@ type MapDataStatus =
   | ({ status: "ready" } & MapData)
   | ({ status: "savedCopy"; savedAtUnixMs: number } & MapData);
 
-/** Mirror of `compass_core::MobDetails`: a figure MeowDB shows as "—" is null. */
+/** Mirror of `compass_core::MobDetails`: a figure shown as "—" is null. */
 type MobDetails = {
   elements: { weak: string[]; strong: string[]; immune: string[] };
   touchDamage: { min: number; max: number } | null;
@@ -89,16 +89,11 @@ type MobDetails = {
   physicalDefense: number | null;
   magicDefense: number | null;
   speed: string;
-  movement: string;
   hpPerExp: { hundredths: number; rank: number; ranked: number } | null;
 };
 
 /** Mirror of `compass_core::MobCard`: one listed mob's Mob Card. */
-type MobCard = { id: string; url: string; image: string | null } & (
-  | { status: "loading" | "unavailable" | "formatChanged" }
-  | ({ status: "ready" } & MobDetails)
-  | ({ status: "savedCopy"; savedAtUnixMs: number } & MobDetails)
-);
+type MobCard = { id: string; url: string; image: string | null } & MobDetails;
 
 /** Mirror of `compass_core::Recognition`. */
 type Recognition =
@@ -885,7 +880,7 @@ function mobFigures(details: MobDetails): HTMLDListElement {
   return list;
 }
 
-/** The Mob Card's content: the mob, then its figures or why there are none. */
+/** The Mob Card's content: the mob, then its figures. */
 function mobCardContent(mob: Mob, card: MobCard): Node[] {
   const sprite = document.createElement("div");
   sprite.className = "mob-card-sprite";
@@ -899,35 +894,14 @@ function mobCardContent(mob: Mob, card: MobCard): Node[] {
     img.src = card.image;
     sprite.append(img);
   }
-  const ready = card.status === "ready" || card.status === "savedCopy" ? card : null;
   const who = document.createElement("div");
   who.className = "mob-card-who";
-  who.append(
-    span("mob-card-name", mob.name),
-    span("mob-card-gait", ready ? `Lv ${mob.level} · ${ready.speed} · ${ready.movement.toLowerCase()}` : `Lv ${mob.level}`),
-  );
-  if (ready) who.append(elementTags(ready.elements));
+  who.append(span("mob-card-name", mob.name), span("mob-card-gait", `Lv ${mob.level} · ${card.speed}`));
+  who.append(elementTags(card.elements));
   const head = document.createElement("div");
   head.className = "mob-card-head";
   head.append(sprite, who);
-  const note = (text: string, problem = false) => {
-    const p = document.createElement("p");
-    p.className = problem ? "note problem" : "note";
-    p.textContent = text;
-    return p;
-  };
-  switch (card.status) {
-    case "loading":
-      return [head, note("Loading from MeowDB…")];
-    case "unavailable":
-      return [head, note("Couldn't reach MeowDB. MapleCompass tries again in a few minutes.", true)];
-    case "formatChanged":
-      return [head, note("MeowDB's page for this mob has changed. Click its name to read it there.", true)];
-    case "ready":
-      return [head, mobFigures(card)];
-    case "savedCopy":
-      return [head, mobFigures(card), note(`MeowDB unreachable — saved copy from ${savedOn(card.savedAtUnixMs)}`, true)];
-  }
+  return [head, mobFigures(card)];
 }
 
 /** The space kept between the card and the hovered row, and the panel's edges. */
