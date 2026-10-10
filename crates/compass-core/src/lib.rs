@@ -145,11 +145,6 @@ pub const MEOWDB_CREDIT: &str = "NiaMeowDB (meowdb.com)";
 /// mobs' names open NiaMeowDB's pages.
 pub const OSMS_CREDIT: &str = "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com)";
 
-/// The panel's credit when it lists mobs: their Mob Cards show images from maplestory.io
-/// (ADR 0006).
-pub const OSMS_AND_IMAGES_CREDIT: &str =
-    "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com) · images: maplestory.io";
-
 /// Whether minimap titles can be recognised as real maps.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
@@ -190,7 +185,7 @@ pub struct PanelState {
     /// The shown map's Map Summary, mobs and Hidden Portals from OSMS's file set, or why they
     /// aren't there.
     pub data: MapDataStatus,
-    /// [`OSMS_CREDIT`] whenever a map is shown; with Mob Cards, [`OSMS_AND_IMAGES_CREDIT`].
+    /// [`OSMS_CREDIT`] whenever a map is shown.
     pub credit: Option<&'static str>,
     /// The Mob Card of each mob the panel lists, in its order; empty while it lists none.
     pub mob_cards: Vec<MobCard>,
@@ -552,8 +547,7 @@ impl Compass {
         }
         self.state.candidates = self.set.as_ref().and_then(|set| self.shown_map.candidates(&set.maps));
         self.sync_mob_cards();
-        let credit = if self.state.mob_cards.is_empty() { OSMS_CREDIT } else { OSMS_AND_IMAGES_CREDIT };
-        self.state.credit = self.state.map.as_ref().map(|_| credit);
+        self.state.credit = self.state.map.as_ref().map(|_| OSMS_CREDIT);
     }
 
     /// The listed mobs' Mob Cards, with the animations in so far.

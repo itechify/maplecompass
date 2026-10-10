@@ -9,8 +9,8 @@ use common::osms;
 use common::{FakeSource, arrive, fresh_files, requests_for};
 use compass_core::osms::OsmsFiles;
 use compass_core::{
-    Compass, DamageRange, Elements, HpPerExp, MapDataStatus, MobCard, MobDetails, OSMS_AND_IMAGES_CREDIT,
-    OSMS_CREDIT, PanelState, Recognition, Request, SourceError,
+    Compass, DamageRange, Elements, HpPerExp, MapDataStatus, MobCard, MobDetails, OSMS_CREDIT, PanelState,
+    Recognition, Request, SourceError,
 };
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
@@ -351,12 +351,13 @@ fn clicking_a_listed_mobs_name_opens_its_meowdb_page() {
 }
 
 #[test]
-fn the_panel_credits_maplestory_io_for_the_mob_images() {
+fn with_mob_cards_the_panel_credits_only_osms_and_meowdb() {
     let mut compass = Compass::new(FakeSource::osms());
+    arrive(&mut compass, SUNSET, 0);
 
-    let state = arrive(&mut compass, SUNSET, 0);
-    assert_eq!(state.credit, Some(OSMS_AND_IMAGES_CREDIT));
+    let state = compass.tick(400).clone();
 
-    let state = arrive(&mut compass, KERNING, 1_000);
+    assert!(state.mob_cards.iter().all(|c| c.image.is_some()));
     assert_eq!(state.credit, Some(OSMS_CREDIT));
+    assert_eq!(OSMS_CREDIT, "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com)");
 }
