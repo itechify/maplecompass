@@ -75,7 +75,8 @@ pub(crate) struct MapPortals {
 /// A teleport within the map (or a portal into the map itself) is marked, but is
 /// neither an edge nor a Hidden Portal. It is never a Door, which leads into a building,
 /// so an invisible one is hidden on a Town too. It lands where the portal it names is,
-/// at that portal's mark if it has one (a spawn point, to the dead end, has none).
+/// at that portal's mark if it has one (a spawn point, to the dead end, has none). Two
+/// that land at each other's marks are a pair, both ways.
 pub(crate) fn portals(map: &MapFacts, exits: Vec<Exit>, overrides: &[PortalOverride]) -> MapPortals {
     let mut sorted = MapPortals { portals: Vec::new(), hidden_portals: Vec::new(), marks: Vec::new() };
     // Every portal, for the teleports to land at.
@@ -133,9 +134,20 @@ pub(crate) fn portals(map: &MapFacts, exits: Vec<Exit>, overrides: &[PortalOverr
             });
         }
     }
-    for (mark, landing) in teleports {
-        sorted.marks[mark].lands_at =
-            spots.iter().find(|spot| spot.name == landing).map(|spot| Landing { at: spot.at, mark: spot.mark });
+    for (mark, landing) in &teleports {
+        sorted.marks[*mark].lands_at = spots
+            .iter()
+            .find(|spot| spot.name == *landing)
+            .map(|spot| Landing { at: spot.at, mark: spot.mark, both_ways: false });
+    }
+    // A pair: each lands at the other's mark.
+    let lands_at_mark = |from: usize| sorted.marks[from].lands_at.and_then(|landing| landing.mark);
+    let pairs: Vec<usize> =
+        teleports.iter().map(|&(mark, _)| mark).filter(|&mark| lands_at_mark(mark).and_then(lands_at_mark) == Some(mark)).collect();
+    for mark in pairs {
+        if let Some(landing) = &mut sorted.marks[mark].lands_at {
+            landing.both_ways = true;
+        }
     }
     sorted
 }

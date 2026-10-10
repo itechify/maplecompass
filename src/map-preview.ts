@@ -31,8 +31,11 @@ type PortalMark = {
   kind: PortalKind;
   toMapName: string;
   toStreetName: string;
-  /** A teleport within the map: where it lands, and the mark there if it has one. */
-  landsAt: { x: number; y: number; mark: number | null } | null;
+  /**
+   * A teleport within the map: where it lands, the mark there if it has one, and whether
+   * that mark lands back here (a pair).
+   */
+  landsAt: { x: number; y: number; mark: number | null; bothWays: boolean } | null;
   /** Its row among the Hidden Portals. */
   hiddenPortal: number | null;
 };
@@ -246,9 +249,8 @@ function drawMarks(marks: PortalMark[], scale: number, width: number, height: nu
   marks.forEach((mark, i) => {
     const landing = mark.landsAt;
     if (mark.leads !== "withinTheMap" || !landing) return;
-    const back = landing.mark !== null ? marks[landing.mark]?.landsAt?.mark === i : false;
     // A pair is one line with a head at each end, drawn once.
-    if (back && landing.mark !== null && landing.mark < i) return;
+    if (landing.bothWays && landing.mark !== null && landing.mark < i) return;
     const from = at(mark.x, mark.y, scale);
     const to = at(landing.x, landing.y, scale);
     const length = Math.hypot(to.x - from.x, to.y - from.y);
@@ -266,7 +268,7 @@ function drawMarks(marks: PortalMark[], scale: number, width: number, height: nu
     };
     const g = svg("g", { class: "arrow", "data-from": i, "data-to": landing.mark ?? "" });
     const dash = svg("line", { ...line, class: "dash", "marker-end": "url(#landing-head)" });
-    if (back) dash.setAttribute("marker-start", "url(#landing-head)");
+    if (landing.bothWays) dash.setAttribute("marker-start", "url(#landing-head)");
     g.append(svg("line", { ...line, class: "halo" }), dash);
     arrows.append(g);
   });

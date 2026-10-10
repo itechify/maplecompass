@@ -100,4 +100,7 @@ pub struct Landing {
     /// The mark it lands at (an index into [`MapPreview::marks`]), when the portal it
     /// lands at is marked; a spawn point isn't.
     pub mark: Option<usize>,
+    /// That mark is a teleport landing back at this one: the two are a pair, one way
+    /// there and the other back.
+    pub both_ways: bool,
 }
