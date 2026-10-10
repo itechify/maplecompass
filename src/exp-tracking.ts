@@ -12,7 +12,7 @@ export type ExpTracking = {
   rolling: ExpRate | null;
   sessionAverage: ExpRate | null;
   ceilingShareHundredths: number | null;
-  /** The shown map's MeowDB solo EXP/h, while there is a share of it. */
+  /** The shown map's solo EXP/h ceiling (its Map Summary), while there is a share of it. */
   soloExpCeiling: number | null;
   deaths: { count: number; expLost: number; percentLostHundredths: number };
   /** The Session started afresh on a character switch and hasn't warmed up since. */
