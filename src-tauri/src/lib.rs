@@ -9,6 +9,7 @@
 pub mod capture;
 pub mod gamewin;
 mod bests;
+mod bests_page;
 mod files;
 mod grind_tracker;
 mod hotkeys;
@@ -735,6 +736,7 @@ fn carry_out(
                 compass.on_item_tooltip_reading(None);
             }
         }
+        Some(Request::OpenBestsPage { page }) => bests_page::open(app, &page),
         None => {}
     }
 }

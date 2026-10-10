@@ -24,6 +24,9 @@ pub struct GrindTrackerWindow {
     /// app is in front (see [`crate::Layer`]). Never over the Title Region or the EXP Bar
     /// Region: it shows in screen captures, ours included.
     pub placement: Option<ScreenRect>,
+    /// Some map has a Personal Best, the Visit under way's included: the window bar's
+    /// button that opens the Personal Bests page shows.
+    pub personal_bests: bool,
 }
 
 /// The gap between the panel and the Grind Tracker's window beside it.
