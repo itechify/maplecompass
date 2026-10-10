@@ -23,7 +23,7 @@ fn press(held: &str, code: &str) -> KeyPress {
 
 /// A core with the game in front and the settings view open.
 fn settings_open() -> Compass {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     compass.on_foreground(Foreground::Game);
     compass.press(PanelControl::Settings);
     compass
@@ -45,7 +45,7 @@ fn saved(hotkey: Hotkey) -> Option<SettingsNotice> {
 
 #[test]
 fn the_gear_opens_the_settings_view_on_the_expanded_panel() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     assert_eq!(compass.panel_state().settings_view, None);
     compass.on_hotkey("ctrl+shift+c");
     assert!(!compass.panel_state().expanded);
@@ -110,7 +110,7 @@ fn a_rebound_hotkey_is_saved_and_the_others_are_kept() {
 
     let saved = compass.settings().hotkeys;
     assert_eq!(saved, Hotkeys { item_lookup: "alt+f5".into(), ..Hotkeys::default() });
-    let mut later = Compass::new(FakeSource::meowdb());
+    let mut later = Compass::new(FakeSource::osms());
     later.restore(serde_json::from_str(&serde_json::to_string(&compass.settings()).unwrap()).unwrap());
     assert_eq!(later.panel_state().hotkeys.item_lookup, "alt+f5", "and kept at the next launch");
 }
@@ -337,7 +337,7 @@ fn a_hotkey_turned_off_stays_off_at_the_next_launch_and_can_be_turned_on_again()
     compass.act(Action::BeginRebind(Hotkey::ItemLookup));
     compass.rebind_key(press("", "Delete"));
 
-    let mut later = Compass::new(FakeSource::meowdb());
+    let mut later = Compass::new(FakeSource::osms());
     later.restore(serde_json::from_str(&serde_json::to_string(&compass.settings()).unwrap()).unwrap());
     assert_eq!(later.panel_state().hotkeys.item_lookup, "", "still off");
     assert!(later.panel_state().hotkeys.all().iter().all(|hotkey| !hotkey.is_empty()));
@@ -391,7 +391,7 @@ fn starting_another_change_clears_the_last_ones_notice() {
 
 #[test]
 fn restore_defaults_puts_every_hotkey_back_and_on() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     let hotkeys = Hotkeys { toggle_panel: "ctrl+shift+x".into(), search: "".into(), ..Hotkeys::default() };
     compass.restore(Settings { hotkeys, ..Settings::default() });
     compass.press(PanelControl::Settings);
@@ -410,7 +410,7 @@ fn restore_defaults_puts_every_hotkey_back_and_on() {
 
 #[test]
 fn undo_after_restore_defaults_brings_the_hotkeys_from_before_back() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     let mine = Hotkeys { toggle_panel: "ctrl+shift+x".into(), search: "".into(), ..Hotkeys::default() };
     compass.restore(Settings { hotkeys: mine.clone(), ..Settings::default() });
     compass.press(PanelControl::Settings);
@@ -429,7 +429,7 @@ fn undo_after_restore_defaults_brings_the_hotkeys_from_before_back() {
 #[test]
 fn restore_defaults_can_no_longer_be_undone_once_another_change_starts_or_the_view_closes() {
     for after in [Action::BeginRebind(Hotkey::Search), Action::CloseSettings] {
-        let mut compass = Compass::new(FakeSource::meowdb());
+        let mut compass = Compass::new(FakeSource::osms());
         let mine = Hotkeys { toggle_panel: "ctrl+shift+x".into(), ..Hotkeys::default() };
         compass.restore(Settings { hotkeys: mine, ..Settings::default() });
         compass.press(PanelControl::Settings);
@@ -477,7 +477,7 @@ fn the_overlay_gets_the_settings_view_with_the_names_it_reads() {
 
 #[test]
 fn a_combination_rebound_away_from_is_no_longer_reported_unavailable() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     let hotkeys = Hotkeys { setup: "ctrl+shift+banana".into(), ..Hotkeys::default() };
     compass.restore(Settings { hotkeys, ..Settings::default() });
     compass.hotkeys_unavailable(vec!["ctrl+shift+n".into()], vec!["ctrl+shift+banana".into()]);

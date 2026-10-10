@@ -7,9 +7,9 @@
 
 mod common;
 
-use common::{FakeSource, made_up_index};
-use compass_core::{Compass, CrawlProgress, MapData, PanelState, SavedWorld, WORLD_VERSION};
-use std::task::Poll;
+use common::FakeSource;
+use common::osms::made_up_world;
+use compass_core::{Compass, CrawlProgress, PanelState, SavedWorld, WORLD_VERSION};
 
 const DAY: u64 = 24 * 60 * 60 * 1000;
 /// The wall clock at the second launch: 2026-10-09 00:00 UTC, ms since the Unix epoch.
@@ -18,7 +18,12 @@ const NOW: u64 = 1_791_504_000_000;
 /// A source serving `n` made-up maps, each a map without mobs or portals, answering
 /// crawl requests at once.
 fn blank_world(n: usize) -> FakeSource {
-    FakeSource::with_index(made_up_index(n)).with_pages(|_| Poll::Ready(Ok(MapData::default())))
+    FakeSource::with_world(made_up_world(n as u64))
+}
+
+/// The made-up maps' IDs.
+fn ids(n: usize) -> Vec<String> {
+    made_up_world(n as u64).maps.iter().map(|m| format!("{:09}", m.id)).collect()
 }
 
 fn progress(state: &PanelState) -> (u32, u32, bool) {
@@ -109,7 +114,7 @@ fn a_world_saved_in_another_format_is_left_and_every_map_is_crawled_again() {
 
 #[test]
 fn maps_over_a_week_old_still_count_as_known_and_refresh_oldest_first_one_every_30_seconds() {
-    let index = made_up_index(3);
+    let index = ids(3);
     let world = crawled_world(3, NOW - DAY);
     let world = dated(dated(world, 0, NOW - 8 * DAY), 1, NOW - 10 * DAY);
     let source = blank_world(3).crawling_uncached();
@@ -127,16 +132,16 @@ fn maps_over_a_week_old_still_count_as_known_and_refresh_oldest_first_one_every_
     }
 
     // The 10-day-old map first, then the 8-day-old one; the day-old one waits its turn.
-    assert_eq!(*crawled.lock().unwrap(), [index[1].id.clone(), index[0].id.clone()]);
+    assert_eq!(*crawled.lock().unwrap(), [index[1].clone(), index[0].clone()]);
     assert!(starts[1] - starts[0] >= 30_000, "{starts:?}");
     let saved = compass.world();
     let as_of = |id: &str| saved.maps.iter().find(|m| m.id == id).unwrap().as_of_unix_ms;
-    assert_eq!((as_of(&index[0].id), as_of(&index[1].id), as_of(&index[2].id)), (NOW, NOW, NOW - DAY));
+    assert_eq!((as_of(&index[0]), as_of(&index[1]), as_of(&index[2])), (NOW, NOW, NOW - DAY));
 }
 
 #[test]
 fn maps_never_seen_come_at_the_crawl_s_pace_before_any_refresh() {
-    let index = made_up_index(4);
+    let ids = ids(4);
     let world = SavedWorld { maps: vec![crawled_world(1, NOW - 10 * DAY).maps.remove(0)], ..SavedWorld::default() };
     let source = blank_world(4).crawling_uncached();
     let crawled = source.crawl_requests.clone();
@@ -148,14 +153,13 @@ fn maps_never_seen_come_at_the_crawl_s_pace_before_any_refresh() {
     let state = tick_through(&mut compass, 2_100, 40_000);
 
     assert_eq!(progress(&state), (4, 4, true));
-    let ids: Vec<String> = index.into_iter().map(|m| m.id).collect();
     assert_eq!(*crawled.lock().unwrap(), [ids[1].clone(), ids[2].clone(), ids[3].clone(), ids[0].clone()]);
 }
 
 #[test]
 fn a_refresh_that_fails_keeps_the_map_known_and_waits_before_trying_again() {
     let world = dated(crawled_world(1, NOW), 0, NOW - 8 * DAY);
-    let source = FakeSource::with_index(made_up_index(1)).with_pages_offline().crawling_uncached();
+    let source = blank_world(1).with_pages_offline().crawling_uncached();
     let crawled = source.crawl_requests.clone();
     let mut compass = relaunch(source, NOW);
     compass.restore_world(world);

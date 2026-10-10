@@ -1,6 +1,6 @@
-//! The world crawl (ADR 0004): every map in the index has its MeowDB page asked for in
-//! the background, one at a time and politely paced, so mob search knows the whole
-//! world. It has its own requests, and never touches the shown map's.
+//! The world crawl (ADR 0004, until #57): every map in OSMS's map list has its MeowDB
+//! page asked for in the background, one at a time and politely paced, so mob search
+//! knows the whole world. It has its own requests, and never touches the shown map's.
 //!
 //! What it learns is kept between launches ([`SavedWorld`]), each map with the date its
 //! data is from. A map over [`STALE_AFTER_MS`] old still counts as known, so search
@@ -35,7 +35,7 @@ pub(crate) const REFRESH_EVERY_MS: u64 = 30_000;
 pub struct CrawlProgress {
     /// Maps whose page has been read, fresh, from a saved copy, or at an earlier launch.
     pub known: u32,
-    /// Maps in the map index; 0 until it arrives.
+    /// Maps in the map list; 0 until it arrives.
     pub total: u32,
     /// Every map has been asked for and answered for good: no map never seen is still
     /// to ask for, in flight, or waiting to be retried. (Pages in a changed format are

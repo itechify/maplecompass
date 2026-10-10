@@ -10,7 +10,7 @@ const SUNSET: &str = "victoria-road__sunset-sky--window";
 
 #[test]
 fn the_collapse_icon_collapses_the_panel_like_ctrl_shift_c() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     assert_eq!(compass.press(PanelControl::TogglePanel), None);
     assert!(!compass.panel_state().expanded);
@@ -20,7 +20,7 @@ fn the_collapse_icon_collapses_the_panel_like_ctrl_shift_c() {
 
 #[test]
 fn the_placement_icon_cycles_the_placement_like_ctrl_shift_p() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     compass.press(PanelControl::CyclePlacement);
 
@@ -29,7 +29,7 @@ fn the_placement_icon_cycles_the_placement_like_ctrl_shift_p() {
 
 #[test]
 fn the_meowdb_icon_opens_the_shown_maps_page_like_ctrl_shift_m_and_nothing_without_a_map() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     assert_eq!(compass.press(PanelControl::OpenMeowdbPage), None);
 
     arrive(&mut compass, SUNSET, 0);
@@ -42,7 +42,7 @@ fn the_meowdb_icon_opens_the_shown_maps_page_like_ctrl_shift_m_and_nothing_witho
 
 #[test]
 fn the_help_icon_opens_setup_like_ctrl_shift_s() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     compass.restore(Settings { title_region: Some(common::kerning_title_region()), ..Settings::default() });
 
     compass.press(PanelControl::Setup);
@@ -54,7 +54,7 @@ fn the_help_icon_opens_setup_like_ctrl_shift_s() {
 
 #[test]
 fn the_search_icon_opens_the_search_view_like_ctrl_shift_f() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     assert_eq!(compass.press(PanelControl::Search), None);
 
@@ -72,8 +72,8 @@ fn a_button_and_its_hotkey_land_in_the_same_state() {
         (PanelControl::ToggleGrindTracker, "ctrl+shift+g"),
     ];
     for (control, hotkey) in presses {
-        let mut clicked = Compass::new(FakeSource::meowdb());
-        let mut typed = Compass::new(FakeSource::meowdb());
+        let mut clicked = Compass::new(FakeSource::osms());
+        let mut typed = Compass::new(FakeSource::osms());
         arrive(&mut clicked, SUNSET, 0);
         arrive(&mut typed, SUNSET, 0);
 

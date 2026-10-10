@@ -1,5 +1,5 @@
 //! Name matcher: snaps a raw title reading to the closest street name and map name
-//! pair in the map index, scoring both lines together.
+//! pair in the map list, scoring both lines together.
 //!
 //! Many map names differ only in a trailing Roman numeral ("The Tree That Grew I",
 //! "II", "III"), one edit apart, so edit distance alone would pick the shortest when
@@ -53,7 +53,7 @@ impl Matcher {
         let maps = index
             .into_iter()
             .map(|e| {
-                // MeowDB names can carry trailing spaces ("A Hill West of Henesys ").
+                // OSMS's names can carry trailing spaces ("A Hill West of Henesys ").
                 let entry = MapEntry {
                     id: e.id.trim().to_string(),
                     street_name: e.street_name.trim().to_string(),
@@ -75,6 +75,11 @@ impl Matcher {
 
     pub fn map(&self, index: usize) -> &MapEntry {
         &self.maps[index].entry
+    }
+
+    /// The index of the map with this ID, if it is listed.
+    pub fn index_of(&self, id: &str) -> Option<usize> {
+        self.maps.iter().position(|known| known.entry.id == id)
     }
 
     /// Every map with the same title as map `index` (itself included), in index order.

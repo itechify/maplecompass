@@ -1,21 +1,20 @@
 //! Each mob the panel lists has a Mob Card, shown when the player hovers its name: its
-//! image and the figures from its MeowDB page that the row doesn't show. Once the shown
-//! map's own page is in, its listed mobs' pages (MeowDB) and images (maplestory.io) are
-//! asked for one at a time, ahead of the world crawl and paced like it, and each only
+//! image and the figures from its MeowDB page that the row doesn't show (until #58). Once
+//! the shown map lists them, its listed mobs' pages (MeowDB) and images (maplestory.io)
+//! are asked for one at a time, ahead of the world crawl and paced like it, and each only
 //! once. Clicking a mob's name opens its MeowDB page.
 
 mod common;
 
+use common::osms;
 use common::{FakeSource, arrive, requests_for, saved_mob_ids, saved_mob_page};
 use compass_core::{
-    Compass, DamageRange, Elements, HpPerExp, MapData, MapDataStatus, Mob, MobCard, MobDetails, MobPage,
-    PanelState, Request, SourceError,
+    Compass, DamageRange, Elements, HpPerExp, MapDataStatus, MobCard, MobDetails, MobPage, OSMS_AND_IMAGES_CREDIT,
+    OSMS_CREDIT, PanelState, Request, SourceError,
 };
 use std::sync::{Arc, Mutex};
-use std::task::Poll;
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
-const SUNSET_SKY: &str = "010003070";
 const KERNING: &str = "victoria-road__kerning-city--window";
 const CONSTRUCTION_SITE: &str = "victoria-road__construction-site-north-of-kerning-city--window";
 
@@ -49,39 +48,22 @@ fn listed_ids(state: &PanelState) -> Vec<String> {
     data.listed_mobs.iter().map(|m| m.id.clone()).collect()
 }
 
-/// A map page listing these mobs (by ID) and nothing else.
-fn map_with_mobs(ids: &[String]) -> MapData {
-    let mobs = ids
-        .iter()
-        .enumerate()
-        .map(|(i, id)| Mob {
-            id: id.clone(),
-            name: format!("Mob {id}"),
-            level: 10 + i as u32,
-            hp: 100,
-            exp: 10,
-            spawn_count: 4,
-            spawn_share_percent: 100 / ids.len() as u32,
-        })
-        .collect();
-    MapData { mobs, ..MapData::default() }
-}
-
-/// Sunset Sky's page lists these mobs instead of its own.
+/// The made-up game world, but Sunset Sky lists these mobs (by ID) and nothing else:
+/// each "Mob <id>" on 4 spawn points, levels 10 up in the order given.
 fn sunset_listing<S: ToString>(ids: &[S]) -> FakeSource {
-    let ids: Vec<String> = ids.iter().map(S::to_string).collect();
-    FakeSource::meowdb().with_pages(move |id| {
-        Poll::Ready(if id == SUNSET_SKY {
-            Ok(map_with_mobs(&ids))
-        } else {
-            Err(SourceError::Unreachable("only Sunset Sky".into()))
-        })
-    })
+    let ids: Vec<u64> = ids.iter().map(|id| id.to_string().parse().unwrap()).collect();
+    let mut world = osms::game().changing(osms::SUNSET_SKY, |m| osms::Map { spawns: Vec::new(), ..m });
+    for (i, &id) in ids.iter().enumerate() {
+        world = world
+            .with_mob(osms::mob(id, &format!("Mob {id}"), 10 + i as u32, 100, 10))
+            .changing(osms::SUNSET_SKY, |m| m.spawns(id, 4));
+    }
+    FakeSource::with_world(world)
 }
 
 #[test]
 fn each_listed_mob_has_a_card_with_the_figures_from_its_meowdb_page() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     arrive(&mut compass, SUNSET, 0);
 
     let state = tick_through(&mut compass, 400, 20_000);
@@ -187,7 +169,7 @@ fn a_mob_page_missing_one_of_the_cards_figures_reads_as_changed_never_as_a_parti
     let page = saved_mob_page("3").expect("Blue Snail's page");
     for (label, renamed) in [(">AVOID<", ">EVA<"), (">Touch DMG<", ">Contact<"), (">HP per EXP<", ">HP/EXP<")] {
         assert!(page.contains(label), "{label}");
-        let source = FakeSource::meowdb().with_mob_page("3", page.replace(label, renamed));
+        let source = FakeSource::osms().with_mob_page("3", page.replace(label, renamed));
         let mut compass = Compass::new(source);
         arrive(&mut compass, SUNSET, 0);
 
@@ -200,7 +182,7 @@ fn a_mob_page_missing_one_of_the_cards_figures_reads_as_changed_never_as_a_parti
 
 #[test]
 fn while_a_mobs_page_is_on_its_way_its_card_says_so() {
-    let mut compass = Compass::new(FakeSource::meowdb().mobs_uncached());
+    let mut compass = Compass::new(FakeSource::osms().mobs_uncached());
     let state = arrive(&mut compass, SUNSET, 0);
 
     assert!(!state.mob_cards.is_empty());
@@ -212,13 +194,13 @@ fn while_a_mobs_page_is_on_its_way_its_card_says_so() {
 
 #[test]
 fn when_meowdb_is_unreachable_a_card_says_so_or_shows_its_saved_copy_with_the_date() {
-    let source = FakeSource::meowdb().with_mob_pages(|_| Err(SourceError::Unreachable("offline".into())));
+    let source = FakeSource::osms().with_mob_pages(|_| Err(SourceError::Unreachable("offline".into())));
     let mut compass = Compass::new(source);
     arrive(&mut compass, SUNSET, 0);
     let state = tick_through(&mut compass, 400, 20_000);
     assert!(state.mob_cards.iter().all(|c| c.page == MobPage::Unavailable), "{:?}", state.mob_cards);
 
-    let mut compass = Compass::new(FakeSource::meowdb().serving_saved_copies(1_759_900_000_000));
+    let mut compass = Compass::new(FakeSource::osms().serving_saved_copies(1_759_900_000_000));
     arrive(&mut compass, SUNSET, 0);
     let state = tick_through(&mut compass, 400, 20_000);
     let MobPage::SavedCopy { saved_at_unix_ms, details } = &card(&state, "3").page else {
@@ -230,7 +212,7 @@ fn when_meowdb_is_unreachable_a_card_says_so_or_shows_its_saved_copy_with_the_da
 
 #[test]
 fn a_mob_without_an_image_still_has_its_card() {
-    let source = FakeSource::meowdb().with_images(|id| {
+    let source = FakeSource::osms().with_images(|id| {
         if id == "3" { Err(SourceError::FormatChanged("no such mob".into())) } else { Ok(format!("image:{id}")) }
     });
     let mut compass = Compass::new(source);
@@ -245,7 +227,7 @@ fn a_mob_without_an_image_still_has_its_card() {
 
 #[test]
 fn only_the_listed_mobs_pages_and_images_are_asked_for_and_each_only_once() {
-    let source = FakeSource::meowdb();
+    let source = FakeSource::osms();
     let (mobs, images) = (source.mob_requests.clone(), source.image_requests.clone());
     let mut compass = Compass::new(source);
 
@@ -294,7 +276,7 @@ fn fetch_starts(
 
 #[test]
 fn mob_pages_come_one_at_a_time_ahead_of_the_crawl_and_every_meowdb_request_is_paced() {
-    let source = FakeSource::meowdb().crawling_uncached().mobs_uncached();
+    let source = FakeSource::osms().crawling_uncached().mobs_uncached();
     let logs = [
         ("crawl", &source.crawl_requests.clone()),
         ("mob", &source.mob_requests.clone()),
@@ -322,7 +304,7 @@ fn mob_pages_come_one_at_a_time_ahead_of_the_crawl_and_every_meowdb_request_is_p
 #[test]
 fn the_crawl_waits_while_a_slow_mob_page_is_on_its_way() {
     // Each mob page takes about 5 seconds to come (100 polls at 50 ms).
-    let source = FakeSource::meowdb().crawling_uncached().mobs_taking(100);
+    let source = FakeSource::osms().crawling_uncached().mobs_taking(100);
     let logs = [
         ("crawl", &source.crawl_requests.clone()),
         ("mob", &source.mob_requests.clone()),
@@ -343,23 +325,18 @@ fn the_crawl_waits_while_a_slow_mob_page_is_on_its_way() {
 
 #[test]
 fn without_a_map_or_its_mobs_there_are_no_cards() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     assert!(compass.tick(0).mob_cards.is_empty());
 
     // Kerning City is a town.
     let state = arrive(&mut compass, KERNING, 100);
     assert!(matches!(state.data, MapDataStatus::Ready(_)));
     assert!(state.mob_cards.is_empty());
-
-    let mut compass = Compass::new(FakeSource::meowdb().with_pages_offline());
-    let state = arrive(&mut compass, SUNSET, 0);
-    assert_eq!(state.data, MapDataStatus::Unavailable);
-    assert!(state.mob_cards.is_empty());
 }
 
 #[test]
 fn clicking_a_listed_mobs_name_opens_its_meowdb_page() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     arrive(&mut compass, SUNSET, 0);
 
     assert_eq!(
@@ -372,11 +349,11 @@ fn clicking_a_listed_mobs_name_opens_its_meowdb_page() {
 
 #[test]
 fn the_panel_credits_maplestory_io_for_the_mob_images() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     let state = arrive(&mut compass, SUNSET, 0);
-    assert_eq!(state.credit, Some("NiaMeowDB (meowdb.com) · images: maplestory.io"));
+    assert_eq!(state.credit, Some(OSMS_AND_IMAGES_CREDIT));
 
     let state = arrive(&mut compass, KERNING, 1_000);
-    assert_eq!(state.credit, Some("NiaMeowDB (meowdb.com)"));
+    assert_eq!(state.credit, Some(OSMS_CREDIT));
 }

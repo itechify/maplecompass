@@ -34,7 +34,7 @@ fn frame(path: &Path) -> Frame {
 /// tracking on (a fresh one, so no earlier reading lingers).
 fn read(frame: Frame) -> Option<ExpBar> {
     let client = Size { width: 1920, height: 1200 };
-    let mut compass = Compass::new(FakeSource::offline());
+    let mut compass = Compass::new(FakeSource::osms_offline());
     compass.restore(Settings {
         title_region: Some(TitleRegion { marked: Rect { x: 70, y: 40, width: 130, height: 48 }, client }),
         exp_bar_region: Some(ExpBarRegion { marked: Rect { x: 1005, y: 1144, width: 240, height: 32 }, client }),

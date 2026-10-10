@@ -56,13 +56,13 @@ fn started_with(source: FakeSource, settings: Settings) -> Compass {
 
 /// MeowDB's saved answers, as soon as asked (from the cache).
 fn started() -> Compass {
-    started_with(FakeSource::offline(), settings())
+    started_with(FakeSource::osms_offline(), settings())
 }
 
 /// MeowDB's search answers whatever is asked with its saved answer for `query`.
 fn answering(query: &'static str) -> FakeSource {
     let json = saved_search(query).expect("saved answer");
-    FakeSource::offline().with_item_searches(move |_| meowdb::read_item_search(&json))
+    FakeSource::osms_offline().with_item_searches(move |_| meowdb::read_item_search(&json))
 }
 
 /// MeowDB's search answers whatever is asked with these items.
@@ -71,7 +71,7 @@ fn answering_items(items: &[(&str, &str)]) -> FakeSource {
         .iter()
         .map(|(id, name)| ItemHit { id: id.to_string(), name: name.to_string(), category: None })
         .collect();
-    FakeSource::offline().with_item_searches(move |_| Ok(hits.clone()))
+    FakeSource::osms_offline().with_item_searches(move |_| Ok(hits.clone()))
 }
 
 fn found(name: &str, at_ms: u64) -> Option<ItemTooltipReading> {
@@ -114,7 +114,7 @@ fn ctrl_shift_i_over_the_game_asks_the_shell_to_capture_it_with_the_pointer() {
 
 #[test]
 fn without_a_game_window_ctrl_shift_i_does_nothing() {
-    let mut compass = Compass::new(FakeSource::offline());
+    let mut compass = Compass::new(FakeSource::osms_offline());
 
     assert_eq!(compass.on_hotkey("ctrl+shift+i"), None);
     assert_eq!(compass.panel_state().item_lookup, None);
@@ -170,7 +170,7 @@ fn every_seed_item_opens_its_own_page() {
 
 #[test]
 fn while_meowdb_is_asked_the_panel_shows_the_name_read_and_the_page_opens_when_it_answers() {
-    let mut compass = started_with(FakeSource::offline().items_taking(2), settings());
+    let mut compass = started_with(FakeSource::osms_offline().items_taking(2), settings());
 
     let state = look_up(&mut compass, "Orihalcon Ore", 1_000);
     assert_eq!(line(&state), Some(ItemLookup::LookingUp { read: "Orihalcon Ore".into() }));
@@ -185,7 +185,7 @@ fn while_meowdb_is_asked_the_panel_shows_the_name_read_and_the_page_opens_when_i
 
 #[test]
 fn meowdb_is_asked_once_per_lookup() {
-    let source = FakeSource::offline().items_taking(2);
+    let source = FakeSource::osms_offline().items_taking(2);
     let asked = source.item_requests.clone();
     let mut compass = started_with(source, settings());
 
@@ -339,7 +339,7 @@ fn the_next_lookup_replaces_the_list() {
 
 #[test]
 fn meowdb_unreachable_says_so() {
-    let source = FakeSource::offline().with_item_searches(|_| Err(SourceError::Unreachable("offline".into())));
+    let source = FakeSource::osms_offline().with_item_searches(|_| Err(SourceError::Unreachable("offline".into())));
     let mut compass = started_with(source, settings());
 
     let state = look_up(&mut compass, "Orihalcon Ore", 1_000);
@@ -351,7 +351,7 @@ fn meowdb_unreachable_says_so() {
 #[test]
 fn a_search_answer_in_another_shape_says_lookup_is_unavailable() {
     for answer in ["<!DOCTYPE html><html></html>", r#"{"results":[]}"#, r#"{"items":[{"id":418}]}"#] {
-        let source = FakeSource::offline().with_item_searches(move |_| meowdb::read_item_search(answer));
+        let source = FakeSource::osms_offline().with_item_searches(move |_| meowdb::read_item_search(answer));
         let mut compass = started_with(source, settings());
         let state = look_up(&mut compass, "Orihalcon Ore", 1_000);
         assert_eq!(line(&state), Some(ItemLookup::FormatChanged), "{answer}");
@@ -361,7 +361,7 @@ fn a_search_answer_in_another_shape_says_lookup_is_unavailable() {
 
 #[test]
 fn no_item_tooltip_near_the_pointer_says_so_and_nothing_is_looked_up() {
-    let source = FakeSource::offline();
+    let source = FakeSource::osms_offline();
     let asked = source.item_requests.clone();
     let mut compass = started_with(source, settings());
     compass.on_hotkey("ctrl+shift+i");
@@ -394,7 +394,7 @@ fn a_name_read_as_too_little_to_be_one_is_unreadable() {
 
 #[test]
 fn our_panel_over_the_name_says_so_and_nothing_is_looked_up() {
-    let source = FakeSource::offline();
+    let source = FakeSource::osms_offline();
     let asked = source.item_requests.clone();
     let mut compass = started_with(source, settings());
     assert_eq!(compass.panel_state().placement, Some(PANEL));
@@ -415,7 +415,7 @@ fn the_grind_tracker_over_the_name_says_so() {
         exp_bar_region: Some(ExpBarRegion { marked: Rect { x: 1005, y: 1144, width: 240, height: 32 }, client: CLIENT }),
         ..settings()
     };
-    let mut compass = started_with(FakeSource::offline(), tracking);
+    let mut compass = started_with(FakeSource::osms_offline(), tracking);
     let tracker = compass.panel_state().grind_tracker.placement.expect("the Grind Tracker shows");
     compass.on_hotkey("ctrl+shift+i");
 
@@ -428,7 +428,7 @@ fn the_grind_tracker_over_the_name_says_so() {
 
 #[test]
 fn a_scrolled_items_upgrade_count_isnt_looked_up_with_its_name() {
-    let source = FakeSource::offline();
+    let source = FakeSource::osms_offline();
     let asked = source.item_requests.clone();
     let mut compass = started_with(source, settings());
 
@@ -498,7 +498,7 @@ fn the_alert_hides_while_another_app_is_in_front_of_the_game_and_shows_again_unt
 fn the_alert_goes_below_a_title_region_marked_where_it_would_be() {
     // A minimap title marked at the top centre of the client area.
     let title = TitleRegion { marked: Rect { x: 800, y: 40, width: 320, height: 48 }, client: CLIENT };
-    let mut compass = started_with(FakeSource::offline(), Settings { title_region: Some(title), ..settings() });
+    let mut compass = started_with(FakeSource::osms_offline(), Settings { title_region: Some(title), ..settings() });
     let region = compass.panel_state().title_region.expect("the Title Region is captured");
 
     let alert = look_up(&mut compass, "Zqxv Nothing", 1_000).item_lookup_placement.expect("an alert");

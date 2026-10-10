@@ -16,6 +16,7 @@ mod hotkey_settings;
 mod hotkeys;
 mod item_lookup;
 pub mod meowdb;
+pub mod osms;
 mod search;
 mod settings;
 mod setup;

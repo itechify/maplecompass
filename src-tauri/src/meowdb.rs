@@ -1,24 +1,16 @@
-//! The MeowDB map data source (ADR 0003, ADR 0004): fetches pages over HTTPS with an
-//! honest user agent, keeps them in a disk cache, and leaves reading them to the core.
+//! The shell's data source: OSMS Data Explorer's file set (ADR 0008, in [`crate::osms`]),
+//! and MeowDB's pages and search (ADR 0003), fetched over HTTPS with an honest user agent
+//! and kept in a disk cache. Reading them is left to the core.
 //!
-//! Politeness: the core asks for the map index once at startup (again only after a
-//! failure, at most once a minute), and for the shown map's page once the player is
-//! confirmed on that map (or, for a title several maps share, on that title). A cached
-//! page younger than [`FRESH_FOR`] is used for it without any request, so revisits
-//! within a day cost nothing; an older one is refetched, and if MeowDB can't be reached
-//! it is still used, as a saved copy the panel labels with its date. Every page MeowDB
-//! serves is cached, even one the core can't read, so a format change costs one
-//! request a day rather than one a minute.
+//! The core's world crawl (ADR 0004, until #57) keeps what it learns itself (saved
+//! between launches by `world.rs`) and decides when a map's MeowDB page is due, so its
+//! requests always go to MeowDB, paced to about one every 2 seconds, falling back on the
+//! saved copy when MeowDB can't be reached. Every page MeowDB serves is cached, even one
+//! the core can't read.
 //!
-//! The core's world crawl (ADR 0004) keeps what it learns itself (saved between
-//! launches by `world.rs`) and decides when a map's page is due, so its requests always
-//! go to MeowDB, paced to about one every 2 seconds, falling back on the saved copy
-//! when MeowDB can't be reached. Its fetches have their own slot, so they never abandon
-//! or hold up the shown map's.
-//!
-//! Mob Cards (ADR 0006): the core asks for the shown map's listed mobs' MeowDB pages,
-//! one at a time and paced with the crawl, and for their images from maplestory.io. A
-//! cached mob page is good for [`MOB_FRESH_FOR`] (a week), an image for
+//! Mob Cards (ADR 0006, until #58): the core asks for the shown map's listed mobs' MeowDB
+//! pages, one at a time and paced with the crawl, and for their images from maplestory.io.
+//! A cached mob page is good for [`MOB_FRESH_FOR`] (a week), an image for
 //! [`IMAGE_FRESH_FOR`] (30 days). Each has its own slot. Images are saved as files and
 //! served to the overlay from them ([`serve_mob_image`]): the webview never asks
 //! maplestory.io itself.
@@ -29,18 +21,16 @@
 //!
 //! Fetches run on the async runtime and never block the caller: the first call starts
 //! one and answers `Pending`, later calls collect it. A map page is read from the cache
-//! there too (a page is a few hundred KB to read): only the map index, read once at
-//! startup, and the few mob pages a map lists are read on the caller's thread.
+//! there too (a page is a few hundred KB to read): only the few mob pages a map lists
+//! are read on the caller's thread.
 
-use compass_core::{Fetched, ItemHit, MapData, MapDataSource, MapEntry, MobDetails, SourceError, meowdb};
+use crate::osms::OsmsSet;
+use compass_core::osms::OsmsFiles;
+use compass_core::{Fetched, ItemHit, MapData, MapDataSource, MobDetails, SourceError, meowdb};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::task::Poll;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-/// How long a cached page is used without asking MeowDB again. MeowDB's figures will
-/// change after the Oct 21 launch, so not much longer than a day.
-const FRESH_FOR: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// How long a cached mob page is used without asking MeowDB again (ADR 0006).
 const MOB_FRESH_FOR: Duration = Duration::from_secs(7 * 24 * 60 * 60);
@@ -60,21 +50,25 @@ const USER_AGENT: &str = concat!(
     " (personal-use map helper; +https://github.com/itechify/maplecompass)"
 );
 
-/// Cache file for the "All Maps A-Z" page.
-const INDEX_FILE: &str = "map-index.html";
-
 type Answer<T> = Result<Fetched<T>, SourceError>;
+
+/// An HTTP client that says who is asking, with MapleCompass's timeouts.
+pub(crate) fn client() -> reqwest::Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .user_agent(USER_AGENT)
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(15))
+        .build()
+}
 
 pub struct MeowDbSource {
     client: reqwest::Client,
     cache_dir: PathBuf,
-    /// The map index being fetched in the background.
-    index_in_flight: Option<Receiver<Answer<Vec<MapEntry>>>>,
-    /// The shown map's page fetches.
-    shown_map_pages: PageFetches,
-    /// The world crawl's page fetches: their own, so asking for one never abandons the
-    /// shown map's fetch.
-    crawl_pages: PageFetches,
+    /// OSMS's file set.
+    osms: OsmsSet,
+    /// The world crawl's page being fetched in the background, and where its data will
+    /// arrive.
+    crawl_page_in_flight: Option<(String, Receiver<Answer<MapData>>)>,
     /// The mob page being fetched for a Mob Card, and where its figures will arrive.
     mob_page_in_flight: Option<(String, Receiver<Answer<MobDetails>>)>,
     /// The mob image being fetched from maplestory.io, and where its address will arrive.
@@ -84,19 +78,14 @@ pub struct MeowDbSource {
 }
 
 impl MeowDbSource {
-    /// A source caching pages under `cache_dir` (created when first written).
+    /// A source caching under `cache_dir` (created when first written).
     pub fn new(cache_dir: PathBuf) -> reqwest::Result<Self> {
-        let client = reqwest::Client::builder()
-            .user_agent(USER_AGENT)
-            .connect_timeout(Duration::from_secs(5))
-            .timeout(Duration::from_secs(15))
-            .build()?;
+        let client = client()?;
         Ok(Self {
+            osms: OsmsSet::new(client.clone(), &cache_dir),
             client,
             cache_dir,
-            index_in_flight: None,
-            shown_map_pages: PageFetches::default(),
-            crawl_pages: PageFetches::default(),
+            crawl_page_in_flight: None,
             mob_page_in_flight: None,
             mob_image_in_flight: None,
             item_search_in_flight: None,
@@ -107,23 +96,17 @@ impl MeowDbSource {
         self.cache_dir.join(format!("map-{id}.html"))
     }
 
-    /// In the background: use the page cached at `path` if it was saved less than
-    /// `fresh_for` ago, or else fetch `url` and cache it there. What `read` makes of it
+    /// In the background: fetch `url` and cache it at `path`. What `read` makes of it
     /// (or of the saved copy, if MeowDB can't be reached) arrives on the receiver.
     fn fetch<T: Send + 'static>(
         &self,
         url: String,
         path: PathBuf,
-        fresh_for: Option<Duration>,
         read: impl Fn(&str) -> Result<T, SourceError> + Send + 'static,
     ) -> Receiver<Answer<T>> {
         let (tx, rx) = mpsc::channel();
         let client = self.client.clone();
         tauri::async_runtime::spawn(async move {
-            if let Some(page) = fresh_for.and_then(|fresh_for| cached(&path, fresh_for)) {
-                let _ = tx.send(read(&page).map(Fetched::Fresh));
-                return;
-            }
             let fetched = fetch(&client, &url).await;
             let _ = tx.send(settle(&path, &url, fetched, read));
         });
@@ -132,30 +115,27 @@ impl MeowDbSource {
 }
 
 impl MapDataSource for MeowDbSource {
-    fn map_index(&mut self) -> Poll<Answer<Vec<MapEntry>>> {
-        if let Some(arriving) = &self.index_in_flight {
-            let Poll::Ready(index) = collect(arriving) else { return Poll::Pending };
-            self.index_in_flight = None;
-            if let Err(e) = &index {
-                eprintln!("map index unavailable: {e}");
-            }
-            return Poll::Ready(index);
-        }
-        let path = self.cache_dir.join(INDEX_FILE);
-        if let Some(page) = cached(&path, FRESH_FOR) {
-            return Poll::Ready(meowdb::read_map_index(&page).map(Fetched::Fresh));
-        }
-        let url = meowdb::MAP_INDEX_URL.to_string();
-        self.index_in_flight = Some(self.fetch(url, path, None, meowdb::read_map_index));
-        Poll::Pending
-    }
-
-    fn map_data(&mut self, id: &str) -> Poll<Answer<MapData>> {
-        self.map_page(PageAsker::ShownMap, id)
+    fn osms_files(&mut self) -> Poll<Answer<OsmsFiles>> {
+        self.osms.poll()
     }
 
     fn crawl_data(&mut self, id: &str) -> Poll<Answer<MapData>> {
-        self.map_page(PageAsker::Crawl, id)
+        if let Some((asked, arriving)) = &self.crawl_page_in_flight {
+            if asked == id {
+                let Poll::Ready(data) = collect(arriving) else { return Poll::Pending };
+                self.crawl_page_in_flight = None;
+                if let Err(e) = &data {
+                    eprintln!("map {id}: {e}");
+                }
+                return Poll::Ready(data);
+            }
+        }
+        // A new map: an earlier fetch still in flight finishes into the cache unheard.
+        let owned = id.to_string();
+        let read = move |page: &str| meowdb::read_map_page(page, &owned);
+        let arriving = self.fetch(meowdb::map_url(id), self.map_file(id), read);
+        self.crawl_page_in_flight = Some((id.to_string(), arriving));
+        Poll::Pending
     }
 
     fn mob_page(&mut self, id: &str) -> Poll<Answer<MobDetails>> {
@@ -175,7 +155,7 @@ impl MapDataSource for MeowDbSource {
         if let Some(page) = cached(&path, MOB_FRESH_FOR) {
             return Poll::Ready(meowdb::read_mob_page(&page).map(Fetched::Fresh));
         }
-        let arriving = self.fetch(meowdb::mob_url(id), path, None, meowdb::read_mob_page);
+        let arriving = self.fetch(meowdb::mob_url(id), path, meowdb::read_mob_page);
         self.mob_page_in_flight = Some((id.to_string(), arriving));
         Poll::Pending
     }
@@ -227,7 +207,7 @@ impl MapDataSource for MeowDbSource {
             Ok(url) => url.to_string(),
             Err(e) => return Poll::Ready(Err(SourceError::FormatChanged(format!("search URL: {e}")))),
         };
-        let arriving = self.fetch(url, path, None, meowdb::read_item_search);
+        let arriving = self.fetch(url, path, meowdb::read_item_search);
         self.item_search_in_flight = Some((name.to_string(), arriving));
         Poll::Pending
     }
@@ -321,54 +301,6 @@ pub fn serve_mob_image(cache_dir: &Path, request: &tauri::http::Request<Vec<u8>>
         None => Response::builder().status(StatusCode::NOT_FOUND).body(Vec::new()),
     };
     response.unwrap_or_default()
-}
-
-/// Who asks for a map page: the panel, for the map it shows, or the world crawl.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum PageAsker {
-    ShownMap,
-    Crawl,
-}
-
-/// One asker's map page fetches. Each asker has its own, so the crawl never abandons or
-/// holds up the shown map's fetch.
-#[derive(Default)]
-struct PageFetches {
-    /// The page being fetched in the background, and where its data will arrive.
-    in_flight: Option<(String, Receiver<Answer<MapData>>)>,
-}
-
-impl MeowDbSource {
-    fn fetches(&mut self, asker: PageAsker) -> &mut PageFetches {
-        match asker {
-            PageAsker::ShownMap => &mut self.shown_map_pages,
-            PageAsker::Crawl => &mut self.crawl_pages,
-        }
-    }
-
-    /// Map `id`'s data for `asker`, in the background: for the shown map, from the
-    /// cache if it's young enough, otherwise (and always for the crawl, which decides
-    /// for itself when a page is due) from MeowDB.
-    fn map_page(&mut self, asker: PageAsker, id: &str) -> Poll<Answer<MapData>> {
-        let fetches = self.fetches(asker);
-        if let Some((asked, arriving)) = &fetches.in_flight {
-            if asked == id {
-                let Poll::Ready(data) = collect(arriving) else { return Poll::Pending };
-                fetches.in_flight = None;
-                if let Err(e) = &data {
-                    eprintln!("map {id}: {e}");
-                }
-                return Poll::Ready(data);
-            }
-        }
-        // A new map: an earlier fetch still in flight finishes into the cache unheard.
-        let fresh_for = (asker == PageAsker::ShownMap).then_some(FRESH_FOR);
-        let owned = id.to_string();
-        let read = move |page: &str| meowdb::read_map_page(page, &owned);
-        let arriving = self.fetch(meowdb::map_url(id), self.map_file(id), fresh_for, read);
-        self.fetches(asker).in_flight = Some((id.to_string(), arriving));
-        Poll::Pending
-    }
 }
 
 /// What a background fetch sent, if it has finished.

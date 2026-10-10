@@ -15,7 +15,7 @@ const GAME: ScreenRect = ScreenRect { x: 0, y: 0, width: 1920, height: 1200 };
 /// first-run setup is waiting, with or without the game window found.
 fn set_up(game_found: bool) -> Compass {
     let client = Size { width: 1920, height: 1200 };
-    let mut compass = Compass::new(FakeSource::offline());
+    let mut compass = Compass::new(FakeSource::osms_offline());
     compass.set_panel_sizes(PanelSizes {
         expanded: Size { width: 380, height: 72 },
         collapsed: Size { width: 44, height: 44 },
@@ -80,7 +80,7 @@ fn launched_again_detached_without_the_game_opens_setup_too() {
 
 #[test]
 fn launched_again_during_first_run_setup_leaves_setup_as_it_is() {
-    let mut compass = Compass::new(FakeSource::offline());
+    let mut compass = Compass::new(FakeSource::osms_offline());
     compass.on_game_window(Some(GameWindow { client: GAME, frame: GAME, screens: vec![GAME] }));
     let before = compass.panel_state().setup.clone();
     assert!(before.window_open);
