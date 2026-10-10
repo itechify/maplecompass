@@ -164,11 +164,17 @@ fn a_cards_elements_read_as_weak_strong_and_immune() {
 #[test]
 fn a_mob_record_not_as_expected_reads_as_a_changed_format_never_as_a_partial_card() {
     let odd_affinity = osms::mob(9001, "Odd", 10, 100, 10).element("Fire", "Absorbs");
+    let odd_animation = osms::mob(9003, "Odd", 10, 100, 10).animation("../../hash");
     let files = osms::game().with_mob(osms::mob(9002, "Odd", 10, 100, 10).acc(39)).files();
     let acc_as_text = OsmsFiles { monsters: files.monsters.replace(r#""acc":39"#, r#""acc":"39""#), ..files };
     assert_ne!(acc_as_text.monsters, osms::game().files().monsters);
 
-    for source in [sunset_listing(vec![odd_affinity]), FakeSource::answering_osms(vec![fresh_files(acc_as_text)])] {
+    let sources = [
+        sunset_listing(vec![odd_affinity]),
+        sunset_listing(vec![odd_animation]),
+        FakeSource::answering_osms(vec![fresh_files(acc_as_text)]),
+    ];
+    for source in sources {
         let mut compass = Compass::new(source);
 
         let state = compass.tick(0).clone();
@@ -177,25 +183,123 @@ fn a_mob_record_not_as_expected_reads_as_a_changed_format_never_as_a_partial_car
     }
 }
 
+/// Where OSMS keeps the animation with this hash, below its data folder.
+fn animation(hash: &str) -> String {
+    format!("images/monsters/{hash}.webp")
+}
+
 #[test]
-fn a_mob_without_an_image_still_has_its_card() {
-    let source = FakeSource::osms().with_images(|id| {
-        if id == "3" { Err(SourceError::FormatChanged("no such mob".into())) } else { Ok(format!("image:{id}")) }
+fn a_cards_image_is_osmss_default_animation_of_its_mob_asked_for_by_its_path() {
+    let blue_snail = osms::mob(3, "Blue Snail", 2, 51, 4).animation("43d30603411fc517");
+    let mut compass = Compass::new(sunset_listing(vec![blue_snail]));
+    arrive(&mut compass, SUNSET, 0);
+
+    let state = compass.tick(400).clone();
+
+    // The fake source's answer: where the overlay loads it from.
+    assert_eq!(card(&state, "3").image, Some(format!("picture:{}", animation("43d30603411fc517"))));
+}
+
+#[test]
+fn saved_animations_are_on_the_cards_by_the_next_tick() {
+    let mut compass = Compass::new(FakeSource::osms());
+    let state = arrive(&mut compass, SUNSET, 0);
+    assert_eq!(state.mob_cards.len(), 5);
+
+    let state = compass.tick(400).clone();
+
+    for id in listed_ids(&state) {
+        assert_eq!(card(&state, &id).image, Some(format!("picture:{}", animation(&format!("gif{id}")))));
+    }
+}
+
+#[test]
+fn while_its_animation_is_on_its_way_a_card_shows_its_figures_without_it() {
+    let mut compass = Compass::new(FakeSource::osms().pictures_taking(20));
+
+    let state = arrive(&mut compass, SUNSET, 0);
+    assert!(state.mob_cards.iter().all(|c| c.image.is_none()), "{:?}", state.mob_cards);
+    assert_eq!(details(&state, "3").speed, "Normal");
+
+    let state = tick_through(&mut compass, 400, 20_000);
+    assert!(state.mob_cards.iter().all(|c| c.image.is_some()), "{:?}", state.mob_cards);
+}
+
+#[test]
+fn a_mob_without_an_animation_still_has_its_card() {
+    let source = sunset_listing(vec![
+        osms::mob(3, "Blue Snail", 2, 51, 4),
+        osms::mob(6, "Stump", 5, 133, 10).without_animation(),
+        osms::mob(9, "Orange Mushroom", 8, 142, 15),
+    ])
+    .with_pictures(|path| match path.contains("gif3") {
+        true => Err(SourceError::FormatChanged("not found".into())),
+        false => Ok(format!("picture:{path}")),
     });
+    let requests = source.picture_requests.clone();
     let mut compass = Compass::new(source);
     arrive(&mut compass, SUNSET, 0);
 
     let state = tick_through(&mut compass, 400, 20_000);
 
-    assert_eq!(card(&state, "3").image, None);
-    assert_eq!(details(&state, "3").speed, "Normal");
-    assert_eq!(card(&state, "6").image.as_deref(), Some("image:6"));
+    // OSMS couldn't give Blue Snail's; it names none for the Stump.
+    assert_eq!((card(&state, "3").image.as_ref(), card(&state, "6").image.as_ref()), (None, None));
+    assert_eq!((details(&state, "3").speed.as_str(), details(&state, "6").speed.as_str()), ("Normal", "Normal"));
+    assert_eq!(card(&state, "9").image, Some(format!("picture:{}", animation("gif9"))));
+    assert_eq!(*requests.lock().unwrap(), [animation("gif3"), animation("gif9")]);
 }
 
 #[test]
-fn only_the_listed_mobs_images_are_asked_for_and_each_only_once() {
+fn an_animation_that_couldnt_be_fetched_is_asked_for_again_a_few_minutes_later() {
+    let mut first = true;
+    let source = FakeSource::osms().with_pictures(move |path| match (path.contains("gif3"), first) {
+        (true, true) => {
+            first = false;
+            Err(SourceError::Unreachable("offline".into()))
+        }
+        _ => Ok(format!("picture:{path}")),
+    });
+    let mut compass = Compass::new(source);
+    arrive(&mut compass, SUNSET, 0);
+
+    let mut at = 400;
+    let mut image_at = |compass: &mut Compass, until: u64| {
+        while at < until {
+            compass.tick(at);
+            at += 1_000;
+        }
+        card(compass.panel_state(), "3").image.clone()
+    };
+
+    assert_eq!(image_at(&mut compass, 60_000), None);
+    assert_eq!(image_at(&mut compass, 6 * 60_000), Some(format!("picture:{}", animation("gif3"))));
+}
+
+#[test]
+fn animations_are_asked_for_one_at_a_time_with_no_other_pace() {
+    // Each takes a second to come (20 polls at 50 ms).
+    let source = FakeSource::osms().pictures_taking(20);
+    let requests = source.picture_requests.clone();
+    let mut compass = Compass::new(source);
+    let state = arrive(&mut compass, SUNSET, 0);
+    let listed = listed_ids(&state).len();
+
+    let mut starts = Vec::new();
+    for at in (50..=20_000).step_by(50) {
+        let before = requests.lock().unwrap().len();
+        compass.tick(at);
+        starts.extend(std::iter::repeat_n(at, requests.lock().unwrap().len() - before));
+    }
+
+    assert_eq!(starts.len(), listed, "{starts:?}");
+    // Each asked for just as the one before arrives.
+    assert!(starts.windows(2).all(|w| w[1] - w[0] == 1_000), "{starts:?}");
+}
+
+#[test]
+fn only_the_listed_mobs_animations_are_asked_for_and_each_only_once() {
     let source = FakeSource::osms();
-    let images = source.image_requests.clone();
+    let requests = source.picture_requests.clone();
     let mut compass = Compass::new(source);
 
     let state = arrive(&mut compass, CONSTRUCTION_SITE, 0);
@@ -214,10 +318,10 @@ fn only_the_listed_mobs_images_are_asked_for_and_each_only_once() {
 
     for id in &all_mobs {
         let expected = usize::from(construction_site.contains(id) || sunset.contains(id));
-        assert_eq!(requests_for(&images, id), expected, "mob {id}'s image");
+        assert_eq!(requests_for(&requests, &animation(&format!("gif{id}"))), expected, "mob {id}'s animation");
     }
     for id in &sunset {
-        assert_eq!(requests_for(&images, id), 1, "mob {id}");
+        assert_eq!(requests_for(&requests, &animation(&format!("gif{id}"))), 1, "mob {id}");
     }
 }
 

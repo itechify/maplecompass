@@ -1,6 +1,6 @@
 //! OSMS Data Explorer's file set (ADR 0008): the raw texts the shell fetches from
 //! [`DATA_URL`], and the reader that turns them into every map's data and every mob's
-//! Mob Card figures. Credit "OSMS Data Explorer (osmsdataexplorer.com)".
+//! Mob Card figures and animation. Credit "OSMS Data Explorer (osmsdataexplorer.com)".
 
 use crate::map_data::{MapData, MapSummary, Mob, PerParty};
 use crate::map_index::{MapEntry, SourceError};
@@ -13,6 +13,10 @@ use std::collections::{BTreeMap, HashMap};
 /// Where OSMS Data Explorer publishes its current data set: each of [`OsmsFiles::NAMES`]
 /// is a file under it.
 pub const DATA_URL: &str = "https://osmsdataexplorer.com/data/current/";
+
+/// Where OSMS Data Explorer keeps its pictures, each named by its content: a picture's
+/// path is below it ([`crate::MapDataSource::picture`]).
+pub const PICTURES_URL: &str = "https://osmsdataexplorer.com/data/";
 
 /// OSMS's file set as fetched: each file's text, unread. Saved and swapped whole.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,6 +48,9 @@ pub struct MapSet {
     maps: Vec<(MapEntry, MapData)>,
     /// Every mob in `monsters.json`, by its ID.
     mobs: HashMap<String, MobDetails>,
+    /// The path of each mob's default animation, by its ID; a mob OSMS names none for
+    /// isn't here.
+    animations: HashMap<String, String>,
 }
 
 impl MapSet {
@@ -65,6 +72,12 @@ impl MapSet {
     /// Mob `id`'s Mob Card figures. Every mob a map lists has them.
     pub(crate) fn mob(&self, id: &str) -> Option<&MobDetails> {
         self.mobs.get(id)
+    }
+
+    /// The path of OSMS's default animation of mob `id` ([`crate::MapDataSource::picture`]),
+    /// if OSMS names one.
+    pub(crate) fn animation(&self, id: &str) -> Option<&str> {
+        self.animations.get(id).map(String::as_str)
     }
 }
 
@@ -123,7 +136,21 @@ fn read_set(files: &OsmsFiles, overrides: &[PortalOverride]) -> Result<MapSet, S
         }
     }
     let mobs = monsters.monsters.iter().map(|mob| (mob.id.to_string(), mob_details(mob, &monsters.monsters))).collect();
-    Ok(MapSet { maps: set, mobs })
+    let mut animations = HashMap::new();
+    for mob in &monsters.monsters {
+        if let Some(hash) = &mob.gif {
+            animations.insert(mob.id.to_string(), animation_path(hash).map_err(|why| format!("mob {}: {why}", mob.id))?);
+        }
+    }
+    Ok(MapSet { maps: set, mobs, animations })
+}
+
+/// Where OSMS keeps the mob animation with content hash `hash`, below [`PICTURES_URL`].
+fn animation_path(hash: &str) -> Result<String, String> {
+    if hash.is_empty() || !hash.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        return Err(format!("gif {hash:?} isn't a hash"));
+    }
+    Ok(format!("images/monsters/{hash}.webp"))
 }
 
 /// A mob's Mob Card figures, from its record among `all` of `monsters.json`.
@@ -397,6 +424,8 @@ struct OsmsMob {
     /// Each element it has an affinity to ("Fire"), in name order; absent for none.
     #[serde(default)]
     elements: BTreeMap<String, Affinity>,
+    /// The content hash of OSMS's default animation of it, one of its `gifs`.
+    gif: Option<String>,
     /// The maps it spawns on; absent for a mob on none.
     #[serde(default)]
     maps: Vec<MobOnMap>,
