@@ -13,7 +13,8 @@ use crate::gamewin;
 use crate::view::{LastView, ViewSender};
 use crate::Command;
 use compass_core::{
-    Action, Hotkeys, MarkTarget, PanelState, Recognition, Rect, ScreenRect, SelectionDirection, SetupState,
+    Action, Hotkeys, MarkTarget, PanelControl, PanelState, Recognition, Rect, ScreenRect, SelectionDirection,
+    SetupState,
 };
 use serde::Serialize;
 use std::sync::Mutex;
@@ -45,7 +46,6 @@ struct SetupView<'a> {
     /// The window title looked for.
     game_title: &'a str,
     hotkeys: &'a Hotkeys,
-    settings_path: &'a str,
     /// Hotkeys that do nothing: another app has them, or they are invalid.
     unavailable_hotkeys: &'a [String],
     /// Those of them that don't name a key combination.
@@ -71,7 +71,6 @@ pub struct SetupWindows {
     setup: WebviewWindow,
     shown: bool,
     region_client: Option<ScreenRect>,
-    settings_path: String,
     /// Sends the setup window its view.
     view: ViewSender,
 }
@@ -92,7 +91,6 @@ impl SetupWindows {
         });
         Ok(Self {
             app: app.clone(), setup, shown: false, region_client: None,
-            settings_path: crate::settings::path(app)?.display().to_string(),
             view: ViewSender::new(SETUP, "setup-state"),
         })
     }
@@ -155,7 +153,6 @@ impl SetupWindows {
             game: game.map(|c| GameView { width: c.width, height: c.height }),
             game_title: &state.game_window_title,
             hotkeys: &state.hotkeys,
-            settings_path: &self.settings_path,
             unavailable_hotkeys: &state.unavailable_hotkeys,
             invalid_hotkeys: &state.invalid_hotkeys,
         };
@@ -266,6 +263,13 @@ pub async fn cancel_marking(app: AppHandle, bridge: State<'_, Bridge>) -> Result
     hide(&app, REGION);
     focus_setup(&app);
     app.emit_to(SETUP, "marking-cancelled", ()).map_err(|e| e.to_string())
+}
+
+/// The Overlay Guide's Change hotkeys: open the overlay's settings view, as its gear does.
+/// It comes in front with the keyboard, which our setup window, in front now, may give it.
+#[tauri::command]
+pub async fn open_hotkey_settings(bridge: State<'_, Bridge>) -> Result<(), String> {
+    bridge.commands.send(Command::Press(PanelControl::Settings)).map_err(|e| e.to_string())
 }
 
 /// Finish setup (the core only does once the test reads of what was marked succeeded).
