@@ -14,6 +14,7 @@ mod item_lookup;
 mod item_tooltip;
 mod map_data;
 mod map_index;
+mod map_preview;
 mod matcher;
 pub mod meowdb;
 mod mob_card;
@@ -47,6 +48,7 @@ pub use map_data::{
     Portal, PortalKind,
 };
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
+pub use map_preview::{Landing, Leads, MapPreview, PortalMark};
 pub use mob_card::{DamageRange, Elements, HpPerExp, MobCard, MobDetails, MobPage};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 pub use panel::{
@@ -189,6 +191,10 @@ pub struct PanelState {
     /// The shown map's Map Summary, mobs and Hidden Portals from OSMS's file set, or why they
     /// aren't there.
     pub data: MapDataStatus,
+    /// The shown map's Map Preview: its picture and every portal on it, marked. `None`
+    /// with no map shown, on a map without a picture, and while it isn't settled which
+    /// of the maps sharing a title the player is on.
+    pub map_preview: Option<MapPreview>,
     /// [`OSMS_CREDIT`] whenever a map is shown; with Mob Cards, [`OSMS_AND_IMAGES_CREDIT`].
     pub credit: Option<&'static str>,
     /// The Mob Card of each mob the panel lists, in its order; empty while it lists none.
@@ -549,6 +555,7 @@ impl Compass {
             self.sync_search();
         }
         self.state.candidates = self.set.as_ref().and_then(|set| self.shown_map.candidates(&set.maps));
+        self.state.map_preview = self.set.as_ref().and_then(|set| self.shown_map.preview(&set.maps));
         let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
         self.mob_cards.list(listed);
         self.state.mob_cards = self.mob_cards.cards();
