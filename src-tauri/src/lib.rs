@@ -16,7 +16,9 @@ mod hotkey_settings;
 mod hotkeys;
 mod item_lookup;
 pub mod meowdb;
+mod old_caches;
 pub mod osms;
+mod pictures;
 mod search;
 mod settings;
 mod setup;
@@ -147,8 +149,8 @@ fn panel_height(height: f64, commands: tauri::State<'_, Sender<Command>>) {
     let _ = commands.send(Command::PanelHeight(height));
 }
 
-/// Where MeowDB's pages and maplestory.io's mob images are cached. WebView2 shares the app
-/// cache folder, hence the subfolder.
+/// Where OSMS's file set and pictures, and MeowDB's pages, are cached. WebView2 shares the
+/// app cache folder, hence the subfolder.
 fn cache_dir(app: &AppHandle) -> tauri::Result<PathBuf> {
     Ok(app.path().app_cache_dir()?.join("cache"))
 }
@@ -177,9 +179,9 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
-        // The Mob Cards' images, from our saved copies of maplestory.io's.
-        .register_uri_scheme_protocol(meowdb::MOB_IMAGE_SCHEME, |ctx, request| match cache_dir(ctx.app_handle()) {
-            Ok(dir) => meowdb::serve_mob_image(&dir, &request),
+        // OSMS's pictures, such as the Mob Cards' animations, from our saved copies.
+        .register_uri_scheme_protocol(pictures::SCHEME, |ctx, request| match cache_dir(ctx.app_handle()) {
+            Ok(dir) => pictures::serve(&dir, &request),
             Err(_) => tauri::http::Response::builder().status(500).body(Vec::new()).unwrap_or_default(),
         })
         .setup(|app| {
@@ -192,9 +194,16 @@ pub fn run() {
             // tauri.conf.json is WS_EX_NOACTIVATE), so the game keeps the keyboard.
             overlay.set_ignore_cursor_events(true)?;
 
-            // MeowDB pages are cached on disk (ADR 0003), and maplestory.io's mob images
-            // (ADR 0006).
+            // OSMS's file set and pictures are kept on disk (ADR 0008), and so are MeowDB's
+            // pages (ADR 0003).
             let cache = cache_dir(app.handle())?;
+            // Off the compass loop: what earlier versions cached and nothing reads now, and
+            // the pictures unused for 30 days.
+            let swept = cache.clone();
+            std::thread::Builder::new().name("cache-sweeper".into()).spawn(move || {
+                old_caches::delete(&swept);
+                pictures::sweep(&swept);
+            })?;
             let source = MeowDbSource::new(cache.clone())?;
             let mut compass = Compass::new(source);
             let settings_path = settings::path(app.handle())?;

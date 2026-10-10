@@ -21,6 +21,7 @@ pub mod osms;
 mod pace;
 mod panel;
 mod personal_best;
+mod pictures;
 mod portal_overrides;
 mod portals;
 mod prep;
@@ -73,8 +74,8 @@ use item_lookup::ItemLookups;
 use search::{MobSearch, Searched};
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
-use mob_card::MobCards;
 use pace::Pace;
+use pictures::Pictures;
 use panel::Panel;
 use session::Session;
 use setup::Setup;
@@ -376,8 +377,9 @@ pub struct Compass {
     progress_shown_at: Option<u64>,
     /// The wall clock (ms since the Unix epoch), as the shell last told it.
     wall_clock: Option<u64>,
-    /// The listed mobs' images, for their Mob Cards.
-    mob_cards: MobCards,
+    /// OSMS's pictures the panel asked for: the listed mobs' animations, for their Mob
+    /// Cards.
+    pictures: Pictures,
     /// MeowDB's pace, kept by the crawl and Item Lookup together.
     meowdb_pace: Pace,
     /// What the player typed, highlighted and picked in mob search.
@@ -423,7 +425,7 @@ impl Compass {
             world_awaited: false,
             progress_shown_at: None,
             wall_clock: None,
-            mob_cards: MobCards::default(),
+            pictures: Pictures::default(),
             meowdb_pace: Pace::default(),
             search: MobSearch::default(),
             hotkey_settings: HotkeySettings::default(),
@@ -549,11 +551,27 @@ impl Compass {
             self.sync_search();
         }
         self.state.candidates = self.set.as_ref().and_then(|set| self.shown_map.candidates(&set.maps));
-        let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
-        self.mob_cards.list(listed);
-        self.state.mob_cards = self.set.as_ref().map_or_else(Vec::new, |set| self.mob_cards.cards(&set.maps));
+        self.sync_mob_cards();
         let credit = if self.state.mob_cards.is_empty() { OSMS_CREDIT } else { OSMS_AND_IMAGES_CREDIT };
         self.state.credit = self.state.map.as_ref().map(|_| credit);
+    }
+
+    /// The listed mobs' Mob Cards, with the animations in so far.
+    fn sync_mob_cards(&mut self) {
+        let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
+        self.state.mob_cards = match &self.set {
+            Some(set) => mob_card::cards(listed, &set.maps, &self.pictures),
+            None => Vec::new(),
+        };
+    }
+
+    /// Ask for the pictures the panel wants, one at a time: the listed mobs' animations.
+    fn poll_pictures(&mut self, at_ms: u64) {
+        let Some(set) = &self.set else { return };
+        let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
+        let wanted = mob_card::animations(listed, &set.maps);
+        self.pictures.poll(&wanted, &mut *self.source, at_ms);
+        self.sync_mob_cards();
     }
 
     /// The game window moved, resized, appeared or went away (`None`: not found, or
@@ -1033,9 +1051,7 @@ impl Compass {
         self.load_osms(at_ms);
         if self.set.is_some() {
             self.sync_shown_map();
-            // Once the shown map lists its mobs.
-            self.mob_cards.poll(&mut *self.source, at_ms);
-            self.state.mob_cards = self.set.as_ref().map_or_else(Vec::new, |set| self.mob_cards.cards(&set.maps));
+            self.poll_pictures(at_ms);
         }
         // An Item Lookup's search, which the player waits on, before the crawl.
         let open = self.item_lookups.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);

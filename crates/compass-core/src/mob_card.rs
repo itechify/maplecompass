@@ -1,18 +1,13 @@
 //! Mob Cards: what the panel shows when the player hovers a listed mob's name. Each
-//! holds the mob's image and the figures from OSMS's set that the panel's row doesn't
-//! show (ADR 0008). The figures come with the set, so a card is ready as soon as its map
-//! is shown.
-//!
-//! Once the shown map lists its mobs, their images are asked for one at a time. An answer
-//! is kept for the run, so a mob met again on another map isn't asked for again.
+//! holds OSMS's animation of the mob and the figures from OSMS's set that the panel's row
+//! doesn't show (ADR 0008). The figures come with the set, so a card is ready as soon as
+//! its map is shown; the animations are pictures, asked for once the map lists its mobs.
 
 use crate::map_data::Mob;
-use crate::map_index::{MapDataSource, SourceError};
 use crate::meowdb;
 use crate::osms::MapSet;
-use crate::pace::Pace;
+use crate::pictures::Pictures;
 use serde::Serialize;
-use std::task::Poll;
 
 /// The figures from OSMS's set that the panel's row (level, HP, EXP, share) doesn't show.
 /// A figure the mob doesn't have, or has as 0, is `None` (the panel shows "—").
@@ -70,130 +65,32 @@ pub struct MobCard {
     pub id: String,
     /// The mob's MeowDB page, which a click on its name opens.
     pub url: String,
-    /// Where the overlay loads the mob's image from; `None` until it's in, or if it can't
-    /// be had.
+    /// Where the overlay loads OSMS's default animation of the mob from, through
+    /// MapleCompass's own URL scheme; `None` until it's in, if it can't be had, or if OSMS
+    /// names none.
     pub image: Option<String>,
     #[serde(flatten)]
     pub details: MobDetails,
 }
 
-/// How long an unreachable image waits before it is asked for again, while its mob is
-/// still listed.
-const RETRY_MS: u64 = 5 * 60_000;
-
-/// How many answers given at once (from the source's cache) are taken in one tick.
-const AT_ONCE_PER_TICK: usize = 8;
-
-/// The listed mobs' images, asked for and kept.
-#[derive(Default)]
-pub(crate) struct MobCards {
-    /// The mobs the panel lists now, in its order.
-    listed: Vec<Mob>,
-    images: Lane<String>,
-    image_pace: Pace,
+/// The pictures the `listed` mobs' cards want: OSMS's animations of them, in the panel's
+/// order.
+pub(crate) fn animations(listed: &[Mob], set: &MapSet) -> Vec<String> {
+    listed.iter().filter_map(|mob| set.animation(&mob.id)).map(String::from).collect()
 }
 
-impl MobCards {
-    /// The panel lists these mobs now: their images are wanted.
-    pub fn list(&mut self, mobs: &[Mob]) {
-        self.listed = mobs.to_vec();
-    }
-
-    /// Time passed: check on the request in flight, and ask for the next image when the
-    /// pace allows.
-    pub fn poll(&mut self, source: &mut dyn MapDataSource, at_ms: u64) {
-        let wanted: Vec<&str> = self.listed.iter().map(|m| m.id.as_str()).collect();
-        self.images.poll(&wanted, &mut self.image_pace, at_ms, |id| source.mob_image(id));
-    }
-
-    /// The listed mobs' cards, in the panel's order, with their figures from `set`.
-    pub fn cards(&self, set: &MapSet) -> Vec<MobCard> {
-        self.listed
-            .iter()
-            .filter_map(|mob| {
-                Some(MobCard {
-                    id: mob.id.clone(),
-                    url: meowdb::mob_url(&mob.id),
-                    image: match self.images.answer(&mob.id) {
-                        Some(Ok(image)) => Some(image.clone()),
-                        _ => None,
-                    },
-                    details: set.mob(&mob.id)?.clone(),
-                })
+/// The `listed` mobs' cards, in the panel's order: their figures from `set`, and their
+/// animations once `pictures` has them.
+pub(crate) fn cards(listed: &[Mob], set: &MapSet, pictures: &Pictures) -> Vec<MobCard> {
+    listed
+        .iter()
+        .filter_map(|mob| {
+            Some(MobCard {
+                id: mob.id.clone(),
+                url: meowdb::mob_url(&mob.id),
+                image: set.animation(&mob.id).and_then(|path| pictures.url(path)).map(String::from),
+                details: set.mob(&mob.id)?.clone(),
             })
-            .collect()
-    }
-}
-
-/// Requests to one site, one at a time: each mob's answer, and the mob whose answer is
-/// awaited.
-struct Lane<T> {
-    /// Each mob asked about, its latest answer, and when it came.
-    answers: Vec<(String, Result<T, SourceError>, u64)>,
-    in_flight: Option<String>,
-}
-
-impl<T> Default for Lane<T> {
-    fn default() -> Self {
-        Self { answers: Vec::new(), in_flight: None }
-    }
-}
-
-impl<T> Lane<T> {
-    fn answer(&self, id: &str) -> Option<&Result<T, SourceError>> {
-        self.answers.iter().find(|(asked, ..)| asked == id).map(|(_, answer, _)| answer)
-    }
-
-    /// The next wanted mob to ask about: the first never asked, else the first whose
-    /// site couldn't be reached and whose retry is due.
-    fn next<'a>(&self, wanted: &[&'a str], at_ms: u64) -> Option<&'a str> {
-        let unasked = wanted.iter().find(|id| self.answer(id).is_none());
-        let retry = || {
-            wanted.iter().find(|id| {
-                self.answers.iter().any(|(asked, answer, came_ms)| {
-                    asked == *id
-                        && matches!(answer, Err(SourceError::Unreachable(_)))
-                        && at_ms.saturating_sub(*came_ms) >= RETRY_MS
-                })
-            })
-        };
-        unasked.or_else(retry).copied()
-    }
-
-    /// Check on the request in flight (even for a mob no longer listed), and ask about
-    /// the next wanted mob when `pace` allows.
-    fn poll(
-        &mut self,
-        wanted: &[&str],
-        pace: &mut Pace,
-        at_ms: u64,
-        mut ask: impl FnMut(&str) -> Poll<Result<T, SourceError>>,
-    ) {
-        for _ in 0..AT_ONCE_PER_TICK {
-            let (id, first_ask) = match self.in_flight.take() {
-                Some(id) => (id, false),
-                None if !pace.ready(at_ms) => return,
-                None => match self.next(wanted, at_ms) {
-                    Some(id) => (id.to_string(), true),
-                    None => return,
-                },
-            };
-            let answer = match ask(&id) {
-                Poll::Pending => {
-                    if first_ask {
-                        pace.sent(at_ms);
-                    }
-                    self.in_flight = Some(id);
-                    return;
-                }
-                Poll::Ready(answer) => answer,
-            };
-            self.answers.retain(|(asked, ..)| *asked != id);
-            self.answers.push((id, answer, at_ms));
-            if !first_ask {
-                // It came over the network: the next one waits out the pace.
-                return;
-            }
-        }
-    }
+        })
+        .collect()
 }

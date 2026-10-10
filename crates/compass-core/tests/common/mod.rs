@@ -154,7 +154,7 @@ pub fn saved_search(name: &str) -> Option<String> {
 }
 
 type PageAnswer = Poll<Result<MapData, SourceError>>;
-type ImageAnswer = Result<String, SourceError>;
+type PictureAnswer = Result<String, SourceError>;
 type SearchAnswer = Result<Vec<ItemHit>, SourceError>;
 pub type OsmsAnswer = Poll<Result<Fetched<OsmsFiles>, SourceError>>;
 
@@ -178,22 +178,22 @@ pub struct FakeSource {
     /// The sites are unreachable and the answers are copies saved at this time (ms since
     /// the Unix epoch); `None`: they are fresh.
     saved_at: Option<u64>,
-    /// Answers a mob image request for a mob ID. Defaults to `"image:<id>"`.
-    images: Box<dyn FnMut(&str) -> ImageAnswer + Send>,
-    /// The mob ID of every mob image fetch started, in order.
-    pub image_requests: Arc<Mutex<Vec<String>>>,
-    /// How many polls an image answer takes: 0 when it's in the cache (answered at once),
-    /// otherwise it arrives on the `n`th poll after its fetch started, as from the
-    /// network.
-    mob_polls: usize,
-    /// The image fetch in flight, its answer, and how many more polls it takes.
-    image_in_flight: Option<(String, ImageAnswer, usize)>,
+    /// Answers a picture request for a path under OSMS's data folder. Defaults to
+    /// `"picture:<path>"`.
+    pictures: Box<dyn FnMut(&str) -> PictureAnswer + Send>,
+    /// The path of every picture fetch started, in order.
+    pub picture_requests: Arc<Mutex<Vec<String>>>,
+    /// How many polls a picture takes: 0 when it's saved (answered at once), otherwise it
+    /// arrives on the `n`th poll after its fetch started, as from the network.
+    picture_polls: usize,
+    /// The picture fetch in flight, its answer, and how many more polls it takes.
+    picture_in_flight: Option<(String, PictureAnswer, usize)>,
     /// Answers an item search for a name. Defaults to MeowDB's saved answers, read with the
     /// core's MeowDB reader; a name without a saved answer is unreachable.
     item_searches: Box<dyn FnMut(&str) -> SearchAnswer + Send>,
     /// The name of every item search started, in order.
     pub item_requests: Arc<Mutex<Vec<String>>>,
-    /// How many polls an item search takes, as `mob_polls` for images.
+    /// How many polls an item search takes, as `picture_polls` for pictures.
     item_polls: usize,
     item_in_flight: Option<(String, SearchAnswer, usize)>,
 }
@@ -224,10 +224,10 @@ impl FakeSource {
             crawl_uncached: false,
             crawl_in_flight: None,
             saved_at: None,
-            images: Box::new(|id| Ok(format!("image:{id}"))),
-            image_requests: Arc::default(),
-            mob_polls: 0,
-            image_in_flight: None,
+            pictures: Box::new(|path| Ok(format!("picture:{path}"))),
+            picture_requests: Arc::default(),
+            picture_polls: 0,
+            picture_in_flight: None,
             item_searches: Box::new(read_saved_search),
             item_requests: Arc::default(),
             item_polls: 0,
@@ -284,22 +284,16 @@ impl FakeSource {
         Self { crawl_uncached: true, ..self }
     }
 
-    /// Answer mob image requests with `images`.
-    pub fn with_images(mut self, images: impl FnMut(&str) -> ImageAnswer + Send + 'static) -> Self {
-        self.images = Box::new(images);
+    /// Answer picture requests with `pictures`, by path.
+    pub fn with_pictures(mut self, pictures: impl FnMut(&str) -> PictureAnswer + Send + 'static) -> Self {
+        self.pictures = Box::new(pictures);
         self
     }
 
-    /// Mob images come over the network, not from the cache: each arrives on the poll
-    /// after its fetch started.
-    pub fn mobs_uncached(self) -> Self {
-        self.mobs_taking(1)
-    }
-
-    /// Mob images come over a slow network: each arrives on the `polls`th poll after its
-    /// fetch started.
-    pub fn mobs_taking(self, polls: usize) -> Self {
-        Self { mob_polls: polls, ..self }
+    /// Pictures aren't saved yet, and come over the network: each arrives on the
+    /// `polls`th poll after its fetch started.
+    pub fn pictures_taking(self, polls: usize) -> Self {
+        Self { picture_polls: polls, ..self }
     }
 
     /// Answer item searches with `searches` instead of MeowDB's saved answers.
@@ -408,8 +402,8 @@ impl MapDataSource for FakeSource {
         self.fetched(answer)
     }
 
-    fn mob_image(&mut self, id: &str) -> Poll<Result<String, SourceError>> {
-        one_at_a_time(id, &mut self.image_in_flight, &self.image_requests, self.mob_polls, &mut self.images)
+    fn picture(&mut self, path: &str) -> Poll<Result<String, SourceError>> {
+        one_at_a_time(path, &mut self.picture_in_flight, &self.picture_requests, self.picture_polls, &mut self.pictures)
     }
 
     fn item_search(&mut self, name: &str) -> Poll<Result<Fetched<Vec<ItemHit>>, SourceError>> {
