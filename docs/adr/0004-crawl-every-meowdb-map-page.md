@@ -1,5 +1,5 @@
 ---
-status: accepted, amended by ADR-0006 (the listed mobs' pages are fetched for their Mob Cards)
+status: superseded by ADR-0008 (there is no crawl: OSMS Data Explorer's files hold the whole world)
 ---
 
 # Crawl every MeowDB map page for personal use
