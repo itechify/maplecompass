@@ -13,8 +13,8 @@ mod common;
 use common::osms::{self, CONSTRUCTION_SITE, DEAD_END, KERNING_CITY, NORTHERN_TOP, SUNSET_SKY, map};
 use common::{FakeSource, arrive, fresh_files};
 use compass_core::{
-    Compass, Landing, Leads, MapDataStatus, MapPreview, PanelState, PortalKind, PortalMark, PreviewImage, SourceError,
-    TitleLines, TitleReading,
+    Compass, Landing, Leads, MapDataStatus, MapPreview, PanelState, PicturePoint, PortalKind, PortalMark, PreviewImage,
+    SourceError, TitleLines, TitleReading,
 };
 
 /// A made-up map whose portals the tests give, on a street of its own.
@@ -53,8 +53,7 @@ fn each_portal_is_marked_where_osms_puts_it_in_the_maps_picture() {
     assert_eq!(
         marks(&state),
         [PortalMark {
-            x: 1480,
-            y: 612,
+            at: PicturePoint { x: 1480, y: 612 },
             leads: Leads::AnotherMap,
             kind: PortalKind::Visible,
             to_map_name: "Kerning City".into(),
@@ -163,9 +162,9 @@ fn a_teleport_within_the_map_lands_at_the_mark_of_the_portal_it_names() {
     assert_eq!(
         landings,
         [
-            (Leads::WithinTheMap, Some(Landing { x: 340, y: 640, mark: Some(1) })),
-            (Leads::WithinTheMap, Some(Landing { x: 300, y: 1200, mark: Some(0) })),
-            (Leads::WithinTheMap, Some(Landing { x: 340, y: 640, mark: Some(1) })),
+            (Leads::WithinTheMap, Some(Landing { at: PicturePoint { x: 340, y: 640 }, mark: Some(1) })),
+            (Leads::WithinTheMap, Some(Landing { at: PicturePoint { x: 300, y: 1200 }, mark: Some(0) })),
+            (Leads::WithinTheMap, Some(Landing { at: PicturePoint { x: 340, y: 640 }, mark: Some(1) })),
         ]
     );
 }
@@ -180,7 +179,7 @@ fn a_teleport_landing_on_an_unmarked_point_lands_where_it_is_and_one_landing_now
     });
 
     let landings: Vec<_> = marks(&state).iter().map(|m| m.lands_at).collect();
-    assert_eq!(landings, [Some(Landing { x: 520, y: 940, mark: None }), None]);
+    assert_eq!(landings, [Some(Landing { at: PicturePoint { x: 520, y: 940 }, mark: None }), None]);
 }
 
 /// A teleport within the map is to the map itself, named as it is; never a Hidden Portal
@@ -217,7 +216,7 @@ fn a_hidden_teleport_is_marked_hidden_within_the_map_but_has_no_row_even_on_a_to
 fn a_portal_off_the_pictures_edge_is_marked_where_osms_puts_it() {
     let state = on_field(|m| m.portal_at("west00", 2, SUNSET_SKY, -12, 1810));
 
-    assert_eq!((marks(&state)[0].x, marks(&state)[0].y), (-12, 1810));
+    assert_eq!(marks(&state)[0].at, PicturePoint { x: -12, y: 1810 });
 }
 
 #[test]
