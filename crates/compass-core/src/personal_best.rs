@@ -73,7 +73,8 @@ pub struct VisitBest {
     /// The Rolling Rate's EXP/h shown, over a full 5 minutes of active play on the map.
     pub exp_per_hour: u64,
     /// When it was first shown, by the wall clock (ms since the Unix epoch); `None` if
-    /// the shell hadn't told the wall clock by then.
+    /// the shell hadn't told the wall clock by then. Kept in the saved file, though no
+    /// window shows it now (the Best row has no date).
     pub set_at_unix_ms: Option<u64>,
 }
 
