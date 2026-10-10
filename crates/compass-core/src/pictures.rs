@@ -1,5 +1,5 @@
-//! OSMS's pictures (ADR 0008), by their path below [`crate::osms::PICTURES_URL`]: the Mob
-//! Cards' animations. The shell keeps them on disk and answers with where the overlay
+//! OSMS's pictures (ADR 0008), by their path below [`crate::osms::PICTURES_URL`]: the Map
+//! Preview's picture of the shown map, and the Mob Cards' animations. The shell keeps them on disk and answers with where the overlay
 //! loads each from.
 //!
 //! The pictures the panel wants are asked for one at a time, with no other pace: the next
@@ -32,6 +32,12 @@ impl Pictures {
             Some((Ok(url), _)) => Some(url),
             _ => None,
         }
+    }
+
+    /// What the source answered for the picture at `path`: where the overlay loads it from,
+    /// or why it couldn't be had; `None` before the first answer.
+    pub fn answer(&self, path: &str) -> Option<Result<&str, &SourceError>> {
+        self.answers.get(path).map(|(answer, _)| answer.as_ref().map(String::as_str))
     }
 
     /// Time passed: check on the picture being fetched (even one no longer wanted), and

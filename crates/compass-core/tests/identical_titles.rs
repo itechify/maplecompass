@@ -287,3 +287,47 @@ fn the_choose_candidate_hotkey_does_nothing_when_there_is_nothing_to_choose() {
 
     assert_eq!(*state, before);
 }
+
+/// Which map's picture the Map Preview shows, if any.
+fn previewed(state: &PanelState) -> Option<&str> {
+    state.map_preview.as_ref().map(|p| p.picture.as_str())
+}
+
+/// Each map has its own layout, so the Map Preview waits until it's settled which map the
+/// player is on: shown the first of maps that differ, they see its figures but no picture,
+/// until they choose; then the picture is the chosen one's.
+#[test]
+fn no_map_preview_shows_while_candidates_wait_for_a_choice_and_the_chosen_ones_shows_after() {
+    let mut compass = Compass::new(coconut_harvests_that_differ());
+
+    let state = arrive(&mut compass, KERNING, 0);
+    assert_eq!(mob_count(&state), Some(5));
+    assert_eq!(previewed(&state), None);
+
+    let state = compass.act(Action::ChooseCandidate);
+    assert_eq!(previewed(state), Some("picture090040201"));
+}
+
+/// Maps that would show the same figures are shown without asking, but which of them the
+/// player is on is still open: the layout may differ, so there is no picture.
+#[test]
+fn maps_alike_show_their_figures_without_asking_but_no_map_preview() {
+    let mut compass = Compass::new(FakeSource::with_world(titled_like_kerning_city(osms::game(), &MUSHROOM_TOWNS)));
+
+    let state = arrive(&mut compass, KERNING, 0);
+
+    assert_eq!(state.candidates, None);
+    assert!(matches!(state.data, MapDataStatus::Ready(_)));
+    assert_eq!(previewed(&state), None);
+}
+
+#[test]
+fn coming_from_a_map_connected_to_just_one_of_them_shows_its_map_preview() {
+    let mut compass = Compass::new(FakeSource::with_world(kerning_city_and_northern_top()));
+    arrive(&mut compass, SUNSET, 0);
+
+    compass.on_frame(sample_frame(KERNING, 666));
+    let state = compass.on_frame(sample_frame(KERNING, 1000));
+
+    assert_eq!(previewed(state), Some("picture010003000"));
+}
