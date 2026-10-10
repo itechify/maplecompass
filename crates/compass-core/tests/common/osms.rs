@@ -357,6 +357,13 @@ impl World {
     }
 }
 
+/// A small world of `n` made-up maps ("100000000", "100000001", …) on one street, with
+/// nothing on them.
+pub fn made_up_world(n: u64) -> World {
+    let maps = (0..n).map(|i| map(100_000_000 + i, "Made-up Street", &format!("Made-up Map {i}"))).collect();
+    world(maps, Vec::new())
+}
+
 #[derive(Deserialize)]
 struct NamedMap {
     id: u64,
