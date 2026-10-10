@@ -9,7 +9,7 @@ use common::{
     CONSTRUCTION_SITE_ID, NORTHERN_TOP_ID, SUNSET_SKY_ID, sharing_a_title, three_sharing_a_title, tracking,
     tracking_with,
 };
-use compass_core::{BESTS_VERSION, Compass, PanelControl, PanelState, SavedBests, VisitBest};
+use compass_core::{BESTS_VERSION, Compass, ExpBar, ExpBarReading, PanelControl, PanelState, SavedBests, VisitBest};
 
 const S: u64 = 1000;
 const MIN: u64 = 60 * S;
@@ -190,6 +190,24 @@ fn each_map_keeps_only_its_10_best_visits() {
     first.arrive(CONSTRUCTION_SITE);
     assert_eq!(saved_rates(&handed_out(&first.compass), SUNSET_SKY_ID), kept);
     assert_eq!(first.saves(), saves);
+}
+
+#[test]
+fn the_next_launch_shows_the_best_row_on_arriving_before_the_sessions_first_gain() {
+    let mut compass = tracking();
+    compass.restore_bests(a_best_of_7200_on_sunset_sky());
+    // The bar read twice, the same: nothing gained yet.
+    for at_ms in [0, 10 * S] {
+        let bar = Some(ExpBar { exp: 1000, percent_hundredths: 500 });
+        compass.on_exp_bar_reading(ExpBarReading { bar, at_ms });
+    }
+
+    common::arrive(&mut compass, SUNSET, 20 * S);
+
+    // What the Grind Tracker gets: the Best row while the Session waits for EXP.
+    let state = serde_json::to_value(compass.panel_state()).unwrap();
+    assert_eq!(state["expTracking"]["state"], "waiting");
+    assert_eq!(state["expTracking"]["personalBest"], 7200);
 }
 
 #[test]

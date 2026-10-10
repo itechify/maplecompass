@@ -14,8 +14,10 @@ const switched = byId("tracking-switched");
 const resetNote = byId("tracking-reset");
 const waiting = byId("tracking-waiting");
 const figures = byId("tracking-figures");
+const headline = byId("tracking-headline");
 const timeToLevel = byId("time-to-level");
 const tag = byId("tracking-tag");
+const rollingRow = byId("rolling-row");
 const rollingExp = byId("rolling-exp");
 const rollingPercent = byId("rolling-percent");
 const rollingStar = byId("rolling-star");
@@ -71,8 +73,9 @@ function noTimeToLevel(rolling: ExpRate | null) {
 }
 
 /** The Grind Tracker: a line until the Session starts, then Time to Level over the rates
- *  and what else the Session carries; the EXP bar's last reading at the foot, from the
- *  first reading on. Above them, why the figures went or can't move. */
+ *  and what else the Session carries; the map's Best row from arriving, before the
+ *  Session starts too; the EXP bar's last reading at the foot, from the first reading on.
+ *  Above them, why the figures went or can't move. */
 function render({ shown, tracking: t }: TrackerView) {
   // Not showing, the window draws nothing (the shell lets clicks through it).
   document.body.classList.toggle("hidden", !shown);
@@ -86,7 +89,11 @@ function render({ shown, tracking: t }: TrackerView) {
   resetNote.hidden = !t.resetUndoable;
   waiting.hidden = started || t.state === "unreadable";
 
-  figures.hidden = !started;
+  // The Best row shows from arriving on the map: until the Session starts it is all the
+  // figures hold, under the waiting note. Time to Level and the rates wait for a gain.
+  figures.hidden = !started && t.personalBest === null;
+  headline.hidden = !started;
+  rollingRow.hidden = !started;
   timeToLevel.textContent = t.timeToLevelBadge ?? noTimeToLevel(t.rolling);
   timeToLevel.classList.toggle("words", !t.timeToLevelBadge);
   const label = TAGS[t.state];
@@ -104,7 +111,7 @@ function render({ shown, tracking: t }: TrackerView) {
   rollingStar.classList.toggle("on", t.newBest);
   // Only once the Session is longer than the Rolling Rate's window does its average say
   // something else.
-  sessionRow.hidden = t.activeS <= t.rollingS;
+  sessionRow.hidden = !started || t.activeS <= t.rollingS;
   sessionLength.textContent = length(t.activeS);
   sessionExp.textContent = expPerHour(t.sessionAverage);
   sessionPercent.textContent = percentPerHour(t.sessionAverage);
