@@ -3,6 +3,7 @@
 use crate::item_lookup::ItemHit;
 use crate::map_data::MapData;
 use crate::mob_card::MobDetails;
+use crate::osms::OsmsFiles;
 use std::task::Poll;
 
 /// One map in MeowDB's map index.
@@ -67,6 +68,16 @@ pub enum Fetched<T> {
 /// again (each tick and frame) until the answer is ready. A source should answer at
 /// once when it can (from a cache, say).
 pub trait MapDataSource {
+    /// OSMS Data Explorer's file set (ADR 0008), unread: the core reads it. The core asks
+    /// at startup and every 24 hours after, and a minute after asking found nothing at
+    /// all. Fetch the set when the one saved is over a day old (or there is none), and
+    /// answer it fresh once it reads with [`crate::osms::read`], saving it whole. Answer the
+    /// saved set fresh, at once, while it is younger; and as a saved copy, with when it
+    /// was saved, when a file can't be fetched or the set fetched doesn't read.
+    fn osms_files(&mut self) -> Poll<Result<Fetched<OsmsFiles>, SourceError>> {
+        Poll::Ready(Err(SourceError::Unreachable("no OSMS source".into())))
+    }
+
     /// Every map's ID, street name, map name and region. The core asks at startup,
     /// and again only if asking failed.
     fn map_index(&mut self) -> Poll<Result<Fetched<Vec<MapEntry>>, SourceError>>;
