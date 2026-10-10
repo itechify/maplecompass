@@ -64,7 +64,7 @@ pub fn panel_press(control: PanelControl, commands: State<'_, Sender<Command>>) 
     let _ = commands.send(Command::Press(control));
 }
 
-/// A click on a listed mob's name in the panel (its MeowDB ID): open its MeowDB page.
+/// A click on a listed mob's name in the panel (its ID): open its MeowDB page.
 #[tauri::command]
 pub fn open_mob_page(id: String, commands: State<'_, Sender<Command>>) {
     let _ = commands.send(Command::OpenMobPage(id));
@@ -95,7 +95,7 @@ pub fn search_enter(commands: State<'_, Sender<Command>>) {
     act(&commands, Action::SearchEnter);
 }
 
-/// A click on a suggested mob or a listed map (its MeowDB ID): pick it.
+/// A click on a suggested mob or a listed map (its ID): pick it.
 #[tauri::command]
 pub fn search_pick(id: String, commands: State<'_, Sender<Command>>) {
     let _ = commands.send(Command::SearchPick(id));
