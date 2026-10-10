@@ -355,15 +355,15 @@ body {
   outline-offset: 2px;
 }
 
-#data,
-.facts {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+/* 10px between the map's notes and sections, a pixel more than the view's 9px: each after
+   the first that shows. (The Navigation section has no box: its heading takes the pixel.) */
+:is(.candidates, #note, .portals, .navigation):not([hidden]) ~ :is(#note, .portals, .map-mobs),
+:is(.candidates, #note, .portals):not([hidden]) ~ .navigation > h2 {
+  margin-top: 1px;
 }
 
-/* While the map shown isn't confirmed, its facts step back. */
-.not-sure .facts {
+/* While the map shown isn't confirmed, its facts (the Map and the Mobs) step back. */
+.not-sure :is(.portals, .map-mobs) {
   opacity: 0.7;
 }
 
@@ -397,88 +397,6 @@ body {
   box-shadow: 0 0 0 1px var(--orange-deep);
 }
 
-/* Background progress: present, but quieter than a status note. */
-.panel .crawl .note {
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--ink-3);
-}
-
-/* The world crawl: its line over a gauge, the game's own HP/MP/EXP gauge in miniature.
-   A framed inset track filled with the window buttons' blue (portal blue, mob red and
-   you yellow stay the minimap's). The only motion in any window: the fill eases to each
-   new count, and a soft sheen runs along it while the crawl goes on. Hidden, the gauge
-   isn't rendered, so neither runs. */
-@property --known {
-  syntax: "<number>";
-  inherits: true;
-  initial-value: 0;
-}
-
-.crawl {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.gauge {
-  position: relative;
-  box-sizing: border-box;
-  height: 8px;
-  overflow: hidden;
-  /* Framed like the game's blue buttons, the track sunk dark as the game's gauges are. */
-  border: 1px solid var(--game-button-edge);
-  border-radius: 2px;
-  background: rgba(22, 34, 66, 0.42);
-  box-shadow:
-    inset 0 1px 1px rgba(5, 12, 30, 0.45),
-    0 1px 0 rgba(255, 255, 255, 0.45);
-  transition: --known 700ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.gauge-fill {
-  position: absolute;
-  inset: 0;
-  background: var(--game-button);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.6),
-    inset 0 -1px 0 rgba(0, 60, 110, 0.25);
-  transform: scaleX(var(--known));
-  transform-origin: left center;
-}
-
-/* The sheen, kept to the filled part. */
-.gauge::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  clip-path: inset(0 calc((1 - var(--known)) * 100%) 0 0);
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.7) 50%, transparent 100%) no-repeat;
-  background-size: 35% 100%;
-  animation: gauge-sheen 2.6s cubic-bezier(0.45, 0, 0.25, 1) infinite;
-}
-
-@keyframes gauge-sheen {
-  from {
-    background-position: -60% 0;
-  }
-  70%,
-  to {
-    background-position: 160% 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .gauge {
-    transition: none;
-  }
-
-  .gauge::after {
-    animation: none;
-    background: none;
-  }
-}
-
 /* A section's heading, a step above its rows' 13px bold: the Street Name's size. */
 h2 {
   margin: 0;
@@ -488,8 +406,8 @@ h2 {
   color: var(--ink);
 }
 
-/* The current map's sections, marked with the minimap's legend: a portal ring for
-   Hidden Portals, a mob dot for Mobs. */
+/* The normal view's sections, each marked with a legend glyph: a portal ring for the Map,
+   the route's ring for Navigation, a mob dot for Mobs. */
 .portals h2,
 .map-mobs h2 {
   margin-bottom: 5px;
@@ -529,6 +447,14 @@ h2 {
   margin: 0 1px;
   background: var(--mob);
   box-shadow: 0 0 0 1px var(--mob-edge);
+}
+
+/* The ring the Map Preview puts around a portal the route takes next. */
+.navigation .section-toggle::before {
+  width: 10px;
+  height: 10px;
+  border: 2.5px solid var(--route);
+  background: #fff;
 }
 
 /* Collapsed, the heading says how many the section holds. */
@@ -591,6 +517,7 @@ h2 {
 
 /* Collapsed: the heading alone. */
 .portals.collapsed > :not(h2),
+.navigation.collapsed > :not(h2),
 .map-mobs.collapsed > :not(h2) {
   display: none !important;
 }
@@ -600,20 +527,17 @@ h2 {
   margin-bottom: 0;
 }
 
-/* Nothing to list: the heading and "None on this map" on one line. */
-.portals:has(> .none:not([hidden])),
+/* Nothing to list: the heading and "No mobs on this map" on one line. */
 .map-mobs:has(> .none:not([hidden])):not(:has(> .summary:not([hidden]))) {
   display: flex;
   align-items: baseline;
   gap: 10px;
 }
 
-.portals:has(> .none:not([hidden])) h2,
 .map-mobs:has(> .none:not([hidden])):not(:has(> .summary:not([hidden]))) h2 {
   margin: 0;
 }
 
-.portals .none,
 .map-mobs .none {
   font-size: 13px;
   color: var(--ink-2);
@@ -624,6 +548,7 @@ h2 {
 .tracking .tag,
 .portals .tag,
 .mob-card .tag,
+.mark-card .tag,
 .route-stops .tag {
   flex: none;
   padding: 0 5px;
@@ -702,18 +627,20 @@ td:first-child {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
 }
 
+/* A Hidden Portal's row, lit (Selection Periwinkle) while the pointer is on it or on its
+   ring; its text stays where it is. */
 .portals li {
-  display: grid;
-  grid-template-columns: 47px minmax(0, 1fr);
-  align-items: center;
-  column-gap: 9px;
+  margin: 0 -5px;
+  padding: 2px 5px;
+  border-radius: 3px;
 }
 
-.portals li > div {
-  min-width: 0;
+.portals li.lit {
+  background: var(--select);
+  box-shadow: inset 0 0 0 1px var(--select-edge);
 }
 
 .portals .dest {
@@ -721,6 +648,188 @@ td:first-child {
   align-items: baseline;
   gap: 6px;
   min-width: 0;
+}
+
+/* Each row leads with its ring as the Map Preview draws it. */
+.row-ring {
+  flex: none;
+  align-self: center;
+  width: 12px;
+  height: 12px;
+  overflow: visible;
+}
+
+/* The Map Preview: OSMS's picture of the whole map on the minimap's paper, see-through as
+   the picture is, set into the body as an inset box, fitted and centred within 180px,
+   every portal ringed over it. */
+.map-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  margin-bottom: 7px;
+  padding: 5px;
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--minimap-paper);
+  overflow: hidden;
+}
+
+/* Waiting for the picture: a box of fixed height saying so. */
+.map-preview.loading {
+  height: 140px;
+}
+
+.map-picture {
+  position: relative;
+  flex: none;
+}
+
+.map-picture img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  -webkit-user-drag: none;
+}
+
+.panel .map-loading {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: var(--ink-2);
+}
+
+.portals > .note.problem {
+  margin-bottom: 7px;
+}
+
+/* The rings: a white halo under each so it holds on dark art and pale paper alike, then
+   the ring in its colour over a faint fill. Dashed when hidden or a Quest Portal: the
+   gaps show the halo. */
+.map-marks {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.ring circle {
+  pointer-events: none;
+}
+
+.ring .halo {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 3.75;
+}
+
+.ring .stroke {
+  stroke: var(--ring);
+  stroke-width: 1.75;
+  fill: var(--ring);
+  fill-opacity: 0.22;
+}
+
+.ring.dashed .stroke {
+  stroke-dasharray: 2.6 1.6;
+}
+
+.ring.anotherMap { --ring: var(--portal); }
+.ring.withinTheMap { --ring: var(--teleport); }
+.ring.mapNotInTheData { --ring: var(--unknown); }
+
+/* Lit: a second ring around it in its own colour, a static target. */
+.ring .lit-ring {
+  display: none;
+  fill: none;
+  stroke: var(--ring);
+  stroke-width: 1.5;
+}
+
+.ring.lit .lit-ring {
+  display: inline;
+}
+
+/* Next on the Hunting Target's route: a wide Route Magenta ring around the portal's own,
+   outside where its lit ring goes, on a white halo of its own. Always shown, solid
+   whatever the portal's kind, under every ring. */
+.route-rings circle {
+  fill: none;
+  pointer-events: none;
+}
+
+.route-rings .route-halo {
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 4.5;
+}
+
+.route-rings .route-ring {
+  stroke: var(--route);
+  stroke-width: 2.25;
+}
+
+.ring .hit {
+  fill: transparent;
+  stroke: none;
+  pointer-events: all;
+}
+
+/* A teleport within the map: a dashed green arrow from its ring to where it lands, over a
+   white under-stroke; heads at both ends for a pair. */
+.arrow line {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.arrow .halo {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 3.25;
+}
+
+.arrow .dash {
+  stroke: var(--teleport);
+  stroke-width: 1.5;
+  stroke-dasharray: 3.5 2.5;
+}
+
+.arrow.lit .dash {
+  stroke-width: 2.25;
+}
+
+.map-marks .head {
+  fill: var(--teleport);
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 0.75;
+}
+
+/* The ring's card: where it leads, its street and its kind. A window like the Mob Card
+   (see there), above the ring or below it, never outside the panel. */
+.mark-card {
+  max-width: calc(100% - 16px);
+  padding: 4px 8px 6px;
+}
+
+.mark-card-to {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mark-card-street {
+  display: block;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mark-card-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 4px;
+  margin-top: 3px;
 }
 
 .portals .to {
@@ -732,62 +841,12 @@ td:first-child {
   white-space: nowrap;
 }
 
-/* Quest Portals come from NPCs: the minimap's NPC green. */
-.portals .tag.quest {
-  border-color: #98c58a;
-  background: #dff0d8;
-  color: #2b6a20;
-}
-
-.portals .where {
-  display: block;
-  font-size: 12px;
-  line-height: 15px;
-  color: var(--ink-2);
-}
-
-.portals .where::first-letter {
-  text-transform: uppercase;
-}
-
-/* The minimap in miniature: its 5x3 grid, the portal's cell lit, the game's ring in it. */
-.minimap {
-  display: block;
-  width: 47px;
-  height: 29px;
-}
-
-.minimap .field {
-  fill: #eef3fb;
-}
-
-.minimap .frame {
-  fill: none;
-  stroke: #50648c;
-  stroke-width: 1;
-}
-
-.minimap .grid {
-  stroke: #b8c7e1;
-  stroke-width: 0.6;
-}
-
-.minimap .cell {
-  fill: #a9c3ec;
-}
-
-.minimap .ring {
-  fill: none;
-  stroke: var(--portal);
-  stroke-width: 1.7;
-}
-
-.minimap .core {
-  fill: var(--portal);
-}
-
-.minimap.unknown .frame {
-  stroke-dasharray: 2 1.5;
+/* Quest Portals in violet: green means only "within the map" on the Map Preview. */
+.portals .tag.quest,
+.mark-card .tag.quest {
+  border-color: var(--quest-edge);
+  background: var(--quest-bg);
+  color: var(--quest-ink);
 }
 
 /* EXP and mobs per hour, each figure beside its party size. */
@@ -887,14 +946,18 @@ td:first-child {
 /* The Mob Card: the hovered mob's image and the figures its row doesn't show. One of the
    game's windows, opaque (the panel's content goes on under it), floating beside the
    mob's row and never outside the panel, which it never resizes. The pointer passes
-   through it. */
+   through it, as through the ring's card, the same window. */
 .mob-card {
-  position: absolute;
   left: 8px;
   right: 8px;
+  padding: 6px 10px 8px 6px;
+}
+
+.mob-card,
+.mark-card {
+  position: absolute;
   z-index: 5;
   box-sizing: border-box;
-  padding: 6px 10px 8px 6px;
   border: 1px solid var(--window-edge);
   border-radius: 4px;
   background: var(--body-solid);
@@ -1029,7 +1092,7 @@ td:first-child {
    tall as the space where it is placed; the rest keeps its height. */
 .view > *,
 .step > *,
-.hunting > * {
+.navigation > * {
   flex-shrink: 0;
 }
 
@@ -1074,27 +1137,27 @@ td:first-child {
   z-index: 1;
 }
 
-/* The Hunting section: its own section at the bottom of the normal view, divided from
-   the current map's info by a rule, headed by the Hunting Target's mob and map. Its parts
-   sit in the view's own column, so its route gives way to everything else in the panel
-   (down to its floor) rather than the section shrinking past its parts. */
-.hunting {
+/* The Navigation section, between the Map and the Mobs while there is a Hunting Target:
+   its heading, then the target's mob (as OSMS animates it) and map, its figures and the
+   way there. Its parts sit in the view's own column, so its route gives way to everything
+   else in the panel (down to its floor) rather than the section shrinking past its parts. */
+.navigation {
   display: contents;
 }
 
 /* Over the parts' own margins (the figures', the route's). */
-.panel .hunting > * {
+.panel .navigation > * {
   margin-inline: 11px;
 }
 
-.hunting > .section-head {
-  padding-top: 8px;
-  border-top: 1px solid var(--rule);
+/* 6px apart within the section, not the view's 9px; 5px under its heading, as the Map
+   and the Mobs have. */
+.panel .navigation > * + * {
+  margin-top: -3px;
 }
 
-/* 6px apart within the section, not the view's 9px. */
-.panel .hunting > * + * {
-  margin-top: -3px;
+.panel .navigation > h2 + * {
+  margin-top: -4px;
 }
 
 .section-head,
@@ -1104,7 +1167,28 @@ td:first-child {
   gap: 6px;
 }
 
-.hunting h2,
+/* The mob's animation beside its name: a square of its own, the animation standing on
+   its floor at its own size (pixelated), or scaled down smoothly to fit, never up. */
+.target-sprite {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: end center;
+  margin-right: 2px;
+}
+
+.target-sprite img {
+  max-width: 40px;
+  max-height: 40px;
+  image-rendering: pixelated;
+}
+
+.target-sprite img.scaled {
+  image-rendering: auto;
+}
+
+.target-title,
 .search-view h2,
 .settings-view h2 {
   flex: 1;
@@ -1115,15 +1199,22 @@ td:first-child {
   white-space: nowrap;
 }
 
-.hunting h2 .hunting-mob,
-.hunting h2 .hunting-map {
+/* The mob in the Section Heading's size, the map under it, as a street sits under its
+   map. */
+.target-title {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.target-title .hunting-mob,
+.target-title .hunting-map {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* The map under the mob, as a street sits under its map. */
-.hunting h2 .hunting-map {
+.target-title .hunting-map {
   font-size: 12px;
   line-height: 15px;
   font-weight: 400;
@@ -1684,17 +1775,40 @@ td:first-child {
   color: var(--ink-2);
 }
 
+/* The credit as a small info glyph at the right, its words in its tooltip: one short line
+   under the rule instead of two or three of 12px text. */
 footer {
   display: flex;
-  justify-content: space-between;
-  gap: 4px 8px;
-  flex-wrap: wrap;
-  padding-top: 6px;
+  justify-content: flex-end;
+  padding-top: 4px;
   border-top: 1px solid var(--rule);
-  font-size: 12px;
-  line-height: 15px;
   color: var(--ink-3);
-  overflow-wrap: anywhere;
+}
+
+.credit {
+  display: block;
+  width: 14px;
+  height: 14px;
+  cursor: help;
+}
+
+.credit svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.credit svg .dot {
+  fill: currentColor;
+  stroke: none;
+}
+
+.credit:hover {
+  color: var(--ink-2);
 }
 
 /* Collapsed: the app icon, the gold compass, with the map's Hidden Portal count on a
@@ -1841,10 +1955,11 @@ body:has(#badge:not([hidden])) .icon .count {
   .mobs td:first-child { grid-column: 1 / -1; font-weight: 700; }
   .mobs td:not(:first-child)::before { content: attr(data-label); display: block; font-size: 12px; line-height: 15px; color: var(--ink-2); }
   .portals .dest { flex-wrap: wrap; }
-  .portals .to { flex-basis: 100%; white-space: normal; }
-  /* An empty section's heading stays on one line; "None on this map" goes under it
-     rather than losing its end. */
-  .portals, .map-mobs { flex-wrap: wrap; row-gap: 2px; }
-  .portals > h2, .map-mobs > h2 { flex: none; }
-  .portals > .none, .map-mobs > .none { flex: none; max-width: 100%; }
+  /* The destination keeps its ring beside it, and its tags go under it. */
+  .portals .to { flex-basis: calc(100% - 18px); white-space: normal; }
+  /* An empty Mobs section's heading stays on one line; "No mobs on this map" goes under
+     it rather than losing its end. */
+  .map-mobs { flex-wrap: wrap; row-gap: 2px; }
+  .map-mobs > h2 { flex: none; }
+  .map-mobs > .none { flex: none; max-width: 100%; }
 }

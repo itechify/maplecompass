@@ -3,8 +3,8 @@
 //! account straight away.
 //!
 //! The taxis run between the Victoria Island towns and the scrolls go to the named
-//! towns, by their real MeowDB IDs, so the hand-built worlds here use those IDs for
-//! the towns.
+//! towns, by their real map IDs, so the hand-built worlds here use those IDs for the
+//! towns. No scroll goes to Orbis or El Nath while Ossyria isn't in the game.
 
 mod common;
 
@@ -14,8 +14,8 @@ use compass_core::{Action, Compass, Distance, PanelState, SearchResult, Settings
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
 
-/// A core over `maps`, crawled, with the player arrived on the map named Sunset Sky
-/// and the Orange Mushroom picked.
+/// A core over `maps`, its file set in hand, with the player arrived on the map named
+/// Sunset Sky and the Orange Mushroom picked.
 fn searched_from_sunset_sky(maps: Vec<WorldMap>) -> Compass {
     let mut compass = Compass::new(world(maps));
     compass.tick(0);
@@ -189,8 +189,6 @@ fn a_teleport_scroll_takes_the_player_from_any_map_to_each_named_town_only_while
         (KERNING_CITY, "Kerning City"),
         (LITH_HARBOR, "Lith Harbor"),
         (SLEEPYWOOD, "Sleepywood"),
-        (ORBIS, "Orbis"),
-        (EL_NATH, "El Nath"),
     ];
     let mut maps = vec![map("100000000", "Sunset Sky", 100, vec![])];
     maps.extend(towns.iter().map(|&(id, name)| map(id, name, 100, vec![orange(10)])));
@@ -212,6 +210,19 @@ fn a_teleport_scroll_takes_the_player_from_any_map_to_each_named_town_only_while
     let state = compass.act(Action::ToggleTeleportScrolls);
 
     assert!(state.search.results.iter().all(|r| r.distance == Distance::NoRoute && r.travel.is_empty()));
+}
+
+#[test]
+fn no_teleport_scroll_goes_to_orbis_or_el_nath_while_ossyria_is_out_of_the_game() {
+    let mut compass = searched_from_sunset_sky(vec![
+        map("100000000", "Sunset Sky", 100, vec![]),
+        map(ORBIS, "Orbis", 100, vec![orange(10)]),
+        map(EL_NATH, "El Nath", 100, vec![orange(10)]),
+    ]);
+
+    let state = compass.act(Action::ToggleTeleportScrolls);
+
+    assert_eq!(distances(state), ["El Nath: NoRoute", "Orbis: NoRoute"]);
 }
 
 /// Near Field is two roads from Sunset Sky; Perion is four.
@@ -257,19 +268,13 @@ fn restored_toggles_count_in_the_distances_at_once() {
     assert_eq!(distances(state), ["Perion: 1", "Near Field: 2"]);
 }
 
-/// The same map, with `town` as its nearest town.
-fn with_nearest_town(mut map: WorldMap, town: &str) -> WorldMap {
-    map.page.nearest_town = Some(town.into());
-    map
-}
-
 #[test]
 fn a_nearest_town_scroll_takes_the_player_to_their_own_maps_nearest_town() {
     let mut compass = searched_from_sunset_sky(vec![
-        with_nearest_town(map("100000000", "Sunset Sky", 100, vec![]), "100000010"),
+        map("100000000", "Sunset Sky", 100, vec![]).returning_to("100000010"),
         map("100000010", "Amherst", 100, vec![orange(10)]),
         // Another map's nearest town is no nearer.
-        with_nearest_town(map("100000030", "Far Field", 100, vec![]), "100000020"),
+        map("100000030", "Far Field", 100, vec![]).returning_to("100000020"),
         map("100000020", "Other Town", 100, vec![orange(10)]),
     ]);
     assert_eq!(distances(compass.panel_state()), ["Amherst: NoRoute", "Other Town: NoRoute"]);
@@ -282,11 +287,25 @@ fn a_nearest_town_scroll_takes_the_player_to_their_own_maps_nearest_town() {
     assert_eq!(nearest(&state).unwrap().map_name, "Amherst");
 }
 
+/// OSMS gives no nearest town for a few maps that aren't Towns: a nearest-town scroll
+/// takes the player nowhere from them.
+#[test]
+fn from_a_map_osms_gives_no_nearest_town_a_nearest_town_scroll_goes_nowhere() {
+    let mut compass = searched_from_sunset_sky(vec![
+        map("100000000", "Sunset Sky", 100, vec![]),
+        map("100000010", "Amherst", 100, vec![orange(10)]),
+    ]);
+
+    let state = compass.act(Action::ToggleTeleportScrolls).clone();
+
+    assert_eq!(distances(&state), ["Amherst: NoRoute"]);
+}
+
 #[test]
 fn a_nearest_town_scroll_can_be_read_partway_along_a_route() {
     let mut compass = searched_from_sunset_sky(vec![
-        with_nearest_town(map("100000000", "Sunset Sky", 100, vec![]), "100000000").to(&["100000001"]),
-        with_nearest_town(map("100000001", "Deep Cave", 100, vec![]), "100000010"),
+        map("100000000", "Sunset Sky", 100, vec![]).returning_to("100000000").to(&["100000001"]),
+        map("100000001", "Deep Cave", 100, vec![]).returning_to("100000010"),
         map("100000010", "Amherst", 100, vec![]).to(&["100000011"]),
         map("100000011", "Amherst Field", 100, vec![orange(10)]),
     ]);

@@ -20,7 +20,7 @@ fn ctrl_shift(letter: &str) -> String {
 
 #[test]
 fn the_hotkeys_are_ctrl_shift_letters() {
-    let compass = Compass::new(FakeSource::meowdb());
+    let compass = Compass::new(FakeSource::osms());
 
     assert_eq!(
         compass.panel_state().hotkeys,
@@ -40,7 +40,7 @@ fn the_hotkeys_are_ctrl_shift_letters() {
 #[test]
 fn ctrl_shift_i_is_the_item_lookup_hotkey_even_with_a_settings_file_from_before_it() {
     let before_item_lookup = r#"{"version":4,"hotkeys":{"togglePanel":"ctrl+shift+x","grindTracker":"ctrl+shift+g"}}"#;
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     let state = compass.restore(serde_json::from_str(before_item_lookup).unwrap()).clone();
 
@@ -51,7 +51,7 @@ fn ctrl_shift_i_is_the_item_lookup_hotkey_even_with_a_settings_file_from_before_
 
 #[test]
 fn a_rebound_item_lookup_hotkey_is_the_one_that_looks_up() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     let hotkeys = Hotkeys { item_lookup: "ctrl+shift+k".into(), ..Hotkeys::default() };
     compass.restore(Settings { hotkeys, ..Settings::default() });
     let screen = ScreenRect { x: 0, y: 0, width: 1920, height: 1200 };
@@ -79,7 +79,7 @@ const WIN_ALT_SETTINGS: &str = r#"{
 
 #[test]
 fn win_alt_hotkeys_from_version_2_are_replaced_by_the_ctrl_shift_ones_and_the_rest_is_kept() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     let state = compass.restore(serde_json::from_str(WIN_ALT_SETTINGS).unwrap());
 
@@ -112,7 +112,7 @@ const VERSION_3_WIN_ALT_SETTINGS: &str = r#"{
 
 #[test]
 fn win_alt_hotkeys_saved_as_version_3_are_replaced_by_the_ctrl_shift_ones_too() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     let state = compass.restore(serde_json::from_str(VERSION_3_WIN_ALT_SETTINGS).unwrap());
 
@@ -137,7 +137,7 @@ const VERSION_1_SETTINGS: &str = r#"{
 
 #[test]
 fn version_1_hotkeys_are_replaced_by_the_defaults_and_the_rest_is_kept() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     let state = compass.restore(serde_json::from_str(VERSION_1_SETTINGS).unwrap());
 
@@ -149,7 +149,7 @@ fn version_1_hotkeys_are_replaced_by_the_defaults_and_the_rest_is_kept() {
 
 #[test]
 fn ctrl_shift_c_collapses_the_panel_and_expands_it_again() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     compass.on_hotkey("ctrl+shift+c");
     assert!(!compass.panel_state().expanded);
@@ -159,7 +159,7 @@ fn ctrl_shift_c_collapses_the_panel_and_expands_it_again() {
 
 #[test]
 fn ctrl_shift_p_cycles_the_placement() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     compass.on_hotkey("ctrl+shift+p");
 
@@ -183,7 +183,7 @@ const WITH_EDIT_MODE: &str = r#"{
 
 #[test]
 fn settings_with_the_retired_edit_mode_hotkey_still_load_and_it_is_neither_registered_nor_saved() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     let state = compass.restore(serde_json::from_str(WITH_EDIT_MODE).unwrap()).clone();
 
@@ -196,7 +196,7 @@ fn settings_with_the_retired_edit_mode_hotkey_still_load_and_it_is_neither_regis
 
 #[test]
 fn ctrl_shift_e_does_nothing_any_more() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     let before = compass.panel_state().clone();
 
     assert_eq!(compass.on_hotkey("ctrl+shift+e"), None);
@@ -206,7 +206,7 @@ fn ctrl_shift_e_does_nothing_any_more() {
 
 #[test]
 fn ctrl_shift_m_opens_the_shown_maps_meowdb_page_and_nothing_without_a_map() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     assert_eq!(compass.on_hotkey("ctrl+shift+m"), None);
 
     arrive(&mut compass, SUNSET, 0);
@@ -219,7 +219,7 @@ fn ctrl_shift_m_opens_the_shown_maps_meowdb_page_and_nothing_without_a_map() {
 
 #[test]
 fn ctrl_shift_s_opens_setup_again() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     compass.restore(Settings { title_region: Some(common::kerning_title_region()), ..Settings::default() });
     assert!(!compass.panel_state().setup.window_open);
 
@@ -232,7 +232,7 @@ fn ctrl_shift_s_opens_setup_again() {
 
 #[test]
 fn hotkeys_the_player_rebound_are_the_ones_that_act() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     let hotkeys = Hotkeys { toggle_panel: "ctrl+shift+x".into(), ..Hotkeys::default() };
     compass.restore(Settings { hotkeys, ..Settings::default() });
 
@@ -244,7 +244,7 @@ fn hotkeys_the_player_rebound_are_the_ones_that_act() {
 
 #[test]
 fn a_hotkey_another_app_has_taken_is_shown_as_unavailable() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     let state = compass.hotkeys_unavailable(vec!["ctrl+shift+n".into()], vec![]);
 
@@ -254,7 +254,7 @@ fn a_hotkey_another_app_has_taken_is_shown_as_unavailable() {
 
 #[test]
 fn a_hotkey_that_names_no_key_combination_is_shown_as_unavailable_and_invalid() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     let state = compass.hotkeys_unavailable(vec!["ctrl+shift+n".into()], vec!["ctrl+shift+banana".into()]);
 
@@ -266,7 +266,7 @@ fn a_hotkey_that_names_no_key_combination_is_shown_as_unavailable_and_invalid() 
 #[test]
 fn ctrl_shift_f_is_the_search_hotkey_even_with_a_settings_file_from_before_search() {
     let before_search = r#"{"version":4,"hotkeys":{"togglePanel":"ctrl+shift+x","chooseCandidate":"ctrl+shift+n"}}"#;
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     let state = compass.restore(serde_json::from_str(before_search).unwrap()).clone();
 
@@ -277,7 +277,7 @@ fn ctrl_shift_f_is_the_search_hotkey_even_with_a_settings_file_from_before_searc
 
 #[test]
 fn every_hotkey_the_panel_lists_is_one_to_register_the_search_one_included() {
-    let compass = Compass::new(FakeSource::meowdb());
+    let compass = Compass::new(FakeSource::osms());
 
     let to_register = compass.panel_state().hotkeys.all();
 
@@ -298,7 +298,7 @@ fn every_hotkey_the_panel_lists_is_one_to_register_the_search_one_included() {
 
 #[test]
 fn a_rebound_search_hotkey_another_app_has_taken_is_shown_as_unavailable() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     let hotkeys = Hotkeys { search: "ctrl+shift+q".into(), ..Hotkeys::default() };
     compass.restore(Settings { hotkeys, ..Settings::default() });
 
@@ -311,7 +311,7 @@ fn a_rebound_search_hotkey_another_app_has_taken_is_shown_as_unavailable() {
 
 #[test]
 fn the_hotkeys_are_live_only_while_the_game_or_maplecompass_is_in_front() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     assert!(compass.on_foreground(Foreground::Game).hotkeys_live);
     assert!(!compass.on_foreground(Foreground::OtherApp).hotkeys_live, "other apps keep their Ctrl+Shift keys");
@@ -320,14 +320,14 @@ fn the_hotkeys_are_live_only_while_the_game_or_maplecompass_is_in_front() {
 
 #[test]
 fn before_the_foreground_is_known_the_hotkeys_are_not_live() {
-    let compass = Compass::new(FakeSource::meowdb());
+    let compass = Compass::new(FakeSource::osms());
 
     assert!(!compass.panel_state().hotkeys_live);
 }
 
 #[test]
 fn a_hotkey_reported_unavailable_stays_listed_while_the_hotkeys_are_not_live() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     compass.on_foreground(Foreground::Game);
     compass.hotkeys_unavailable(vec!["ctrl+shift+n".into()], vec![]);
 
@@ -340,7 +340,7 @@ fn a_hotkey_reported_unavailable_stays_listed_while_the_hotkeys_are_not_live() {
 /// these hotkeys.
 fn tracking_with(hotkeys: Hotkeys) -> Compass {
     let client = Size { width: 1920, height: 1200 };
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     compass.restore(Settings {
         title_region: Some(TitleRegion { marked: Rect { x: 70, y: 40, width: 130, height: 48 }, client }),
         exp_bar_region: Some(ExpBarRegion { marked: Rect { x: 1005, y: 1144, width: 240, height: 32 }, client }),
@@ -403,7 +403,7 @@ const SETTINGS_WITH_RESET_SESSION: &str = r#"{
 
 #[test]
 fn settings_from_before_the_grind_tracker_hotkey_get_ctrl_shift_g_and_keep_the_rest() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
 
     let state = compass.restore(serde_json::from_str(SETTINGS_WITH_RESET_SESSION).unwrap());
 

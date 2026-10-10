@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0008 (Mob Card figures and images come from OSMS Data Explorer's files)
 ---
 
 # Mob Cards: listed mobs' MeowDB pages, and their images from maplestory.io

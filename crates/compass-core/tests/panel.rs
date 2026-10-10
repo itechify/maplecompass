@@ -20,7 +20,7 @@ use compass_core::{
 
 fn compass() -> Compass {
     // Layout never asks for the map index, so any source will do.
-    let mut compass = Compass::new(FakeSource::offline());
+    let mut compass = Compass::new(FakeSource::osms_offline());
     compass.set_panel_sizes(PanelSizes {
         expanded: Size { width: 340, height: 72 },
         collapsed: Size { width: 44, height: 44 },

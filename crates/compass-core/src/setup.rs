@@ -2,8 +2,11 @@
 //! after it, their test reads, and when to ask for setup again.
 
 use crate::panel::{ScreenRect, Size};
-use crate::{CurrentMap, ExpBar, MEOWDB_CREDIT, Rect, default_title_region};
+use crate::{CurrentMap, ExpBar, Rect, default_title_region};
 use serde::{Deserialize, Serialize};
+
+/// The credit for a recognised test read: the names it shows are OSMS Data Explorer's.
+const MAP_NAMES_CREDIT: &str = "Map names from OSMS Data Explorer";
 
 /// Why the player needs to (re)do setup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -27,7 +30,7 @@ pub enum TestRead {
     Reading,
     /// The latest frame snapped to this real map.
     Recognised { map: CurrentMap },
-    /// The latest frame didn't match a real map confidently (or the map index couldn't
+    /// The latest frame didn't match a real map confidently (or the map list couldn't
     /// be had).
     Failed,
 }
@@ -52,7 +55,7 @@ pub struct SetupState {
     pub needed: Option<SetupReason>,
     /// The test read of the region just marked; `None` when none is being marked.
     pub test_read: Option<TestRead>,
-    /// [`MEOWDB_CREDIT`] when the test read shows a map: its names are MeowDB's.
+    /// "Map names from OSMS Data Explorer" when the test read shows a map.
     pub credit: Option<&'static str>,
     /// The setup window shows: when setup becomes needed, and when the player asks
     /// for it, until it is finished or closed.
@@ -114,8 +117,8 @@ pub struct ExpBarRegion {
 /// more than enough for a mark that takes in the taller "EXP." label too.
 const EXP_WIDTH_PER_MARKED_HEIGHT: u32 = 12;
 
-/// Before the map index is loaded, the longest name in it is taken to be as long as
-/// MeowDB's longest: "Physical Fitness Test <Normal Waiting Room>".
+/// Before the map list is loaded, the longest name in it is taken to be as long as the
+/// longest in OSMS's map list, "Physical Fitness Test <Normal Waiting Room>".
 const FALLBACK_LONGEST_NAME: usize = 43;
 
 /// Title width allowed per character, per px of marked height. On the samples the two
@@ -316,7 +319,7 @@ impl Setup {
         let test_read = self.marking.as_ref().map(|(_, read)| read.clone());
         SetupState {
             needed: self.needed(),
-            credit: matches!(test_read, Some(TestRead::Recognised { .. })).then_some(MEOWDB_CREDIT),
+            credit: matches!(test_read, Some(TestRead::Recognised { .. })).then_some(MAP_NAMES_CREDIT),
             test_read,
             window_open: self.window_open,
             selection: self.selection.map(|(_, marked, _)| marked),

@@ -29,7 +29,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 # The Personal Bests page carries its fonts and icon inline, as data: URLs.
 base64 = "0.22"
-# MeowDB pages (ADR 0003). OS TLS (SChannel on Windows): reqwest's default rustls
+# OSMS Data Explorer's files and pictures (ADR 0008), and MeowDB's search (ADR 0007).
+# OS TLS (SChannel on Windows): reqwest's default rustls
 # backend builds aws-lc, which needs NASM/CMake.
 reqwest = { version = "0.13", default-features = false, features = ["native-tls", "http2", "charset", "system-proxy", "gzip"] }
 

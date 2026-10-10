@@ -24,7 +24,7 @@ fn the_tree_that_grew_i_ii_and_iii_each_show_their_own_map() {
         ("victoria-road__the-tree-that-grew-ii--title-region", "010002061", "The Tree That Grew II"),
         ("victoria-road__the-tree-that-grew-iii--title-region", "010002062", "The Tree That Grew III"),
     ] {
-        let mut compass = Compass::new(FakeSource::meowdb());
+        let mut compass = Compass::new(FakeSource::osms());
         compass.on_frame(sample_frame(sample, 0));
         let state = compass.on_frame(sample_frame(sample, 333));
 
@@ -38,7 +38,7 @@ fn the_tree_that_grew_i_ii_and_iii_each_show_their_own_map() {
 /// shows the real map.
 #[test]
 fn a_slightly_misread_title_snaps_to_the_right_map() {
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     compass.on_frame(sample_frame("victoria-road__rocky-road-i--title-region", 0));
     let state = compass.on_frame(sample_frame("victoria-road__rocky-road-i--title-region", 333));
 
@@ -76,7 +76,7 @@ fn every_sample_shows_the_street_name_and_map_name_its_filename_names() {
     paths.sort();
     assert!(paths.len() >= 6, "expected the minimap samples, found {}", paths.len());
 
-    let mut compass = Compass::new(FakeSource::meowdb());
+    let mut compass = Compass::new(FakeSource::osms());
     let mut wrong = Vec::new();
     for (i, path) in paths.iter().enumerate() {
         let name = path.file_stem().unwrap().to_string_lossy().to_string();

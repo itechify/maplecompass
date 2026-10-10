@@ -6,7 +6,6 @@
 //! live here.
 
 mod bests_page;
-mod crawl;
 mod exp_bar;
 mod grind_tracker;
 mod hotkey_settings;
@@ -14,17 +13,19 @@ mod item_lookup;
 mod item_tooltip;
 mod map_data;
 mod map_index;
+mod map_preview;
 mod matcher;
 pub mod meowdb;
 mod mob_card;
+pub mod osms;
 mod pace;
 mod panel;
 mod personal_best;
+mod pictures;
 mod portal_overrides;
 mod portals;
 mod prep;
 mod recogniser;
-mod saved_world;
 mod search;
 mod session;
 mod settings;
@@ -35,18 +36,18 @@ mod travel_links;
 mod world;
 
 pub use bests_page::{BestsPage, BestsPageMap};
-pub use crawl::CrawlProgress;
 pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use grind_tracker::{ClientOffset, GrindTrackerWindow};
 pub use hotkey_settings::{KeyPress, RebindProblem, SettingsNotice, SettingsView};
 pub use item_lookup::{ItemChoice, ItemHit, ItemLookup, ItemLookupLine, OurWindow};
 pub use item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReader, ItemTooltipReading};
 pub use map_data::{
-    HiddenPortal, LISTED_MOBS, MapData, MapDataStatus, MapSpot, MapSummary, Mob, MoreMobs, PerParty,
+    HiddenPortal, LISTED_MOBS, MapData, MapDataStatus, MapSummary, Mob, MoreMobs, PerParty,
     Portal, PortalKind,
 };
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
-pub use mob_card::{DamageRange, Elements, HpPerExp, MobCard, MobDetails, MobPage};
+pub use map_preview::{Landing, Leads, MapPreview, PicturePoint, PortalMark, PreviewImage};
+pub use mob_card::{DamageRange, Elements, HpPerExp, MobCard, MobDetails};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 pub use panel::{
     Action, CollapsedSections, DEFAULT_PANEL_WIDTH, Foreground, GameWindow, InsideOffset, Layer, MIN_PANEL_WIDTH, PanelSizes,
@@ -54,7 +55,6 @@ pub use panel::{
     ScreenRect, Section, Size,
 };
 pub use personal_best::{BESTS_VERSION, MapBests, SavedBests, VisitBest};
-pub use saved_world::{SavedMap, SavedMapData, SavedWorld, WORLD_VERSION};
 pub use search::{DensityTier, HuntingTarget, MobChoice, RouteStop, SearchResult, SearchState, SearchView, Trip};
 pub use session::{Deaths, ExpRate, ExpTracking, TrackingState};
 pub use settings::{Hotkey, Hotkeys, Settings};
@@ -65,22 +65,21 @@ pub use setup::{
 pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
 pub use world::{Distance, Step, Travel};
 
-use crawl::Crawl;
 use grind_tracker::GrindTracker;
 use hotkey_settings::HotkeySettings;
 use item_lookup::ItemLookups;
 use search::{MobSearch, Searched};
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
-use mob_card::MobCards;
 use pace::Pace;
+use pictures::Pictures;
 use panel::Panel;
 use session::Session;
 use setup::Setup;
 pub use recogniser::{TitleLines, TitleReader, TitleReading};
 use tracker::Tracker;
-use world::Here;
 use serde::{Deserialize, Serialize};
+use osms::MapSet;
 use std::collections::VecDeque;
 use std::task::Poll;
 
@@ -111,7 +110,7 @@ pub struct Rect {
 ///
 /// On the samples (1920x1200 client, default UI size) the title band is 66 px tall at
 /// client (0..4, 31). The region keeps ~15 px of slack above and below it, and is wide
-/// enough for the longest map name in MeowDB ("Physical Fitness Test <Normal Waiting
+/// enough for the longest name in the map list ("Physical Fitness Test <Normal Waiting
 /// Room>", ~470 px of panel). The core trims each frame where the panel ends, so a
 /// narrow minimap's surroundings are never read. Clamped to the client area.
 pub fn default_title_region(client_width: u32, client_height: u32) -> Rect {
@@ -122,41 +121,47 @@ pub fn default_title_region(client_width: u32, client_height: u32) -> Rect {
     Rect { x: 0, y, width: WIDTH.min(client_width), height: HEIGHT.min(client_height - y) }
 }
 
-/// The map the panel shows: a real map from the map index.
+/// The map the panel shows: a real map from the map list.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrentMap {
-    /// MeowDB's 9-digit map ID, zero padding kept.
+    /// The 9-digit map ID, zero padding kept.
     pub id: String,
     pub street_name: String,
     pub map_name: String,
-    /// The map's MeowDB page.
+    /// The map's MeowDB page, which the title and the open-page hotkey open.
     pub url: String,
 }
 
-/// The credit for everything MapleCompass shows from MeowDB (ADR 0003).
-pub const MEOWDB_CREDIT: &str = "NiaMeowDB (meowdb.com)";
+/// Search's credit (ADR 0008): its results and routes are worked out from OSMS Data
+/// Explorer's data, and open no pages, so MeowDB isn't credited.
+pub const OSMS_ONLY_CREDIT: &str = "Data: OSMS Data Explorer (osmsdataexplorer.com)";
 
-/// The panel's credit when it lists mobs: their Mob Cards show images from maplestory.io
-/// (ADR 0006).
-pub const MEOWDB_AND_IMAGES_CREDIT: &str = "NiaMeowDB (meowdb.com) · images: maplestory.io";
+/// The panel's credit (ADR 0008): its data is OSMS Data Explorer's, and its title and
+/// mobs' names open NiaMeowDB's pages.
+pub const OSMS_AND_MEOWDB_CREDIT: &str =
+    "Data: OSMS Data Explorer (osmsdataexplorer.com) · Pages: NiaMeowDB (meowdb.com)";
 
 /// Whether minimap titles can be recognised as real maps.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum Recognition {
-    /// The map index hasn't arrived yet (it is asked for at startup).
+    /// OSMS's file set hasn't arrived yet (it is asked for at startup).
     #[default]
     Starting,
     Ready,
-    /// MeowDB couldn't be reached, so titles are snapped to a copy of the map index
-    /// saved at `saved_at_unix_ms` (ms since the Unix epoch).
+    /// OSMS hasn't been reached for over 7 days, so titles are snapped to a copy of its
+    /// file set saved at `saved_at_unix_ms` (ms since the Unix epoch).
     SavedCopy {
         #[serde(rename = "savedAtUnixMs")]
         saved_at_unix_ms: u64,
     },
-    /// The map index couldn't be had, so readings can't be snapped to real maps.
+    /// OSMS couldn't be reached and no file set is saved, so readings can't be snapped to
+    /// real maps. The map list is asked for again every minute.
     Unavailable,
+    /// OSMS's file set doesn't read, and there is no earlier one to fall back on:
+    /// MapleCompass needs an update.
+    FormatChanged,
 }
 
 /// Everything the overlay renders.
@@ -174,11 +179,14 @@ pub struct PanelState {
     /// The maps sharing the shown map's title, when the core couldn't tell which of
     /// them the player is on; `None` when it could.
     pub candidates: Option<Candidates>,
-    /// The shown map's Map Summary, mobs and Hidden Portals from MeowDB, or why they
+    /// The shown map's Map Summary, mobs and Hidden Portals from OSMS's file set, or why they
     /// aren't there.
     pub data: MapDataStatus,
-    /// [`MEOWDB_CREDIT`] whenever a map is shown: its names and data are MeowDB's; with
-    /// Mob Cards, [`MEOWDB_AND_IMAGES_CREDIT`].
+    /// The shown map's Map Preview: its picture and every portal on it, marked. `None`
+    /// with no map shown, on a map without a picture, and while it isn't settled which
+    /// of the maps sharing a title the player is on.
+    pub map_preview: Option<MapPreview>,
+    /// [`OSMS_AND_MEOWDB_CREDIT`] whenever a map is shown.
     pub credit: Option<&'static str>,
     /// The Mob Card of each mob the panel lists, in its order; empty while it lists none.
     pub mob_cards: Vec<MobCard>,
@@ -237,7 +245,7 @@ pub struct PanelState {
     /// The player closed first-run setup: with no Title Region there is nothing to
     /// read, so the app quits.
     pub quit: bool,
-    /// Mob search, and how far the world crawl behind it has got.
+    /// Mob search, over every map in OSMS's file set.
     pub search: SearchState,
     /// What the latest Item Lookup came to, for a few seconds; `None` once it has gone.
     pub item_lookup: Option<ItemLookupLine>,
@@ -306,13 +314,28 @@ pub enum PanelControl {
 /// The game window's title, unless the player picked another by hand.
 pub const GAME_WINDOW_TITLE: &str = "MapleStory";
 
-/// How long to wait before asking for the map index again after a failure. MeowDB is
-/// asked politely (ADR 0003): never on every frame.
-const INDEX_RETRY_MS: u64 = 60_000;
+/// How long a file set is used before it is fetched afresh: a day. Game data changes only
+/// on patch days, and a day is soon enough to catch one. At startup, a set saved under a
+/// day ago by the wall clock is used as it is; while running, the set is fetched afresh
+/// every day by capture time, however old the one held, so a set used at one daily ask is
+/// always fetched afresh at the next.
+const SET_RECHECK_MS: u64 = 24 * 60 * 60 * 1000;
 
-/// The world crawl's progress reaches the panel no more often than this (capture time),
-/// unless the crawl is done: each change re-renders the panel.
-const PROGRESS_EVERY_MS: u64 = 1_000;
+/// With no file set at all, how long to wait before asking again after OSMS couldn't be
+/// reached: never on every frame.
+const SET_RETRY_MS: u64 = 60_000;
+
+/// A file set saved longer ago than this (wall clock) is shown as a Saved Copy, with its
+/// date: game data changes only on patch days, so a younger one says nothing.
+const SAVED_COPY_AFTER_MS: u64 = 7 * 24 * 60 * 60 * 1000;
+
+/// OSMS's file set as read, and when it was saved (ms since the Unix epoch): by an earlier
+/// launch, or as it was fetched in this one (the wall clock then); `None` if the wall
+/// clock wasn't known.
+struct HeldSet {
+    maps: MapSet,
+    saved_at_unix_ms: Option<u64>,
+}
 
 /// The compass core: feed it frames, render its [`PanelState`].
 pub struct Compass {
@@ -328,24 +351,31 @@ pub struct Compass {
     /// The Grind Tracker's window.
     grind_tracker: GrindTracker,
     source: Box<dyn MapDataSource + Send>,
+    /// Every map's data, once OSMS's file set has been read: the map list, and the
+    /// shown map's figures.
+    set: Option<HeldSet>,
+    /// When to ask for OSMS's file set next (capture time); 0 at startup.
+    ask_osms_at: u64,
+    /// The source is fetching OSMS's file set.
+    osms_in_flight: bool,
+    /// The set an earlier launch saved has been looked at (on the first tick or frame).
+    saved_set_seen: bool,
+    /// The set an earlier launch saved, read, while a fresh one is fetched at startup
+    /// because it is too old to use as it is: what the panel falls back on if none can be
+    /// had.
+    fallback: Option<HeldSet>,
+    /// What the file set is read with: [`PORTAL_OVERRIDES`], but for tests of the list.
+    portal_overrides: Vec<PortalOverride>,
+    /// Built from the map list, once there is one.
     matcher: Option<Matcher>,
-    /// When asking for the map index last failed (frame time).
-    index_failed_at: Option<u64>,
     tracker: Tracker,
     shown_map: ShownMap,
-    /// The world crawl, from when the map index arrives.
-    crawl: Option<Crawl>,
-    /// What an earlier launch's crawl learned, for the crawl to start from.
-    saved_world: SavedWorld,
-    /// The shell is loading the saved world: the crawl holds until it arrives.
-    world_awaited: bool,
-    /// When the crawl's progress last reached the panel (capture time).
-    progress_shown_at: Option<u64>,
     /// The wall clock (ms since the Unix epoch), as the shell last told it.
     wall_clock: Option<u64>,
-    /// The listed mobs' pages and images, for their Mob Cards.
-    mob_cards: MobCards,
-    /// MeowDB's pace, kept by the crawl and the Mob Cards' pages together.
+    /// OSMS's pictures the panel asked for: the Map Preview's picture, and the listed
+    /// mobs' animations for their Mob Cards.
+    pictures: Pictures,
+    /// MeowDB's pace, kept by Item Lookup's searches.
     meowdb_pace: Pace,
     /// What the player typed, highlighted and picked in mob search.
     search: MobSearch,
@@ -368,7 +398,7 @@ pub struct Compass {
 }
 
 impl Compass {
-    /// A core using the given map data source and default settings. The map index is
+    /// A core using the given data source and default settings. OSMS's file set is
     /// asked for on the first tick or frame.
     pub fn new(source: impl MapDataSource + Send + 'static) -> Self {
         let mut compass = Self {
@@ -378,16 +408,17 @@ impl Compass {
             session: Session::default(),
             grind_tracker: GrindTracker::default(),
             source: Box::new(source),
+            set: None,
+            ask_osms_at: 0,
+            osms_in_flight: false,
+            saved_set_seen: false,
+            fallback: None,
+            portal_overrides: PORTAL_OVERRIDES.to_vec(),
             matcher: None,
-            index_failed_at: None,
             tracker: Tracker::default(),
             shown_map: ShownMap::default(),
-            crawl: None,
-            saved_world: SavedWorld::default(),
-            world_awaited: false,
-            progress_shown_at: None,
             wall_clock: None,
-            mob_cards: MobCards::default(),
+            pictures: Pictures::default(),
             meowdb_pace: Pace::default(),
             search: MobSearch::default(),
             hotkey_settings: HotkeySettings::default(),
@@ -404,6 +435,15 @@ impl Compass {
         compass
     }
 
+    /// The same core, reading OSMS's file set with these portal overrides in place of
+    /// [`PORTAL_OVERRIDES`]. Only for tests of the override list (integration tests can't
+    /// see test-only items); the app keeps the list it ships.
+    #[doc(hidden)]
+    pub fn with_portal_overrides(mut self, overrides: Vec<PortalOverride>) -> Self {
+        self.portal_overrides = overrides;
+        self
+    }
+
     /// Read a captured Title Region frame and update the panel state: the same as
     /// [`Compass::on_reading`] with what a [`TitleReader`] reads in the frame, here.
     pub fn on_frame(&mut self, frame: Frame) -> &PanelState {
@@ -414,9 +454,9 @@ impl Compass {
     /// Take what a Title Region frame read as (read by a [`TitleReader`], possibly on
     /// another thread) and update the panel state.
     pub fn on_reading(&mut self, reading: TitleReading) -> &PanelState {
-        self.load_map_index(reading.at_ms);
-        let Some(matcher) = &self.matcher else {
-            // Without the map index nothing can be recognised.
+        self.load_osms(reading.at_ms);
+        let (Some(matcher), Some(set)) = (&self.matcher, &self.set) else {
+            // Without the map list nothing can be recognised.
             self.setup.on_read(None);
             return self.sync_panel();
         };
@@ -425,7 +465,7 @@ impl Compass {
             // Names differing only in a numeral the reading doesn't make out: the
             // one within the player's reach, if just one is; otherwise not sure.
             Match::OneOf { maps, score } => {
-                let reach = self.shown_map.within_reach();
+                let reach = self.shown_map.within_reach(&set.maps);
                 let mut reachable = maps.into_iter().filter(|&i| {
                     matcher.same_title_as(i).into_iter().any(|j| reach.contains(&matcher.map(j).id))
                 });
@@ -452,7 +492,7 @@ impl Compass {
         let maps = titled.into_iter().map(current_map).collect();
         // Another title confirmed is another map: a new Visit. Losing the title, or choosing
         // among the maps sharing it, is not.
-        if self.shown_map.show(maps, &mut *self.source) {
+        if self.shown_map.show(maps, &set.maps) {
             self.session.arrive();
         }
         self.sync_shown_map();
@@ -487,9 +527,9 @@ impl Compass {
 
     fn sync_shown_map(&mut self) {
         let map = self.shown_map.map().cloned();
-        let data = self.shown_map.data();
-        // Distances are measured from the map shown (with Candidates, the one shown),
-        // and its page's exits count before the crawl gets to it.
+        let saved_copy_from = self.saved_copy_from();
+        let data = self.set.as_ref().map_or(MapDataStatus::NoMap, |set| self.shown_map.data(&set.maps, saved_copy_from));
+        // Distances are measured from the map shown (with Candidates, the one shown).
         let moved = map.as_ref().map(|m| &m.id) != self.state.map.as_ref().map(|m| &m.id);
         let paged = data.data() != self.state.data.data();
         // Arriving on the Hunting Target's map (with Candidates, showing it), or leaving it
@@ -502,12 +542,44 @@ impl Compass {
         if moved || paged {
             self.sync_search();
         }
-        self.state.candidates = self.shown_map.candidates();
+        self.state.candidates = self.set.as_ref().and_then(|set| self.shown_map.candidates(&set.maps));
+        self.sync_pictured();
+        self.state.credit = self.state.map.as_ref().map(|_| OSMS_AND_MEOWDB_CREDIT);
+    }
+
+    /// What shows OSMS's pictures, with those in so far: the Map Preview (its portals on the
+    /// Hunting Target's route marked), the listed mobs' Mob Cards and the Hunting Target's mob.
+    fn sync_pictured(&mut self) {
+        let next_map = self.state.search.hunting.as_ref().and_then(HuntingTarget::next_map_by_portal);
+        self.state.map_preview = self
+            .set
+            .as_ref()
+            .and_then(|set| self.shown_map.preview(&set.maps, &self.pictures))
+            .map(|preview| preview.on_route_to(next_map));
         let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
-        self.mob_cards.list(listed);
-        self.state.mob_cards = self.mob_cards.cards();
-        let credit = if self.state.mob_cards.is_empty() { MEOWDB_CREDIT } else { MEOWDB_AND_IMAGES_CREDIT };
-        self.state.credit = self.state.map.as_ref().map(|_| credit);
+        self.state.mob_cards = match &self.set {
+            Some(set) => mob_card::cards(listed, &set.maps, &self.pictures),
+            None => Vec::new(),
+        };
+        if let (Some(hunting), Some(set)) = (&mut self.state.search.hunting, &self.set) {
+            hunting.image = set.maps.animation(&hunting.mob.id).and_then(|path| self.pictures.url(path)).map(String::from);
+        }
+    }
+
+    /// Ask for the pictures the panel wants, one at a time: the Map Preview's first, then
+    /// the listed mobs' animations, then the Hunting Target mob's.
+    fn poll_pictures(&mut self, at_ms: u64) {
+        let Some(set) = &self.set else { return };
+        let preview = self.state.map_preview.as_ref().map(|preview| map_preview::picture_path(&preview.picture));
+        let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
+        let hunted = self.state.search.hunting.as_ref().and_then(|hunting| set.maps.animation(&hunting.mob.id));
+        let wanted: Vec<String> = preview
+            .into_iter()
+            .chain(mob_card::animations(listed, &set.maps))
+            .chain(hunted.map(String::from))
+            .collect();
+        self.pictures.poll(&wanted, &mut *self.source, at_ms);
+        self.sync_pictured();
     }
 
     /// The game window moved, resized, appeared or went away (`None`: not found, or
@@ -555,7 +627,7 @@ impl Compass {
             Action::PanelResized { width } => self.panel.resized_to(width),
             Action::CyclePlacement => self.panel.cycle_placement(),
             Action::ChooseCandidate => {
-                self.shown_map.choose_next(&mut *self.source);
+                self.shown_map.choose_next();
                 self.sync_shown_map();
             }
             Action::MarkTitleRegion(marked) => self.setup.mark(marked),
@@ -627,11 +699,11 @@ impl Compass {
             }
             Action::SearchPrevious | Action::SearchNext => {
                 let by = if action == Action::SearchNext { 1 } else { -1 };
-                self.search.move_highlight(by, &searched(&self.crawl, &self.state, &self.settings));
+                self.search.move_highlight(by, &searched(&self.set, &self.state, &self.settings));
                 self.sync_search();
             }
             Action::SearchEnter => {
-                self.search.enter(&searched(&self.crawl, &self.state, &self.settings));
+                self.search.enter(&searched(&self.set, &self.state, &self.settings));
                 self.sync_search();
             }
             Action::SearchEscape => {
@@ -716,18 +788,20 @@ impl Compass {
     }
 
     /// The player clicked one of the search view's items: the mob (in the suggestions)
-    /// or the map (in the map list) with this MeowDB ID. Like Enter on it.
+    /// or the map (in the map list) with this ID. Like Enter on it.
     pub fn search_pick(&mut self, id: &str) -> &PanelState {
-        self.search.pick(id, &searched(&self.crawl, &self.state, &self.settings));
+        self.search.pick(id, &searched(&self.set, &self.state, &self.settings));
         self.sync_search();
         self.sync_panel()
     }
 
-    /// Bring the panel's mob search up to date with the player's inputs, the maps the
-    /// crawl knows, the map shown and the travel toggles.
+    /// Bring the panel's mob search up to date with the player's inputs, OSMS's file set,
+    /// the map shown and the travel toggles; and with it what follows from the Hunting
+    /// Target: its mob's animation, and the Map Preview's portals on its route.
     fn sync_search(&mut self) {
-        let search = self.search.state(&searched(&self.crawl, &self.state, &self.settings));
+        let search = self.search.state(&searched(&self.set, &self.state, &self.settings));
         self.state.search = search;
+        self.sync_pictured();
     }
 
     /// The player pressed one of the global hotkeys (an accelerator string, as listed
@@ -793,18 +867,12 @@ impl Compass {
         None
     }
 
-    /// The Personal Bests page now: every map's best as saved, with what the map index and
-    /// the maps' pages (the shown map's own, else the crawl's) say of the map.
+    /// The Personal Bests page now: every map's best as saved, with what OSMS's file set
+    /// held says of the map.
     fn bests_page(&self) -> BestsPage {
-        let crawl = self.crawl.as_ref();
-        let shown = self.state.map.as_ref().map(|m| m.id.as_str());
         let map = |id: &str| {
-            let entry = crawl.and_then(|c| c.entry(id));
-            let data = match self.state.data.data() {
-                Some(data) if shown == Some(id) => Some(data),
-                _ => crawl.and_then(|c| c.known().find(|(e, _)| e.id == id).map(|(_, data)| data)),
-            };
-            (entry, data)
+            let maps = &self.set.as_ref()?.maps;
+            Some((maps.entry(id)?, maps.data(id)?))
         };
         bests_page::page(&self.session.bests().saved(), map, certain_map(&self.state), self.wall_clock)
     }
@@ -923,41 +991,10 @@ impl Compass {
         }
     }
 
-    /// The wall clock now, in ms since the Unix epoch: what dates the world crawl's maps,
-    /// and tells which are stale. The shell tells it as time passes.
+    /// The wall clock now, in ms since the Unix epoch: what tells how old a saved copy of
+    /// OSMS's file set is, and dates Personal Bests. The shell tells it as time passes.
     pub fn on_wall_clock(&mut self, now_unix_ms: u64) {
         self.wall_clock = Some(now_unix_ms);
-    }
-
-    /// The shell is loading the world an earlier launch saved: the crawl holds until
-    /// [`Compass::restore_world`], so it doesn't ask MeowDB for maps already known.
-    pub fn await_world(&mut self) {
-        self.world_awaited = true;
-    }
-
-    /// Pick up the world an earlier launch's crawl learned ([`SavedWorld::default`] when
-    /// none was saved), and let the crawl go on. One saved in another shape is left. A
-    /// map the crawl knows already is kept unless the saved one is newer.
-    pub fn restore_world(&mut self, world: SavedWorld) -> &PanelState {
-        self.world_awaited = false;
-        if world.version == WORLD_VERSION {
-            if let Some(crawl) = &mut self.crawl {
-                crawl.restore(&world);
-            }
-            self.saved_world = world;
-        }
-        self.sync_search();
-        self.sync_panel()
-    }
-
-    /// Every map the world crawl knows, for the shell to save.
-    pub fn world(&self) -> SavedWorld {
-        self.crawl.as_ref().map_or_else(|| self.saved_world.clone(), Crawl::saved)
-    }
-
-    /// Changes whenever what [`Compass::world`] holds does, so the shell saves it only then.
-    pub fn world_revision(&self) -> u64 {
-        self.crawl.as_ref().map_or(0, Crawl::revision)
     }
 
     /// Pick up the Personal Bests an earlier launch saved ([`SavedBests::default`] when
@@ -978,69 +1015,103 @@ impl Compass {
         self.session.bests().revision()
     }
 
-    /// Time passed: check on fetches in flight, move the world crawl on, and let the
-    /// Session pause. The shell
-    /// calls this many times a second (`at_ms` on the same clock as frames), so nothing
-    /// waits for the network.
+    /// Time passed: check on fetches in flight, and let the Session pause. The shell calls
+    /// this many times a second (`at_ms` on the same clock as frames), so nothing waits for
+    /// the network.
     pub fn tick(&mut self, at_ms: u64) -> &PanelState {
         self.session.tick(at_ms);
-        self.load_map_index(at_ms);
-        if self.matcher.is_some() {
-            self.shown_map.poll(&mut *self.source);
+        self.load_osms(at_ms);
+        if self.set.is_some() {
             self.sync_shown_map();
-            // Once the shown map's page lists its mobs.
-            self.mob_cards.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
-            self.state.mob_cards = self.mob_cards.cards();
+            self.poll_pictures(at_ms);
         }
-        // An Item Lookup's search, which the player waits on, before the crawl.
+        // An Item Lookup's search, which the player waits on.
         let open = self.item_lookups.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
         self.requests.extend(open.map(|url| Request::OpenInBrowser { url }));
-        // After the shown map, which never waits for the crawl, and its listed mobs' pages.
-        let crawling = !self.world_awaited && !self.mob_cards.wants_meowdb(at_ms);
-        if let Some(crawl) = self.crawl.as_mut().filter(|_| crawling) {
-            crawl.poll(&mut *self.source, &mut self.meowdb_pace, at_ms, self.wall_clock);
-            // Search covers the maps known so far: redone as the crawl learns more, but
-            // no more than once a second while it goes on.
-            let progress = crawl.progress();
-            let due = self.progress_shown_at.is_none_or(|t| at_ms.saturating_sub(t) >= PROGRESS_EVERY_MS);
-            if progress != self.state.search.crawl && (due || progress.done) {
-                self.progress_shown_at = Some(at_ms);
-                self.sync_search();
-            }
-        }
         self.sync_panel()
     }
 
-    /// Ask the source for the map index at startup (the first tick or frame) until it
-    /// answers, and after a failure, again no sooner than [`INDEX_RETRY_MS`] later.
-    fn load_map_index(&mut self, at_ms: u64) {
-        if self.matcher.is_some()
-            || self.index_failed_at.is_some_and(|t| at_ms.saturating_sub(t) < INDEX_RETRY_MS)
-        {
-            return;
-        }
-        let index = match self.source.map_index() {
-            Poll::Pending => return,
-            Poll::Ready(index) => index,
-        };
-        let index = match index {
-            Ok(Fetched::Fresh(index)) => {
-                self.state.recognition = Recognition::Ready;
-                index
-            }
-            Ok(Fetched::SavedCopy { data, saved_at_unix_ms }) => {
-                self.state.recognition = Recognition::SavedCopy { saved_at_unix_ms };
-                data
-            }
-            Err(_) => {
-                self.index_failed_at = Some(at_ms);
-                self.state.recognition = Recognition::Unavailable;
+    /// OSMS's file set. At startup (the first tick or frame), the set an earlier launch
+    /// saved, if it was saved under [`SET_RECHECK_MS`] ago; otherwise, and every
+    /// [`SET_RECHECK_MS`] after, one the source fetches afresh, and with no set at all, a
+    /// minute after OSMS couldn't be reached. A fetched set that reads replaces the one
+    /// held whole. One that can't be had or doesn't read leaves the one held as it is, and
+    /// at startup falls back on the saved set, however old.
+    fn load_osms(&mut self, at_ms: u64) {
+        if !self.osms_in_flight {
+            if at_ms < self.ask_osms_at {
                 return;
             }
+            if !self.saved_set_seen {
+                self.saved_set_seen = true;
+                if self.take_saved_set() {
+                    self.ask_osms_at = at_ms + SET_RECHECK_MS;
+                    return;
+                }
+            }
+        }
+        let fetched = match self.source.fetch_osms_files() {
+            Poll::Pending => {
+                self.osms_in_flight = true;
+                return;
+            }
+            Poll::Ready(fetched) => fetched,
         };
-        self.crawl = Some(Crawl::new(index.clone(), &self.saved_world));
-        self.matcher = Some(Matcher::new(index));
+        self.osms_in_flight = false;
+        self.ask_osms_at = at_ms + SET_RECHECK_MS;
+        let read = fetched.and_then(|files| osms::read_with(&files, &self.portal_overrides));
+        match (read, self.fallback.take()) {
+            // The source saved it as it fetched it: now.
+            (Ok(maps), _) => self.take_set(HeldSet { maps, saved_at_unix_ms: self.wall_clock }),
+            (Err(_), _) if self.set.is_some() => {}
+            (Err(_), Some(saved)) => self.take_set(saved),
+            (Err(SourceError::Unreachable(_)), None) => {
+                self.state.recognition = Recognition::Unavailable;
+                self.ask_osms_at = at_ms + SET_RETRY_MS;
+            }
+            (Err(SourceError::FormatChanged(_)), None) => self.state.recognition = Recognition::FormatChanged,
+        }
+    }
+
+    /// Take the set an earlier launch saved if it was saved under [`SET_RECHECK_MS`] ago by
+    /// the wall clock, or else keep it to fall back on; whether it was taken. Without the
+    /// wall clock its age is unknown, so it isn't taken as it is, and a set that doesn't
+    /// read is as good as none.
+    fn take_saved_set(&mut self) -> bool {
+        let Some(saved) = self.source.saved_osms_files() else { return false };
+        let Ok(maps) = osms::read_with(&saved.files, &self.portal_overrides) else { return false };
+        let held = HeldSet { maps, saved_at_unix_ms: Some(saved.saved_at_unix_ms) };
+        let age = self.wall_clock.and_then(|now| now.checked_sub(saved.saved_at_unix_ms));
+        if age.is_some_and(|age| age < SET_RECHECK_MS) {
+            self.take_set(held);
+            return true;
+        }
+        self.fallback = Some(held);
+        false
+    }
+
+    /// Hold `set`, a file set just read, in place of the one held: search and Distance
+    /// work over it at once. A new map list is matched against from then on, and the map
+    /// the player is on stays theirs.
+    fn take_set(&mut self, set: HeldSet) {
+        let entries = set.maps.entries();
+        if self.set.as_ref().is_none_or(|held| held.maps.entries() != entries) {
+            let matcher = Matcher::new(entries);
+            if let Some(old) = &self.matcher {
+                self.tracker.remap(|at| matcher.index_of(&old.map(at).id));
+            }
+            self.matcher = Some(matcher);
+        }
+        self.set = Some(set);
         self.sync_search();
+    }
+
+    /// When the file set held was saved, if that was over [`SAVED_COPY_AFTER_MS`] ago, so it
+    /// is a Saved Copy: no fresh one could be had since. The panel says so, with its date.
+    fn saved_copy_from(&self) -> Option<u64> {
+        let saved_at = self.set.as_ref()?.saved_at_unix_ms?;
+        let now = self.wall_clock?;
+        (now.saturating_sub(saved_at) > SAVED_COPY_AFTER_MS).then_some(saved_at)
     }
 
     pub fn panel_state(&self) -> &PanelState {
@@ -1048,6 +1119,12 @@ impl Compass {
     }
 
     fn sync_panel(&mut self) -> &PanelState {
+        if self.set.is_some() {
+            self.state.recognition = match self.saved_copy_from() {
+                Some(saved_at_unix_ms) => Recognition::SavedCopy { saved_at_unix_ms },
+                None => Recognition::Ready,
+            };
+        }
         self.sync_setup();
         // Never over a captured region: the capture would read the panel.
         self.panel.avoid = [self.state.title_region, self.state.exp_bar_region].into_iter().flatten().collect();
@@ -1130,23 +1207,23 @@ impl Compass {
     }
 }
 
-/// What mob search works over: the maps the crawl knows, the map the panel shows with
-/// its page (once it has it), and the travel the player has turned on.
-fn searched<'a>(crawl: &'a Option<Crawl>, state: &'a PanelState, settings: &Settings) -> Searched<'a> {
+/// What mob search works over: OSMS's file set, the map the panel shows, and the travel
+/// the player has turned on.
+fn searched<'a>(set: &'a Option<HeldSet>, state: &'a PanelState, settings: &Settings) -> Searched<'a> {
     Searched {
-        crawl: crawl.as_ref(),
-        here: state.map.as_ref().map(|map| Here { id: &map.id, page: state.data.data() }),
+        set: set.as_ref().map(|held| &held.maps),
+        here: state.map.as_ref().map(|map| map.id.as_str()),
         travel: settings.travel,
     }
 }
 
-/// The shown map, by MeowDB ID, if Personal Bests are kept there: only where the map is
+/// The shown map, by ID, if Personal Bests are kept there: only where the map is
 /// certain, and has a Map Summary (in a town, quest turn-ins would set one).
 fn bests_map(state: &PanelState) -> Option<&str> {
     certain_map(state).filter(|_| state.data.solo_exp_ceiling().is_some())
 }
 
-/// The shown map, by MeowDB ID, if the panel is certain the player is on it: no
+/// The shown map, by ID, if the panel is certain the player is on it: no
 /// Candidates waiting for a choice. One map has the title, the map the player came from
 /// settled it, or the player chose it. Maps that share a title but would show the same
 /// are certain too, as they show the same: the panel always shows the first of them, and

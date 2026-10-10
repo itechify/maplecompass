@@ -9,7 +9,7 @@ related_targets: ["src/main.ts","src/styles.css"]
 
 Scope: the in-game overlay panel (index.html, src/main.ts, src/styles.css), every state it can show. Mode: Operate. A glanceable, click-through tool read mid-hunt.
 
-Job: on each map change, tell the player which map this is, where its Hidden Portals are, and whether its mobs are worth grinding, in one glance. Constraints: fixed 380 px width, height fits the content (44–900 px), 44 px collapsed square, no hover or pointer interaction except dragging in edit mode, credit "NiaMeowDB (meowdb.com)" wherever MeowDB data shows.
+Job: on each map change, tell the player which map this is, where its Hidden Portals are, and whether its mobs are worth grinding, in one glance. Constraints: fixed 380 px width, height fits the content (44–900 px), 44 px collapsed square, no hover or pointer interaction except dragging in edit mode, credit "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com)" whenever a map is shown.
 
 Scene: a player at a desk, the bright, saturated 2D game filling the screen, glancing at the right edge between attacks. The game's own windows there (Quest Helper, minimap) are light, translucent periwinkle and lavender, so the panel is light.
 
@@ -21,8 +21,27 @@ OWN-WORLD: Translucent lavender-grey body as in the Quest Helper. Steel-periwink
 
 STORY: The player learns the map, sees each hidden exit's spot and where it leads, checks EXP/h, and gets back to hunting. When unsure, the panel says so before anything else.
 
-FIRST VIEWPORT: Title bar with the street name and the outlined map name, full width. Under it, Hidden Portals: each row is a 30×18 mini-minimap with a blue ring at the portal's cell, then the destination and its tags, then the position in words. Then one summary line ("EXP/h 6,180 solo · 27,900 6+"), then up to 5 mobs (red dot, name, Lv, HP, EXP, share) and a "+N more · Lv x–y" line, then the credit footer. Signature move: Hidden Portals drawn on miniature minimaps with the game's portal ring.
+FIRST VIEWPORT: Title bar with the street name and the outlined map name, full width. Under it, Portals: the Map Preview, OSMS's picture of the whole map with every portal ringed, then a row per Hidden Portal (its dashed ring, the destination and its tags). Then one summary line ("EXP/h 6,180 solo · 27,900 6+"), then up to 5 mobs (red dot, name, Lv, HP, EXP, share) and a "+N more · Lv x–y" line, then the credit footer. Signature move: the map itself, ringed the way the minimap rings a portal, with the hidden ones dashed.
 
 FORM: user-pinned, no roll (the user chose "lean into MapleStory" and confirmed this direction). Code-led: no image generation is available.
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+
+## Portals and the Map Preview (#60)
+
+Design pass for the Portals section, 10 Oct 2026. Reference: OSMS Data Explorer's map detail view (Maps tab, a map's row opened), read from its live page: the whole-map picture with a ring per portal, positioned at `x·scale − size/2`; blue rings (`#33aaff` on an 18% fill, a soft glow) to other maps, green rings (`#2ecc40` on a dark 45% fill, a stronger glow) for teleports within the map, grey (`#999`) to a map it doesn't know; dashed green arrows (`6 3`, 2px) for teleports, one line with a head at each end for a mutual pair, and one-way arrows that run to the landing point even where that point has no ring (a teleport landing on a spawn point). Its hover card names the destination with a thumbnail and its mobs. OSMS doesn't set hidden portals apart; we do.
+
+Fixed by the ticket: the section is Portals; the preview sits on top at full width, at most about 180 px tall, fitted and centred, on every map; rows below, or "No hidden portals"; OSMS's three colours; Hidden and Quest dashed; Doors like visible portals; hover a mark for name, street and kind, and to light its row; hover a row to light its mark; a click does nothing; collapsing hides both, the count stays the Hidden Portal count; "Loading map…" in a fixed-height placeholder; the rows alone with "Couldn't load the map picture" on failure; no preview while shared titles are unsettled; the Quest tag off green.
+
+Assumed in this pass (no one to ask in the session; correct here if wrong):
+
+- **Ground.** OSMS's pictures carry alpha (three checked: Sunset Sky, Northern Top, Kerning City), so the glass would show the game through them. The picture sits on opaque Minimap Paper inside the inset frame (1px Inset Edge, 4px radius): the retired mini-minimap's paper carries over to the map it stood for.
+- **Rings in screen pixels, not picture pixels.** Pictures run 1,500 to 5,400 px wide and show at about 358, so a ring is a fixed 9 px across wherever the picture is scaled to, over a white halo so it holds on dark art and on the paper alike. Blue is the panel's own Portal Ring Blue, not OSMS's lighter one: the Minimap Legend Rule keeps one blue for portals. Green is a new Teleport Green, grey a new Unknown Grey from the panel's cool inks.
+- **Dashes.** Hidden and Quest rings are dashed over their solid white halo, so the gaps read white. A hidden teleport within the map is dashed too.
+- **Arrows.** As OSMS draws them: a dashed Teleport Green line from ring edge to ring edge, or to the landing point when it has no ring, with a small head where it lands; a mutual pair is one line with two heads. A white under-stroke keeps it on any art.
+- **Lit.** A lit mark (hovered, or its row hovered) gains a second ring around it in its own colour, a static target; a lit teleport's arrow thickens. A lit row takes Selection Periwinkle with its inset edge, whichever side the pointer is on. No motion: the panel has none.
+- **Rows.** Each row leads with its mark's ring, dashed, in the mark's colour (grey when the destination isn't in the data), so the list and the picture read as one legend.
+- **Card.** Hovering a mark shows a small card at once (marks are small and sparse; the Mob Card's 250 ms wait would feel broken), floating over the panel above the mark, or below it when there's no room, never leaving the panel, the pointer passing through: opaque Body Solid, Window Edge, 4px radius, the window's inner ring. The destination in 13px bold, its street in 12px Panel Ink Steel, then a tag per kind: "Hidden", "Quest", "Door", "Within the map", "Not in the map list". A visible portal to a known map has no tag.
+- **Quest tag.** Not amber: cream and amber tags already mean a state to notice ("paused", "Taken", "Invalid") and the Orange Means Doubt Rule keeps the game's orange for problems. Quest moves to a violet no other meaning holds.
+- **Loading.** A 140 px placeholder in the same frame and paper, "Loading map…" centred in 12px Panel Ink Steel; then the box takes the picture's own fitted height. **Failure** is the panel's problem note, "Couldn't load the map picture", in the preview's place.
+- **Cursor and focus.** Marks keep the default cursor (a click does nothing) and take no focus; the preview is one image to assistive tech, named with the map and its portal count, and the rows carry the Hidden Portals as text.

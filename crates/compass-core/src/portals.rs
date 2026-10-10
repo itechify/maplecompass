@@ -1,117 +1,156 @@
-//! The Hidden Portal rule and position hints: what kind of portal each of a map's
-//! exits is, which the player can't see, and roughly where each of those is.
+//! The Hidden Portal rule: what kind of portal each of a map's exits is, and which the
+//! player can't see; and the marks on the Map Preview that follow from it.
 
-use crate::map_data::{HiddenPortal, MapSpot, Portal, PortalKind};
+use crate::map_data::{HiddenPortal, Portal, PortalKind};
+use crate::map_preview::{Landing, Leads, PicturePoint, PortalMark};
 use crate::portal_overrides::PortalOverride;
 
 /// The street name of a Hidden Street.
 const HIDDEN_STREET: &str = "Hidden Street";
 
-/// MeowDB's dead-end destination: a portal that goes nowhere.
+/// The dead end: where a portal that goes nowhere leads (spawn points), and the nearest
+/// town of a map that has none.
 pub(crate) const DEAD_END: &str = "999999999";
 
-/// MeowDB portal types.
+/// Portal types, the game's numbers as OSMS's files (and MeowDB's pages) give them.
 const INVISIBLE: u64 = 1;
 const HIDDEN: u64 = 10;
 const SCRIPT: u64 = 11;
 
-/// One exit from a map to another, as MeowDB lists it.
+/// One portal on a map, as its source lists it.
 pub(crate) struct Exit {
     pub name: String,
     pub kind: u64,
-    pub x: f64,
-    pub y: f64,
     pub to_map_id: String,
-    pub to_map_name: String,
-    pub to_street_name: String,
+    pub to: Destination,
+    /// The source marks it as a teleport within the map.
+    pub within_map: bool,
+    /// The name of the portal it lands at on its destination; for a teleport within the
+    /// map, another of the map's own.
+    pub landing: String,
+    /// Where it is in the map's picture.
+    pub at: PicturePoint,
 }
 
-/// What a map's MeowDB page says about the map itself, for the rule and the hints.
+/// A portal's destination as the player knows it.
+pub(crate) struct Destination {
+    pub map_name: String,
+    pub street_name: String,
+    /// It is in the map list.
+    pub known: bool,
+}
+
+/// A portal a teleport within the map may land at.
+struct Spot {
+    name: String,
+    at: PicturePoint,
+    /// Its mark; a portal to the dead end (a spawn point) has none.
+    mark: Option<usize>,
+}
+
+/// What the rule needs to know of the map itself.
 pub(crate) struct MapFacts<'a> {
     pub id: &'a str,
     pub is_town: bool,
-    pub minimap: Minimap,
 }
 
-/// MeowDB's minimap bounds: a point (x, y) on the map sits at
-/// `((x + center_x) / width, (y + center_y) / height)` of the minimap, from its top-left.
-/// All zero on maps without a minimap.
-#[derive(Clone, Copy)]
-pub(crate) struct Minimap {
-    pub width: f64,
-    pub height: f64,
-    pub center_x: f64,
-    pub center_y: f64,
+/// A map's portals, sorted by the rule.
+pub(crate) struct MapPortals {
+    /// Its portals to other maps, with their kinds: its edges in the world's portal graph.
+    pub portals: Vec<Portal>,
+    pub hidden_portals: Vec<HiddenPortal>,
+    /// Every portal but those to the dead end, for the Map Preview.
+    pub marks: Vec<PortalMark>,
 }
 
-/// The map's portals to other maps (not to itself or the dead end) with their kinds,
-/// and its Hidden Portals; both in MeowDB's order.
+/// The map's portals to other maps (not to itself or the dead end) with their kinds, its
+/// Hidden Portals, and its marks; all in the source's order.
 ///
 /// A portal is hidden when its type is invisible (1), hidden (10) or script (11, a
 /// Quest Portal), except that invisible portals on a Town are Doors: drawn into the
 /// scenery, so the player sees them. An entry in `overrides` for the map and portal
 /// settles whether it is hidden either way, except for the destination. A script
 /// portal is a Quest Portal whether hidden or not.
-pub(crate) fn portals(
-    map: &MapFacts,
-    exits: Vec<Exit>,
-    overrides: &[PortalOverride],
-) -> (Vec<Portal>, Vec<HiddenPortal>) {
-    let mut portals = Vec::new();
-    let mut hidden_portals = Vec::new();
-    for e in exits.into_iter().filter(|e| e.to_map_id != map.id && e.to_map_id != DEAD_END) {
+///
+/// A teleport within the map (or a portal into the map itself) is marked, but is
+/// neither an edge nor a Hidden Portal. It is never a Door, which leads into a building,
+/// so an invisible one is hidden on a Town too. It lands where the portal it names is,
+/// at that portal's mark if it has one (a spawn point, to the dead end, has none). Two
+/// that land at each other's marks are a pair, both ways.
+pub(crate) fn portals(map: &MapFacts, exits: Vec<Exit>, overrides: &[PortalOverride]) -> MapPortals {
+    let mut sorted = MapPortals { portals: Vec::new(), hidden_portals: Vec::new(), marks: Vec::new() };
+    // Every portal, for the teleports to land at.
+    let mut spots: Vec<Spot> = Vec::new();
+    // The teleports' marks, and the portals they land at.
+    let mut teleports: Vec<(usize, String)> = Vec::new();
+    for e in exits {
+        if e.to_map_id == DEAD_END {
+            spots.push(Spot { name: e.name, at: e.at, mark: None });
+            continue;
+        }
+        spots.push(Spot { name: e.name.clone(), at: e.at, mark: Some(sorted.marks.len()) });
+        let within = e.within_map || e.to_map_id == map.id;
         let overridden = overrides.iter().find(|o| o.map_id == map.id && o.portal == e.name);
         let hidden = match (overridden, e.kind) {
             (Some(o), _) => o.hidden,
-            (None, INVISIBLE) => !map.is_town,
+            (None, INVISIBLE) => within || !map.is_town,
             (None, HIDDEN | SCRIPT) => true,
             (None, _) => false,
         };
         let kind = match e.kind {
             SCRIPT => PortalKind::Quest,
             _ if hidden => PortalKind::Hidden,
-            INVISIBLE if map.is_town => PortalKind::Door,
+            INVISIBLE if map.is_town && !within => PortalKind::Door,
             _ => PortalKind::Visible,
         };
-        portals.push(Portal { name: e.name.clone(), to_map_id: e.to_map_id.clone(), kind });
-        if hidden {
-            let (position, spot) = position_hint(map.minimap, e.x, e.y);
-            hidden_portals.push(HiddenPortal {
-                position,
-                spot,
-                to_hidden_street: e.to_street_name == HIDDEN_STREET,
+        let leads = match (within, e.to.known) {
+            (true, _) => Leads::WithinTheMap,
+            (false, true) => Leads::AnotherMap,
+            (false, false) => Leads::MapNotInTheData,
+        };
+        let row = (hidden && !within).then_some(sorted.hidden_portals.len());
+        sorted.marks.push(PortalMark {
+            at: e.at,
+            leads,
+            kind,
+            to_map_id: e.to_map_id.clone(),
+            to_map_name: e.to.map_name.clone(),
+            to_street_name: e.to.street_name.clone(),
+            lands_at: None,
+            hidden_portal: row,
+            // The Hunting Target's route is the panel's: it marks these when it shows them.
+            next_on_route: false,
+        });
+        if within {
+            teleports.push((sorted.marks.len() - 1, e.landing));
+            continue;
+        }
+        sorted.portals.push(Portal { name: e.name.clone(), to_map_id: e.to_map_id.clone(), kind });
+        if row.is_some() {
+            sorted.hidden_portals.push(HiddenPortal {
+                to_hidden_street: e.to.street_name == HIDDEN_STREET,
                 quest: e.kind == SCRIPT,
                 name: e.name,
                 to_map_id: e.to_map_id,
-                to_map_name: e.to_map_name,
-                to_street_name: e.to_street_name,
+                to_map_name: e.to.map_name,
+                to_street_name: e.to.street_name,
             });
         }
     }
-    (portals, hidden_portals)
-}
-
-/// Roughly where (x, y) is on the map: in words ("far right, lower") and as a cell of
-/// the minimap's 5x3 grid, which is `None` when the map has no minimap bounds.
-fn position_hint(minimap: Minimap, x: f64, y: f64) -> (String, Option<MapSpot>) {
-    if minimap.width <= 0.0 || minimap.height <= 0.0 {
-        return ("position unknown".into(), None);
+    for (mark, landing) in &teleports {
+        sorted.marks[*mark].lands_at = spots
+            .iter()
+            .find(|spot| spot.name == *landing)
+            .map(|spot| Landing { at: spot.at, mark: spot.mark, both_ways: false });
     }
-    let across = (x + minimap.center_x) / minimap.width;
-    let down = (y + minimap.center_y) / minimap.height;
-    let column: u8 = match across {
-        a if a < 0.2 => 0,
-        a if a < 0.4 => 1,
-        a if a < 0.6 => 2,
-        a if a < 0.8 => 3,
-        _ => 4,
-    };
-    let row: u8 = match down {
-        d if d < 1.0 / 3.0 => 0,
-        d if d < 2.0 / 3.0 => 1,
-        _ => 2,
-    };
-    let horizontal = ["far left", "left", "centre", "right", "far right"][column as usize];
-    let vertical = ["upper", "middle", "lower"][row as usize];
-    (format!("{horizontal}, {vertical}"), Some(MapSpot { column, row }))
+    // A pair: each lands at the other's mark.
+    let lands_at_mark = |from: usize| sorted.marks[from].lands_at.and_then(|landing| landing.mark);
+    let pairs: Vec<usize> =
+        teleports.iter().map(|&(mark, _)| mark).filter(|&mark| lands_at_mark(mark).and_then(lands_at_mark) == Some(mark)).collect();
+    for mark in pairs {
+        if let Some(landing) = &mut sorted.marks[mark].lands_at {
+            landing.both_ways = true;
+        }
+    }
+    sorted
 }

@@ -64,7 +64,7 @@ pub fn panel_press(control: PanelControl, commands: State<'_, Sender<Command>>) 
     let _ = commands.send(Command::Press(control));
 }
 
-/// A click on a listed mob's name in the panel (its MeowDB ID): open its MeowDB page.
+/// A click on a listed mob's name in the panel (its ID): open its MeowDB page.
 #[tauri::command]
 pub fn open_mob_page(id: String, commands: State<'_, Sender<Command>>) {
     let _ = commands.send(Command::OpenMobPage(id));
@@ -95,7 +95,7 @@ pub fn search_enter(commands: State<'_, Sender<Command>>) {
     act(&commands, Action::SearchEnter);
 }
 
-/// A click on a suggested mob or a listed map (its MeowDB ID): pick it.
+/// A click on a suggested mob or a listed map (its ID): pick it.
 #[tauri::command]
 pub fn search_pick(id: String, commands: State<'_, Sender<Command>>) {
     let _ = commands.send(Command::SearchPick(id));
@@ -107,13 +107,13 @@ pub fn search_escape(commands: State<'_, Sender<Command>>) {
     act(&commands, Action::SearchEscape);
 }
 
-/// The Hunting section's 🔍: the Hunting Target mob's map list, to pick another map.
+/// The Navigation section's 🔍: the Hunting Target mob's map list, to pick another map.
 #[tauri::command]
 pub fn hunting_reopen(commands: State<'_, Sender<Command>>) {
     act(&commands, Action::ReopenMapList);
 }
 
-/// The Hunting section's ×: clear the Hunting Target.
+/// The Navigation section's ×: clear the Hunting Target.
 #[tauri::command]
 pub fn hunting_clear(commands: State<'_, Sender<Command>>) {
     act(&commands, Action::ClearHuntingTarget);
@@ -131,7 +131,7 @@ pub fn search_toggle_teleport_scrolls(commands: State<'_, Sender<Command>>) {
     act(&commands, Action::ToggleTeleportScrolls);
 }
 
-/// A click on the Hidden Portals or Mobs heading: collapse that section, or open it.
+/// A click on the Map, Navigation or Mobs heading: collapse that section, or open it.
 #[tauri::command]
 pub fn panel_toggle_section(section: Section, commands: State<'_, Sender<Command>>) {
     act(&commands, Action::ToggleSection(section));

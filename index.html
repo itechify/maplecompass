@@ -47,58 +47,43 @@
         </div>
         <p class="note" id="recovery" role="status" hidden></p>
         <p class="note problem" id="hotkey-problem" role="status" hidden></p>
-        <section id="data" hidden>
-          <section class="candidates" id="candidates" hidden>
-            <p class="note" id="candidates-note"></p>
-            <ol id="candidate-rows"></ol>
-          </section>
-          <p class="note" id="note" role="status"></p>
-          <div class="facts" id="facts">
-            <section class="portals" id="portals">
-              <h2>
-                <button type="button" class="section-toggle" id="portals-toggle" data-section="hiddenPortals" aria-expanded="true">
-                  <span class="section-name">Hidden Portals</span>
-                  <span class="section-count" id="portals-toggle-count" hidden></span>
-                  <span class="fold" aria-hidden="true">
-                    <svg viewBox="0 0 16 16"><path class="bar" d="M4 8h8" /><path class="post" d="M8 4v8" /></svg>
-                  </span>
-                </button>
-              </h2>
-              <p class="none" id="no-portals">None on this map</p>
-              <ul id="portal-rows"></ul>
-            </section>
-            <section class="map-mobs" id="map-mobs">
-              <h2>
-                <button type="button" class="section-toggle" id="mobs-toggle" data-section="mobs" aria-expanded="true">
-                  <span class="section-name">Mobs</span>
-                  <span class="section-count" id="mobs-toggle-count" hidden></span>
-                  <span class="fold" aria-hidden="true">
-                    <svg viewBox="0 0 16 16"><path class="bar" d="M4 8h8" /><path class="post" d="M8 4v8" /></svg>
-                  </span>
-                </button>
-              </h2>
-              <p class="none" id="no-mobs">No mobs on this map</p>
-              <div class="summary" id="summary">
-                <span class="label">EXP/h</span>
-                <span class="value" id="exp-solo"></span><span class="unit">solo</span>
-                <span class="value" id="exp-party"></span><span class="unit" title="Party of six or more players">6+ party</span>
-                <span class="label">Mobs/h</span>
-                <span class="value" id="mobs-solo"></span><span class="unit">solo</span>
-                <span class="value" id="mobs-party"></span><span class="unit" title="Party of six or more players">6+ party</span>
-              </div>
-              <table class="mobs" id="mobs">
-                <thead>
-                  <tr><th>Mob</th><th>Lv</th><th>HP</th><th>EXP</th><th title="Share of all mob spawns on this Map" aria-label="Spawn Share">Share</th></tr>
-                </thead>
-                <tbody id="mob-rows"></tbody>
-              </table>
-              <p class="more" id="more-mobs" hidden></p>
-            </section>
-          </div>
+        <section class="candidates" id="candidates" hidden>
+          <p class="note" id="candidates-note"></p>
+          <ol id="candidate-rows"></ol>
         </section>
-        <section class="hunting" id="hunting" aria-labelledby="hunting-title" hidden>
-          <div class="section-head">
-            <h2 id="hunting-title"></h2>
+        <p class="note" id="note" role="status" hidden></p>
+        <!-- The map's sections and the Navigation section sit in the view's own column, so the
+             route there gives way to everything else when the panel runs out of room. -->
+        <section class="portals" id="portals" aria-labelledby="portals-name" hidden>
+          <h2>
+            <button type="button" class="section-toggle" id="portals-toggle" data-section="hiddenPortals" aria-expanded="true">
+              <span class="section-name" id="portals-name">Map</span>
+              <span class="fold" aria-hidden="true">
+                <svg viewBox="0 0 16 16"><path class="bar" d="M4 8h8" /><path class="post" d="M8 4v8" /></svg>
+              </span>
+            </button>
+          </h2>
+          <div class="map-preview" id="map-preview" hidden>
+            <div class="map-picture" id="map-picture" role="img">
+              <svg class="map-marks" id="map-marks" aria-hidden="true"></svg>
+            </div>
+            <p class="map-loading" id="map-loading">Loading map…</p>
+          </div>
+          <p class="note problem" id="map-failed" hidden>Couldn't load the map picture</p>
+          <ul id="portal-rows"></ul>
+        </section>
+        <section class="navigation" id="navigation" aria-labelledby="navigation-name" hidden>
+          <h2>
+            <button type="button" class="section-toggle" id="navigation-toggle" data-section="navigation" aria-expanded="true">
+              <span class="section-name" id="navigation-name">Navigation</span>
+              <span class="fold" aria-hidden="true">
+                <svg viewBox="0 0 16 16"><path class="bar" d="M4 8h8" /><path class="post" d="M8 4v8" /></svg>
+              </span>
+            </button>
+          </h2>
+          <div class="section-head target-head">
+            <div class="target-sprite" id="hunting-sprite"></div>
+            <h3 class="target-title" id="hunting-title"></h3>
             <button type="button" class="icon-button light" id="hunting-reopen" aria-label="Pick another map for this mob" title="Pick another map for this mob">
               <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.25" /><path d="M10.2 10.2 13.5 13.5" /></svg>
             </button>
@@ -119,14 +104,38 @@
             <p class="arrival-here">You're here</p>
             <p class="arrival-trip" id="hunting-trip" hidden></p>
           </div>
-          <p class="search-credit" id="hunting-credit" hidden></p>
         </section>
-        <div class="crawl" id="crawl-progress" role="status" hidden>
-          <p class="note crawl-text"></p>
-          <div class="gauge" role="progressbar" aria-label="Maps known" aria-valuemin="0"><span class="gauge-fill"></span></div>
-        </div>
+        <section class="map-mobs" id="map-mobs" aria-labelledby="mobs-name" hidden>
+          <h2>
+            <button type="button" class="section-toggle" id="mobs-toggle" data-section="mobs" aria-expanded="true">
+              <span class="section-name" id="mobs-name">Mobs</span>
+              <span class="section-count" id="mobs-toggle-count" hidden></span>
+              <span class="fold" aria-hidden="true">
+                <svg viewBox="0 0 16 16"><path class="bar" d="M4 8h8" /><path class="post" d="M8 4v8" /></svg>
+              </span>
+            </button>
+          </h2>
+          <p class="none" id="no-mobs">No mobs on this map</p>
+          <div class="summary" id="summary">
+            <span class="label">EXP/h</span>
+            <span class="value" id="exp-solo"></span><span class="unit">solo</span>
+            <span class="value" id="exp-party"></span><span class="unit" title="Party of six or more players">6+ party</span>
+            <span class="label">Mobs/h</span>
+            <span class="value" id="mobs-solo"></span><span class="unit">solo</span>
+            <span class="value" id="mobs-party"></span><span class="unit" title="Party of six or more players">6+ party</span>
+          </div>
+          <table class="mobs" id="mobs">
+            <thead>
+              <tr><th>Mob</th><th>Lv</th><th>HP</th><th>EXP</th><th title="Share of all mob spawns on this Map" aria-label="Spawn Share">Share</th></tr>
+            </thead>
+            <tbody id="mob-rows"></tbody>
+          </table>
+          <p class="more" id="more-mobs" hidden></p>
+        </section>
         <footer id="footer" hidden>
-          <span id="credit"></span>
+          <span class="credit" id="credit" role="img">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" /><path d="M8 7.4v3.9" /><circle class="dot" cx="8" cy="4.9" r=".95" /></svg>
+          </span>
         </footer>
       </div>
       <section class="view search-view" id="search-view" aria-labelledby="search-title" hidden>
@@ -166,15 +175,11 @@
             <label title="Taxi rides between Lith Harbor, Henesys, Ellinia, Kerning City and Perion, one map change each">
               <input type="checkbox" id="taxis" /> Taxis
             </label>
-            <label title="A scroll to the map's nearest town, or to Henesys, Ellinia, Perion, Kerning City, Lith Harbor, Sleepywood, Orbis or El Nath, one map change each">
+            <label title="A scroll to the map's nearest town, or to Henesys, Ellinia, Perion, Kerning City, Lith Harbor or Sleepywood, one map change each">
               <input type="checkbox" id="teleport-scrolls" /> Teleport Scrolls
             </label>
           </fieldset>
           <p class="keys">↑ ↓ choose a map · Enter or a click makes it your Hunting Target · Esc goes back</p>
-        </div>
-        <div class="crawl" id="search-crawl" role="status" hidden>
-          <p class="note crawl-text"></p>
-          <div class="gauge" role="progressbar" aria-label="Maps known" aria-valuemin="0"><span class="gauge-fill"></span></div>
         </div>
         <p class="search-credit" id="search-credit" hidden></p>
       </section>
@@ -202,6 +207,7 @@
       <div class="grip right" data-resize="East" title="Drag to resize" aria-hidden="true"></div>
       <!-- The Mob Card of the mob whose name the pointer rests on, over the panel's content. -->
       <div class="mob-card" id="mob-card" role="tooltip" hidden></div>
+      <div class="mark-card" id="mark-card" role="tooltip" hidden></div>
     </main>
     <div class="icon" id="icon" title="Click to expand" draggable="false">
       <img class="art" src="/assets/icon.png" alt="MapleCompass" draggable="false" />

@@ -1,4 +1,4 @@
-//! Writing our own files (settings, MeowDB cache).
+//! Writing our own files (settings, Personal Bests, caches).
 
 use std::io::Write;
 use std::path::Path;

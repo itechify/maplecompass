@@ -1,5 +1,5 @@
 ---
-status: accepted, superseded in part by ADR-0004 (map pages are now crawled ahead of time)
+status: superseded in part by ADR-0004 (map pages were crawled ahead of time), then by ADR-0008 for maps and mobs, which come from OSMS Data Explorer's files. ADR-0008 also lifts its ban on a public release. Saved Copies stay, and its honest user agent and credit still hold for Item Lookup's MeowDB search (ADR-0007)
 ---
 
 # Fetch map data live from MeowDB; get permission before public release

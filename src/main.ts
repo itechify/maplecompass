@@ -2,7 +2,17 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { dayText } from "./dates";
+import { byId, cardTop, span } from "./dom";
+import { LOADING_MAP_LIST, recognitionProblem, type Recognition } from "./recognition";
 import type { ExpTracking } from "./exp-tracking";
+import {
+  initMapPreview,
+  layOutMapPreview,
+  renderMapPreview,
+  renderPortalRows,
+  type HiddenPortal,
+  type MapPreview,
+} from "./map-preview";
 import {
   HOTKEY_NAMES,
   KEY_ONLY,
@@ -18,7 +28,6 @@ import {
 } from "./hotkeys";
 import {
   TIER_NAMES,
-  crawlLine,
   density,
   distanceText,
   distanceWithTravel,
@@ -48,21 +57,6 @@ type Mob = {
   spawnSharePercent: number;
 };
 
-/** Mirror of `compass_core::HiddenPortal`. */
-type HiddenPortal = {
-  name: string;
-  toMapId: string;
-  toMapName: string;
-  toStreetName: string;
-  toHiddenStreet: boolean;
-  quest: boolean;
-  position: string;
-  spot: MapSpot | null;
-};
-
-/** Mirror of `compass_core::MapSpot`: a cell of the minimap's 5x3 grid. */
-type MapSpot = { column: number; row: number };
-
 /** Mirror of `compass_core::LevelRange`. */
 type LevelRange = { lowest: number; highest: number };
 
@@ -76,16 +70,19 @@ type MapData = {
   moreMobs: { count: number; levels: LevelRange } | null;
 };
 
-/** Mirror of `compass_core::Section`: a section the player can collapse to its heading. */
-type Section = "hiddenPortals" | "mobs";
+/**
+ * Mirror of `compass_core::Section`: a section the player can collapse to its heading. The
+ * Map section is `hiddenPortals`, as the settings have always named it.
+ */
+type Section = "hiddenPortals" | "mobs" | "navigation";
 
 /** Mirror of `compass_core::MapDataStatus`. */
 type MapDataStatus =
-  | { status: "noMap" | "loading" | "unavailable" | "formatChanged" }
+  | { status: "noMap" }
   | ({ status: "ready" } & MapData)
   | ({ status: "savedCopy"; savedAtUnixMs: number } & MapData);
 
-/** Mirror of `compass_core::MobDetails`: a figure MeowDB shows as "—" is null. */
+/** Mirror of `compass_core::MobDetails`: a figure shown as "—" is null. */
 type MobDetails = {
   elements: { weak: string[]; strong: string[]; immune: string[] };
   touchDamage: { min: number; max: number } | null;
@@ -95,21 +92,11 @@ type MobDetails = {
   physicalDefense: number | null;
   magicDefense: number | null;
   speed: string;
-  movement: string;
   hpPerExp: { hundredths: number; rank: number; ranked: number } | null;
 };
 
 /** Mirror of `compass_core::MobCard`: one listed mob's Mob Card. */
-type MobCard = { id: string; url: string; image: string | null } & (
-  | { status: "loading" | "unavailable" | "formatChanged" }
-  | ({ status: "ready" } & MobDetails)
-  | ({ status: "savedCopy"; savedAtUnixMs: number } & MobDetails)
-);
-
-/** Mirror of `compass_core::Recognition`. */
-type Recognition =
-  | { status: "starting" | "ready" | "unavailable" }
-  | { status: "savedCopy"; savedAtUnixMs: number };
+type MobCard = { id: string; url: string; image: string | null } & MobDetails;
 
 /** Mirror of `compass_core::Outline`. */
 type Outline = {
@@ -120,7 +107,7 @@ type Outline = {
 
 /** Mirror of `compass_core::Candidates`. */
 type Candidates = {
-  maps: { id: string; outline: Outline | null }[];
+  maps: { id: string; outline: Outline }[];
   shown: number;
   chosen: boolean;
 };
@@ -136,6 +123,8 @@ type PanelState = {
   notSure: boolean;
   candidates: Candidates | null;
   data: MapDataStatus;
+  /** The shown map's Map Preview; null while there is none, or it isn't settled which map it is. */
+  mapPreview: MapPreview | null;
   credit: string | null;
   /** The Mob Card of each mob the panel lists, in its order. */
   mobCards: MobCard[];
@@ -165,11 +154,9 @@ type PanelState = {
   search: SearchState;
 };
 
-const byId = (id: string) => document.getElementById(id)!;
 const panelEl = byId("panel");
 const street = byId("street");
 const map = byId("map");
-const dataEl = byId("data");
 const note = byId("note");
 const candidatesEl = byId("candidates");
 const candidatesNote = byId("candidates-note");
@@ -178,8 +165,6 @@ const summary = byId("summary");
 const mobsTable = byId("mobs");
 const mobRows = byId("mob-rows");
 const portals = byId("portals");
-const noPortals = byId("no-portals");
-const portalRows = byId("portal-rows");
 const footer = byId("footer");
 const credit = byId("credit");
 const hotkeyProblem = byId("hotkey-problem");
@@ -190,25 +175,25 @@ const noMobs = byId("no-mobs");
 const moreMobs = byId("more-mobs");
 const portalsToggle = byId("portals-toggle") as HTMLButtonElement;
 const mobsToggle = byId("mobs-toggle") as HTMLButtonElement;
+const navigationToggle = byId("navigation-toggle") as HTMLButtonElement;
 const mobCardEl = byId("mob-card");
 const iconCount = byId("icon-count");
 const iconAlert = byId("icon-alert");
 const recovery = byId("recovery");
 const uncertainty = byId("uncertainty");
-const crawlProgress = byId("crawl-progress");
 const normalView = byId("normal-view");
 const toolbar = byId("toolbar");
 const icon = document.querySelector<HTMLElement>(".icon")!;
 const nextCandidate = byId("next-candidate");
 const titlebar = byId("titlebar");
-const hunting = byId("hunting");
+const navigation = byId("navigation");
+const huntingSprite = byId("hunting-sprite");
 const huntingTitle = byId("hunting-title");
 const huntingReopen = byId("hunting-reopen");
 const huntingClear = byId("hunting-clear");
 const huntingRouteTitle = byId("hunting-route-title");
 const huntingRoute = byId("hunting-route");
 const huntingRouteNone = byId("hunting-route-none");
-const huntingCredit = byId("hunting-credit");
 const huntingArrival = byId("hunting-arrival");
 const huntingTrip = byId("hunting-trip");
 const searchView = byId("search-view");
@@ -225,7 +210,6 @@ const searchNearest = byId("search-nearest");
 const searchNote = byId("search-note");
 const resultsBox = byId("results-box");
 const resultsTable = byId("search-results") as HTMLTableElement;
-const searchCrawl = byId("search-crawl");
 const searchCredit = byId("search-credit");
 const settingsView = byId("settings-view");
 const settingsBack = byId("settings-back");
@@ -240,7 +224,7 @@ let draggable = false;
 
 /**
  * What each part of the panel was last rendered from. The panel state comes again
- * whenever anything in it changes (the world crawl's progress, say): a part whose own
+ * whenever anything in it changes (the EXP tracking's figures, say): a part whose own
  * inputs didn't change keeps its rows, and the scroll and hover on them.
  */
 const renderedFrom = new Map<string, string>();
@@ -290,80 +274,11 @@ function cell(text: string): HTMLTableCellElement {
   return td;
 }
 
-function span(className: string, text: string): HTMLSpanElement {
-  const el = document.createElement("span");
-  el.className = className;
-  el.textContent = text;
-  return el;
-}
-
-const SVG = "http://www.w3.org/2000/svg";
-
-function svg<K extends keyof SVGElementTagNameMap>(
-  tag: K,
-  attributes: Record<string, string | number>,
-): SVGElementTagNameMap[K] {
-  const el = document.createElementNS(SVG, tag);
-  for (const [name, value] of Object.entries(attributes)) el.setAttribute(name, String(value));
-  return el;
-}
-
-/** The minimap's 5x3 grid in miniature, with the game's portal ring in the portal's cell. */
-const CELL = 9;
-function miniMap(spot: MapSpot | null): SVGSVGElement {
-  const [width, height] = [5 * CELL, 3 * CELL];
-  const el = svg("svg", { class: "minimap", viewBox: `-1 -1 ${width + 2} ${height + 2}` });
-  el.setAttribute("aria-hidden", "true");
-  el.classList.toggle("unknown", !spot);
-  // Field, lit cell, grid, then the frame over them, so no edge cell covers its border.
-  el.append(svg("rect", { class: "field", x: 0, y: 0, width, height, rx: 1.5 }));
-  if (spot) {
-    el.append(
-      svg("rect", { class: "cell", x: spot.column * CELL, y: spot.row * CELL, width: CELL, height: CELL }),
-    );
-  }
-  for (let c = 1; c < 5; c++) {
-    el.append(svg("line", { class: "grid", x1: c * CELL, y1: 0, x2: c * CELL, y2: height }));
-  }
-  for (let r = 1; r < 3; r++) {
-    el.append(svg("line", { class: "grid", x1: 0, y1: r * CELL, x2: width, y2: r * CELL }));
-  }
-  el.append(svg("rect", { class: "frame", x: 0, y: 0, width, height, rx: 1.5 }));
-  if (spot) {
-    const [cx, cy] = [(spot.column + 0.5) * CELL, (spot.row + 0.5) * CELL];
-    el.append(
-      svg("circle", { class: "ring", cx, cy, r: 3.3 }),
-      svg("circle", { class: "core", cx, cy, r: 1.5 }),
-    );
-  }
-  return el;
-}
-
-/** A tiny minimap, then "Northern Top of Construction Site [Hidden Street]" over "Right, upper". */
-function portalRow(portal: HiddenPortal): HTMLLIElement {
-  const row = document.createElement("li");
-  const text = document.createElement("div");
-  const to = document.createElement("div");
-  to.className = "dest";
-  to.append(span("to", portal.toMapName));
-  if (portal.toHiddenStreet) to.append(span("tag", "Hidden Street"));
-  if (portal.quest) to.append(span("tag quest", "Quest"));
-  text.append(to, span("where", portal.position));
-  row.append(miniMap(portal.spot), text);
-  return row;
-}
-
 /** Keep player-recognizable clues ahead of the secondary map ID. */
-function candidateRow(id: string, outline: Outline | null): HTMLLIElement {
+function candidateRow(id: string, outline: Outline): HTMLLIElement {
   const row = document.createElement("li");
   const facts = document.createElement("div");
   facts.className = "candidate-facts";
-  if (!outline) {
-    row.append(span("candidate-mobs", "Comparison data unavailable"));
-    facts.append(span("candidate-id", `Map ${id}`));
-    row.append(facts);
-    return row;
-  }
   const { mobLevels, firstMobs, hiddenPortals } = outline;
   row.append(span("candidate-mobs", firstMobs.length ? firstMobs.join(", ") : "No mobs"));
   if (mobLevels) {
@@ -382,35 +297,30 @@ function candidateRow(id: string, outline: Outline | null): HTMLLIElement {
 /** "7 Oct 2026", in the player's time zone. */
 const savedOn = (unixMs: number) => dayText(new Date(unixMs), true);
 
-/** The note shown in place of (or above) the map's data. */
-function dataNote(data: MapDataStatus, recognition: Recognition, sourceHint: string): string {
+/** The note shown above the map's data: only that it comes from a saved copy over a week old. */
+function dataNote(data: MapDataStatus): string {
   // A map without mobs says so in its Mobs section, not here.
   switch (data.status) {
-    case "loading":
-      return "Loading MeowDB data…";
-    case "unavailable":
-      return `Couldn't reach MeowDB. Check your connection, then restart MapleCompass to retry.${sourceHint}`;
-    case "formatChanged":
-      return `MeowDB's page format has changed. MapleCompass needs an update to read it.${sourceHint}`;
     case "savedCopy":
-      return `MeowDB unreachable — showing a saved copy from ${savedOn(data.savedAtUnixMs)}`;
+      return `OSMS Data Explorer unreachable — showing a saved copy from ${savedOn(data.savedAtUnixMs)}`;
     case "ready":
-      if (recognition.status === "savedCopy") {
-        return `MeowDB unreachable — map list from a saved copy from ${savedOn(recognition.savedAtUnixMs)}`;
-      }
-      return "";
     case "noMap":
       return "";
   }
 }
 
+/** Whether the panel shows a map, and so its notes and its Map and Mobs sections. */
+const mapShown = (panel: PanelState) => panel.gameFound && !!panel.map;
+
 function renderData(panel: PanelState) {
   const { data } = panel;
-  const shown = panel.gameFound && !!panel.map;
-  dataEl.hidden = !shown;
-  footer.hidden = !shown;
-  if (!shown) return;
-  const inputs = [data, panel.candidates, panel.collapsedSections, panel.credit, panel.recognition];
+  if (!mapShown(panel)) {
+    for (const part of [candidatesEl, note, portals, mapMobs]) part.hidden = true;
+    renderMapPreview(null, "");
+    renderedFrom.delete("data");
+    return;
+  }
+  const inputs = [data, panel.mapPreview, panel.candidates, panel.collapsedSections, panel.recognition];
   if (!changed("data", ...inputs, panel.hotkeys, panel.unavailableHotkeys)) return;
 
   const { candidates } = panel;
@@ -436,19 +346,19 @@ function renderData(panel: PanelState) {
     );
   }
 
-  const sourceAvailable = hotkeyAvailable(panel.hotkeys.openMeowdbPage, panel.unavailableHotkeys);
-  const sourceHint = sourceAvailable ? ` ${keyLabel(panel.hotkeys.openMeowdbPage)} opens the source page.` : "";
-  note.textContent = dataNote(data, panel.recognition, sourceHint);
+  note.textContent = dataNote(data);
   note.hidden = note.textContent === "";
-  const problem = ["unavailable", "formatChanged", "savedCopy"].includes(data.status);
-  note.classList.toggle("problem", problem || panel.recognition.status === "savedCopy");
+  note.classList.toggle("problem", data.status === "savedCopy");
 
   const ready = data.status === "ready" || data.status === "savedCopy" ? data : null;
 
-  // Hidden Portals first: what the game won't show the player.
-  portals.hidden = !ready;
-  noPortals.hidden = !ready || ready.hiddenPortals.length > 0;
-  portalRows.replaceChildren(...(ready?.hiddenPortals ?? []).map(portalRow));
+  // The Map first: the map with every portal on it, then the Hidden Portals, what the game
+  // won't show the player. With neither picture (nor why it's missing) nor Hidden Portals,
+  // it has nothing to show and goes.
+  const hiddenPortals: HiddenPortal[] = ready?.hiddenPortals ?? [];
+  const pictured = renderMapPreview(ready ? panel.mapPreview : null, panel.map?.mapName ?? "");
+  portals.hidden = !ready || (!pictured && hiddenPortals.length === 0);
+  renderPortalRows(hiddenPortals, panel.mapPreview?.marks ?? []);
 
   mapMobs.hidden = !ready;
   noMobs.hidden = !ready || ready.listedMobs.length > 0;
@@ -492,22 +402,39 @@ function renderData(panel: PanelState) {
   moreMobs.hidden = !more;
   if (more) moreMobs.textContent = `+${more.count} more · ${levels(more.levels)} · all on MeowDB`;
 
-  // Each section collapses to its heading, which then says how many it holds. One with
-  // nothing to list has nothing to collapse: its heading and "None" show as ever.
+  // Each section collapses to its heading; Mobs then says how many it holds. With nothing
+  // to list, Mobs has nothing to collapse: its heading and "No mobs on this map" show as
+  // ever. The Map shows only with something in it.
   const mobCount = (ready?.listedMobs.length ?? 0) + (ready?.moreMobs?.count ?? 0);
-  foldSection(portals, portalsToggle, panel.collapsedSections.hiddenPortals, ready?.hiddenPortals.length ?? 0);
-  foldSection(mapMobs, mobsToggle, panel.collapsedSections.mobs, mobCount);
-
-  credit.textContent = panel.credit ?? "";
+  foldSection(portals, portalsToggle, panel.collapsedSections.hiddenPortals, true);
+  foldSection(mapMobs, mobsToggle, panel.collapsedSections.mobs, mobCount > 0, mobCount);
+  // Opened again, the picture is fitted to the section.
+  layOutMapPreview();
 }
 
-/** A section collapsed to its heading, or open; `count` is how many it lists. */
-function foldSection(section: HTMLElement, toggle: HTMLButtonElement, collapsed: boolean, count: number) {
-  const folded = collapsed && count > 0;
+/**
+ * The footer's info icon, whose tooltip is the credit, so it takes one small line: the
+ * panel's credit while a map is shown, or else search's while there is a Hunting Target.
+ * With nothing to credit, no footer.
+ */
+function renderCredit(panel: PanelState) {
+  const text = (mapShown(panel) ? panel.credit : null) ?? (panel.search.hunting ? panel.search.credit : null);
+  footer.hidden = !text;
+  credit.title = text ?? "";
+  credit.setAttribute("aria-label", text ?? "");
+}
+
+/**
+ * A section collapsed to its heading, or open. `holds` says whether it has anything to
+ * collapse; `count`, if given, is how many it lists, which its heading says while collapsed.
+ */
+function foldSection(section: HTMLElement, toggle: HTMLButtonElement, collapsed: boolean, holds: boolean, count?: number) {
+  const folded = collapsed && holds;
   section.classList.toggle("collapsed", folded);
-  toggle.disabled = count === 0;
+  toggle.disabled = !holds;
   toggle.setAttribute("aria-expanded", String(!folded));
-  toggle.title = count === 0 ? "" : folded ? "Show this section" : "Collapse to the heading";
+  toggle.title = !holds ? "" : folded ? "Show this section" : "Collapse to the heading";
+  if (count === undefined) return;
   const countEl = byId(`${toggle.id}-count`);
   countEl.hidden = !folded;
   countEl.textContent = String(count);
@@ -557,15 +484,46 @@ function renderToolbar(panel: PanelState) {
 }
 
 /**
- * The Hunting section, at the bottom of the normal view: the Hunting Target's mob and
- * map, the map's figures, and the route there from the map you're on, which scrolls
- * when the panel runs out of room. Its 🔍 reopens the mob's map list; its × clears it.
+ * The mob's animation in a square of its own, standing on its floor at its own size (drawn
+ * pixelated), or scaled down smoothly to fit, never up, as the Mob Card draws it. The
+ * square keeps its room while the animation loads, or when there is none.
  */
-function renderHunting(panel: PanelState) {
+function fillSprite(square: HTMLElement, url: string | null, scaleAbove: number) {
+  const img = square.querySelector("img");
+  if ((img?.getAttribute("src") ?? null) === url) return;
+  if (!url) {
+    square.replaceChildren();
+    return;
+  }
+  const next = document.createElement("img");
+  next.alt = "";
+  // Shrunk to fit, a sprite is smoothed: pixel doubling only works upward.
+  next.addEventListener("load", () =>
+    next.classList.toggle("scaled", next.naturalWidth > scaleAbove || next.naturalHeight > scaleAbove),
+  );
+  // No saved image after all: the square stays empty.
+  next.addEventListener("error", () => next.remove());
+  next.src = url;
+  square.replaceChildren(next);
+}
+
+/** The Navigation section's square for the Hunting Target mob's animation, in CSS px. */
+const TARGET_SPRITE = 40;
+
+/**
+ * The Navigation section, between the Map and the Mobs, while there is a Hunting Target:
+ * its mob (as OSMS animates it) and map, the map's figures, and the route there from the
+ * map you're on, which scrolls when the panel runs out of room; once you're there, that
+ * you've arrived. Its 🔍 reopens the mob's map list; its × clears it. It collapses to its
+ * heading like the map's sections.
+ */
+function renderNavigation(panel: PanelState) {
   const target: HuntingTarget | null = panel.search.hunting;
-  hunting.hidden = !target;
-  if (!target || !changed("hunting", target, panel.search.credit, panel.credit)) return;
+  navigation.hidden = !target;
+  if (!target || !changed("navigation", target, panel.collapsedSections.navigation)) return;
+  foldSection(navigation, navigationToggle, panel.collapsedSections.navigation, true);
   const { mob, map } = target;
+  fillSprite(huntingSprite, target.image, TARGET_SPRITE);
   // The mob on the first line, the map on the next.
   const mobLine = document.createElement("span");
   mobLine.className = "hunting-mob";
@@ -600,9 +558,6 @@ function renderHunting(panel: PanelState) {
   huntingArrival.hidden = !arrived;
   huntingTrip.textContent = trip ? tripLine(trip) : "";
   huntingTrip.hidden = !trip;
-  // The footer credits MeowDB whenever a map is shown; otherwise the section does.
-  huntingCredit.textContent = panel.search.credit ?? "";
-  huntingCredit.hidden = !panel.search.credit || !!panel.credit;
 }
 
 /**
@@ -621,13 +576,11 @@ function renderSearchView(panel: PanelState) {
   mobsStep.hidden = view !== "mobs";
   mapsStep.hidden = view !== "maps";
   // Before the lists, which scroll their highlight into what room is left.
-  // The world crawl, while it runs: search only knows the mobs on the maps known so far.
-  renderCrawl(searchCrawl, search, true);
   searchCredit.textContent = search.credit ?? "";
   searchCredit.hidden = !search.credit;
   if (view === "mobs") {
     searchTitle.textContent = "Search a mob";
-    renderMobs(search);
+    renderMobs(search, panel.recognition);
     // A fresh query box, and the typing goes to it.
     if (opened) {
       query.value = search.query;
@@ -811,9 +764,11 @@ function renderSettingsView(panel: PanelState) {
   if (target) settingsView.querySelector<HTMLElement>(`[data-focus="${target}"]`)?.focus({ preventScroll: true });
 }
 
-/** The first step: the suggestions (the highlighted one is what Enter picks). */
-function renderMobs(search: SearchState) {
-  if (!changed("suggestions", search.suggestions, search.highlighted, search.query, search.crawl.total)) return;
+/** The first step: the suggestions (the highlighted one is what Enter picks). Search knows no
+ *  mob until OSMS's file set is in, which `recognition` says. */
+function renderMobs(search: SearchState, recognition: Recognition) {
+  const loaded = recognition.status === "ready" || recognition.status === "savedCopy";
+  if (!changed("suggestions", search.suggestions, search.highlighted, search.query, loaded)) return;
   suggestions.replaceChildren(
     ...search.suggestions.map((mob, i) => {
       const row = document.createElement("li");
@@ -837,7 +792,7 @@ function renderMobs(search: SearchState) {
   } else {
     query.removeAttribute("aria-activedescendant");
   }
-  noMatch.textContent = search.crawl.total === 0 ? "Loading MeowDB's map list…" : "No known mob has that in its name.";
+  noMatch.textContent = loaded ? "No known mob has that in its name." : "Loading the map list…";
   noMatch.hidden = listed || search.query.trim() === "";
 }
 
@@ -864,24 +819,6 @@ function renderMaps(search: SearchState) {
   if (current) scrollWithin(resultsBox, current);
 }
 
-/**
- * The world crawl's line and gauge (`el`), while it runs and `shown`: "Mapping the world:
- * 312 of 422 maps known" over the game's gauge, filled to the share known. The fill eases
- * to each new count in CSS, through `--known`.
- */
-function renderCrawl(el: HTMLElement, search: SearchState, shown: boolean) {
-  const line = crawlLine(search);
-  el.hidden = !shown || !line;
-  if (el.hidden) return;
-  el.querySelector(".crawl-text")!.textContent = `Mapping the world: ${line}`;
-  const { known, total } = search.crawl;
-  const gauge = el.querySelector<HTMLElement>(".gauge")!;
-  gauge.setAttribute("aria-valuenow", String(known));
-  gauge.setAttribute("aria-valuemax", String(total));
-  gauge.setAttribute("aria-valuetext", line);
-  gauge.style.setProperty("--known", String(total > 0 ? known / total : 0));
-}
-
 /** Scroll `box` just enough to show `item`. Not `scrollIntoView`, which would scroll the overlay's page too. */
 function scrollWithin(box: HTMLElement, item: HTMLElement) {
   const outer = box.getBoundingClientRect();
@@ -900,6 +837,10 @@ function renderBadge(panel: PanelState) {
   badge.textContent = text ?? "";
   badge.classList.toggle("held", panel.expTracking.state !== "active");
 }
+
+// The Map Preview's card shows over the expanded panel's normal view only, and the panel
+// is measured again once its picture is in.
+initMapPreview({ cardAllowed: () => !!shownPanel?.expanded && step === null, laidOut: () => reportHeight() });
 
 /** How long the pointer rests on a mob's name before its Mob Card shows. */
 const MOB_CARD_DELAY_MS = 250;
@@ -974,49 +915,19 @@ function mobFigures(details: MobDetails): HTMLDListElement {
   return list;
 }
 
-/** The Mob Card's content: the mob, then its figures or why there are none. */
+/** The Mob Card's content: the mob, then its figures. */
 function mobCardContent(mob: Mob, card: MobCard): Node[] {
   const sprite = document.createElement("div");
   sprite.className = "mob-card-sprite";
-  if (card.image) {
-    const img = document.createElement("img");
-    img.alt = "";
-    // Shrunk to fit, a sprite is smoothed: pixel doubling only works upward.
-    img.addEventListener("load", () => img.classList.toggle("scaled", img.naturalWidth > 64 || img.naturalHeight > 64));
-    // No saved image after all: the box stays empty.
-    img.addEventListener("error", () => img.remove());
-    img.src = card.image;
-    sprite.append(img);
-  }
-  const ready = card.status === "ready" || card.status === "savedCopy" ? card : null;
+  fillSprite(sprite, card.image, 64);
   const who = document.createElement("div");
   who.className = "mob-card-who";
-  who.append(
-    span("mob-card-name", mob.name),
-    span("mob-card-gait", ready ? `Lv ${mob.level} · ${ready.speed} · ${ready.movement.toLowerCase()}` : `Lv ${mob.level}`),
-  );
-  if (ready) who.append(elementTags(ready.elements));
+  who.append(span("mob-card-name", mob.name), span("mob-card-gait", `Lv ${mob.level} · ${card.speed}`));
+  who.append(elementTags(card.elements));
   const head = document.createElement("div");
   head.className = "mob-card-head";
   head.append(sprite, who);
-  const note = (text: string, problem = false) => {
-    const p = document.createElement("p");
-    p.className = problem ? "note problem" : "note";
-    p.textContent = text;
-    return p;
-  };
-  switch (card.status) {
-    case "loading":
-      return [head, note("Loading from MeowDB…")];
-    case "unavailable":
-      return [head, note("Couldn't reach MeowDB. MapleCompass tries again in a few minutes.", true)];
-    case "formatChanged":
-      return [head, note("MeowDB's page for this mob has changed. Click its name to read it there.", true)];
-    case "ready":
-      return [head, mobFigures(card)];
-    case "savedCopy":
-      return [head, mobFigures(card), note(`MeowDB unreachable — saved copy from ${savedOn(card.savedAtUnixMs)}`, true)];
-  }
+  return [head, mobFigures(card)];
 }
 
 /** The space kept between the card and the hovered row, and the panel's edges. */
@@ -1047,21 +958,10 @@ function renderMobCard() {
     mobCardShown = shown;
   }
   mobCardEl.hidden = false;
-  const frame = panelEl.getBoundingClientRect();
   const row = (button.closest("tr") ?? button).getBoundingClientRect();
-  const bar = normalView.querySelector(".window-bar")?.getBoundingClientRect();
-  const height = mobCardEl.offsetHeight;
-  const highest = (bar ? bar.bottom - frame.top : 0) + MOB_CARD_GAP;
-  const lowest = panelEl.clientHeight - MOB_CARD_GAP - height;
-  const below = row.bottom - frame.top + MOB_CARD_GAP;
-  const above = row.top - frame.top - MOB_CARD_GAP - height;
-  const roomBelow = panelEl.clientHeight - MOB_CARD_GAP - below;
-  const roomAbove = row.top - frame.top - MOB_CARD_GAP - highest;
-  let top: number;
-  if (below <= lowest) top = below;
-  else if (above >= highest) top = above;
-  else top = roomBelow >= roomAbove ? below : above;
-  mobCardEl.style.top = `${Math.max(highest, Math.min(top, lowest))}px`;
+  const bar = normalView.querySelector(".window-bar");
+  const top = cardTop(panelEl, bar, row, mobCardEl.offsetHeight, MOB_CARD_GAP, "below");
+  mobCardEl.style.top = `${top}px`;
 }
 
 // Resting on a listed mob's name shows its Mob Card; clicking it opens its MeowDB page.
@@ -1084,7 +984,7 @@ function renderIcon(panel: PanelState) {
   iconAlert.hidden = !(
     panel.notSure ||
     (panel.candidates && !panel.candidates.chosen) ||
-    ["unavailable", "formatChanged", "savedCopy"].includes(panel.data.status) ||
+    panel.data.status === "savedCopy" ||
     panel.setup.needed === "firstRun" ||
     panel.setup.needed === "resolutionChanged" ||
     panel.expTracking.state === "unreadable"
@@ -1110,11 +1010,20 @@ function render(panel: PanelState) {
     : hotkeys.setup === ""
       ? "Re-mark from Help & Setup, the ? at the top of the panel."
       : "Setup shortcut unavailable. Close the app using it, or change it in Settings (the gear at the top of the panel).";
+  // Why it isn't sure is the chip's tooltip, not a note taking room under the title.
+  const doubt = !doubtful
+    ? ""
+    : panel.candidates && !panel.candidates.chosen
+      ? `${panel.candidates.maps.length} maps share this title; not sure which you're on.`
+      : `Title not confirmed. Keep both minimap title lines visible. ${setupHint}`;
+  uncertainty.title = doubt;
+  uncertainty.setAttribute("aria-label", doubt ? `Not sure: ${doubt}` : "Current Map is uncertain");
   // Without a map, the title bar holds the status and the note under it what to do; the
   // Street Name slot stays the Street Name's.
   recovery.textContent = "";
   let problem = false;
   street.textContent = "";
+  const unrecognisable = recognitionProblem(recognition);
   if (!panel.gameFound) {
     map.textContent = `Looking for ${panel.gameWindowTitle}…`;
   } else if (panel.setup.needed === "firstRun" || panel.setup.needed === "resolutionChanged") {
@@ -1123,20 +1032,17 @@ function render(panel: PanelState) {
       panel.setup.needed === "firstRun" ? "Finish setup to start" : "The game window changed size";
     recovery.textContent = `Mark the minimap title. ${setupHint}`;
     problem = panel.setup.needed === "resolutionChanged";
-  } else if (recognition.status === "unavailable") {
+  } else if (unrecognisable) {
     map.textContent = "Map recognition unavailable";
-    recovery.textContent = "Couldn't load the map list from MeowDB. Check your connection. The map list retries every minute.";
+    recovery.textContent = unrecognisable;
     problem = true;
   } else if (current) {
     street.textContent = current.streetName;
     map.textContent = current.mapName;
-    if (notSure && !panel.candidates) {
-      recovery.textContent = `Title not confirmed. Keep both minimap title lines visible. ${setupHint}`;
-    }
   } else {
     map.textContent = "Reading the minimap title…";
     recovery.textContent = recognition.status === "starting"
-      ? "Loading MeowDB's map list…"
+      ? LOADING_MAP_LIST
       : `Keep the minimap open with both title lines visible. If this persists, ${setupHint.charAt(0).toLowerCase() + setupHint.slice(1)}`;
   }
   recovery.hidden = recovery.textContent === "";
@@ -1149,11 +1055,9 @@ function render(panel: PanelState) {
   hotkeyProblem.textContent = causes &&
     `${causes} ${taken ? "Close the other app, or change" : "Change"} ${them} in Settings (the gear at the top of the panel).`;
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
-  // The world crawl, while it runs, with or without a search: "Mapping the world: 312
-  // of 422 maps known". Search can only find mobs on the maps known so far.
-  renderCrawl(crawlProgress, panel.search, panel.gameFound);
   renderData(panel);
-  renderHunting(panel);
+  renderNavigation(panel);
+  renderCredit(panel);
   renderSearchView(panel);
   renderSettingsView(panel);
   shownPanel = panel;
@@ -1260,7 +1164,7 @@ searchBack.addEventListener("click", () => invoke("search_escape"));
 huntingReopen.addEventListener("click", () => invoke("hunting_reopen"));
 huntingClear.addEventListener("click", () => invoke("hunting_clear"));
 // A click on a section's heading collapses the section to it, or opens it again.
-for (const toggle of [portalsToggle, mobsToggle]) {
+for (const toggle of [portalsToggle, navigationToggle, mobsToggle]) {
   toggle.addEventListener("click", () => invoke("panel_toggle_section", { section: toggle.dataset.section }));
 }
 

@@ -1,33 +1,36 @@
-//! Small hand-built worlds for mob search: a made-up map index and each map's page,
-//! served by a [`FakeSource`] for both the shown map and the world crawl.
+//! Small hand-built worlds for mob search: made-up maps written out in OSMS's shape, the
+//! map list and every map's data.
 
 use super::FakeSource;
-use compass_core::{Action, Compass, MapData, MapEntry, Mob, PanelState, Portal, PortalKind, SearchResult};
-use std::task::Poll;
+use super::osms::{self, Spawn};
+use compass_core::{Action, Compass, Mob, PanelState, PortalKind, SearchResult};
 
 /// The search hotkey (the default).
 pub const SEARCH: &str = "ctrl+shift+f";
 
-/// A map in a hand-built world.
+/// A map in a hand-built world, and the mobs it holds.
+#[derive(Debug, Clone)]
 pub struct WorldMap {
-    pub entry: MapEntry,
-    pub page: MapData,
+    pub map: osms::Map,
+    pub mobs: Vec<osms::Mob>,
 }
 
-/// A map on Victoria Island with this Mob Rate (hundredths) and these mobs.
+/// A map on Victoria Road, Victoria Island, with this Mob Rate (hundredths) and these
+/// mobs (their Spawn Counts as spawn points).
 pub fn map(id: &str, name: &str, mob_rate_percent: u32, mobs: Vec<Mob>) -> WorldMap {
-    WorldMap {
-        entry: MapEntry {
-            id: id.into(),
-            street_name: "Victoria Road".into(),
-            map_name: name.into(),
-            region: "Victoria Island".into(),
-        },
-        page: MapData { mobs, mob_rate_percent, ..MapData::default() },
-    }
+    let mut map = osms::map(id.parse().expect("a map ID"), "Victoria Road", name).mob_rate(f64::from(mob_rate_percent) / 100.0);
+    map.spawns = mobs
+        .iter()
+        .map(|mob| Spawn { mob: mob.id.parse().expect("a mob ID"), points: mob.spawn_count, timer: None })
+        .collect();
+    let mobs = mobs
+        .into_iter()
+        .map(|mob| osms::mob(mob.id.parse().expect("a mob ID"), &mob.name, mob.level, mob.hp, mob.exp))
+        .collect();
+    WorldMap { map, mobs }
 }
 
-/// A mob with MeowDB ID `id`, `spawn_count` of it on the map.
+/// A mob with ID `id`, `spawn_count` of it on the map.
 pub fn mob(id: &str, name: &str, level: u32, spawn_count: u32) -> Mob {
     Mob { id: id.into(), name: name.into(), level, hp: 0, exp: 0, spawn_count, spawn_share_percent: 0 }
 }
@@ -37,16 +40,26 @@ pub fn orange(spawn_count: u32) -> Mob {
 }
 
 impl WorldMap {
-    /// The same map with a portal of this kind to map `to`.
+    /// The same map with a portal of this kind to map `to`. A Door is an invisible portal
+    /// on a Town, so the map becomes one.
     pub fn exit(mut self, kind: PortalKind, to: &str) -> Self {
-        let name = format!("portal{}", self.page.portals.len());
-        self.page.portals.push(Portal { name, to_map_id: to.into(), kind });
+        let name = format!("portal{}", self.map.portals.len());
+        let kind = match kind {
+            PortalKind::Visible => 2,
+            PortalKind::Hidden => 10,
+            PortalKind::Quest => 11,
+            PortalKind::Door => {
+                self.map.town = true;
+                1
+            }
+        };
+        self.map = self.map.portal(&name, kind, to.parse().expect("a map ID"));
         self
     }
 
-    /// The same map in another region of MeowDB's index ("Event", "Hidden Street", …).
+    /// The same map in another of OSMS's regions ("Event", "Dev", …).
     pub fn in_region(mut self, region: &str) -> Self {
-        self.entry.region = region.into();
+        self.map.region = region.into();
         self
     }
 
@@ -54,22 +67,32 @@ impl WorldMap {
     pub fn to(self, to: &[&str]) -> Self {
         to.iter().fold(self, |map, to| map.exit(PortalKind::Visible, to))
     }
+
+    /// The same map with map `town` as its nearest town.
+    pub fn returning_to(mut self, town: &str) -> Self {
+        self.map.return_map = Some(town.parse().expect("a map ID"));
+        self
+    }
 }
 
-/// A source serving a hand-built world: its index, and each map's page for the crawl.
+/// The OSMS world of these maps, each mob once.
+pub fn osms_world(maps: Vec<WorldMap>) -> osms::World {
+    let mut world = osms::world(Vec::new(), Vec::new());
+    for WorldMap { map, mobs } in maps {
+        world = mobs.into_iter().fold(world.with(map), osms::World::with_mob);
+    }
+    world
+}
+
+/// A source serving a hand-built world as OSMS's file set.
 pub fn world(maps: Vec<WorldMap>) -> FakeSource {
-    let index = maps.iter().map(|m| m.entry.clone()).collect();
-    let pages: Vec<(String, MapData)> = maps.into_iter().map(|m| (m.entry.id, m.page)).collect();
-    FakeSource::with_index(index).with_pages(move |id| {
-        Poll::Ready(Ok(pages.iter().find(|(page_id, _)| page_id == id).map(|(_, p)| p.clone()).unwrap_or_default()))
-    })
+    FakeSource::with_world(osms_world(maps))
 }
 
-/// A core over `maps`, crawled (every page cached, so at once).
-pub fn crawled(maps: Vec<WorldMap>) -> Compass {
+/// A core over `maps`, its file set in hand (answered at once, on the first tick).
+pub fn loaded(maps: Vec<WorldMap>) -> Compass {
     let mut compass = Compass::new(world(maps));
     compass.tick(0);
-    compass.tick(50);
     compass
 }
 
