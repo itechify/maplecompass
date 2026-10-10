@@ -29,7 +29,7 @@ The street name and map name as rendered at the top of the in-game minimap; the 
 One of several maps that share a Minimap Title, offered to the player when the map they came from doesn't settle which one they are on.
 
 **Saved Copy**:
-MeowDB data cached earlier and shown, with its date, because MeowDB can't be reached right now.
+Map and mob data cached earlier and shown, with its date, because its source can't be reached right now.
 
 **Title Region**:
 The rectangle the player marks around the minimap title, saved relative to the game window.
@@ -57,6 +57,10 @@ _Avoid_: entrance, building portal
 A hidden portal that only works while the player meets a quest condition.
 _Avoid_: script portal
 
+**Map Preview**:
+A picture of the whole of the shown map, with its hidden portals marked where they are.
+_Avoid_: minimap (the game's own), map image
+
 ### Hunting
 
 **Mob**:
@@ -64,7 +68,7 @@ A hostile monster that spawns on a map.
 _Avoid_: monster, enemy, creature
 
 **Mob Card**:
-The card that appears when the player hovers a mob's name in the panel: its image and the figures from its MeowDB page that the row doesn't show. Clicking the name opens that page.
+The card that appears when the player hovers a mob's name in the panel: its image and the figures the row doesn't show. Clicking the name opens the mob's MeowDB page.
 _Avoid_: tooltip, popup, mob info
 
 **Spawn Count**:
