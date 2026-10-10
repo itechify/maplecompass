@@ -164,26 +164,26 @@ pub fn saved_map_page(id: &str) -> Result<MapData, SourceError> {
     }
 }
 
-/// Sunset Sky's and the Construction Site's MeowDB map IDs: both have a Map Summary.
+/// Sunset Sky's and the Construction Site's map IDs: both have a Map Summary in the
+/// made-up game world ([`osms::game`]).
 pub const SUNSET_SKY_ID: &str = "010003070";
 pub const CONSTRUCTION_SITE_ID: &str = "010003080";
 
-/// MeowDB's saved index and pages, with the Construction Site and Sunset Sky sharing the
-/// Kerning City sample's title: the Construction Site, first in the map index, shows
-/// first.
+/// The made-up game world, with the Construction Site and Sunset Sky sharing the Kerning
+/// City sample's title: the Construction Site, listed first, shows first.
 pub fn sharing_a_title() -> FakeSource {
-    FakeSource::with_index(index_with_title("Victoria Road", "Kerning City", &[CONSTRUCTION_SITE_ID, SUNSET_SKY_ID]))
+    FakeSource::with_world(osms::game().titled("Victoria Road", "Kerning City", &[osms::CONSTRUCTION_SITE, osms::SUNSET_SKY]))
 }
 
-/// The Northern Top of the Construction Site's MeowDB map ID: it has a Map Summary.
+/// The Northern Top of the Construction Site's map ID: it has a Map Summary.
 pub const NORTHERN_TOP_ID: &str = "010003081";
 
 /// As [`sharing_a_title`], with the Northern Top of the Construction Site sharing the
-/// title too: three Candidates in map index order, the Northern Top first (shown first),
+/// title too: three Candidates in map list order, the Northern Top first (shown first),
 /// then the Construction Site, then Sunset Sky.
 pub fn three_sharing_a_title() -> FakeSource {
-    let ids = [NORTHERN_TOP_ID, CONSTRUCTION_SITE_ID, SUNSET_SKY_ID];
-    FakeSource::with_index(index_with_title("Victoria Road", "Kerning City", &ids))
+    let ids = [osms::NORTHERN_TOP, osms::CONSTRUCTION_SITE, osms::SUNSET_SKY];
+    FakeSource::with_world(osms::game().titled("Victoria Road", "Kerning City", &ids))
 }
 
 /// A MeowDB mob page saved on 2026-10-08:
