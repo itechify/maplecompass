@@ -7,7 +7,8 @@
 
 use crate::CurrentMap;
 use crate::map_data::{MapData, MapDataStatus, for_panel};
-use crate::map_preview::{MapPreview, Pictures, picture_path};
+use crate::map_preview::{MapPreview, PreviewImage};
+use crate::pictures::Pictures;
 use crate::osms::MapSet;
 use serde::Serialize;
 
@@ -173,7 +174,7 @@ impl ShownMap {
         }
         let data = set.data(&self.map()?.id)?;
         let picture = data.picture.clone()?;
-        let image = pictures.image(&picture_path(&picture));
+        let image = PreviewImage::of(&picture, pictures);
         Some(MapPreview { picture, image, marks: data.marks.clone() })
     }
 

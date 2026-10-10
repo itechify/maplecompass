@@ -244,6 +244,11 @@ fn image(state: &PanelState) -> &PreviewImage {
     &preview(state).image
 }
 
+/// The maps' pictures asked for, in order, leaving out the Mob Cards' animations.
+fn map_pictures(requests: &std::sync::Mutex<Vec<String>>) -> Vec<String> {
+    requests.lock().unwrap().iter().filter(|path| path.starts_with("maps/")).cloned().collect()
+}
+
 /// The picture is asked for by its path under OSMS's data; the overlay loads it from where
 /// the source says it is.
 #[test]
@@ -292,7 +297,7 @@ fn an_unreachable_picture_is_asked_for_again_five_minutes_on() {
     let state = compass.tick(400 + 5 * 60_000).clone();
 
     assert_eq!(*image(&state), PreviewImage::Ready { url: "picture:maps/picture010003000.webp".into() });
-    assert_eq!(requests.lock().unwrap().len(), 2);
+    assert_eq!(map_pictures(&requests).len(), 2);
 }
 
 /// A picture is kept for the run: coming back to a map shows it at once, asking nothing.
@@ -308,7 +313,7 @@ fn a_map_shown_again_shows_its_picture_without_asking_again() {
     let state = arrive(&mut compass, "victoria-road__kerning-city--window", 2000);
 
     assert_eq!(*image(&state), PreviewImage::Ready { url: "picture:maps/picture010003000.webp".into() });
-    assert_eq!(*requests.lock().unwrap(), ["maps/picture010003000.webp", "maps/picture010003070.webp"]);
+    assert_eq!(map_pictures(&requests), ["maps/picture010003000.webp", "maps/picture010003070.webp"]);
 }
 
 /// While it isn't settled which of the maps sharing a title the player is on, no picture
@@ -322,5 +327,18 @@ fn no_picture_is_asked_for_while_no_map_preview_shows() {
 
     compass.tick(400);
 
-    assert_eq!(*requests.lock().unwrap(), Vec::<String>::new());
+    assert_eq!(map_pictures(&requests), Vec::<String>::new());
+}
+
+/// The map comes first: its picture is asked for ahead of the listed mobs' animations.
+#[test]
+fn the_maps_picture_is_asked_for_before_the_mob_cards_animations() {
+    let source = FakeSource::osms().pictures_taking(1);
+    let requests = source.picture_requests.clone();
+    let mut compass = Compass::new(source);
+    arrive(&mut compass, "victoria-road__sunset-sky--window", 0);
+
+    compass.tick(400);
+
+    assert_eq!(requests.lock().unwrap().first().map(String::as_str), Some("maps/picture010003070.webp"));
 }

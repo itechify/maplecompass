@@ -1,17 +1,22 @@
 //! OSMS Data Explorer's file set (ADR 0008): the raw texts the shell fetches from
-//! [`DATA_URL`], and the reader that turns them into every map's data. Credit "OSMS Data
-//! Explorer (osmsdataexplorer.com)".
+//! [`DATA_URL`], and the reader that turns them into every map's data and every mob's
+//! Mob Card figures and animation. Credit "OSMS Data Explorer (osmsdataexplorer.com)".
 
 use crate::map_data::{MapData, MapSummary, Mob, PerParty};
 use crate::map_index::{MapEntry, SourceError};
+use crate::mob_card::{DamageRange, Elements, HpPerExp, MobDetails};
 use crate::portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 use crate::portals::{self, Exit, MapFacts};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// Where OSMS Data Explorer publishes its current data set: each of [`OsmsFiles::NAMES`]
 /// is a file under it.
 pub const DATA_URL: &str = "https://osmsdataexplorer.com/data/current/";
+
+/// Where OSMS Data Explorer keeps its pictures, each named by its content: a picture's
+/// path is below it ([`crate::MapDataSource::picture`]).
+pub const PICTURES_URL: &str = "https://osmsdataexplorer.com/data/";
 
 /// OSMS's file set as fetched: each file's text, unread. Saved and swapped whole.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,11 +40,17 @@ impl OsmsFiles {
     pub const NAMES: [&str; 5] = ["maps.json", "portals.json", "monsters.json", "map_manifest.json", "lookups.json"];
 }
 
-/// Every map's data from OSMS's file set: the map list, and each listed map's figures.
+/// Every map's data from OSMS's file set: the map list, each listed map's figures, and
+/// every mob's Mob Card figures.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MapSet {
     /// In OSMS's order: by region, then as `maps.json` lists them.
     maps: Vec<(MapEntry, MapData)>,
+    /// Every mob in `monsters.json`, by its ID.
+    mobs: HashMap<String, MobDetails>,
+    /// The path of each mob's default animation, by its ID; a mob OSMS names none for
+    /// isn't here.
+    animations: HashMap<String, String>,
 }
 
 impl MapSet {
@@ -56,6 +67,17 @@ impl MapSet {
     /// Map `id`'s data, if it is in the map list.
     pub(crate) fn data(&self, id: &str) -> Option<&MapData> {
         self.maps.iter().find(|(entry, _)| entry.id == id).map(|(_, data)| data)
+    }
+
+    /// Mob `id`'s Mob Card figures. Every mob a map lists has them.
+    pub(crate) fn mob(&self, id: &str) -> Option<&MobDetails> {
+        self.mobs.get(id)
+    }
+
+    /// The path of OSMS's default animation of mob `id` ([`crate::MapDataSource::picture`]),
+    /// if OSMS names one.
+    pub(crate) fn animation(&self, id: &str) -> Option<&str> {
+        self.animations.get(id).map(String::as_str)
     }
 }
 
@@ -116,7 +138,70 @@ fn read_set(files: &OsmsFiles, overrides: &[PortalOverride]) -> Result<MapSet, S
             set.push((entry.clone(), data));
         }
     }
-    Ok(MapSet { maps: set })
+    let mobs = monsters.monsters.iter().map(|mob| (mob.id.to_string(), mob_details(mob, &monsters.monsters))).collect();
+    let mut animations = HashMap::new();
+    for mob in &monsters.monsters {
+        if let Some(hash) = &mob.gif {
+            animations.insert(mob.id.to_string(), animation_path(hash).map_err(|why| format!("mob {}: {why}", mob.id))?);
+        }
+    }
+    Ok(MapSet { maps: set, mobs, animations })
+}
+
+/// Where OSMS keeps the mob animation with content hash `hash`, below [`PICTURES_URL`].
+fn animation_path(hash: &str) -> Result<String, String> {
+    if hash.is_empty() || !hash.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        return Err(format!("gif {hash:?} isn't a hash"));
+    }
+    Ok(format!("images/monsters/{hash}.webp"))
+}
+
+/// A mob's Mob Card figures, from its record among `all` of `monsters.json`.
+///
+/// Touch DMG is `floor(1.1 × P.ATK)` to `ceil(1.5 × P.ATK) − 1`, and Speed is "Slow" below
+/// 0, "Fast" above 0 and otherwise "Normal": both rules fitted to MeowDB's pages. A figure
+/// that is absent or 0 is `None`.
+///
+/// HP per EXP is ranked among all the set's mobs, the mobs in the game now: tied mobs
+/// share a rank, and a mob without EXP has no HP per EXP and ranks below every other.
+fn mob_details(mob: &OsmsMob, all: &[OsmsMob]) -> MobDetails {
+    let p_atk = mob.p_atk.filter(|&p| p > 0).map(u64::from);
+    let speed = match mob.speed {
+        Some(speed) if speed < 0 => "Slow",
+        Some(speed) if speed > 0 => "Fast",
+        _ => "Normal",
+    };
+    let hp_per_exp = (mob.exp > 0).then(|| {
+        let (hp, exp) = (u128::from(mob.hp), u128::from(mob.exp));
+        // Compared exactly: a / b < c / d is a·d < c·b.
+        let lower = all.iter().filter(|other| other.exp > 0 && u128::from(other.hp) * exp < hp * u128::from(other.exp));
+        HpPerExp {
+            // Rounded half up.
+            hundredths: u64::try_from((hp * 200 + exp) / (2 * exp)).unwrap_or(u64::MAX),
+            rank: u32::try_from(lower.count() + 1).unwrap_or(u32::MAX),
+            ranked: u32::try_from(all.len()).unwrap_or(u32::MAX),
+        }
+    });
+    let mut elements = Elements::default();
+    for (element, affinity) in &mob.elements {
+        let list = match affinity {
+            Affinity::Weak => &mut elements.weak,
+            Affinity::Strong => &mut elements.strong,
+            Affinity::Immune => &mut elements.immune,
+        };
+        list.push(element.trim().to_string());
+    }
+    MobDetails {
+        elements,
+        touch_damage: p_atk.map(|p| DamageRange { min: 11 * p / 10, max: (3 * p).div_ceil(2) - 1 }),
+        mp: mob.mp.filter(|&mp| mp > 0),
+        accuracy: mob.acc.filter(|&acc| acc > 0),
+        avoid: mob.eva.filter(|&eva| eva > 0),
+        physical_defense: mob.p_def.filter(|&def| def > 0),
+        magic_defense: mob.m_def.filter(|&def| def > 0),
+        speed: speed.to_string(),
+        hp_per_exp,
+    }
 }
 
 /// One map's data, from its entry in `maps.json`, its `portals` and the `mobs`.
@@ -341,7 +426,7 @@ struct MonstersFile {
     monsters: Vec<OsmsMob>,
 }
 
-/// A mob in `monsters.json`.
+/// A mob in `monsters.json`. Optional fields are absent, never null.
 #[derive(Deserialize)]
 struct OsmsMob {
     id: u64,
@@ -349,9 +434,35 @@ struct OsmsMob {
     level: u32,
     hp: u64,
     exp: u64,
+    /// P.ATK, what Touch DMG is worked out from.
+    #[serde(rename = "PADamage")]
+    p_atk: Option<u32>,
+    #[serde(rename = "PDDamage")]
+    p_def: Option<u32>,
+    #[serde(rename = "MDDamage")]
+    m_def: Option<u32>,
+    mp: Option<u64>,
+    acc: Option<u32>,
+    /// AVOID.
+    eva: Option<u32>,
+    /// Below 0 slow, above 0 fast.
+    speed: Option<i64>,
+    /// Each element it has an affinity to ("Fire"), in name order; absent for none.
+    #[serde(default)]
+    elements: BTreeMap<String, Affinity>,
+    /// The content hash of OSMS's default animation of it, one of its `gifs`.
+    gif: Option<String>,
     /// The maps it spawns on; absent for a mob on none.
     #[serde(default)]
     maps: Vec<MobOnMap>,
+}
+
+/// A mob's affinity to an element. Any other is a changed format.
+#[derive(Deserialize)]
+enum Affinity {
+    Weak,
+    Strong,
+    Immune,
 }
 
 #[derive(Deserialize)]

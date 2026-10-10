@@ -1,82 +1,76 @@
-//! OSMS Data Explorer's pictures (ADR 0008): map pictures and mob animations, each by its
-//! path under OSMS's data (`maps/<hash>.webp`). They are named by content hash, so a copy
-//! on disk never goes stale: one is fetched the first time it is asked for, one at a time
-//! and with MapleCompass's own user agent, and saved under `osms-images/<path>` in the
-//! cache. The overlay loads it from there through the [`SCHEME`] URL scheme
-//! ([`serve`]): the webview never asks OSMS itself.
+//! OSMS's pictures (ADR 0008): mob animations and map pictures, each named by its content
+//! at a path below [`PICTURES_URL`]. They are fetched one at a time with MapleCompass's
+//! own user agent, kept under the cache's [`FOLDER`] at the same path, and served to the
+//! overlay from there through the [`SCHEME`] URL scheme: the webview never asks OSMS
+//! itself.
 //!
-//! Every ask for a saved copy marks it used (its modified time), and copies unused for
-//! [`UNUSED_FOR`] (30 days) are deleted when the source starts.
+//! A path names a picture by its content, so a saved one never goes stale. A picture is
+//! touched whenever it is reused or served, and one untouched for [`KEPT_FOR`] (30 days)
+//! is deleted at launch ([`sweep`]).
 
 use compass_core::SourceError;
+use compass_core::osms::PICTURES_URL;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::task::Poll;
 use std::time::{Duration, SystemTime};
 
-/// The URL scheme the overlay loads OSMS's pictures from: our saved copies of them.
+/// The URL scheme the overlay loads OSMS's pictures from.
 pub const SCHEME: &str = "osmsimage";
 
-/// Where OSMS Data Explorer publishes its data: a picture's path is under it.
-const DATA_URL: &str = "https://osmsdataexplorer.com/data/";
+/// The folder in the cache the pictures are kept in, each at its path.
+const FOLDER: &str = "osms-images";
 
-/// The pictures' folder in the cache.
-const DIR: &str = "osms-images";
-
-/// How long a saved picture is kept without being asked for.
-const UNUSED_FOR: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+/// How long a picture nobody has asked for is kept.
+const KEPT_FOR: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
 type Answer = Result<String, SourceError>;
 
-/// OSMS's pictures: saved, and fetched when they aren't.
+/// OSMS's pictures: saved, and fetched when asked for.
 pub struct Pictures {
     client: reqwest::Client,
+    /// Where the pictures are kept.
     dir: PathBuf,
-    /// The picture being fetched, by path, and where its address will arrive.
+    /// The picture being fetched, by path, and where its answer will arrive.
     in_flight: Option<(String, Receiver<Answer>)>,
 }
 
 impl Pictures {
-    /// Pictures saved under `cache_dir`, fetched with `client`. Those unused for
-    /// [`UNUSED_FOR`] are deleted, in the background.
+    /// Pictures kept under `cache_dir`, fetched with `client`.
     pub fn new(client: reqwest::Client, cache_dir: &Path) -> Self {
-        let dir = cache_dir.join(DIR);
-        let unused = dir.clone();
-        std::thread::spawn(move || delete_unused(&unused, SystemTime::now()));
-        Self { client, dir, in_flight: None }
+        Self { client, dir: cache_dir.join(FOLDER), in_flight: None }
     }
 
-    /// Where the overlay loads the picture at `path` from: at once when it is saved;
-    /// otherwise fetched in the background, the first call starting the fetch and later
-    /// ones collecting it. One fetch at a time: while another picture is on its way, the
-    /// ask waits for it.
+    /// Where the overlay loads the picture at `path` from: at once if it is saved,
+    /// otherwise once it is fetched, in the background. One fetch at a time: a picture
+    /// asked for while another is on its way waits for it.
     pub fn poll(&mut self, path: &str) -> Poll<Answer> {
-        if !is_picture_path(path) {
+        let Some(file) = file(&self.dir, path) else {
             return Poll::Ready(Err(SourceError::FormatChanged(format!("picture path {path:?}"))));
-        }
+        };
         if let Some((asked, arriving)) = &self.in_flight {
-            let finished = match arriving.try_recv() {
-                Err(TryRecvError::Empty) => None,
-                Ok(answer) => Some(answer),
-                Err(TryRecvError::Disconnected) => Some(Err(SourceError::Unreachable("fetch abandoned".into()))),
+            let mine = asked == path;
+            let answer = match arriving.try_recv() {
+                Err(TryRecvError::Empty) => Poll::Pending,
+                Ok(answer) => Poll::Ready(answer),
+                Err(TryRecvError::Disconnected) => Poll::Ready(Err(SourceError::Unreachable("fetch abandoned".into()))),
             };
-            match finished {
-                Some(answer) if asked == path => {
+            match (answer, mine) {
+                (Poll::Pending, true) => return Poll::Pending,
+                (Poll::Pending, false) => {}
+                (Poll::Ready(answer), true) => {
                     self.in_flight = None;
                     if let Err(e) = &answer {
                         eprintln!("OSMS picture {path}: {e}");
                     }
                     return Poll::Ready(answer);
                 }
-                // Another picture's fetch finished, unheard: it is saved all the same.
-                Some(_) => self.in_flight = None,
-                None if asked == path => return Poll::Pending,
-                None => {}
+                // Another picture's, saved unheard.
+                (Poll::Ready(_), false) => self.in_flight = None,
             }
         }
-        let file = self.dir.join(path);
         if file.is_file() {
-            mark_used(&file);
+            touch(&file);
             return Poll::Ready(Ok(url(path)));
         }
         if self.in_flight.is_some() {
@@ -97,125 +91,173 @@ fn url(path: &str) -> String {
     if cfg!(windows) { format!("http://{SCHEME}.localhost/{path}") } else { format!("{SCHEME}://localhost/{path}") }
 }
 
-/// Whether `path` looks like a picture's path under OSMS's data: folders and a file name
-/// of letters, digits, `-`, `_` and `.` (none starting with a dot), ending in a picture's
-/// extension. Nothing else is fetched, saved or served.
-fn is_picture_path(path: &str) -> bool {
-    let safe = |part: &str| {
-        !part.is_empty()
-            && !part.starts_with('.')
-            && part.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
-    };
-    let picture = [".webp", ".png", ".gif"].iter().any(|ext| path.ends_with(ext));
-    path.len() <= 200 && path.contains('/') && path.split('/').all(safe) && picture
-}
-
-/// Mark the saved picture at `file` used now, so it isn't deleted as unused.
-fn mark_used(file: &Path) {
-    let marked = std::fs::File::options().write(true).open(file).and_then(|f| f.set_modified(SystemTime::now()));
-    if let Err(e) = marked {
-        eprintln!("couldn't mark {} used: {e}", file.display());
+/// Where the picture at `path` is kept under `dir`. `None` for a path that isn't one of
+/// OSMS's picture paths: segments of letters, digits, `.`, `-` and `_`, none of them `.`
+/// or `..`.
+fn file(dir: &Path, path: &str) -> Option<PathBuf> {
+    let mut file = dir.to_path_buf();
+    for segment in path.split('/') {
+        let plain = |b: u8| b.is_ascii_alphanumeric() || b"._-".contains(&b);
+        if segment.is_empty() || segment == "." || segment == ".." || !segment.bytes().all(plain) {
+            return None;
+        }
+        file.push(segment);
     }
+    Some(file)
 }
 
 /// Fetch the picture at `path` from OSMS and save it at `file`.
 async fn fetch(client: &reqwest::Client, path: &str, file: &Path) -> Answer {
-    let response = client.get(format!("{DATA_URL}{path}")).send().await.map_err(|e| SourceError::Unreachable(e.to_string()))?;
+    let address = format!("{PICTURES_URL}{path}");
+    let response = client.get(&address).send().await.map_err(|e| SourceError::Unreachable(e.to_string()))?;
     let status = response.status();
+    if matches!(status, reqwest::StatusCode::NOT_FOUND | reqwest::StatusCode::GONE) {
+        return Err(SourceError::FormatChanged(format!("{address}: {status}")));
+    }
+    let response = response.error_for_status().map_err(|e| SourceError::Unreachable(e.to_string()))?;
     let is_image = response
         .headers()
         .get(reqwest::header::CONTENT_TYPE)
         .and_then(|t| t.to_str().ok())
         .is_some_and(|t| t.starts_with("image/"));
-    if status.is_client_error() || (status.is_success() && !is_image) {
-        return Err(SourceError::FormatChanged(format!("OSMS has no picture {path} ({status})")));
+    if !is_image {
+        return Err(SourceError::FormatChanged(format!("{address}: not a picture")));
     }
-    let bytes = response.error_for_status().map_err(|e| SourceError::Unreachable(e.to_string()))?;
-    let bytes = bytes.bytes().await.map_err(|e| SourceError::Unreachable(e.to_string()))?;
+    let bytes = response.bytes().await.map_err(|e| SourceError::Unreachable(e.to_string()))?;
     crate::files::write_atomically(file, &bytes)
         .map_err(|e| SourceError::Unreachable(format!("couldn't save {}: {e}", file.display())))?;
     Ok(url(path))
 }
 
-/// Delete the pictures under `dir` last used longer than [`UNUSED_FOR`] before `now`.
-fn delete_unused(dir: &Path, now: SystemTime) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let Ok(meta) = entry.metadata() else { continue };
-        if meta.is_dir() {
-            delete_unused(&path, now);
-        } else if meta.modified().is_ok_and(|used| now.duration_since(used).is_ok_and(|age| age > UNUSED_FOR)) {
-            if let Err(e) = std::fs::remove_file(&path) {
-                eprintln!("couldn't delete unused {}: {e}", path.display());
-            }
-        }
-    }
-}
-
-/// Answer the overlay's request for a picture ([`url`]) from the pictures saved under
-/// `cache_dir`.
+/// Answer the overlay's request for a picture ([`url`]) from the pictures kept under
+/// `cache_dir`, and touch it.
 pub fn serve(cache_dir: &Path, request: &tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
     use tauri::http::{Response, StatusCode, header};
     let path = request.uri().path().trim_start_matches('/');
-    let picture = if is_picture_path(path) { std::fs::read(cache_dir.join(DIR).join(path)).ok() } else { None };
-    let kind = match path.rsplit('.').next() {
-        Some("png") => "image/png",
-        Some("gif") => "image/gif",
-        _ => "image/webp",
-    };
-    let response = match picture {
-        Some(bytes) => Response::builder().header(header::CONTENT_TYPE, kind).body(bytes),
+    let file = file(&cache_dir.join(FOLDER), path);
+    let response = match file.as_ref().and_then(|file| Some((file, std::fs::read(file).ok()?))) {
+        Some((file, bytes)) => {
+            touch(file);
+            Response::builder().header(header::CONTENT_TYPE, content_type(path)).body(bytes)
+        }
         None => Response::builder().status(StatusCode::NOT_FOUND).body(Vec::new()),
     };
     response.unwrap_or_default()
+}
+
+/// A picture's type, by its file name's extension.
+fn content_type(path: &str) -> &'static str {
+    match path.rsplit_once('.').map(|(_, extension)| extension.to_ascii_lowercase()).as_deref() {
+        Some("webp") => "image/webp",
+        Some("png") => "image/png",
+        Some("gif") => "image/gif",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        _ => "application/octet-stream",
+    }
+}
+
+/// Mark the picture at `file` as used now, so it is kept another [`KEPT_FOR`].
+fn touch(file: &Path) {
+    let touched = std::fs::File::options().write(true).open(file).and_then(|f| f.set_modified(SystemTime::now()));
+    if let Err(e) = touched {
+        eprintln!("OSMS picture: couldn't touch {}: {e}", file.display());
+    }
+}
+
+/// Delete every picture kept under `cache_dir` that hasn't been used for [`KEPT_FOR`].
+/// Slow with many pictures: call it off the compass loop.
+pub fn sweep(cache_dir: &Path) {
+    sweep_older_than(&cache_dir.join(FOLDER), SystemTime::now() - KEPT_FOR);
+}
+
+/// Delete every file under `dir`, at any depth, last touched before `cutoff`.
+fn sweep_older_than(dir: &Path, cutoff: SystemTime) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let Ok(kind) = entry.file_type() else { continue };
+        if kind.is_dir() {
+            sweep_older_than(&entry.path(), cutoff);
+        } else if entry.metadata().and_then(|m| m.modified()).is_ok_and(|touched| touched < cutoff) {
+            if let Err(e) = std::fs::remove_file(entry.path()) {
+                eprintln!("OSMS picture: couldn't delete {}: {e}", entry.path().display());
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// A fresh, empty folder for one test.
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("maplecompass-pictures-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
     #[test]
-    fn only_paths_of_pictures_under_osmss_data_are_taken() {
-        for path in ["maps/75cadba2900f5b76b7582ab69585f026.webp", "images/monsters/0a1b2c.webp", "images/monsters/0a1b2c.png"] {
-            assert!(is_picture_path(path), "{path}");
-        }
-        for path in [
-            "",
-            "75cadba2900f5b76b7582ab69585f026.webp",
-            "maps/../settings.json",
-            "maps/../../x.webp",
-            "maps/.hidden.webp",
-            "maps//x.webp",
-            "/maps/x.webp",
-            "maps\\x.webp",
-            "maps/x.html",
-            "maps/x y.webp",
-            "C:/x.webp",
-        ] {
-            assert!(!is_picture_path(path), "{path}");
+    fn only_osmss_own_picture_paths_are_kept_below_the_folder() {
+        let dir = Path::new("cache").join(FOLDER);
+        assert_eq!(file(&dir, "images/monsters/43d306.webp"), Some(dir.join("images").join("monsters").join("43d306.webp")));
+        assert_eq!(file(&dir, "maps/a1-b_2.webp"), Some(dir.join("maps").join("a1-b_2.webp")));
+        for path in ["", "/maps/a.webp", "maps//a.webp", "../a.webp", "maps/../../a.webp", "maps/./a.webp", r"maps\a.webp", "maps/a b.webp", "C:/a.webp"] {
+            assert_eq!(file(&dir, path), None, "{path:?}");
         }
     }
 
     #[test]
-    fn pictures_unused_for_30_days_are_deleted_and_the_rest_kept() {
-        let dir = std::env::temp_dir().join(format!("maplecompass-pictures-test-{}", std::process::id()));
-        let (old, recent) = (dir.join("maps/old.webp"), dir.join("images/monsters/recent.webp"));
-        for file in [&old, &recent] {
-            crate::files::write_atomically(file, b"webp").unwrap();
-        }
-        let now = SystemTime::now();
-        let set_used = |file: &Path, ago_days: u64| {
-            let used = now - Duration::from_secs(ago_days * 24 * 60 * 60);
-            std::fs::File::options().write(true).open(file).unwrap().set_modified(used).unwrap();
+    fn the_overlay_loads_a_picture_through_the_osmsimage_scheme() {
+        let expected = if cfg!(windows) {
+            "http://osmsimage.localhost/images/monsters/43d306.webp"
+        } else {
+            "osmsimage://localhost/images/monsters/43d306.webp"
         };
-        set_used(&old, 31);
-        set_used(&recent, 29);
+        assert_eq!(url("images/monsters/43d306.webp"), expected);
+    }
 
-        delete_unused(&dir, now);
+    #[test]
+    fn a_picture_untouched_for_30_days_is_deleted_and_a_younger_one_kept() {
+        let cache = scratch("sweep");
+        let monsters = cache.join(FOLDER).join("images").join("monsters");
+        std::fs::create_dir_all(&monsters).unwrap();
+        let (old, young) = (monsters.join("old.webp"), monsters.join("young.webp"));
+        for file in [&old, &young] {
+            std::fs::write(file, b"webp").unwrap();
+        }
+        let file = std::fs::File::options().write(true).open(&old).unwrap();
+        file.set_modified(SystemTime::now() - KEPT_FOR - Duration::from_secs(60)).unwrap();
+        drop(file);
+
+        sweep(&cache);
 
         assert!(!old.exists());
-        assert!(recent.exists());
-        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(young.exists());
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    #[test]
+    fn a_served_picture_is_touched() {
+        let cache = scratch("serve");
+        let maps = cache.join(FOLDER).join("maps");
+        std::fs::create_dir_all(&maps).unwrap();
+        let picture = maps.join("a1.webp");
+        std::fs::write(&picture, b"webp").unwrap();
+        let file = std::fs::File::options().write(true).open(&picture).unwrap();
+        file.set_modified(SystemTime::now() - KEPT_FOR - Duration::from_secs(60)).unwrap();
+        drop(file);
+
+        let request = tauri::http::Request::builder().uri(url("maps/a1.webp")).body(Vec::new()).unwrap();
+        let response = serve(&cache, &request);
+
+        assert_eq!(response.status(), 200);
+        assert_eq!(response.headers()["content-type"], "image/webp");
+        assert_eq!(response.body(), b"webp");
+        sweep(&cache);
+        assert!(picture.exists());
+        let missing = tauri::http::Request::builder().uri(url("maps/none.webp")).body(Vec::new()).unwrap();
+        assert_eq!(serve(&cache, &missing).status(), 404);
+        let _ = std::fs::remove_dir_all(&cache);
     }
 }
