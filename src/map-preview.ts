@@ -1,10 +1,11 @@
 /**
- * The Portals section: the Map Preview, OSMS's picture of the whole map with every portal
+ * The Map section: the Map Preview, OSMS's picture of the whole map with every portal
  * ringed where it is, then a row per Hidden Portal. Rings are drawn in screen pixels over
  * the fitted picture, whatever its scale: blue to another map (Doors included), green
  * within the map with a dashed arrow to where it lands, grey to a map not in the data;
- * dashed when hidden or a Quest Portal. Hovering a ring says where it leads and lights its
- * row; hovering a row lights its ring. A click does nothing.
+ * dashed when hidden or a Quest Portal. A portal the Hunting Target's route takes next
+ * wears a wide magenta ring around its own, always. Hovering a ring says where it leads
+ * and lights its row; hovering a row lights its ring. A click does nothing.
  */
 
 import { byId, cardTop, span } from "./dom";
@@ -31,6 +32,7 @@ type PortalMark = {
   y: number;
   leads: Leads;
   kind: PortalKind;
+  toMapId: string;
   toMapName: string;
   toStreetName: string;
   /**
@@ -40,6 +42,8 @@ type PortalMark = {
   landsAt: { x: number; y: number; mark: number | null; bothWays: boolean } | null;
   /** Its row among the Hidden Portals. */
   hiddenPortal: number | null;
+  /** The Hunting Target's route goes on from the shown map through this portal. */
+  nextOnRoute: boolean;
 };
 
 /** Mirror of `compass_core::MapPreview`. */
@@ -57,6 +61,8 @@ const PAPER = 5;
 const RING = 4;
 /** The lit ring's outer ring. */
 const LIT_RING = 7.5;
+/** The ring around a portal next on the Hunting Target's route, outside the lit ring. */
+const ROUTE_RING = 10;
 /** The space kept between the card and the ring, and the panel's edges. */
 const CARD_GAP = 6;
 
@@ -128,10 +134,12 @@ function rowRing(mark: PortalMark | undefined): SVGSVGElement {
     y: 0,
     leads: "anotherMap",
     kind: "hidden",
+    toMapId: "",
     toMapName: "",
     toStreetName: "",
     landsAt: null,
     hiddenPortal: null,
+    nextOnRoute: false,
   };
   el.append(ring(leads, 6, 6));
   return el;
@@ -209,10 +217,12 @@ export function layOutMapPreview() {
   picture.style.width = `${width}px`;
   picture.style.height = `${height}px`;
   const hidden = shown.marks.filter((m) => m.hiddenPortal !== null).length;
+  const next = shown.marks.filter((m) => m.nextOnRoute).length;
   const portals = shown.marks.length;
+  const onRoute = next > 0 ? `, ${next} next on your route` : "";
   picture.setAttribute(
     "aria-label",
-    `Map of ${mapName}: ${portals} portal${portals === 1 ? "" : "s"} marked, ${hidden} of them hidden`,
+    `Map of ${mapName}: ${portals} portal${portals === 1 ? "" : "s"} marked, ${hidden} of them hidden${onRoute}`,
   );
   const key = JSON.stringify([shown.marks, width, height]);
   if (key !== drawnFor) {
@@ -269,16 +279,25 @@ function drawMarks(marks: PortalMark[], scale: number, width: number, height: nu
     g.append(svg("line", { ...line, class: "halo" }), dash);
     arrows.append(g);
   });
+  // Next on the Hunting Target's route: a wide ring around the portal's own, on a halo of
+  // its own, always shown. Over the arrows and under every ring, so it never hides one.
+  const routeRings = svg("g", { class: "route-rings" });
   const rings = svg("g", { class: "rings" });
   marks.forEach((mark, i) => {
     const { x, y } = at(mark.x, mark.y, scale);
+    if (mark.nextOnRoute) {
+      routeRings.append(
+        svg("circle", { class: "route-halo", cx: x, cy: y, r: ROUTE_RING }),
+        svg("circle", { class: "route-ring", cx: x, cy: y, r: ROUTE_RING }),
+      );
+    }
     const g = ring(mark, x, y);
     g.dataset.mark = String(i);
     // A target larger than the ring, so a small ring is easy to rest on.
     g.append(svg("circle", { class: "hit", cx: x, cy: y, r: 8 }));
     rings.append(g);
   });
-  marksSvg.replaceChildren(defs, arrows, rings);
+  marksSvg.replaceChildren(defs, arrows, routeRings, rings);
 }
 
 /** Light `mark` (or nothing) and its row, its arrows, and its card if the pointer is on its ring. */
@@ -313,6 +332,7 @@ function kindTags(mark: PortalMark): HTMLElement[] {
   if (mark.kind === "door") tags.push(span("tag", "Door"));
   if (mark.leads === "withinTheMap") tags.push(span("tag", "Within the map"));
   if (mark.leads === "mapNotInTheData") tags.push(span("tag", "Not in the map list"));
+  if (mark.nextOnRoute) tags.push(span("tag", "Next on your route"));
   return tags;
 }
 

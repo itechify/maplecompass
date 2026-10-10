@@ -70,8 +70,11 @@ type MapData = {
   moreMobs: { count: number; levels: LevelRange } | null;
 };
 
-/** Mirror of `compass_core::Section`: a section the player can collapse to its heading. */
-type Section = "hiddenPortals" | "mobs";
+/**
+ * Mirror of `compass_core::Section`: a section the player can collapse to its heading. The
+ * Map section is `hiddenPortals`, as the settings have always named it.
+ */
+type Section = "hiddenPortals" | "mobs" | "navigation";
 
 /** Mirror of `compass_core::MapDataStatus`. */
 type MapDataStatus =
@@ -154,7 +157,6 @@ type PanelState = {
 const panelEl = byId("panel");
 const street = byId("street");
 const map = byId("map");
-const dataEl = byId("data");
 const note = byId("note");
 const candidatesEl = byId("candidates");
 const candidatesNote = byId("candidates-note");
@@ -163,7 +165,6 @@ const summary = byId("summary");
 const mobsTable = byId("mobs");
 const mobRows = byId("mob-rows");
 const portals = byId("portals");
-const noPortals = byId("no-portals");
 const footer = byId("footer");
 const credit = byId("credit");
 const hotkeyProblem = byId("hotkey-problem");
@@ -174,6 +175,7 @@ const noMobs = byId("no-mobs");
 const moreMobs = byId("more-mobs");
 const portalsToggle = byId("portals-toggle") as HTMLButtonElement;
 const mobsToggle = byId("mobs-toggle") as HTMLButtonElement;
+const navigationToggle = byId("navigation-toggle") as HTMLButtonElement;
 const mobCardEl = byId("mob-card");
 const iconCount = byId("icon-count");
 const iconAlert = byId("icon-alert");
@@ -184,14 +186,14 @@ const toolbar = byId("toolbar");
 const icon = document.querySelector<HTMLElement>(".icon")!;
 const nextCandidate = byId("next-candidate");
 const titlebar = byId("titlebar");
-const hunting = byId("hunting");
+const navigation = byId("navigation");
+const huntingSprite = byId("hunting-sprite");
 const huntingTitle = byId("hunting-title");
 const huntingReopen = byId("hunting-reopen");
 const huntingClear = byId("hunting-clear");
 const huntingRouteTitle = byId("hunting-route-title");
 const huntingRoute = byId("hunting-route");
 const huntingRouteNone = byId("hunting-route-none");
-const huntingCredit = byId("hunting-credit");
 const huntingArrival = byId("hunting-arrival");
 const huntingTrip = byId("hunting-trip");
 const searchView = byId("search-view");
@@ -307,13 +309,18 @@ function dataNote(data: MapDataStatus): string {
   }
 }
 
+/** Whether the panel shows a map, and so its notes and its Map and Mobs sections. */
+const mapShown = (panel: PanelState) => panel.gameFound && !!panel.map;
+
 function renderData(panel: PanelState) {
   const { data } = panel;
-  const shown = panel.gameFound && !!panel.map;
-  dataEl.hidden = !shown;
-  footer.hidden = !shown;
-  if (!shown) return;
-  const inputs = [data, panel.mapPreview, panel.candidates, panel.collapsedSections, panel.credit, panel.recognition];
+  if (!mapShown(panel)) {
+    for (const part of [candidatesEl, note, portals, mapMobs]) part.hidden = true;
+    renderMapPreview(null, "");
+    renderedFrom.delete("data");
+    return;
+  }
+  const inputs = [data, panel.mapPreview, panel.candidates, panel.collapsedSections, panel.recognition];
   if (!changed("data", ...inputs, panel.hotkeys, panel.unavailableHotkeys)) return;
 
   const { candidates } = panel;
@@ -345,12 +352,12 @@ function renderData(panel: PanelState) {
 
   const ready = data.status === "ready" || data.status === "savedCopy" ? data : null;
 
-  // Portals first: the map with every portal on it, then the Hidden Portals, what the game
-  // won't show the player.
-  portals.hidden = !ready;
+  // The Map first: the map with every portal on it, then the Hidden Portals, what the game
+  // won't show the player. With neither picture (nor why it's missing) nor Hidden Portals,
+  // it has nothing to show and goes.
   const hiddenPortals: HiddenPortal[] = ready?.hiddenPortals ?? [];
   const pictured = renderMapPreview(ready ? panel.mapPreview : null, panel.map?.mapName ?? "");
-  noPortals.hidden = !ready || hiddenPortals.length > 0;
+  portals.hidden = !ready || (!pictured && hiddenPortals.length === 0);
   renderPortalRows(hiddenPortals, panel.mapPreview?.marks ?? []);
 
   mapMobs.hidden = !ready;
@@ -395,30 +402,39 @@ function renderData(panel: PanelState) {
   moreMobs.hidden = !more;
   if (more) moreMobs.textContent = `+${more.count} more · ${levels(more.levels)} · all on MeowDB`;
 
-  // Each section collapses to its heading, which then says how many it holds. One with
-  // nothing to list has nothing to collapse: its heading and "None" show as ever.
+  // Each section collapses to its heading; Mobs then says how many it holds. With nothing
+  // to list, Mobs has nothing to collapse: its heading and "No mobs on this map" show as
+  // ever. The Map shows only with something in it.
   const mobCount = (ready?.listedMobs.length ?? 0) + (ready?.moreMobs?.count ?? 0);
-  foldSection(portals, portalsToggle, panel.collapsedSections.hiddenPortals, hiddenPortals.length, pictured);
-  foldSection(mapMobs, mobsToggle, panel.collapsedSections.mobs, mobCount);
+  foldSection(portals, portalsToggle, panel.collapsedSections.hiddenPortals, true);
+  foldSection(mapMobs, mobsToggle, panel.collapsedSections.mobs, mobCount > 0, mobCount);
   // Opened again, the picture is fitted to the section.
   layOutMapPreview();
-
-  // The credit is the footer icon's tooltip, so it takes one small line.
-  credit.title = panel.credit ?? "";
-  credit.setAttribute("aria-label", panel.credit ?? "");
 }
 
 /**
- * A section collapsed to its heading, or open; `count` is how many it lists, and
- * `pictured` whether it shows more than its list (the Portals section's Map Preview).
+ * The footer's info icon, whose tooltip is the credit, so it takes one small line: the
+ * panel's credit while a map is shown, or else search's while there is a Hunting Target.
+ * With nothing to credit, no footer.
  */
-function foldSection(section: HTMLElement, toggle: HTMLButtonElement, collapsed: boolean, count: number, pictured = false) {
-  const holds = count > 0 || pictured;
+function renderCredit(panel: PanelState) {
+  const text = (mapShown(panel) ? panel.credit : null) ?? (panel.search.hunting ? panel.search.credit : null);
+  footer.hidden = !text;
+  credit.title = text ?? "";
+  credit.setAttribute("aria-label", text ?? "");
+}
+
+/**
+ * A section collapsed to its heading, or open. `holds` says whether it has anything to
+ * collapse; `count`, if given, is how many it lists, which its heading says while collapsed.
+ */
+function foldSection(section: HTMLElement, toggle: HTMLButtonElement, collapsed: boolean, holds: boolean, count?: number) {
   const folded = collapsed && holds;
   section.classList.toggle("collapsed", folded);
   toggle.disabled = !holds;
   toggle.setAttribute("aria-expanded", String(!folded));
   toggle.title = !holds ? "" : folded ? "Show this section" : "Collapse to the heading";
+  if (count === undefined) return;
   const countEl = byId(`${toggle.id}-count`);
   countEl.hidden = !folded;
   countEl.textContent = String(count);
@@ -468,15 +484,46 @@ function renderToolbar(panel: PanelState) {
 }
 
 /**
- * The Hunting section, at the bottom of the normal view: the Hunting Target's mob and
- * map, the map's figures, and the route there from the map you're on, which scrolls
- * when the panel runs out of room. Its 🔍 reopens the mob's map list; its × clears it.
+ * The mob's animation in a square of its own, standing on its floor at its own size (drawn
+ * pixelated), or scaled down smoothly to fit, never up, as the Mob Card draws it. The
+ * square keeps its room while the animation loads, or when there is none.
  */
-function renderHunting(panel: PanelState) {
+function fillSprite(square: HTMLElement, url: string | null, scaleAbove: number) {
+  const img = square.querySelector("img");
+  if ((img?.getAttribute("src") ?? null) === url) return;
+  if (!url) {
+    square.replaceChildren();
+    return;
+  }
+  const next = document.createElement("img");
+  next.alt = "";
+  // Shrunk to fit, a sprite is smoothed: pixel doubling only works upward.
+  next.addEventListener("load", () =>
+    next.classList.toggle("scaled", next.naturalWidth > scaleAbove || next.naturalHeight > scaleAbove),
+  );
+  // No saved image after all: the square stays empty.
+  next.addEventListener("error", () => next.remove());
+  next.src = url;
+  square.replaceChildren(next);
+}
+
+/** The Navigation section's square for the Hunting Target mob's animation, in CSS px. */
+const TARGET_SPRITE = 40;
+
+/**
+ * The Navigation section, between the Map and the Mobs, while there is a Hunting Target:
+ * its mob (as OSMS animates it) and map, the map's figures, and the route there from the
+ * map you're on, which scrolls when the panel runs out of room; once you're there, that
+ * you've arrived. Its 🔍 reopens the mob's map list; its × clears it. It collapses to its
+ * heading like the map's sections.
+ */
+function renderNavigation(panel: PanelState) {
   const target: HuntingTarget | null = panel.search.hunting;
-  hunting.hidden = !target;
-  if (!target || !changed("hunting", target, panel.search.credit, panel.credit)) return;
+  navigation.hidden = !target;
+  if (!target || !changed("navigation", target, panel.collapsedSections.navigation)) return;
+  foldSection(navigation, navigationToggle, panel.collapsedSections.navigation, true);
   const { mob, map } = target;
+  fillSprite(huntingSprite, target.image, TARGET_SPRITE);
   // The mob on the first line, the map on the next.
   const mobLine = document.createElement("span");
   mobLine.className = "hunting-mob";
@@ -511,9 +558,6 @@ function renderHunting(panel: PanelState) {
   huntingArrival.hidden = !arrived;
   huntingTrip.textContent = trip ? tripLine(trip) : "";
   huntingTrip.hidden = !trip;
-  // The footer credits OSMS whenever a map is shown; otherwise the section does.
-  huntingCredit.textContent = panel.search.credit ?? "";
-  huntingCredit.hidden = !panel.search.credit || !!panel.credit;
 }
 
 /**
@@ -875,16 +919,7 @@ function mobFigures(details: MobDetails): HTMLDListElement {
 function mobCardContent(mob: Mob, card: MobCard): Node[] {
   const sprite = document.createElement("div");
   sprite.className = "mob-card-sprite";
-  if (card.image) {
-    const img = document.createElement("img");
-    img.alt = "";
-    // Shrunk to fit, a sprite is smoothed: pixel doubling only works upward.
-    img.addEventListener("load", () => img.classList.toggle("scaled", img.naturalWidth > 64 || img.naturalHeight > 64));
-    // No saved image after all: the box stays empty.
-    img.addEventListener("error", () => img.remove());
-    img.src = card.image;
-    sprite.append(img);
-  }
+  fillSprite(sprite, card.image, 64);
   const who = document.createElement("div");
   who.className = "mob-card-who";
   who.append(span("mob-card-name", mob.name), span("mob-card-gait", `Lv ${mob.level} · ${card.speed}`));
@@ -1021,7 +1056,8 @@ function render(panel: PanelState) {
     `${causes} ${taken ? "Close the other app, or change" : "Change"} ${them} in Settings (the gear at the top of the panel).`;
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
   renderData(panel);
-  renderHunting(panel);
+  renderNavigation(panel);
+  renderCredit(panel);
   renderSearchView(panel);
   renderSettingsView(panel);
   shownPanel = panel;
@@ -1128,7 +1164,7 @@ searchBack.addEventListener("click", () => invoke("search_escape"));
 huntingReopen.addEventListener("click", () => invoke("hunting_reopen"));
 huntingClear.addEventListener("click", () => invoke("hunting_clear"));
 // A click on a section's heading collapses the section to it, or opens it again.
-for (const toggle of [portalsToggle, mobsToggle]) {
+for (const toggle of [portalsToggle, navigationToggle, mobsToggle]) {
   toggle.addEventListener("click", () => invoke("panel_toggle_section", { section: toggle.dataset.section }));
 }
 

@@ -1,16 +1,16 @@
 //! The Hunting Target: the mob and map the player picked in the search view. The panel's
-//! Hunting section shows the map's Density Tier, Density, Spawn Share and Distance, and
-//! the route there from the player's current map, recomputed as they move. When they
-//! arrive it says so, with the trip as it stood when they picked it, and it goes away
-//! once they leave that map, or when they clear it with ×.
+//! Navigation section shows the mob as OSMS animates it, the map's Density Tier, Density,
+//! Spawn Share and Distance, and the route there from the player's current map,
+//! recomputed as they move. When they arrive it says so, with the trip as it stood when
+//! they picked it, and it goes away once they leave that map, or when they clear it with ×.
 //!
 //! The maps the player stands on are titled like the minimap samples (Sunset Sky,
 //! Kerning City), so arriving with that sample puts the panel on them.
 
 mod common;
 
-use common::arrive;
-use common::world::{WorldMap, map, mob, orange, search_for, world};
+use common::world::{WorldMap, map, mob, orange, osms_world, search_for, world};
+use common::{FakeSource, arrive, osms};
 use compass_core::{Action, Compass, DensityTier, Distance, HuntingTarget, Mob, PanelState, SearchView, Step};
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
@@ -35,7 +35,12 @@ fn mushroom_roads() -> Vec<WorldMap> {
 
 /// A core over `maps`, its file set in hand, with the player arrived on Sunset Sky.
 fn on_sunset_sky(maps: Vec<WorldMap>) -> Compass {
-    let mut compass = Compass::new(world(maps));
+    on_sunset_sky_from(world(maps))
+}
+
+/// As [`on_sunset_sky`], with the file set and pictures from `source`.
+fn on_sunset_sky_from(source: FakeSource) -> Compass {
+    let mut compass = Compass::new(source);
     compass.tick(0);
     compass.tick(50);
     arrive(&mut compass, SUNSET, 100);
@@ -66,7 +71,7 @@ fn route(state: &PanelState) -> Vec<String> {
 }
 
 #[test]
-fn the_hunting_section_shows_the_mob_and_map_with_its_figures() {
+fn the_navigation_section_shows_the_mob_and_map_with_its_figures() {
     let mut compass = on_sunset_sky(mushroom_roads());
 
     let state = hunt_orange_on(&mut compass, "100000002");
@@ -78,6 +83,65 @@ fn the_hunting_section_shows_the_mob_and_map_with_its_figures() {
     assert_eq!(target.map.density_hundredths, 600, "4 spawns at a 1.5x Mob Rate");
     assert_eq!(target.map.spawn_share_percent, 40);
     assert_eq!(target.map.distance, Distance::MapChanges(2));
+}
+
+/// The mob is shown as its Mob Card shows it: OSMS's default animation, asked for as a
+/// picture and loaded from where the source says it is.
+#[test]
+fn the_hunting_target_shows_the_mobs_animation_once_it_is_in() {
+    let mut compass = on_sunset_sky(mushroom_roads());
+
+    let state = hunt_orange_on(&mut compass, "100000002");
+    assert_eq!(target(&state).image, None, "not asked for yet");
+    let state = compass.tick(200).clone();
+
+    assert_eq!(target(&state).image.as_deref(), Some("picture:images/monsters/gif9.webp"));
+}
+
+/// The panel's own pictures come first: the shown map's, then its listed mobs' animations,
+/// then the Hunting Target mob's.
+#[test]
+fn the_mobs_animation_is_asked_for_after_the_maps_picture_and_the_listed_mobs() {
+    let source = world(vec![
+        map("100000000", "Sunset Sky", 100, vec![mob("4", "Shroom", 2, 6)]).to(&["100000001"]),
+        map("100000001", "Mushroom Field", 100, vec![orange(4)]),
+    ]);
+    let requests = source.picture_requests.clone();
+    let mut compass = on_sunset_sky_from(source);
+    hunt_orange_on(&mut compass, "100000001");
+
+    compass.tick(200);
+
+    assert_eq!(
+        *requests.lock().unwrap(),
+        ["maps/picture100000000.webp", "images/monsters/gif4.webp", "images/monsters/gif9.webp"]
+    );
+}
+
+#[test]
+fn a_mob_osms_has_no_animation_for_shows_none() {
+    let world = osms_world(mushroom_roads()).with_mob(osms::mob(9, "Orange Mushroom", 8, 0, 0).without_animation());
+    let mut compass = on_sunset_sky_from(FakeSource::with_world(world));
+    hunt_orange_on(&mut compass, "100000002");
+
+    let state = compass.tick(200);
+
+    assert_eq!(target(state).image, None);
+}
+
+#[test]
+fn the_mobs_animation_stays_once_the_player_has_arrived() {
+    let mut compass = on_sunset_sky(vec![
+        map("100000000", "Sunset Sky", 100, vec![]).to(&["100000001"]),
+        map("100000001", "Kerning City", 100, vec![orange(10)]).to(&["100000000"]),
+    ]);
+    hunt_orange_on(&mut compass, "100000001");
+    compass.tick(200);
+
+    let state = arrive(&mut compass, KERNING, 1_000);
+
+    assert!(target(&state).arrived);
+    assert_eq!(target(&state).image.as_deref(), Some("picture:images/monsters/gif9.webp"));
 }
 
 #[test]
