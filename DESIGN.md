@@ -31,6 +31,8 @@ colors:
   rule: "rgba(62, 82, 124, 0.2)"
   portal: "#1f63d6"
   portal-fill: "#eef5ff"
+  teleport: "#1e9e3a"
+  unknown: "#7a8396"
   mob: "#d8342a"
   mob-edge: "#8e1c15"
   you: "#ffd21f"
@@ -49,13 +51,10 @@ colors:
   tag-bg: "#dae3f3"
   tag-edge: "#a3b6d8"
   tag-ink: "#284a86"
-  quest-bg: "#dff0d8"
-  quest-edge: "#98c58a"
-  quest-ink: "#2b6a20"
+  quest-bg: "#ece4f7"
+  quest-edge: "#b9a5dc"
+  quest-ink: "#55308f"
   minimap-paper: "#eef3fb"
-  minimap-frame: "#50648c"
-  minimap-grid: "#b8c7e1"
-  minimap-cell: "#a9c3ec"
   button-top: "#4673c6"
   button-base: "#2a52a6"
   button-edge: "#1c3672"
@@ -208,10 +207,12 @@ components:
     typography: "{typography.body}"
     rounded: "{rounded.window}"
     padding: "4px 8px 5px 24px"
-  mini-minimap:
+  map-preview:
     backgroundColor: "{colors.minimap-paper}"
-    width: "47px"
-    height: "29px"
+    textColor: "{colors.panel-ink-2}"
+    typography: "{typography.body-small}"
+    rounded: "{rounded.window}"
+    padding: "5px"
   inset-box:
     backgroundColor: "{colors.inset-bg}"
     textColor: "{colors.panel-ink}"
@@ -230,6 +231,12 @@ components:
     typography: "{typography.body-small}"
     rounded: "{rounded.window}"
     padding: "6px 10px 8px 6px"
+  mark-card:
+    backgroundColor: "{colors.body-solid}"
+    textColor: "{colors.panel-ink}"
+    typography: "{typography.body-small}"
+    rounded: "{rounded.window}"
+    padding: "4px 8px 6px"
   search-input:
     backgroundColor: "#ffffff"
     textColor: "{colors.panel-ink}"
@@ -360,7 +367,7 @@ Every window takes the pointer. The overlay is always clickable, but a click nev
 **Key Characteristics:**
 - The Mini Map's light grey window bar and sky-blue title panel over the Quest Helper's see-through periwinkle body, in a 4px-cornered frame.
 - Street Name over Map Name in light lettering outlined in blue, as the Mini Map draws its title.
-- Three icon vocabularies only: minimap glyphs (portal ring, mob dot, you dot and the you yellow star, mini-minimap) in CSS and SVG, drawn line icons on the game's small blue buttons, and the pixel-art compass as the window's mark.
+- Three icon vocabularies only: minimap glyphs (portal ring, mob dot, you dot and the you yellow star) and the Map Preview's rings and teleport arrows in CSS and SVG, drawn line icons on the game's small blue buttons, and the pixel-art compass as the window's mark.
 - Near-black ink with a faint light edge on the see-through body; navy ink on setup's opaque lavender.
 - Game orange appears only for doubt and problems.
 - NEXON's Maplestory typeface throughout, Light and Bold; numeric columns right-aligned.
@@ -368,10 +375,10 @@ Every window takes the pointer. The overlay is always clickable, but a click nev
 
 ## Colors
 
-Cool periwinkles, sky blue and light grey from the game's own windows, near-black and navy inks, three minimap accents (portal blue, mob red, you yellow), a reserved game orange, the game's bright blue for overlay buttons, a deep steel for setup's, and the game's EXP lime for its EXP gauge alone.
+Cool periwinkles, sky blue and light grey from the game's own windows, near-black and navy inks, three minimap accents (portal blue, mob red, you yellow), two more ring colours for the Map Preview (teleport green, unknown grey), a reserved game orange, the game's bright blue for overlay buttons, a deep steel for setup's, and the game's EXP lime for its EXP gauge alone.
 
 ### Primary
-- **Portal Ring Blue** (portal): the minimap's portal ring. The section mark for Hidden Portals (over Portal Ring Fill, portal-fill) and the ring and core in each mini-minimap.
+- **Portal Ring Blue** (portal): the minimap's portal ring. The section mark for Portals (over Portal Ring Fill, portal-fill), and the ring of every portal to another map, Doors included, on the Map Preview and on its Hidden Portal's row.
 
 ### Secondary
 - **Game Orange** (orange, with orange-deep for edges and text outlines): the game's small orange button. The dot in problem notes (overlay, setup and the Grind Tracker's "Can't read the EXP bar"), in the settings view's line under keys it refused, and the collapsed icon's alert dot. The "Not sure" chip is the game's orange button itself, a gradient from Doubt Gold (doubt-top) to Doubt Amber (doubt-base). Problem notes sit on Problem Cream (problem-bg), edged in Problem Amber (problem-edge), with Problem Brown text (problem-ink). The "paused" tag in the Grind Tracker borrows that cream, amber and brown, without the orange, because held figures are a state to notice; so do the settings view's "Taken" and "Invalid" tags, and the keys it refused, set in a cream chip until others are pressed.
@@ -379,6 +386,8 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 ### Tertiary
 - **Mob Dot Red** (mob, edged by mob-edge): the minimap's mob dot. The section mark for Mobs and the bullet on each mob row.
 - **You Yellow** (you, lit by you-light, edged by you-edge): the minimap's dot for the player's own character. It marks the Hunting Target's arrival, "You're here", as a 10px dot with a you-light highlight up and to the left (and the map the player is on in the Personal Bests page the same way), and one other thing about the player, their best: the Grind Tracker's star on Last 5 min while it is a new best on the map (and the Personal Bests page's star on their best of all maps), an 11px inline SVG star filled You Yellow, lit by a you-light highlight up and to the left, and ringed in you-edge. Kept clear of Game Orange: a pale yellow with a dark gold edge, never a chip or a note.
+- **Teleport Green** (teleport): the Map Preview's green for a teleport within the map, OSMS Data Explorer's meaning in a deeper shade. The ring of a portal that leads elsewhere on the same map, its dashed arrow to where it lands, and the row ring of such a Hidden Portal. The panel's one true green, kept apart from EXP Lime.
+- **Unknown Grey** (unknown): OSMS's grey, taken from the panel's cool inks: the Map Preview's ring for a portal to a map not in the data, and that Hidden Portal's row ring.
 - **EXP Lime** (exp-top, exp-mid, exp-base), on **EXP Track** grey (exp-track) under an **EXP Frame** (exp-frame): the game's own EXP gauge, sampled from its status bar (a lime fill on a light grey track, a dark grey frame with a white line beneath it). The Grind Tracker's EXP gauge, and nothing else. A yellow-green, kept apart from You Yellow's gold.
 
 ### Neutral
@@ -389,14 +398,14 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 - **Game Button Blue** (game-button-top, game-button-mid, game-button-base, edged by game-button-edge): the game's bright blue window buttons, the overlay's and the Grind Tracker's toolbars and the search view's back button. Hover and pressed gradients are one step lighter and one step deeper.
 - **Panel Ink** (panel-ink), **Panel Ink Steel** (panel-ink-2) and **Panel Ink Slate** (panel-ink-3): the Quest Helper's near-black text on the glass, for primary text and values; secondary text such as notes, positions, units, labels and table headers; and tertiary text such as the footer, candidate map IDs, key hints, the crawl note and placeholders.
 - **Panel Rule** (panel-rule): the hairline between parts of the panel, above the Hunting Target and the footer.
-- **Inset** (inset-bg, inset-edge): white at 50% edged in navy at 30%, for a list or box set into the panel's body: the Hunting Target's route and arrival, and the search suggestions. The Grind Tracker's figures and the search results sit on near-opaque Window Lavender instead, edged the same. The Personal Bests page's table is the Inset tint on opaque lavender.
+- **Inset** (inset-bg, inset-edge): white at 50% edged in navy at 30%, for a list or box set into the panel's body: the Hunting Target's route and arrival, and the search suggestions. Inset Edge alone frames the Map Preview's paper. The Grind Tracker's figures and the search results sit on near-opaque Window Lavender instead, edged the same. The Personal Bests page's table is the Inset tint on opaque lavender.
 - **Results Header** (results-head): the opaque tone of the glass behind the search results' sticky header, so rows scrolled under it don't show through.
 - **Ink** (ink), **Ink Steel** (ink-2) and **Ink Slate** (ink-3): navy text on lavender, in setup, the title-marking hint and the Personal Bests page; Ink is also the ground of the collapsed icon's count chip and Time to Level badge; Ink Steel is the badge's ground while its figure is held.
 - **Window Lavender** (body) and **Window Lavender, Opaque** (body-solid): the title-marking hint's translucent body, and setup's and the Personal Bests page's opaque one; at 95%, the ground of the Grind Tracker's figures. **Frame Navy** (frame): the hint's border, setup's secondary buttons and the search field. **Window Rule** (rule): the hairline above setup's button row.
-- **Selection Periwinkle** (select, edged by select-edge): the selected row wherever there is one: the shown candidate, the suggestion Enter picks, the result Enter makes the Hunting Target, the hotkey waiting for its new keys; and the Personal Bests page's text selection. select-edge also colours every scrollbar thumb.
-- **Tag Periwinkle** (tag-bg, tag-edge, tag-ink): the "Hidden Street" tag, setup's "Recognised" and "Read" tags, and (tag-bg alone) the Personal Bests page's table header. **NPC Green** (quest-bg, quest-edge, quest-ink): the "Quest" tag, taken from the minimap's NPC green.
+- **Selection Periwinkle** (select, edged by select-edge): the selected row wherever there is one: the shown candidate, the suggestion Enter picks, the result Enter makes the Hunting Target, the hotkey waiting for its new keys, the Hidden Portal row whose ring is lit; and the Personal Bests page's text selection. select-edge also colours every scrollbar thumb.
+- **Tag Periwinkle** (tag-bg, tag-edge, tag-ink): the "Hidden Street" tag, the mark card's "Hidden", "Door", "Within the map" and "Not in the map list" tags, setup's "Recognised" and "Read" tags, and (tag-bg alone) the Personal Bests page's table header. **Quest Violet** (quest-bg, quest-edge, quest-ink): the "Quest" tag, on a Hidden Portal's row and on the mark card. Violet because no other meaning holds it: green now means a teleport within the map, and cream and amber tags already mean a state to notice (the Orange Means Doubt Rule keeps the game's orange for problems).
 - **Edit Blue** (edit): the 2px keyboard-focus ring in every window, the dashed drag box when marking, the checked travel checkboxes (`accent-color`), and, at 8%, the hover tint on suggestion and result rows and the Personal Bests page's rows.
-- **Minimap Paper** (minimap-paper, minimap-frame, minimap-grid, minimap-cell): the mini-minimap's ground, frame, 5x3 grid lines and lit cell.
+- **Minimap Paper** (minimap-paper): the Map Preview's opaque paper, under OSMS's see-through picture of the map, so the game doesn't show through it.
 - **Button Steel** (button-top, button-base, edged by button-edge): the deep-steel gradient of setup's primary button, deep enough that white holds 4.5:1 even at its light top. **Light Steel** (button-light-top, button-light-base): setup's secondary buttons and the overlay's light icon and text buttons in the body. Hover gradients sit one step darker (deep) or lighter (light).
 - **Greyed** (disabled-bg, disabled-edge, disabled-ink): a button the window won't take, flat with no highlight.
 - **Navy Veil** (veil): the title-marking window's whole surface, so the game reads as paused behind it. It is non-zero on purpose: a fully transparent pixel would not take the mouse.
@@ -404,7 +413,7 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 ### Named Rules
 **The Orange Means Doubt Rule.** Game orange marks only uncertainty and problems: the "Not sure" chip, problem notes, the collapsed alert dot. A confirmed state never uses it, so orange can't become decoration. Search tiers are told apart by weight and ink, never by orange.
 
-**The Minimap Legend Rule.** Portal blue, mob red and you yellow come from the minimap's legend and keep that meaning. Blue is for portals, red is for mobs and yellow is for where the player is, with no other uses but one: you yellow also draws the star for a best (the Grind Tracker's new best, the Personal Bests page's best of all maps), since both are about the player.
+**The Minimap Legend Rule.** Portal blue, mob red and you yellow come from the minimap's legend and keep that meaning. Blue is for portals, red is for mobs and yellow is for where the player is, with no other uses but one: you yellow also draws the star for a best (the Grind Tracker's new best, the Personal Bests page's best of all maps), since both are about the player. The Map Preview adds two ring colours from OSMS Data Explorer, each with one meaning: Teleport Green for a portal within the map and its arrow, Unknown Grey for a portal to a map not in the data. Blue stays the ring of a portal to another map, Doors included; green is never a tag.
 
 **The EXP Lime Rule.** The lime of the game's EXP gauge draws the EXP bar's reading in the Grind Tracker and nothing else: not progress in general (the crawl gauge is Game Button Blue), and never a highlight.
 
@@ -423,12 +432,12 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 ### Hierarchy
 - **Headline** (700, 18px/23px, 0.01em): the Map Name, in Title Lettering on the title panel, in the overlay and in setup's recognised test read. Wraps to at most two lines rather than losing its end. It wraps in balanced lines (`text-wrap: balance`), so a second line is never a stranded word. When no map is read, the status takes this slot at 15px/23px bold (Status) in plain Panel Ink with no outline, so it doesn't read as a map name. The Time to Level figure and setup's step headings use 18px bold in plain ink, without the outline. Held (warming up, paused, or with the EXP bar unread), the Time to Level figure and the rates drop to Light (the Best row's figure, which doesn't move, stays bold): a step back in weight, never a fainter colour or opacity, so held figures stay as legible over the game. With no figure to give, the slot says why in 13px Light Panel Ink Steel ("not yet", "no gain yet", "losing EXP"), never a bare dash. Setup's EXP test read sets its figures at 16px/22px bold.
 - **Street** (700, 14px/18px): the Street Name above the Map Name, in the same Title Lettering, the Mini Map's own idiom.
-- **Section Heading** (700, 14px/18px): the overlay's section headings (Hidden Portals, Mobs, the Hunting Target's mob), in Panel Ink. The Street's size, one step above the 13px bold rows they head, so a heading never reads as one more row.
+- **Section Heading** (700, 14px/18px): the overlay's section headings (Portals, Mobs, the Hunting Target's mob), in Panel Ink. The Street's size, one step above the 13px bold rows they head, so a heading never reads as one more row.
 - **Window Name** (700, 12px/16px): the window's name on the window bar ("MapleCompass", "Grind Tracker") in Window Bar Ink, and the search view's title there, the mob's level beside it in regular weight. Setup's step count is the same size and weight; setup's window name is 14px.
 - **Title** (700, 13px/17px): portal destinations, summary and rate values, the Hunting Target's figures and "You're here".
 - **Body Reading** (400, 14px/20px): setup's prose, the search field's text, and the title-marking hint's heading (at 700). Setup is read at rest, not in glances, so it reads one step larger than the overlay.
 - **Body** (400, 13px/17px): overlay notes, the mob and rates tables, the suggestions, and any panel text without a role of its own (the panel sets 13px/17px). Mob names are 700. Setup's notices, test read and shortcuts use 13px at an 18px line; the title-marking hint's instructions are 13px.
-- **Body Small** (400, 12px/15–17px; 15px on a single line, 16px where it wraps, 17px in a table row): positions, labels, summary units, table headers, figure labels, the route, the arrival's trip, candidate rows, key hints, the crawl note, the footer, setup's MeowDB credit, the title-marking status line.
+- **Body Small** (400, 12px/15–17px; 15px on a single line, 16px where it wraps, 17px in a table row): labels, summary units, table headers, figure labels, the route, the arrival's trip, candidate rows, key hints, the crawl note, the footer, setup's MeowDB credit, the title-marking status line, the Map Preview's "Loading map…" and the mark card's street.
 - **Button** (700, 13px/18px): setup's button labels, sentence case. The Overlay Guide button in setup's window bar is 12px.
 - **Label** (700, 11px/15px): tags, in sentence case and untracked, so a tag never takes room from the destination beside it. The "Not sure" chip alone is uppercase, tracked 0.04em, at a 13px line. Candidate map IDs are 11px regular.
 
@@ -445,9 +454,9 @@ The collapsed icon carries the system's two sizes below the Label step, held the
 
 A single column, 380px wide until the player drags a side or bottom corner (never under 320px), whose height fits its content (44–600px, or less where the panel is placed). The overlay measures its full height, borders and bottom padding included, and the window resizes to match; past that, the long parts (the route, the suggestions, the map list) scroll on Selection Edge scrollbars while the rest keeps its height. A route of three or more stops never shrinks below two and a half of them (6.5em), the cut third saying it scrolls; a shorter route never shrinks. Should the panel still not fit, its body scrolls as a whole under the window bar and title panel, which stay pinned at the top.
 
-The window bar runs full width (at least 22px tall, padding 2px 3px 2px 5px, 5px gaps): the 16px compass, the window's name, and at the right the toolbar (2px between buttons). The title panel runs full width, flush beneath it (padding 6px 10px 8px 11px, 1px between lines): the Street Name, then the Map Name with the doubt chip at its right. The body below is a vertical stack with 11px side insets and 16px at the bottom, clear of the corner grips: 9px between top-level items (11px under a window bar with no title panel, as in the search view), 10px between sections, 6px between portal rows and 2px between candidate rows. The rhythm is tuned pixel by pixel to the game's windows, not taken from a modular scale.
+The window bar runs full width (at least 22px tall, padding 2px 3px 2px 5px, 5px gaps): the 16px compass, the window's name, and at the right the toolbar (2px between buttons). The title panel runs full width, flush beneath it (padding 6px 10px 8px 11px, 1px between lines): the Street Name, then the Map Name with the doubt chip at its right. The body below is a vertical stack with 11px side insets and 16px at the bottom, clear of the corner grips: 9px between top-level items (11px under a window bar with no title panel, as in the search view), 10px between sections, and 2px between portal rows and between candidate rows. The rhythm is tuned pixel by pixel to the game's windows, not taken from a modular scale.
 
-Order is fixed: window bar, title panel, then any recovery or hotkey notes, then candidates when several maps share a title, then the status note, then Hidden Portals, then Mobs (a two-row summary grid of EXP/h and Mobs/h, solo and 6+ party, then the top five mobs in a fixed-layout table and a "+N more" line), then the Hunting Target below a Panel Rule, then the crawl note over its gauge, then a footer with the credit below a Panel Rule. A portal row is a two-column grid: the 47px mini-minimap, then the destination with its tags over the position in words. When a section has nothing to list, its heading and its "None on this map" line share one line. Empty containers collapse rather than leave strips.
+Order is fixed: window bar, title panel, then any recovery or hotkey notes, then candidates when several maps share a title, then the status note, then Portals (the Map Preview, then the Hidden Portals), then Mobs (a two-row summary grid of EXP/h and Mobs/h, solo and 6+ party, then the top five mobs in a fixed-layout table and a "+N more" line), then the Hunting Target below a Panel Rule, then the crawl note over its gauge, then a footer with the credit below a Panel Rule. The Map Preview runs the column's full width, 7px above the rows. A Hidden Portal row is one line: its 12px ring, then the destination and its tags, padded 2px 5px and set out 5px at each side so its lit tint clears the text. When a section has nothing to list, its heading and its "No hidden portals" or "No mobs on this map" line share one line; for Portals, only when there is no Map Preview and no problem note in its place. Empty containers collapse rather than leave strips.
 
 The Grind Tracker has a window of its own, built like the panel without a title panel or corner grips: 280px wide, as tall as its content. Its window bar holds its own icon (the pixel-art gold tally board in `assets/grind-tracker.png`, supplied by the owner, in place of the compass), "Grind Tracker", and at the right the button that opens the Personal Bests page (only once some map has a Personal Best), then the × that closes it. Its body, inset 11px with 10px at the bottom, stacks 8px apart: the notes (6px apart), then the figures set into the body, then the EXP gauge at the foot, where the game keeps its own. Inside the figures (padding 4px 8px 6px 9px, 3px apart): the Time to Level row, with the reset button at its far end; the rates, a row for the last 5 minutes, once the Session has run longer than that a row for the Session with its length, and on a map with a Personal Best from earlier Visits a Best row with its ×; then a line for the ceiling share and one for deaths, each wrapping. Until the Session starts, the figures hold the Best row alone, when there is one, under the waiting note. Until the player drags it, it sits beside the panel (or the collapsed icon) 8px away with the tops level, so it never moves as the panel grows and shrinks with each map: towards the middle of the game when the panel is inside it or detached, away from the game when the panel is docked, and on the other side when that one would leave the monitor. Let go within an eighth of its width of that spot, it follows the panel again. The panel's toolbar has a button that shows and hides it, pressed while it shows.
 
@@ -482,7 +491,7 @@ No window has a drop shadow. Depth comes from the game's window chrome: a faint 
 
 ## Shapes
 
-Small, game-window corners: 4px on the panel, notices, setup's buttons, the search field, inset boxes and the recognised test read; 3px on chips, tags, the badge and selectable rows; 2px on the game's small blue buttons and the light icon buttons; 6px on the title-marking hint; a full 8px pill on the collapsed icon's count chip. Borders are 1px solid in a darker tone of the fill. Dashed lines mean a place not yet fixed: the dashed drag box while marking, and the dashed frame of a mini-minimap whose portal cell is unknown. Circles are reserved for minimap glyphs. The panel's bottom corners carry a dotted grip in their triangle, the way the game's windows mark a resizable corner.
+Small, game-window corners: 4px on the panel, notices, setup's buttons, the search field, inset boxes and the recognised test read; 3px on chips, tags, the badge and selectable rows; 2px on the game's small blue buttons and the light icon buttons; 6px on the title-marking hint; a full 8px pill on the collapsed icon's count chip. Borders are 1px solid in a darker tone of the fill. Dashed lines mark three things: the drag box while marking, a place not yet fixed; the ring of a Hidden or Quest Portal, a way the game doesn't show plainly; and the Map Preview's arrow from a teleport to where it lands, as OSMS draws it. Circles are reserved for minimap glyphs and the Map Preview's rings. The panel's bottom corners carry a dotted grip in their triangle, the way the game's windows mark a resizable corner.
 
 ## Components
 
@@ -519,15 +528,24 @@ The game's window buttons, solid and pressable, in setup.
 - **Disabled:** greyed and flat: disabled-bg, disabled-edge border, disabled-ink label, no highlight or text shadow. Next on the test read and Finish stay disabled until a read succeeds.
 
 ### Section Heading with Legend Mark
-A 14px/18px bold heading (Section Heading) led by a CSS minimap glyph: a 10px ring (2.5px portal border on portal-fill) for Hidden Portals, or an 8px red dot with a mob-edge ring for Mobs.
+A 14px/18px bold heading (Section Heading) led by a CSS minimap glyph: a 10px ring (2.5px portal border on portal-fill) for Portals, or an 8px red dot with a mob-edge ring for Mobs.
 
-The whole heading row is the section's toggle: a click anywhere on it collapses the section to the heading, or opens it again. At its right sits the game's small light button (19px, Light Steel, Window Edge border, solid white top highlight) with a 13px line icon: a dash while open, a plus while collapsed. Hovering anywhere on the row lightens the button, pressing sinks it, and keyboard focus rings the row. Collapsed, the heading adds how many the section holds in regular Panel Ink Steel ("Hidden Portals 2", "Mobs 6") and everything under it goes. A section with nothing to list has nothing to collapse: its heading drops the button and stays beside "None on this map", whatever was collapsed. Collapsed sections are a setting: the same on every map, and kept between sessions.
+The whole heading row is the section's toggle: a click anywhere on it collapses the section to the heading, or opens it again. At its right sits the game's small light button (19px, Light Steel, Window Edge border, solid white top highlight) with a 13px line icon: a dash while open, a plus while collapsed. Hovering anywhere on the row lightens the button, pressing sinks it, and keyboard focus rings the row. Collapsed, the heading adds how many the section holds in regular Panel Ink Steel ("Portals 2", counting the Hidden Portals alone, so a map with only its picture reads "Portals 0"; "Mobs 6") and everything under it goes. A section with nothing to show has nothing to collapse: its heading drops the button and stays beside "No hidden portals" or "No mobs on this map", whatever was collapsed. Portals has something to show whenever it has a Map Preview (loading, drawn, or the note that it couldn't be loaded) or a row. Collapsed sections are a setting: the same on every map, and kept between sessions.
 
-### Portal Row (signature)
-Each Hidden Portal is drawn on a miniature minimap: a 47x29px SVG of the minimap's 5x3 grid (9-unit cells). It is drawn in this order: the Minimap Paper field, the portal's cell lit in minimap-cell, the grid lines, then the unfilled minimap-frame border on top so no edge cell covers it, and last the game's hollow ring (portal stroke, 1.7 wide) with a solid portal core. When the spot is unknown, the frame is dashed and no cell is lit. Beside it: the destination (13px bold, truncating), any tags, and the position in words (12px Panel Ink Steel, first letter capitalised).
+### Map Preview (signature)
+OSMS's picture of the whole map with every portal ringed where it is, then a row per Hidden Portal, so the list and the picture read as one legend. It shows on every map once the map is settled: none while several maps share the title and none is chosen, or when OSMS has no picture for it.
+- **Box:** set into the body at full width, 7px above the rows: Minimap Paper (OSMS's pictures are see-through, so the glass would show the game through them) inside a 1px Inset Edge with a 4px radius, with 5px of paper around the picture so a ring at its edge isn't cut. The picture is fitted to the width and centred, never taller than 168px, so the box stays within 180px; it is fitted again when the panel changes width or the section opens. To assistive tech it is one image, named with the map and its portals ("Map of Kerning City: 6 portals marked, 2 of them hidden"); the rows carry the Hidden Portals as text.
+- **Loading:** a 140px box in the same frame and paper, "Loading map…" centred in 12px/16px regular Panel Ink Steel; then the box takes the picture's fitted height. **Failure:** the problem note "Couldn't load the map picture" in the box's place, 7px above the rows.
+- **Rings:** an SVG over the picture, drawn in screen pixels whatever the picture's scale: radius 4 to the middle of a 1.75 stroke over a 22% fill of the ring's colour, on a white halo (3.75 stroke, 95% white) so it holds on dark art and pale paper alike. Portal Ring Blue to another map (Doors included), Teleport Green within the map, Unknown Grey to a map not in the data. A Hidden or Quest Portal's ring is dashed (2.6 1.6), its gaps showing the halo. A ring answers the pointer within 8px of its centre.
+- **Arrows:** each teleport within the map draws a dashed Teleport Green line (1.5 stroke, dashes 3.5 2.5, round caps) over a white under-stroke (3.25, 85% white), from its ring's edge to the landing ring's edge, or to the landing point when nothing is ringed there, with a small white-edged Teleport Green head where it lands. A pair that land on each other is one line with a head at each end. The arrows lie under every ring.
+- **Rows:** each Hidden Portal's row leads with its ring as the picture draws it, as a 12px SVG (blue and dashed when it has no mark on the picture), then the destination (13px bold, truncating) and its tags. With none, "No hidden portals" in 13px Panel Ink Steel.
+- **Lit:** the pointer on a ring, or on its row, lights both: the ring gains a second ring around it (radius 7.5, 1.5 stroke) in its own colour and comes over its neighbours, its arrow thickens to 2.25, and the row takes Selection Periwinkle with an inset 1px select-edge ring, its text where it was. On a ring, its Mark Card shows too. The cursor stays the default, a click does nothing, and marks take no focus. Nothing moves.
+
+### Mark Card
+The card of the ring the pointer is on, shown at once (marks are small and sparse, so the Mob Card's wait would feel broken) and gone when the pointer leaves it; the pointer passes through it. Centred on the ring, 6px above it, or 6px below it when above would bring it within 6px of the window bar; kept 8px in from the panel's sides, never over the window bar or outside the panel, and never while the panel is collapsed or off its normal view. Opaque Body Solid under a 1px Window Edge with a 4px radius and the window's inner ring (0.65), no drop shadow; padding 4px 8px 6px, 12px/15px Panel Ink, at most the panel's width less 16px. The destination in 13px bold, then its street in Panel Ink Steel, both truncating, then 3px down a wrapping line of Tags saying its kind: "Hidden", "Quest", "Door", "Within the map", "Not in the map list". A visible portal to a known map has none.
 
 ### Tags
-Tags are 11px bold with a 3px radius and a 1px border. "Hidden Street" is in Tag Periwinkle, "Quest" in NPC Green, and "paused" in the problem palette. Padding follows the host line: 0 5px at a 15px line in the overlay, 0 6px at 16px in setup's "Recognised" and "Read" tags.
+Tags are 11px bold with a 3px radius and a 1px border. "Hidden Street", and the mark card's "Hidden", "Door", "Within the map" and "Not in the map list", are in Tag Periwinkle, "Quest" in Quest Violet, and "paused" in the problem palette. Padding follows the host line: 0 5px at a 15px line in the overlay, 0 6px at 16px in setup's "Recognised" and "Read" tags.
 
 ### Candidate Rows
 When several maps share a title, each row leads with what sets the map apart ("1 hidden portal · Lv 2–8 · Blue Snail…") followed by its map ID in Panel Ink Slate. The shown map's row uses Selection Periwinkle with an inset 1px select-edge ring and bold Panel Ink text.
@@ -618,7 +636,7 @@ A transparent window over the game client, its whole surface the Navy Veil with 
 - **Do** keep setup on its opaque lavender with navy ink and steel buttons under the same grey window bar.
 - **Do** use a see-through body for windows over the game and an opaque one for windows on the desktop.
 - **Do** reserve game orange for doubt and problems, and pair it with words and a shape (chip, dot, bordered note) so the state never relies on colour alone.
-- **Do** draw icons as minimap glyphs (portal ring, mob dot, you dot and the you yellow star, mini-minimap) in CSS or inline SVG, or as 2-stroke line icons on the game's small buttons; the pixel-art compass is the only raster and marks the window.
+- **Do** draw icons as minimap glyphs (portal ring, mob dot, you dot and the you yellow star) and the Map Preview's rings and arrows in CSS or inline SVG, or as 2-stroke line icons on the game's small buttons; the pixel-art compass is the only raster and marks the window.
 - **Do** keep numeric columns right-aligned.
 - **Do** let notes and the Map Name wrap, and truncate single-line facts with an ellipsis.
 - **Do** keep the Street Name above the Map Name wherever a map is shown as the overlay shows it.
