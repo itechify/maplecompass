@@ -11,6 +11,10 @@
 - `cargo run -p maplecompass --example probe item samples/item-tooltip "<item name>" [--desc <tag>] [--delay <s>]`: after a countdown, save the game's client area named with the item and the pointer's position, for samples.
 - `cargo run -p maplecompass --example probe osms`: fetch OSMS Data Explorer's live file set and read it in full with the core's reader, reporting its counts or what didn't read. No game is needed.
 
+## Releasing
+
+- `docs/releasing.md`: how versions are numbered (the four files that hold the version), and the steps to bump, merge, build, tag and publish a GitHub Release, with the release notes template. Follow it for every release.
+
 ## Code rules
 
 - All logic goes in `crates/compass-core`, which takes plain data in and returns a `PanelState`. It has no OS, UI, network or file dependencies.
