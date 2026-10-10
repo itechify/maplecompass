@@ -136,12 +136,18 @@ pub struct CurrentMap {
     pub url: String,
 }
 
-/// The credit for everything MapleCompass shows from MeowDB (ADR 0003).
+/// The credit for what MapleCompass shows from MeowDB (ADR 0003): search's results, from
+/// the world crawl, and the Personal Bests page.
 pub const MEOWDB_CREDIT: &str = "NiaMeowDB (meowdb.com)";
+
+/// The panel's credit (ADR 0008): its data is OSMS Data Explorer's, and its title and
+/// mobs' names open NiaMeowDB's pages.
+pub const OSMS_CREDIT: &str = "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com)";
 
 /// The panel's credit when it lists mobs: their Mob Cards show images from maplestory.io
 /// (ADR 0006).
-pub const MEOWDB_AND_IMAGES_CREDIT: &str = "NiaMeowDB (meowdb.com) · images: maplestory.io";
+pub const OSMS_AND_IMAGES_CREDIT: &str =
+    "Data: OSMS Data Explorer (osmsdataexplorer.com) · pages: NiaMeowDB (meowdb.com) · images: maplestory.io";
 
 /// Whether minimap titles can be recognised as real maps.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
@@ -183,8 +189,7 @@ pub struct PanelState {
     /// The shown map's Map Summary, mobs and Hidden Portals from MeowDB, or why they
     /// aren't there.
     pub data: MapDataStatus,
-    /// [`MEOWDB_CREDIT`] whenever a map is shown: its names and data are MeowDB's; with
-    /// Mob Cards, [`MEOWDB_AND_IMAGES_CREDIT`].
+    /// [`OSMS_CREDIT`] whenever a map is shown; with Mob Cards, [`OSMS_AND_IMAGES_CREDIT`].
     pub credit: Option<&'static str>,
     /// The Mob Card of each mob the panel lists, in its order; empty while it lists none.
     pub mob_cards: Vec<MobCard>,
@@ -535,7 +540,7 @@ impl Compass {
         let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
         self.mob_cards.list(listed);
         self.state.mob_cards = self.mob_cards.cards();
-        let credit = if self.state.mob_cards.is_empty() { MEOWDB_CREDIT } else { MEOWDB_AND_IMAGES_CREDIT };
+        let credit = if self.state.mob_cards.is_empty() { OSMS_CREDIT } else { OSMS_AND_IMAGES_CREDIT };
         self.state.credit = self.state.map.as_ref().map(|_| credit);
     }
 
