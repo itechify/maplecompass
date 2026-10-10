@@ -547,24 +547,37 @@ impl Compass {
         self.state.credit = self.state.map.as_ref().map(|_| OSMS_AND_MEOWDB_CREDIT);
     }
 
-    /// What shows OSMS's pictures, with those in so far: the Map Preview and the listed
-    /// mobs' Mob Cards.
+    /// What shows OSMS's pictures, with those in so far: the Map Preview (its portals on the
+    /// Hunting Target's route marked), the listed mobs' Mob Cards and the Hunting Target's mob.
     fn sync_pictured(&mut self) {
-        self.state.map_preview = self.set.as_ref().and_then(|set| self.shown_map.preview(&set.maps, &self.pictures));
+        let next_map = self.state.search.hunting.as_ref().and_then(HuntingTarget::next_map_by_portal);
+        self.state.map_preview = self
+            .set
+            .as_ref()
+            .and_then(|set| self.shown_map.preview(&set.maps, &self.pictures))
+            .map(|preview| preview.on_route_to(next_map));
         let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
         self.state.mob_cards = match &self.set {
             Some(set) => mob_card::cards(listed, &set.maps, &self.pictures),
             None => Vec::new(),
         };
+        if let (Some(hunting), Some(set)) = (&mut self.state.search.hunting, &self.set) {
+            hunting.image = set.maps.animation(&hunting.mob.id).and_then(|path| self.pictures.url(path)).map(String::from);
+        }
     }
 
     /// Ask for the pictures the panel wants, one at a time: the Map Preview's first, then
-    /// the listed mobs' animations.
+    /// the listed mobs' animations, then the Hunting Target mob's.
     fn poll_pictures(&mut self, at_ms: u64) {
         let Some(set) = &self.set else { return };
         let preview = self.state.map_preview.as_ref().map(|preview| map_preview::picture_path(&preview.picture));
         let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
-        let wanted: Vec<String> = preview.into_iter().chain(mob_card::animations(listed, &set.maps)).collect();
+        let hunted = self.state.search.hunting.as_ref().and_then(|hunting| set.maps.animation(&hunting.mob.id));
+        let wanted: Vec<String> = preview
+            .into_iter()
+            .chain(mob_card::animations(listed, &set.maps))
+            .chain(hunted.map(String::from))
+            .collect();
         self.pictures.poll(&wanted, &mut *self.source, at_ms);
         self.sync_pictured();
     }
@@ -783,10 +796,12 @@ impl Compass {
     }
 
     /// Bring the panel's mob search up to date with the player's inputs, OSMS's file set,
-    /// the map shown and the travel toggles.
+    /// the map shown and the travel toggles; and with it what follows from the Hunting
+    /// Target: its mob's animation, and the Map Preview's portals on its route.
     fn sync_search(&mut self) {
         let search = self.search.state(&searched(&self.set, &self.state, &self.settings));
         self.state.search = search;
+        self.sync_pictured();
     }
 
     /// The player pressed one of the global hotkeys (an accelerator string, as listed

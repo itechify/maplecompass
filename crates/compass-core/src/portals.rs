@@ -113,10 +113,13 @@ pub(crate) fn portals(map: &MapFacts, exits: Vec<Exit>, overrides: &[PortalOverr
             at: e.at,
             leads,
             kind,
+            to_map_id: e.to_map_id.clone(),
             to_map_name: e.to.map_name.clone(),
             to_street_name: e.to.street_name.clone(),
             lands_at: None,
             hidden_portal: row,
+            // The Hunting Target's route is the panel's: it marks these when it shows them.
+            next_on_route: false,
         });
         if within {
             teleports.push((sorted.marks.len() - 1, e.landing));
