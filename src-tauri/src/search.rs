@@ -1,8 +1,8 @@
 //! Mob search in the overlay. The overlay is always clickable but never activated by a
-//! click; only while the search view is open does it take the keyboard (ADR 0001): it
-//! becomes focusable and comes to the front when the view opens, and gives focus back
-//! when it closes, so Windows returns it to the game. Nothing is sent to the game: no
-//! input, no messages.
+//! click; only while the search view (or the settings view) is open does it take the
+//! keyboard (ADR 0001): it becomes focusable and comes to the front when the view opens,
+//! and gives focus back when it closes, so Windows returns it to the game. Nothing is sent
+//! to the game: no input, no messages.
 //!
 //! Every decision is the core's; this only moves focus to and from our own overlay and
 //! relays the player's typing, keys and clicks.
@@ -57,7 +57,7 @@ fn act(commands: &Sender<Command>, action: Action) {
     let _ = commands.send(Command::Act(action));
 }
 
-/// One of the icons at the top of the panel (🔍, help & setup, placement and the rest):
+/// One of the icons at the top of the panel (🔍, Help & Setup, placement and the rest):
 /// the same as its hotkey.
 #[tauri::command]
 pub fn panel_press(control: PanelControl, commands: State<'_, Sender<Command>>) {
