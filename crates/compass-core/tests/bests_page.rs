@@ -1,15 +1,16 @@
 //! The Personal Bests page (GLOSSARY): every map's Personal Best side by side, opened in
 //! the player's browser from the Grind Tracker's window bar, to compare maps. The core
 //! hands the shell the page as plain data, one map a row, highest EXP/h first: the bests
-//! as saved, the Visit under way's included, with each map's names, mob levels and share
-//! of its solo EXP/h ceiling, and the map the player is on marked.
+//! as saved, the Visit under way's included, with each map's names, region, mob levels
+//! and share of its solo EXP/h ceiling from OSMS's file set, and the map the player is
+//! on marked.
 
 mod common;
 
 use common::player::Player;
-use common::{CONSTRUCTION_SITE_ID, SUNSET_SKY_ID, sharing_a_title, tracking, tracking_with};
+use common::{CONSTRUCTION_SITE_ID, FakeSource, SUNSET_SKY_ID, osms, sharing_a_title, tracking, tracking_with};
 use compass_core::{
-    BESTS_VERSION, BestsPage, BestsPageMap, LevelRange, MEOWDB_CREDIT, MapBests, PanelControl, PanelState, Request,
+    BESTS_VERSION, BestsPage, BestsPageMap, LevelRange, MapBests, OSMS_CREDIT, PanelControl, PanelState, Request,
     SavedBests, VisitBest, meowdb,
 };
 
@@ -46,18 +47,25 @@ fn row<'a>(page: &'a BestsPage, map: &str) -> &'a BestsPageMap {
     page.maps.iter().find(|m| m.id == map).unwrap_or_else(|| panic!("no row for {map}"))
 }
 
-/// Time passes with the player standing still, long enough for the world crawl to read
-/// every saved page (each is at hand, so taken at once).
-fn crawl_the_world(player: &mut Player) {
-    for _ in 0..60 {
-        player.compass.tick(player.at);
-    }
+/// Bests saved at an earlier launch: one Visit's, with no date, on each map.
+fn bests_of(maps: &[(&str, u64)]) -> SavedBests {
+    let visit = |exp_per_hour| vec![VisitBest { exp_per_hour, set_at_unix_ms: None }];
+    let maps = maps.iter().map(|&(id, exp)| MapBests { id: id.into(), visits: visit(exp) }).collect();
+    SavedBests { version: BESTS_VERSION, maps }
 }
 
-/// Sunset Sky's mob levels, from its saved page: Blue Snail to Green Mushroom.
+/// Henesys Hunting Ground I's map ID: its Map Summary is the one the spec works out.
+const HENESYS_HUNTING_GROUND_I_ID: &str = "010001010";
+
+/// Maple Hill: a Hidden Street map in the Event region.
+const MAPLE_HILL: u64 = 90_000_000;
+const MAPLE_HILL_ID: &str = "090000000";
+
+/// Sunset Sky's mob levels in the made-up game world: Blue Snail to Green Mushroom.
 const SUNSET_SKY_LEVELS: LevelRange = LevelRange { lowest: 2, highest: 14 };
 
-/// The Construction Site's mob levels, from its saved page: Red Snail to Blue Mushroom.
+/// The Construction Site's mob levels in the made-up game world: Red Snail to Blue
+/// Mushroom.
 const CONSTRUCTION_SITE_LEVELS: LevelRange = LevelRange { lowest: 4, highest: 19 };
 
 #[test]
@@ -99,7 +107,7 @@ fn a_first_visits_best_is_on_the_page_with_the_maps_names_levels_and_share_marke
                 set_at_unix_ms: set,
                 here: true,
             }],
-            credit: MEOWDB_CREDIT,
+            credit: OSMS_CREDIT,
         }
     );
 }
@@ -123,27 +131,49 @@ fn maps_are_highest_first_and_only_the_one_the_player_is_on_is_marked_here() {
 }
 
 #[test]
-fn a_map_the_player_is_not_on_has_its_levels_and_share_once_the_crawl_has_read_its_page() {
-    let mut player = Player::clocked(tracking());
+fn a_best_on_a_map_the_player_has_not_been_on_has_its_names_region_levels_and_share_at_once() {
+    // Bests saved at an earlier launch: Henesys Hunting Ground I (Victoria Island) and
+    // Maple Hill, an Event map given Blue Snails.
+    let world = osms::game().changing(MAPLE_HILL, |m| m.spawns(3, 4));
+    let mut compass = tracking_with(FakeSource::with_world(world));
+    compass.restore_bests(bests_of(&[(HENESYS_HUNTING_GROUND_I_ID, 7661), (MAPLE_HILL_ID, 2857)]));
+    let mut player = Player::clocked(compass);
     player.arrive(SUNSET);
-    player.hunt(6 * MIN, 20);
-    player.arrive(CONSTRUCTION_SITE);
-    player.hunt(MIN, 30);
 
-    // The crawl hasn't got to Sunset Sky: its names, but no levels or share.
-    let early = open_page(&mut player).expect("a page");
-    let sunset = row(&early, SUNSET_SKY_ID);
+    let page = open_page(&mut player).expect("a page");
     assert_eq!(
-        (sunset.map_name.as_str(), sunset.mob_levels, sunset.solo_exp_ceiling, sunset.ceiling_share_hundredths),
-        ("Sunset Sky", None, None, None)
-    );
-
-    crawl_the_world(&mut player);
-    let crawled = open_page(&mut player).expect("a page");
-    let sunset = row(&crawled, SUNSET_SKY_ID);
-    assert_eq!(
-        (sunset.mob_levels, sunset.solo_exp_ceiling, sunset.ceiling_share_hundredths),
-        (Some(SUNSET_SKY_LEVELS), Some(213_571), Some(337))
+        page.maps,
+        [
+            BestsPageMap {
+                id: HENESYS_HUNTING_GROUND_I_ID.into(),
+                street_name: "Victoria Road".into(),
+                map_name: "Henesys Hunting Ground I".into(),
+                region: "Victoria Island".into(),
+                url: meowdb::map_url(HENESYS_HUNTING_GROUND_I_ID),
+                // Blue Snail and Shroom to Green Mushroom.
+                mob_levels: Some(LevelRange { lowest: 2, highest: 14 }),
+                exp_per_hour: 7661,
+                // Of its solo ceiling, 153,216 EXP/h: 5.0%.
+                solo_exp_ceiling: Some(153_216),
+                ceiling_share_hundredths: Some(500),
+                set_at_unix_ms: None,
+                here: false,
+            },
+            BestsPageMap {
+                id: MAPLE_HILL_ID.into(),
+                street_name: "Hidden Street".into(),
+                map_name: "Maple Hill".into(),
+                region: "Event".into(),
+                url: meowdb::map_url(MAPLE_HILL_ID),
+                mob_levels: Some(LevelRange { lowest: 2, highest: 2 }),
+                exp_per_hour: 2857,
+                // Of its solo ceiling, 4 Blue Snails' 5,714 EXP/h: 50%.
+                solo_exp_ceiling: Some(5714),
+                ceiling_share_hundredths: Some(5000),
+                set_at_unix_ms: None,
+                here: false,
+            },
+        ]
     );
 }
 
@@ -186,14 +216,10 @@ fn while_candidates_wait_for_a_choice_no_map_is_marked_here() {
 }
 
 #[test]
-fn a_best_on_a_map_the_map_index_no_longer_has_goes_by_its_id() {
+fn a_best_on_a_map_not_in_the_map_list_is_kept_and_goes_by_its_id() {
     let gone = "999999999";
-    let bests = SavedBests {
-        version: BESTS_VERSION,
-        maps: vec![MapBests { id: gone.into(), visits: vec![VisitBest { exp_per_hour: 5000, set_at_unix_ms: None }] }],
-    };
     let mut compass = tracking();
-    compass.restore_bests(bests);
+    compass.restore_bests(bests_of(&[(gone, 5000)]));
     let mut player = Player::clocked(compass);
     player.arrive(SUNSET);
 
@@ -252,7 +278,7 @@ fn the_shell_gets_the_page_and_the_button_as_the_browser_and_window_render_them(
 
     let page = serde_json::to_value(open_page(&mut player).expect("a page")).unwrap();
     assert_eq!(page["asOfUnixMs"], player.wall_clock().unwrap());
-    assert_eq!(page["credit"], MEOWDB_CREDIT);
+    assert_eq!(page["credit"], OSMS_CREDIT);
     let sunset = &page["maps"][0];
     assert_eq!(sunset["id"], SUNSET_SKY_ID);
     assert_eq!(sunset["streetName"], "Victoria Road");
