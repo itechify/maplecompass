@@ -14,14 +14,19 @@ const switched = byId("tracking-switched");
 const resetNote = byId("tracking-reset");
 const waiting = byId("tracking-waiting");
 const figures = byId("tracking-figures");
+const headline = byId("tracking-headline");
 const timeToLevel = byId("time-to-level");
 const tag = byId("tracking-tag");
+const rollingRow = byId("rolling-row");
 const rollingExp = byId("rolling-exp");
 const rollingPercent = byId("rolling-percent");
+const rollingStar = byId("rolling-star");
 const sessionRow = byId("session-row");
 const sessionLength = byId("session-length");
 const sessionExp = byId("session-exp");
 const sessionPercent = byId("session-percent");
+const bestRow = byId("best-row");
+const bestExp = byId("best-exp");
 const share = byId("tracking-share");
 const deaths = byId("tracking-deaths");
 const exp = byId("tracking-exp");
@@ -40,8 +45,14 @@ const whole = (n: number) => signed(n.toLocaleString("en-US"));
 const percent = (hundredths: number, decimals = Math.abs(hundredths) >= 10_000 ? 0 : 1) =>
   signed(`${(hundredths / 100).toFixed(decimals)}%`);
 
+/** A share of a rate (a map's solo ceiling): "73%", and "7.3%" under 10%, where one
+ *  decimal still says something. */
+const sharePercent = (hundredths: number) => percent(hundredths, hundredths < 1000 ? 1 : 0);
+
 /** An EXP rate to 3 significant figures, written out as the panel writes its rates:
- *  840, 6,120, 61,200, 1,230,000. */
+ *  840, 6,120, 61,200, 1,230,000; halves up, 66,550 is 66,600. It must agree with
+ *  `three_figures` in the core's session.rs, through which the star compares Last 5 min
+ *  with the Best row as written here, so it never shows beside two that read the same. */
 const rate = (n: number) => whole(Number(n.toPrecision(3)));
 
 /** A Session's length: "7m", "1h 12m". */
@@ -51,11 +62,6 @@ function length(seconds: number) {
   return h === 0 ? `${m}m` : m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
-const TAGS: Partial<Record<ExpTracking["state"], string>> = {
-  warmingUp: "warming up",
-  paused: "paused",
-};
-
 /** Why there is no Time to Level, in words: never a bare dash beside the label. */
 function noTimeToLevel(rolling: ExpRate | null) {
   if (rolling && rolling.expPerHour < 0) return "losing EXP";
@@ -64,8 +70,9 @@ function noTimeToLevel(rolling: ExpRate | null) {
 }
 
 /** The Grind Tracker: a line until the Session starts, then Time to Level over the rates
- *  and what else the Session carries; the EXP bar's last reading at the foot, from the
- *  first reading on. Above them, why the figures went or can't move. */
+ *  and what else the Session carries; the map's Best row from arriving, before the
+ *  Session starts too; the EXP bar's last reading at the foot, from the first reading on.
+ *  Above them, why the figures went or can't move. */
 function render({ shown, tracking: t }: TrackerView) {
   // Not showing, the window draws nothing (the shell lets clicks through it).
   document.body.classList.toggle("hidden", !shown);
@@ -79,30 +86,38 @@ function render({ shown, tracking: t }: TrackerView) {
   resetNote.hidden = !t.resetUndoable;
   waiting.hidden = started || t.state === "unreadable";
 
-  figures.hidden = !started;
+  // The Best row shows from arriving on the map: until the Session starts it is all the
+  // figures hold, under the waiting note. Time to Level and the rates wait for a gain.
+  figures.hidden = !started && t.personalBest === null;
+  headline.hidden = !started;
+  rollingRow.hidden = !started;
   timeToLevel.textContent = t.timeToLevelBadge ?? noTimeToLevel(t.rolling);
   timeToLevel.classList.toggle("words", !t.timeToLevelBadge);
-  const label = TAGS[t.state];
-  tag.hidden = !label;
-  tag.textContent = label ?? "";
-  tag.className = `tag ${t.state}`;
+  // The headline's one tag, "paused". Warming up has none: its figures in Light say it.
+  tag.hidden = t.state !== "paused";
 
   const expPerHour = (r: ExpRate | null) => (r ? rate(r.expPerHour) : "–");
   const percentPerHour = (r: ExpRate | null) =>
     r?.percentPerHourHundredths != null ? percent(r.percentPerHourHundredths) : "–";
   rollingExp.textContent = expPerHour(t.rolling);
   rollingPercent.textContent = percentPerHour(t.rolling);
+  // The core says when Last 5 min is a new best on the map. The star keeps its room in
+  // the row while it's off, so the figures don't shift as it comes and goes.
+  rollingStar.classList.toggle("on", t.newBest);
   // Only once the Session is longer than the Rolling Rate's window does its average say
   // something else.
-  sessionRow.hidden = t.activeS <= t.rollingS;
+  sessionRow.hidden = !started || t.activeS <= t.rollingS;
   sessionLength.textContent = length(t.activeS);
   sessionExp.textContent = expPerHour(t.sessionAverage);
   sessionPercent.textContent = percentPerHour(t.sessionAverage);
+  // The map's best from its history, written as the rates are, with its ×.
+  bestRow.hidden = t.personalBest === null;
+  bestExp.textContent = t.personalBest === null ? "" : rate(t.personalBest);
 
   const shareOf = t.ceilingShareHundredths;
   share.hidden = shareOf === null || t.soloExpCeiling === null;
   if (shareOf !== null && t.soloExpCeiling !== null) {
-    share.textContent = `${percent(shareOf, shareOf < 1000 ? 1 : 0)} of this map's solo EXP/h (${whole(t.soloExpCeiling)})`;
+    share.textContent = `${sharePercent(shareOf)} of this map's solo EXP/h (${whole(t.soloExpCeiling)})`;
   }
   const died = t.deaths.count;
   deaths.hidden = died === 0;
@@ -147,7 +162,8 @@ document.addEventListener("mousedown", (e) => {
   if (e.button === 0 && onHeader) getCurrentWindow().startDragging();
 });
 
-// Close, reset and undo, through the core like the panel's icons.
+// Close, reset and its Undo, and removing the best, through the core like the panel's
+// icons.
 panelEl.addEventListener("click", (e) => {
   const button = e.target instanceof Element ? e.target.closest<HTMLButtonElement>("button[data-control]") : null;
   if (button) invoke("panel_press", { control: button.dataset.control });

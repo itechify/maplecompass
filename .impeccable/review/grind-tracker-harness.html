@@ -53,20 +53,25 @@
         sessionAverage: { expPerHour: 58400, percentPerHourHundredths: 1230 },
         ceilingShareHundredths: 2050, soloExpCeiling: 297499,
         deaths: { count: 1, expLost: 120, percentLostHundredths: 210 },
-        characterSwitched: false, activeS: 4320, rollingS: 300, resetUndoable: false, bar, ...over,
+        characterSwitched: false, activeS: 4320, rollingS: 300, resetUndoable: false, bar, personalBest: null, newBest: false, ...over,
       });
+      // The map's best from its history, 66,500 as written; Last 5 min at 74,500 beats it.
+      const best = { personalBest: 66523 };
+      const beaten = { rolling: { expPerHour: 74500, percentPerHourHundredths: 1570 }, personalBest: 66523, newBest: true };
       const empty = {
         timeToLevelS: null, timeToLevelBadge: null, rolling: null, sessionAverage: null,
         ceilingShareHundredths: null, soloExpCeiling: null, deaths: none, activeS: 0, rollingS: 0,
       };
       // Two minutes in: one rate, the whole Session; no share yet.
       const early = { activeS: 120, rollingS: 120, sessionAverage: { expPerHour: 61200, percentPerHourHundredths: 1290 }, ceilingShareHundredths: null, soloExpCeiling: null, deaths: none };
+      // Every figure as long as it gets.
+      const extreme = { timeToLevelBadge: "14h", rolling: { expPerHour: 1234567, percentPerHourHundredths: 12345 }, sessionAverage: { expPerHour: 987654, percentPerHourHundredths: 9876 }, activeS: 50400, ceilingShareHundredths: 41200, soloExpCeiling: 2999999, deaths: { count: 128, expLost: 999999, percentLostHundredths: 99999 }, bar: { exp: 1234567, percentHundredths: 9999 } };
       const states = {
         active: tracking(),
         early: tracking(early),
         waiting: tracking({ state: "waiting", ...empty }),
         warmingUp: tracking({ state: "warmingUp", timeToLevelBadge: "52m", activeS: 40, rollingS: 40, ceilingShareHundredths: null, soloExpCeiling: null, deaths: none }),
-        // Just started, nothing gained since: Time to Level says why it has no figure, beside the tag.
+        // Just started, nothing gained since: Time to Level says why it has no figure.
         warmingUpNoGain: tracking({ state: "warmingUp", timeToLevelS: null, timeToLevelBadge: null, rolling: { expPerHour: 0, percentPerHourHundredths: 0 }, sessionAverage: { expPerHour: 0, percentPerHourHundredths: 0 }, activeS: 20, rollingS: 20, ceilingShareHundredths: null, soloExpCeiling: null, deaths: none, bar: { exp: 29590, percentHundredths: 6267 } }),
         paused: tracking({ state: "paused" }),
         unreadable: tracking({ state: "unreadable" }),
@@ -75,12 +80,25 @@
         switched: tracking({ state: "waiting", ...empty, characterSwitched: true, bar: { exp: 157, percentHundredths: 94 } }),
         switchedWarmingUp: tracking({ state: "warmingUp", ...early, activeS: 30, rollingS: 30, timeToLevelBadge: null, rolling: { expPerHour: 2160, percentPerHourHundredths: null }, characterSwitched: true, bar: { exp: 175, percentHundredths: 105 } }),
         losing: tracking({ timeToLevelS: null, timeToLevelBadge: null, rolling: { expPerHour: -3400, percentPerHourHundredths: -72 }, ceilingShareHundredths: null, soloExpCeiling: null, deaths: { count: 3, expLost: 9000, percentLostHundredths: 1930 } }),
-        extreme: tracking({ timeToLevelBadge: "14h", rolling: { expPerHour: 1234567, percentPerHourHundredths: 12345 }, sessionAverage: { expPerHour: 987654, percentPerHourHundredths: 9876 }, activeS: 50400, ceilingShareHundredths: 41200, soloExpCeiling: 2999999, deaths: { count: 128, expLost: 999999, percentLostHundredths: 99999 }, bar: { exp: 1234567, percentHundredths: 9999 } }),
+        // The Personal Best: a first Visit has no history, so no Best row; back on the map,
+        // the Best row from arriving, alone under the waiting note before the first gain,
+        // then under Session (or right under Last 5 min, early on); the star while Last 5
+        // min beats it, held with the figures while paused.
+        firstVisit: tracking(),
+        bestWaiting: tracking({ state: "waiting", ...empty, ...best }),
+        best: tracking(best),
+        bestEarly: tracking({ ...early, ...best }),
+        bestStar: tracking(beaten),
+        bestStarPaused: tracking({ state: "paused", ...beaten }),
+        extreme: tracking(extreme),
+        bestExtreme: tracking({ ...extreme, personalBest: 1104000, newBest: true }),
       };
       const params = new URLSearchParams(location.search);
       document.documentElement.classList.toggle("dark", params.get("bg") === "dark");
       const s = params.get("s") ?? "active";
-      window.__show = (name) => window.__handlers["grind-tracker-state"]({ event: "grind-tracker-state", id: 1, payload: { shown: true, tracking: states[name] } });
+      window.__show = (name) => {
+        window.__handlers["grind-tracker-state"]({ event: "grind-tracker-state", id: 1, payload: { shown: true, tracking: states[name] } });
+      };
       if (s === "all") {
         // A contact sheet: every state at once, each a still copy of the rendered window.
         await document.fonts.ready;

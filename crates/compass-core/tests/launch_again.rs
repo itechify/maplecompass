@@ -6,7 +6,7 @@ mod common;
 
 use common::FakeSource;
 use compass_core::{
-    Action, Compass, GameWindow, PanelSizes, PlacementMode, Rect, ScreenRect, Settings, Size, TitleRegion,
+    Action, Compass, Foreground, GameWindow, PanelSizes, PlacementMode, Rect, ScreenRect, Settings, Size, TitleRegion,
 };
 
 const GAME: ScreenRect = ScreenRect { x: 0, y: 0, width: 1920, height: 1200 };
@@ -38,6 +38,19 @@ fn launched_again_with_the_game_open_the_collapsed_panel_expands() {
 
     assert!(state.expanded);
     assert!(!state.setup.window_open, "the panel is enough to show it runs");
+}
+
+#[test]
+fn launched_again_from_another_app_with_the_game_open_the_panel_expands_for_the_game() {
+    let mut compass = set_up(true);
+    compass.act(Action::ToggleExpanded);
+    // Started from Explorer or the Start menu, say: the overlay hides behind it.
+    compass.on_foreground(Foreground::OtherApp);
+
+    let state = compass.act(Action::LaunchedAgain);
+
+    assert!(state.expanded);
+    assert!(!state.setup.window_open, "it shows once the player is back in the game");
 }
 
 #[test]

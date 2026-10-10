@@ -1,11 +1,14 @@
 //! MapleCompass shell: a thin adapter around `compass-core`. It finds the game window,
 //! captures the Title Region and the EXP Bar Region (and, for Item Lookup, the client
-//! area with the pointer), feeds frames, hotkeys and drags to the core and renders the panel state in an overlay that sits just above the game
-//! (or, detached, in an ordinary window), the Grind Tracker in a window of its own
-//! beside it, and the Item Lookup alert at the top centre of the game window. All logic lives in the core.
+//! area with the pointer), feeds frames, hotkeys and drags to the core and renders the
+//! panel state in an overlay on top of everything (detached, with a taskbar entry), the
+//! Grind Tracker in a window of its own beside it, and the Item Lookup alert at the top
+//! centre of the game window: all three only while the game or one of our windows is in
+//! front. All logic lives in the core.
 
 pub mod capture;
 pub mod gamewin;
+mod bests;
 mod files;
 mod grind_tracker;
 mod hotkeys;
@@ -41,8 +44,9 @@ use tauri_plugin_opener::OpenerExt;
 const TICK: Duration = Duration::from_millis(333);
 /// EXP bar capture rate: EXP tracking needs the figures about once a second.
 const EXP_BAR_TICK: Duration = Duration::from_millis(1000);
-/// Game window and z-order check rate: a docked panel follows a moving game window
-/// and the overlay is back above the game within ~50 ms of the game coming to front.
+/// Game window and foreground check rate: a docked panel follows a moving game window,
+/// and our windows show within ~50 ms of the game coming to the front, and are out of
+/// sight within ~50 ms of another app doing so (their watchers check at this rate too).
 const WINDOW_TICK: Duration = Duration::from_millis(50);
 /// Settings are saved once they have stopped changing for this long (after a drag).
 const SAVE_DELAY: Duration = Duration::from_millis(500);
@@ -107,6 +111,9 @@ pub(crate) enum Command {
     Quit,
     /// The player started MapleCompass again; that one exited, and this one shows itself.
     LaunchedAgain,
+    /// A watcher took one of our windows out of sight, with another app in front, while
+    /// the core still showed it: check the game window and the foreground now.
+    CheckForeground,
     /// The reader is done with a capture of the Title Region `region`: what it read, or
     /// `None` if the capture failed.
     Read { region: ScreenRect, reading: Option<TitleReading> },
@@ -188,6 +195,10 @@ pub fn run() {
             let settings_path = settings::path(app.handle())?;
             // The core brings older settings up to date (hotkeys included).
             compass.restore(settings::load(&settings_path));
+            // The Personal Bests earlier launches set, beside the settings: a small file,
+            // read before anything is captured, so no best is set before they are back.
+            let (bests_file, saved_bests) = bests::BestsFile::load(bests::path(app.handle())?);
+            compass.restore_bests(saved_bests);
             let (commands, commands_rx) = mpsc::channel();
             // What the crawl learned at earlier launches: read (or built from the cached
             // pages) on a thread of its own, while the crawl holds for it.
@@ -217,7 +228,8 @@ pub fn run() {
                 eprintln!("{e}");
             }
             let grind_tracker = GrindTrackerWindow::new(app.handle(), commands.clone());
-            let item_lookup = ItemLookupWindow::new(app.handle());
+            let item_lookup = ItemLookupWindow::new(app.handle(), commands.clone());
+            let overlay_window = OverlayWindow::new(overlay.clone(), commands.clone());
             overlay.on_window_event(move |event| match event {
                 // Only moves during a drag the overlay started are the player's.
                 WindowEvent::Moved(to) => {
@@ -241,9 +253,11 @@ pub fn run() {
             // Per-Monitor-V2 DPI aware.
             let reader = ReaderThread::spawn(app.state::<Sender<Command>>().inner().clone())?;
             let channels = Channels { commands: commands_rx, picks: picks_rx };
-            let windows = Windows { overlay, setup: setup_windows, grind_tracker, item_lookup, hotkeys };
+            let windows =
+                Windows { overlay: overlay_window, setup: setup_windows, grind_tracker, item_lookup, hotkeys };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
-                compass_loop(handle, windows, compass, reader, channels, Files { settings: settings_path, cache })
+                let files = Files { settings: settings_path, bests: bests_file, cache };
+                compass_loop(handle, windows, compass, reader, channels, files)
             })?;
             Ok(())
         })
@@ -284,7 +298,7 @@ pub fn run() {
 /// Our windows: the overlay (with mob search in it), setup (with its region window), the
 /// Grind Tracker's and the Item Lookup alert's.
 struct Windows {
-    overlay: WebviewWindow,
+    overlay: OverlayWindow,
     setup: SetupWindows,
     grind_tracker: GrindTrackerWindow,
     item_lookup: ItemLookupWindow,
@@ -292,10 +306,27 @@ struct Windows {
     hotkeys: hotkeys::GlobalHotkeys,
 }
 
-/// Where the compass loop saves the settings, and what the world crawl learned.
+/// Where the compass loop saves the settings, the Personal Bests, and what the world
+/// crawl learned.
 struct Files {
     settings: PathBuf,
+    bests: bests::BestsFile,
     cache: PathBuf,
+}
+
+/// Save the Personal Bests if the core's bests revision moved on from `saved` (the one
+/// last saved, or restored at startup). At once, not once they settle: the Visit under
+/// way's best is kept as it changes, so however MapleCompass closes, it keeps it. Never
+/// over a file that didn't read at startup and couldn't be set aside.
+fn save_bests(compass: &Compass, file: &bests::BestsFile, saved: &mut u64) {
+    let revision = compass.bests_revision();
+    if *saved == revision {
+        return;
+    }
+    *saved = revision;
+    if let Err(e) = file.save(&compass.bests()) {
+        eprintln!("saving personal bests failed: {e}");
+    }
 }
 
 /// The world crawl's saves: what was saved last, so it is saved only when it changed.
@@ -456,8 +487,10 @@ fn compass_loop(
 ) {
     let settings_path = files.settings;
     let mut world_saves = WorldSaves { loaded: false, saved: None, pending: None };
-    let Windows { overlay, setup: mut setup_windows, mut grind_tracker, mut item_lookup, mut hotkeys } = windows;
-    let mut window = OverlayWindow::new(overlay);
+    // Restored at startup: saved already.
+    let mut bests_saved = compass.bests_revision();
+    let Windows { overlay: mut window, setup: mut setup_windows, mut grind_tracker, mut item_lookup, mut hotkeys } =
+        windows;
     let mut saved = compass.settings();
     let mut pending = (saved.clone(), Instant::now());
     let mut emitted: Option<PanelState> = None;
@@ -503,9 +536,11 @@ fn compass_loop(
                 compass.act(Action::LaunchedAgain);
                 setup_windows.bring_to_front();
             }
+            Ok(Command::CheckForeground) => next_window_check = Instant::now(),
             Ok(Command::Quit) => {
                 // Whatever the player changed last (a drag, say) is saved first.
                 world_saves.save(&compass, &files.cache, true);
+                save_bests(&compass, &files.bests, &mut bests_saved);
                 let current = compass.settings();
                 if current != saved
                     && let Err(e) = settings::save(&settings_path, &current)
@@ -596,7 +631,8 @@ fn compass_loop(
             if let Some(size) = item_lookup.size() {
                 compass.set_item_lookup_size(size);
             }
-            // The hotkeys are live only while the game or one of our windows is in front.
+            // The hotkeys are live, and our windows show, only while the game or one of our
+            // windows is in front.
             compass.on_foreground(gamewin::foreground(game.map(|g| g.handle)));
             if let Some((taken, invalid)) = hotkeys.sync(&app, compass.panel_state().hotkeys_live) {
                 compass.hotkeys_unavailable(taken, invalid);
@@ -626,6 +662,7 @@ fn compass_loop(
         }
         let state = compass.panel_state();
         if state.quit {
+            save_bests(&compass, &files.bests, &mut bests_saved);
             app.exit(0);
             return;
         }
@@ -652,6 +689,7 @@ fn compass_loop(
             saved = pending.0.clone();
         }
         world_saves.save(&compass, &files.cache, false);
+        save_bests(&compass, &files.bests, &mut bests_saved);
     }
 }
 
@@ -732,8 +770,9 @@ struct OverlayWindow {
     /// Whether the overlay is listed in the taskbar (only while detached).
     in_taskbar: Option<bool>,
     search_open: bool,
-    /// Tells the z-order keeper to hold the overlay just above the game.
-    above_game: Arc<AtomicBool>,
+    /// Tells its watcher the core shows it, so it keeps it on top while the game or one
+    /// of our windows is in front.
+    shows_on_top: Arc<AtomicBool>,
     /// The player's drag or resize, from the mouse press that starts it until Windows'
     /// move or size loop ends.
     gesture: Option<PlayerGesture>,
@@ -744,8 +783,8 @@ struct OverlayWindow {
 }
 
 impl OverlayWindow {
-    fn new(overlay: WebviewWindow) -> Self {
-        let above_game = keep_just_above_game(&overlay, "z-order");
+    fn new(overlay: WebviewWindow, commands: Sender<Command>) -> Self {
+        let shows_on_top = keep_on_top(&overlay, "on-top", commands);
         Self {
             overlay,
             layer: None,
@@ -753,7 +792,7 @@ impl OverlayWindow {
             focusable: None,
             in_taskbar: None,
             search_open: false,
-            above_game,
+            shows_on_top,
             gesture: None,
             resized_to: None,
             min_size_expanded: None,
@@ -812,14 +851,11 @@ impl OverlayWindow {
     }
 
     fn show(&mut self, state: &PanelState) {
-        self.above_game.store(state.layer == Layer::AboveGame, Ordering::Relaxed);
+        // On top of everything while it shows: its watcher alone changes that, so a
+        // state the core has already moved on from never puts it back over another app.
+        self.shows_on_top.store(state.layer == Layer::OnTop, Ordering::Relaxed);
         let layer_changed = self.layer != Some(state.layer);
-        if layer_changed {
-            self.layer = Some(state.layer);
-            // Never topmost by itself: above the game it is kept just above it in the
-            // z-order instead, wherever it is placed.
-            let _ = self.overlay.set_always_on_top(false);
-        }
+        self.layer = Some(state.layer);
         // Detached, it can be found in the taskbar.
         let detached = state.placement_mode == PlacementMode::Detached;
         if self.in_taskbar != Some(detached) {
@@ -833,8 +869,9 @@ impl OverlayWindow {
             self.focusable = Some(search_open);
             let _ = self.overlay.set_focusable(search_open);
         }
-        // Always clickable while it shows. Hidden (the game is gone) the webview draws
-        // nothing, so clicks pass through and nothing is in the way.
+        // Always clickable while it shows. Hidden (the game is gone, or another app is in
+        // front) the webview draws nothing, so clicks pass through and nothing is in the
+        // way.
         let click_through = state.layer == Layer::Hidden;
         if self.click_through != click_through {
             self.click_through = click_through;
@@ -871,52 +908,80 @@ impl OverlayWindow {
     }
 }
 
-/// Keep our `window` just above the game in the z-order while the flag returned is set,
-/// on a thread of its own (named `name`), at its own steady pace: the window should be
-/// back above the game within a tick of the game coming to the front, whatever the
-/// compass loop is doing (setting window sizes and positions can take a while). It gets
-/// the window's handle once, here: asking Tauri for it from another thread waits on the
-/// main thread's event loop, which can leave the keeper idle for seconds while another
-/// app covers the game, and the window stays topmost over that app.
-pub(crate) fn keep_just_above_game(window: &WebviewWindow, name: &str) -> Arc<AtomicBool> {
-    let above_game = Arc::new(AtomicBool::new(false));
+/// Keep our `window` on top of every other window while the core shows it (the flag
+/// returned, which the compass loop sets) and the game or one of our windows is in front,
+/// and out of sight otherwise: on a thread of its own (named `name`), at its own steady
+/// pace. The core decides what shows, but the compass loop can stall for a while (setting
+/// window sizes and positions), and a window on top of everything must not sit over
+/// another app meanwhile: this watcher checks what is in front itself, takes the window
+/// out of sight within a tick of another app coming to the front, and tells the compass
+/// loop (`commands`) to check the foreground at once. It gets the window's handle once,
+/// here: asking Tauri for it from another thread waits on the main thread's event loop,
+/// which can leave the watcher idle for seconds while another app is in front.
+pub(crate) fn keep_on_top(window: &WebviewWindow, name: &str, commands: Sender<Command>) -> Arc<AtomicBool> {
+    let shows = Arc::new(AtomicBool::new(false));
     #[cfg(windows)]
     match window.hwnd() {
         Ok(hwnd) => {
-            let (handle, keeper_flag) = (hwnd.0 as isize, above_game.clone());
-            let spawned =
-                std::thread::Builder::new().name(name.into()).spawn(move || keep_above_game(handle, keeper_flag));
+            let (handle, watcher_flag) = (hwnd.0 as isize, shows.clone());
+            let spawned = std::thread::Builder::new()
+                .name(name.into())
+                .spawn(move || keep_on_top_while_in_front(handle, watcher_flag, commands));
             if let Err(e) = spawned {
-                eprintln!("{name} keeper not started: {e}");
+                eprintln!("{name} watcher not started: {e}");
             }
         }
-        Err(e) => eprintln!("{name} keeper not started: no {} window handle: {e}", window.label()),
+        Err(e) => eprintln!("{name} watcher not started: no {} window handle: {e}", window.label()),
     }
     #[cfg(not(windows))]
-    let _ = (window, name);
-    above_game
+    let _ = (window, name, commands);
+    shows
 }
 
-/// While `above_game` is set, check every `WINDOW_TICK` that our window (its handle) is
-/// still just above the game in the z-order, and restack it if not: the game came to the
-/// front, or another app did. Nothing here waits on the main thread.
+/// Every `WINDOW_TICK`, put our window (its handle) on top of everything if `shows` is
+/// set and the game or one of our windows is in front, and at the bottom, out of sight,
+/// if not. Nothing here waits on the main thread.
+///
+/// The core alone decides what shows (`Panel::layer` in compass-core's panel.rs: a game
+/// window, and the game or one of ours in front), and `shows` is its last word. The
+/// watcher restates that rule against what is in front now, as a fast path: the compass
+/// loop reports the foreground to the core every tick but can stall (setting window
+/// sizes and positions), and a window on top of everything must not sit over another
+/// app while it does. So the rule here must agree with the core's: never show what the
+/// core wouldn't. Should they part, change both.
 #[cfg(windows)]
-fn keep_above_game(window: isize, above_game: Arc<AtomicBool>) {
+fn keep_on_top_while_in_front(window: isize, shows: Arc<AtomicBool>, commands: Sender<Command>) {
+    use compass_core::Foreground;
+    use gamewin::Stacking;
     let window = windows::Win32::Foundation::HWND(window as *mut _);
     let mut last_error = None;
+    // On top or at the bottom, as this watcher last put it: the window's style alone can't
+    // be trusted to say (see `gamewin::restack`).
+    let mut set_before = None;
     loop {
         std::thread::sleep(WINDOW_TICK);
-        if !above_game.load(Ordering::Relaxed) {
-            continue;
+        let shows = shows.load(Ordering::Relaxed);
+        // The core's rule (`Panel::layer`), from what is in front now rather than at the
+        // compass loop's last report, which a stall can leave behind.
+        let in_front = || {
+            gamewin::find_game().is_some_and(|game| gamewin::foreground(Some(game.handle)) != Foreground::OtherApp)
+        };
+        let to = if shows && in_front() { Stacking::OnTop } else { Stacking::Bottom };
+        let moved = gamewin::restack(window, to, set_before);
+        if moved.is_ok() {
+            set_before = Some(to);
         }
-        if let Some(game) = gamewin::find_game() {
-            // Polled 20 times a second: report a failure once, not every time.
-            let error = gamewin::keep_above(window, game.handle).err().map(|e| e.to_string());
-            if error.is_some() && error != last_error {
-                eprintln!("keeping our window above the game failed: {}", error.as_deref().unwrap_or_default());
-            }
-            last_error = error;
+        // The core still shows it, over another app: the compass loop is behind.
+        let behind = shows && to == Stacking::Bottom && matches!(moved, Ok(true));
+        if behind && commands.send(Command::CheckForeground).is_err() {
+            return;
         }
+        // Polled 20 times a second: report a failure once, not every time.
+        let error = moved.err().map(|e| e.to_string());
+        if error.is_some() && error != last_error {
+            eprintln!("putting our window on top or out of sight failed: {}", error.as_deref().unwrap_or_default());
+        }
+        last_error = error;
     }
 }
 

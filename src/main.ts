@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { dayText } from "./dates";
 import type { ExpTracking } from "./exp-tracking";
 import { hotkeyAvailable, keyLabel, type Hotkeys } from "./hotkeys";
 import {
@@ -131,7 +132,7 @@ type PanelState = {
   collapsedSections: Record<Section, boolean>;
   gameFound: boolean;
   placementMode: PlacementMode;
-  layer: "aboveGame" | "hidden";
+  layer: "onTop" | "hidden";
   /** The player can drag the panel by its header (inside or detached). */
   draggable: boolean;
   setup: { needed: "firstRun" | "resolutionChanged" | "requested" | null };
@@ -356,8 +357,7 @@ function candidateRow(id: string, outline: Outline | null): HTMLLIElement {
 }
 
 /** "7 Oct 2026", in the player's time zone. */
-const savedOn = (unixMs: number) =>
-  new Date(unixMs).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const savedOn = (unixMs: number) => dayText(new Date(unixMs), true);
 
 /** The note shown in place of (or above) the map's data. */
 function dataNote(data: MapDataStatus, recognition: Recognition, sourceHint: string): string {
@@ -899,7 +899,8 @@ function render(panel: PanelState) {
   const { hotkeys } = panel;
   const { recognition, map: current, notSure } = panel;
   draggable = panel.draggable;
-  // Hidden while the game is minimised or gone: the window stays, but draws nothing.
+  // Hidden while the game is minimised or gone, or another app is in front: the window
+  // stays, but draws nothing.
   document.body.classList.toggle("hidden", panel.layer === "hidden");
   document.body.classList.toggle("collapsed", !panel.expanded);
   document.body.classList.toggle("draggable", panel.draggable);
