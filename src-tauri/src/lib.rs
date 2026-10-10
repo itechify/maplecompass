@@ -12,6 +12,7 @@ mod bests;
 mod bests_page;
 mod files;
 mod grind_tracker;
+mod hotkey_settings;
 mod hotkeys;
 mod item_lookup;
 pub mod meowdb;
@@ -25,7 +26,7 @@ mod world;
 
 use compass_core::{
     Action, Compass, SavedWorld, ExpBarReader, ExpBarReading, Frame, GameWindow, ItemCapture, ItemTooltipReader,
-    ItemTooltipReading, Layer, MIN_PANEL_WIDTH, PanelControl, PanelSizes, PlacementMode, PanelState, Request,
+    ItemTooltipReading, KeyPress, Layer, MIN_PANEL_WIDTH, PanelControl, PanelSizes, PlacementMode, PanelState, Request,
     ScreenPoint, ScreenRect, Size, TitleReader, TitleReading, default_title_region,
 };
 use meowdb::MeowDbSource;
@@ -78,6 +79,8 @@ pub(crate) enum Command {
     Press(PanelControl),
     /// The overlay's query box now holds this, for the core.
     SearchQuery(String),
+    /// The player pressed this key on the settings view, for the core.
+    RebindKey(KeyPress),
     /// The player clicked the search view's mob or map with this MeowDB ID.
     SearchPick(String),
     /// The player clicked the name of the listed mob with this MeowDB ID in the panel.
@@ -241,10 +244,12 @@ pub fn run() {
                     let _ = commands.send(Command::Resized(*size));
                 }
                 // Leaving the overlay for another window (the game) with the search view
-                // open is Esc: it has the keyboard only while it's in front. Not when
-                // focus only moved within our windows, as into the overlay's own webview.
+                // or the settings view open is Esc: it has the keyboard only while it's in
+                // front. Not when focus only moved within our windows, as into the
+                // overlay's own webview.
                 WindowEvent::Focused(false) if !gamewin::foreground_is_ours() => {
                     let _ = commands.send(Command::Act(Action::SearchEscape));
+                    let _ = commands.send(Command::Act(Action::CloseSettings));
                 }
                 _ => {}
             });
@@ -287,6 +292,15 @@ pub fn run() {
             search::search_toggle_taxis,
             search::search_toggle_teleport_scrolls,
             search::panel_toggle_section,
+            hotkey_settings::settings_close,
+            hotkey_settings::rebind_begin,
+            hotkey_settings::rebind_key,
+            hotkey_settings::rebind_cancel,
+            hotkey_settings::rebind_turn_off,
+            hotkey_settings::rebind_swap,
+            hotkey_settings::hotkeys_reset,
+            hotkey_settings::hotkeys_undo_reset,
+            setup::open_hotkey_settings,
             grind_tracker::grind_tracker_height,
             grind_tracker::grind_tracker_view,
             item_lookup::item_lookup_height,
@@ -518,6 +532,9 @@ fn compass_loop(
             Ok(Command::SearchQuery(query)) => {
                 compass.search_query(&query);
             }
+            Ok(Command::RebindKey(press)) => {
+                compass.rebind_key(press);
+            }
             Ok(Command::SearchPick(id)) => {
                 compass.search_pick(&id);
             }
@@ -635,9 +652,13 @@ fn compass_loop(
             // The hotkeys are live, and our windows show, only while the game or one of our
             // windows is in front.
             compass.on_foreground(gamewin::foreground(game.map(|g| g.handle)));
-            if let Some((taken, invalid)) = hotkeys.sync(&app, compass.panel_state().hotkeys_live) {
-                compass.hotkeys_unavailable(taken, invalid);
-            }
+        }
+        // After every wake-up too: the hotkeys are released as soon as the player starts
+        // rebinding one (a registered combination would never reach the overlay), and the
+        // new one is registered as soon as they have pressed it.
+        let state = compass.panel_state();
+        if let Some((taken, invalid)) = hotkeys.sync(&app, &state.hotkeys, state.hotkeys_live) {
+            compass.hotkeys_unavailable(taken, invalid);
         }
         // Fetches in flight (map index, map pages) are checked on, never waited for.
         compass.on_wall_clock(unix_now_ms());
@@ -771,7 +792,8 @@ struct OverlayWindow {
     focusable: Option<bool>,
     /// Whether the overlay is listed in the taskbar (only while detached).
     in_taskbar: Option<bool>,
-    search_open: bool,
+    /// The search view or the settings view is open: the overlay has the keyboard.
+    takes_keyboard: bool,
     /// Tells its watcher the core shows it, so it keeps it on top while the game or one
     /// of our windows is in front.
     shows_on_top: Arc<AtomicBool>,
@@ -793,7 +815,7 @@ impl OverlayWindow {
             click_through: true,
             focusable: None,
             in_taskbar: None,
-            search_open: false,
+            takes_keyboard: false,
             shows_on_top,
             gesture: None,
             resized_to: None,
@@ -864,12 +886,13 @@ impl OverlayWindow {
             self.in_taskbar = Some(detached);
             let _ = self.overlay.set_skip_taskbar(!detached);
         }
-        // Only the open search view takes the typing. Otherwise the overlay can't be
-        // activated (WS_EX_NOACTIVATE), so a click on it leaves the keyboard with the game.
-        let search_open = state.search.view.is_some();
-        if self.focusable != Some(search_open) {
-            self.focusable = Some(search_open);
-            let _ = self.overlay.set_focusable(search_open);
+        // Only the open search view takes the typing, and the open settings view the
+        // combinations the player presses. Otherwise the overlay can't be activated
+        // (WS_EX_NOACTIVATE), so a click on it leaves the keyboard with the game.
+        let takes_keyboard = state.search.view.is_some() || state.settings_view.is_some();
+        if self.focusable != Some(takes_keyboard) {
+            self.focusable = Some(takes_keyboard);
+            let _ = self.overlay.set_focusable(takes_keyboard);
         }
         // Always clickable while it shows. Hidden (the game is gone, or another app is in
         // front) the webview draws nothing, so clicks pass through and nothing is in the
@@ -881,15 +904,15 @@ impl OverlayWindow {
                 eprintln!("click-through toggle failed: {e}");
             }
         }
-        // The search view opens right after our hotkey or a click on the overlay, so
-        // Windows lets us take the foreground; when it closes, Windows gives focus back
-        // to the window below.
-        match (self.search_open, search_open) {
+        // The search view or the settings view opens right after our hotkey or a click on
+        // the overlay, so Windows lets us take the foreground; when it closes, Windows
+        // gives focus back to the window below.
+        match (self.takes_keyboard, takes_keyboard) {
             (false, true) => search::take_focus(&self.overlay),
             (true, false) => search::give_focus_back(&self.overlay),
             _ => {}
         }
-        self.search_open = search_open;
+        self.takes_keyboard = takes_keyboard;
         // Expanded, the player can't resize the panel narrower than the core allows;
         // collapsed, the window is the icon's size, and they can't resize it.
         sizemove::set_resizable(state.expanded);
