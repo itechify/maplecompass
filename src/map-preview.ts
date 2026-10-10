@@ -377,7 +377,11 @@ image.addEventListener("error", () => {
   renderMapPreview(shown, mapName);
   laidOut();
 });
-// The player resized the panel: the picture is fitted again.
-window.addEventListener("resize", () => {
+// The box changed width (the player resized the panel, or a scrollbar came or went): the
+// picture is fitted again.
+let fittedTo = 0;
+new ResizeObserver(() => {
+  if (preview.clientWidth === fittedTo) return;
+  fittedTo = preview.clientWidth;
   if (shown && !preview.hidden) layOutMapPreview();
-});
+}).observe(preview);
