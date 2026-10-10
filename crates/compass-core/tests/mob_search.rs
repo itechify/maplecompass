@@ -322,6 +322,18 @@ fn event_maps_are_left_out_and_dont_set_the_densest_map() {
 }
 
 #[test]
+fn the_dev_map_is_left_out_like_event_maps() {
+    let mut compass = loaded(vec![
+        map("100000001", "Mushroom Field", 100, vec![orange(10)]),
+        map("100000002", "The Manager's Room", 200, vec![orange(30)]).in_region("Dev"),
+    ]);
+
+    let state = search_for(&mut compass, "orange");
+
+    assert_eq!(ranked(&state), ["Mushroom Field: 1000, High"]);
+}
+
+#[test]
 fn a_mob_found_only_on_event_maps_has_no_results_and_search_says_why() {
     let mut compass = loaded(vec![
         map("100000001", "Snail Field", 100, vec![mob("3", "Blue Snail", 4, 5)]),

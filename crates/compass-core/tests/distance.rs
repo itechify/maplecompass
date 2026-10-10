@@ -112,6 +112,19 @@ fn routes_never_pass_through_event_maps() {
     assert_eq!(distances(&state), ["Mushroom Field: 3", "Festival Clearing: no route"]);
 }
 
+#[test]
+fn routes_never_pass_through_the_dev_map() {
+    let state = searched_from_sunset_sky(vec![
+        sunset_sky("100000000").to(&["100000001", "100000002"]),
+        map("100000001", "The Manager's Room", 100, vec![]).in_region("Dev").to(&["100000004"]),
+        map("100000002", "Road", 100, vec![]).to(&["100000003"]),
+        map("100000003", "Long Way Round", 100, vec![]).to(&["100000004"]),
+        map("100000004", "Mushroom Field", 100, vec![orange(10)]),
+    ]);
+
+    assert_eq!(distances(&state), ["Mushroom Field: 3"]);
+}
+
 /// Each result as "Map Name: Distance, Tier".
 fn ranked(state: &PanelState) -> Vec<String> {
     state.search.results.iter().map(|r| format!("{}: {}, {:?}", r.map_name, shown(r.distance), r.tier)).collect()

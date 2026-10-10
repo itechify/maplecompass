@@ -58,7 +58,7 @@ pub struct MobChoice {
     pub level: u32,
 }
 
-/// How a map's Density for a mob compares with the mob's densest map (Event maps
+/// How a map's Density for a mob compares with the mob's densest map (Event and Dev maps
 /// aside). Ordered densest first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -311,7 +311,7 @@ impl MobSearch {
         let results = self.results(searched);
         let only_on_event_maps = match (&self.picked, set) {
             (Some(mob), Some(set)) if results.is_empty() => {
-                set.maps().any(|(entry, data)| entry.is_event() && data.mobs.iter().any(|m| m.id == mob.id))
+                set.maps().any(|(entry, data)| entry.is_left_out() && data.mobs.iter().any(|m| m.id == mob.id))
             }
             _ => false,
         };
@@ -431,16 +431,16 @@ fn route(distances: &Distances, map_id: &str, set: &MapSet) -> Vec<RouteStop> {
         .collect()
 }
 
-/// Every non-Event map mob `mob_id` spawns on, ranked: by Density Tier; within a tier,
-/// maps with a route by Distance from the map the player is on (`here`; by portals, ships
-/// and the `travel` turned on), then those with no known route, then the quest-only ones;
-/// then by Density (densest first), then name.
+/// Every map mob `mob_id` spawns on, Event and Dev maps aside, ranked: by Density Tier;
+/// within a tier, maps with a route by Distance from the map the player is on (`here`; by
+/// portals, ships and the `travel` turned on), then those with no known route, then the
+/// quest-only ones; then by Density (densest first), then name.
 fn results(mob_id: &str, set: &MapSet, here: Option<&str>, travel: Travel) -> Vec<SearchResult> {
     let distances = here.map(|here| World::of(set, travel).distances_from(here));
     let distance = |map_id: &str| distances.as_ref().map_or(Distance::Unknown, |d| d.to(map_id));
     let found: Vec<(&MapEntry, &Mob, u32)> = set
         .maps()
-        .filter(|(entry, _)| !entry.is_event())
+        .filter(|(entry, _)| !entry.is_left_out())
         .flat_map(|(entry, data)| {
             data.mobs
                 .iter()

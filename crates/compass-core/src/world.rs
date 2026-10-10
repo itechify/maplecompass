@@ -1,11 +1,11 @@
 //! The world graph: which maps lead to which, from every map in OSMS's file set, and how
 //! many map changes each map is from another.
 //!
-//! It is directed, one node per known map. Every exit to another map is an edge
-//! (visible, Hidden Portal or Door, one-way or not), except Quest Portals, which are
-//! kept apart: a map reachable only through one is "quest only". The hand-kept travel
-//! links (ships) are edges too. No route steps into an Event map, which the player
-//! can't normally enter. Every edge is one map change, so Distance is the length of the
+//! It is directed, one node per map. Every exit to another map is an edge (visible,
+//! Hidden Portal or Door, one-way or not), except Quest Portals, which are kept apart: a
+//! map reachable only through one is "quest only". The hand-kept travel links (ships)
+//! are edges too. No route steps into an Event or Dev map, which the player can't
+//! normally enter. Every edge is one map change, so Distance is the length of the
 //! shortest path, found breadth-first.
 
 use crate::map_data::PortalKind;
@@ -66,8 +66,8 @@ pub(crate) struct World<'a> {
     /// Where every map leads, after its own exits: the named-town Teleport Scrolls, when
     /// they're on.
     from_anywhere: Vec<(&'a str, Step)>,
-    /// The Event maps: no route steps into one.
-    event_maps: HashSet<&'a str>,
+    /// The Event and Dev maps: no route steps into one.
+    left_out: HashSet<&'a str>,
 }
 
 impl<'a> World<'a> {
@@ -78,7 +78,7 @@ impl<'a> World<'a> {
             exits: HashMap::new(),
             quest_exits: HashMap::new(),
             from_anywhere: Vec::new(),
-            event_maps: set.maps().filter(|(entry, _)| entry.is_event()).map(|(entry, _)| entry.id.as_str()).collect(),
+            left_out: set.maps().filter(|(entry, _)| entry.is_left_out()).map(|(entry, _)| entry.id.as_str()).collect(),
         };
         for (entry, data) in set.maps() {
             let id = entry.id.as_str();
@@ -124,15 +124,15 @@ impl<'a> World<'a> {
     }
 
     /// Breadth-first from `from` over the exits, `more` exits and the ways from
-    /// anywhere, never into an Event map: each map reached, with the fewest map changes
-    /// to it. (A player standing on an Event map still gets out of it.)
+    /// anywhere, never into an Event or Dev map: each map reached, with the fewest map
+    /// changes to it. (A player standing on one still gets out of it.)
     fn map_changes(&self, from: &str, more: &Exits) -> HashMap<String, Reached> {
         let mut reached = HashMap::from([(from.to_string(), Reached { changes: 0, came_from: None })]);
         let mut queue = VecDeque::from([(from.to_string(), 0)]);
         while let Some((map, changes)) = queue.pop_front() {
             let own = self.exits.get(map.as_str()).into_iter().chain(more.get(map.as_str())).flatten();
             for &(to, step) in own.chain(&self.from_anywhere) {
-                if !reached.contains_key(to) && !self.event_maps.contains(to) {
+                if !reached.contains_key(to) && !self.left_out.contains(to) {
                     let came_from = Some((map.clone(), step));
                     reached.insert(to.to_string(), Reached { changes: changes + 1, came_from });
                     queue.push_back((to.to_string(), changes + 1));
