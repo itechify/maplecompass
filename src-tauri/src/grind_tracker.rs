@@ -41,6 +41,8 @@ struct TrackerView<'a> {
     /// The window shows: otherwise the page draws nothing.
     shown: bool,
     tracking: &'a ExpTracking,
+    /// Some map has a Personal Best: the window bar's Personal Bests button shows.
+    personal_bests: bool,
 }
 
 /// The player's drag of the window, from the mouse press until Windows' move loop ends.
@@ -131,7 +133,11 @@ impl GrindTrackerWindow {
     /// Tracker's figures.
     pub fn sync(&mut self, state: &PanelState) {
         let placement = state.grind_tracker.placement;
-        let view = TrackerView { shown: placement.is_some(), tracking: &state.exp_tracking };
+        let view = TrackerView {
+            shown: placement.is_some(),
+            tracking: &state.exp_tracking,
+            personal_bests: state.grind_tracker.personal_bests,
+        };
         self.view.send(&self.app, &view, &self.app.state::<GrindTrackerView>().0);
         self.shows_on_top.store(placement.is_some(), Ordering::Relaxed);
         let dragging = self.under_way();

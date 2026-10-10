@@ -15,6 +15,11 @@
           <img class="window-icon" src="/assets/grind-tracker.png" alt="" draggable="false" />
           <p class="window-name">Grind Tracker</p>
           <div class="toolbar" role="toolbar" aria-label="Grind Tracker window">
+            <!-- Every map's Personal Best, on a page in the browser; only once some map has one.
+                 The star is the Best row's own mark for a best, outlined as the bar's icons are. -->
+            <button type="button" class="icon-button" id="open-bests" data-control="openBestsPage" aria-label="Open your Personal Bests in the browser" title="Open your Personal Bests in the browser" hidden>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.68L9.48 6.52L13.59 6.75L10.39 9.34L11.45 13.32L8 11.08L4.55 13.32L5.61 9.34L2.41 6.75L6.52 6.52Z" /></svg>
+            </button>
             <button type="button" class="icon-button" data-control="closeGrindTracker" aria-label="Close the Grind Tracker" title="Close the Grind Tracker (the Session carries on)">
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>
             </button>
@@ -57,7 +62,8 @@
                 <span class="value" id="session-percent"></span><span class="unit per">/h</span>
               </div>
               <div class="row best" id="best-row" hidden>
-                <span class="period">Best</span>
+                <!-- "Best" opens the Personal Bests page too, where the player meets their bests. -->
+                <button type="button" class="period best-link" data-control="openBestsPage" title="Open your Personal Bests in the browser">Best</button>
                 <span class="value" id="best-exp"></span><span class="unit">EXP/h</span>
                 <button type="button" class="icon-button light" data-control="removeBest" aria-label="Remove this best from your history" title="Remove this best from your history">
                   <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>

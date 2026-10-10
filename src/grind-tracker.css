@@ -166,6 +166,33 @@
   stroke: none;
 }
 
+/* "Best" opens the Personal Bests page: plain at rest, so the row reads as before; Portal
+   Blue and underlined under the pointer, deeper while pressed, as a mob's name in the
+   panel. */
+.rates .best-link {
+  all: unset;
+  cursor: pointer;
+  padding-right: 8px;
+  white-space: nowrap;
+}
+
+.rates .best-link:hover {
+  color: var(--portal);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.rates .best-link:active {
+  color: var(--frame);
+}
+
+.rates .best-link:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 /* The Best row's ×: the light body button, as the reset's is, never the window bar's blue
    ×. Level with the row, and kept from making it taller. */
 .rates .best .icon-button {
