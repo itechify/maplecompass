@@ -1,3 +1,7 @@
+---
+status: accepted, amended 2026-10-09 (the overlay windows are on top of everything while they show, and hide while another app is in front)
+---
+
 # Observe the game from outside only
 
 MapleCompass must not be seen as interacting with the MapleStory client, because third-party interaction can breach the terms of service and get the player's account banned. So it only reads pixels through the operating system's ordinary screen-capture APIs, and it only draws in its own separate windows. It never reads or writes the game's memory or files at runtime, never injects code or hooks the renderer, and never sends input to the game.
@@ -13,5 +17,7 @@ Keyboard input comes only through global hotkeys registered with the operating s
 The map has to be inferred from the rendered minimap title (OCR or glyph matching) rather than read directly. Shortcuts such as reading the current map ID from process memory are permanently off the table, even though they would be more accurate.
 
 To belong to the game rather than float over every app, the overlay windows (the panel's, the Grind Tracker's and the Item Lookup alert's) show on top of everything only while the game or one of our windows is in front, and hide while another app is. We tell by polling `GetForegroundWindow`, and restack only our own windows (`SetWindowPos` with no activation): topmost while they show, the bottom of the z-order once another app comes in front. Making the overlay an owned or child window of the game (`GWLP_HWNDPARENT`, `SetParent`) would tie it to the game for free, but it is ruled out: a cross-process owner or parent link attaches our input queue to the game's, which is interaction with the game client. Window-event hooks (`SetWinEventHook`) to hear of foreground changes are avoided for the same reason.
+
+**Amended 2026-10-09 (PR #50).** Until then the overlay was never topmost: it was kept just above the game in the z-order, so that it would never cover another app, and an app brought in front of the game covered the overlay too. The overlay windows are now topmost while they show, and hide as soon as another app is in front. They still never cover another app, so that reason for keeping out of the topmost band no longer applies. The decision itself stands: no owner or parent link to the game, no hooks, and no messages or input to it; only our own windows are restacked.
 
 Our windows are not hidden from screen capture, so the panel shows in the player's screenshots and streams. Our own capture of the Title Region (and of the EXP Bar Region) would then read the panel if it covered them, so the core never places the panel there: inside the game window it moves clear of every captured region, whether at its default spot or where the player dragged it. The Grind Tracker's window and the Item Lookup alert move clear of them the same way.
