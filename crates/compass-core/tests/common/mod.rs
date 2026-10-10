@@ -2,9 +2,11 @@
 //! serving MeowDB's saved map index and map pages (personal-use test data, ADR 0003).
 #![allow(dead_code)]
 
+pub mod osms;
 pub mod player;
 pub mod world;
 
+use compass_core::osms::OsmsFiles;
 use compass_core::{
     Compass, ExpBarRegion, Fetched, Frame, GameWindow, ItemHit, MapData, MapDataSource, MapEntry, MobDetails,
     PanelState, Rect, ScreenRect, Settings, Size, SourceError, TitleRegion, default_title_region, meowdb,
@@ -232,9 +234,14 @@ type MobAnswer = Result<MobDetails, SourceError>;
 type ImageAnswer = Result<String, SourceError>;
 type IndexAnswer = Poll<Result<Vec<MapEntry>, SourceError>>;
 type SearchAnswer = Result<Vec<ItemHit>, SourceError>;
+pub type OsmsAnswer = Poll<Result<Fetched<OsmsFiles>, SourceError>>;
 
 /// A map data source that answers from memory and counts index and map data requests.
 pub struct FakeSource {
+    /// Answers for successive asks for OSMS's file set; the last one repeats.
+    osms_answers: Vec<OsmsAnswer>,
+    /// How many times OSMS's file set was asked for.
+    pub osms_requests: Arc<AtomicU32>,
     /// Answers for successive index requests; the last one repeats.
     answers: Vec<IndexAnswer>,
     pub index_requests: Arc<AtomicU32>,
@@ -283,6 +290,8 @@ pub struct FakeSource {
 impl FakeSource {
     fn answering(answers: Vec<IndexAnswer>) -> Self {
         Self {
+            osms_answers: vec![fresh(osms::game())],
+            osms_requests: Arc::default(),
             answers,
             index_requests: Arc::default(),
             pages: Box::new(|id| Poll::Ready(saved_map_page(id))),
@@ -409,6 +418,27 @@ impl FakeSource {
         Self { item_polls: polls, ..self }
     }
 
+    /// OSMS's file set answers these, one ask after another; the last one repeats.
+    pub fn answering_osms(answers: Vec<OsmsAnswer>) -> Self {
+        Self { osms_answers: answers, ..Self::answering(vec![Poll::Ready(Err(unreachable()))]) }
+    }
+
+    /// OSMS serves this made-up world.
+    pub fn with_world(world: osms::World) -> Self {
+        Self::answering_osms(vec![fresh(world)])
+    }
+
+    /// OSMS serves the game's map list, with made-up figures on the maps the minimap
+    /// samples show ([`osms::game`]).
+    pub fn osms() -> Self {
+        Self::with_world(osms::game())
+    }
+
+    /// OSMS can't be reached, and no set is saved.
+    pub fn osms_offline() -> Self {
+        Self::answering_osms(vec![Poll::Ready(Err(unreachable()))])
+    }
+
     pub fn with_index(index: Vec<MapEntry>) -> Self {
         Self::answering(vec![Poll::Ready(Ok(index))])
     }
@@ -497,7 +527,28 @@ fn read_saved_search(name: &str) -> SearchAnswer {
     }
 }
 
+/// A fresh answer of OSMS's file set: `world`'s files.
+pub fn fresh(world: osms::World) -> OsmsAnswer {
+    Poll::Ready(Ok(Fetched::Fresh(world.files())))
+}
+
+/// A saved copy of `world`'s files, saved at `saved_at_unix_ms`.
+pub fn saved_copy(world: osms::World, saved_at_unix_ms: u64) -> OsmsAnswer {
+    Poll::Ready(Ok(Fetched::SavedCopy { data: world.files(), saved_at_unix_ms }))
+}
+
 impl MapDataSource for FakeSource {
+    fn osms_files(&mut self) -> Poll<Result<Fetched<OsmsFiles>, SourceError>> {
+        let n = self.osms_requests.fetch_add(1, Ordering::SeqCst) as usize;
+        let answer = self.osms_answers[n.min(self.osms_answers.len() - 1)].clone();
+        match (answer, self.saved_at) {
+            (Poll::Ready(Ok(Fetched::Fresh(data))), Some(saved_at_unix_ms)) => {
+                Poll::Ready(Ok(Fetched::SavedCopy { data, saved_at_unix_ms }))
+            }
+            (answer, _) => answer,
+        }
+    }
+
     fn map_index(&mut self) -> Poll<Result<Fetched<Vec<MapEntry>>, SourceError>> {
         let n = self.index_requests.fetch_add(1, Ordering::SeqCst) as usize;
         let answer = self.answers[n.min(self.answers.len() - 1)].clone();

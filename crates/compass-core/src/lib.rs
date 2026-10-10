@@ -17,6 +17,7 @@ mod map_index;
 mod matcher;
 pub mod meowdb;
 mod mob_card;
+pub mod osms;
 mod pace;
 mod panel;
 mod personal_best;
