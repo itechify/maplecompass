@@ -27,6 +27,8 @@ tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }
+# The Personal Bests page carries its fonts and icon inline, as data: URLs.
+base64 = "0.22"
 # MeowDB pages (ADR 0003). OS TLS (SChannel on Windows): reqwest's default rustls
 # backend builds aws-lc, which needs NASM/CMake.
 reqwest = { version = "0.13", default-features = false, features = ["native-tls", "http2", "charset", "system-proxy", "gzip"] }
