@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { hotkeyAvailable, keyLabel, type Hotkeys } from "./hotkeys";
+import { LOADING_MAP_LIST, recognitionProblem, type Recognition } from "./recognition";
 
 /** Mirror of `compass_core::TestRead`. */
 type TestRead =
@@ -29,7 +30,7 @@ type SetupView = {
   unavailableHotkeys: string[];
   /** Those of them that don't name a key combination; the rest another app has. */
   invalidHotkeys: string[];
-  recognition: { status: "starting" | "ready" | "savedCopy" | "unavailable" | "formatChanged" };
+  recognition: Recognition;
   game: { width: number; height: number } | null;
   gameTitle: string;
   hotkeys: Hotkeys;
@@ -125,15 +126,10 @@ function render() {
       title.append(street, map);
       box.replaceChildren(title, tag("Recognised"));
     } else if (recognition.status === "starting") {
-      box.textContent = "Loading the map list from OSMS Data Explorer…";
-    } else if (recognition.status === "unavailable") {
+      box.textContent = LOADING_MAP_LIST;
+    } else if (recognitionProblem(recognition)) {
       kind = "problem";
-      box.textContent =
-        "Couldn't load the map list from OSMS Data Explorer, so no map can be recognised yet. Check your connection; MapleCompass tries again every minute.";
-    } else if (recognition.status === "formatChanged") {
-      kind = "problem";
-      box.textContent =
-        "OSMS Data Explorer's data has changed format, so no map can be recognised. MapleCompass needs an update to read it.";
+      box.textContent = recognitionProblem(recognition);
     } else {
       kind = "problem";
       box.textContent =
