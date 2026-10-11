@@ -8,23 +8,19 @@ import { byId, span } from "./dom";
 /** Mirror of `compass_core::ShopPrice`. */
 type ShopPrice = { status: "sells"; mesos: number } | { status: "notSold" } | { status: "cash" } | { status: "unknown" };
 
-/** Mirror of `compass_core::QuestReward`. */
-type QuestReward = { status: "always" } | { status: "chance"; hundredths: number } | { status: "pick" } | { status: "sometimes" };
+/** Mirror of `compass_core::MarketPrice`: a price the player keeps, and when they set it. */
+type MarketPrice = { mesos: number; setAtUnixMs?: number };
 
-/** Mirrors of `compass_core::ItemSource` and `compass_core::ItemUse`. */
-type ItemSource = { kind: "quest"; name: string; reward: QuestReward } | { kind: "recipe"; discipline: string; level: number };
-type ItemUse = { kind: "quest"; name: string; count: number } | { kind: "recipe"; makes: string; count: number };
-
-/** Mirror of `compass_core::Listed`. */
-type Listed<T> = { shown: T[]; more: number };
+/** Mirror of `compass_core::MarketEdit`: the market price's field, open. */
+type MarketEdit = { notAPrice: string | null };
 
 /** Mirror of `compass_core::ItemCard`. */
 type ItemCard = {
   id: string;
   name: string;
   shop: ShopPrice;
-  comesFrom: Listed<ItemSource>;
-  usedFor: Listed<ItemUse>;
+  market: MarketPrice | null;
+  marketEdit: MarketEdit | null;
   savedCopyFromUnixMs: number | null;
   credit: string;
 };
@@ -84,58 +80,90 @@ function link(text: string, label: string, onClick: () => void): HTMLButtonEleme
   return button;
 }
 
-/** What players pay for it: MesoWatch, which has no page per item, so the player looks
- * the item up there. */
-function marketFigure(): HTMLDivElement {
-  const open = () => invoke("item_card_open_mesowatch");
-  return figure("Market", link("Look up on MesoWatch ↗", "Open MesoWatch, and look the item up there", open));
+/** A light icon button in the card's body: `path` drawn as the panel's icons are. */
+function iconButton(path: string, label: string, onClick: () => void): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "icon-button light";
+  button.setAttribute("aria-label", label);
+  button.title = label;
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("aria-hidden", "true");
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  line.setAttribute("d", path);
+  svg.append(line);
+  button.append(svg);
+  button.addEventListener("click", onClick);
+  return button;
 }
 
-/** A quest's chance of giving the item, as OSMS gives it: "7.14%". */
-function chance(reward: QuestReward): string {
-  switch (reward.status) {
-    case "always":
-      return "";
-    case "chance":
-      return `${Number((reward.hundredths / 100).toFixed(2))}%`;
-    case "pick":
-      return "a pick";
-    case "sometimes":
-      return "sometimes";
-  }
+/** MesoWatch, which has no page per item: the player looks the item up there. */
+const mesoWatchButton = () =>
+  iconButton("M9 3h4v4M13 3L7.5 8.5M11.5 9.5V13h-8.5V4.5H6.5", "Look it up on MesoWatch", () =>
+    invoke("item_card_open_mesowatch"),
+  );
+
+/** The market price's field, open: what the player typed (or the price kept), Enter to
+ * keep it, Esc to leave it as it was. Leaving the field keeps what is typed. */
+let fieldDone = false;
+function marketField(card: ItemCard): HTMLElement[] {
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "item-card-input";
+  input.inputMode = "decimal";
+  input.autocomplete = "off";
+  input.spellcheck = false;
+  input.placeholder = "450,000 or 450k";
+  input.setAttribute("aria-label", `Your market price for ${card.name}`);
+  input.value = card.marketEdit?.notAPrice ?? (card.market ? card.market.mesos.toLocaleString("en-US") : "");
+  fieldDone = false;
+  const finish = (command: "item_card_enter_market" | "item_card_cancel_market") => {
+    if (fieldDone) return;
+    fieldDone = true;
+    invoke(command, command === "item_card_enter_market" ? { typed: input.value } : {});
+  };
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") finish("item_card_enter_market");
+    if (e.key === "Escape") finish("item_card_cancel_market");
+  });
+  input.addEventListener("blur", () => {
+    if (input.isConnected) finish("item_card_enter_market");
+  });
+  const row = document.createElement("div");
+  row.className = "item-card-market editing";
+  row.append(span("label", "Market"), input, mesoWatchButton());
+  const note = document.createElement("p");
+  const problem = card.marketEdit?.notAPrice;
+  note.className = problem ? "item-card-hint problem" : "item-card-hint";
+  note.textContent = problem
+    ? `“${problem}” isn't a price. Try 450,000, 450k or 1.2m.`
+    : "Enter keeps it · Esc cancels · empty clears";
+  queueMicrotask(() => {
+    input.focus();
+    input.select();
+  });
+  return [row, note];
 }
 
-/** One row of a list: what it is, its name, and how many or how likely at the right. */
-function entry(tag: string, name: string, aside: string): HTMLLIElement {
-  const row = document.createElement("li");
-  const tagEl = span("tag", tag);
-  row.append(tagEl, span("what", name));
-  if (aside) row.append(span("aside", aside));
-  row.title = aside ? `${name} (${aside})` : name;
+/** The market price the player keeps (the day they set it under the pointer), and buttons
+ * to change it and to look it up on MesoWatch. */
+function marketRow(card: ItemCard): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "item-card-market";
+  const edit = () => invoke("item_card_edit_market");
+  const setOn = card.market?.setAtUnixMs;
+  const value = card.market
+    ? link(mesos(card.market.mesos), `Your price${setOn === undefined ? "" : `, set ${dayText(new Date(setOn), false)}`}. Click to change it`, edit)
+    : link("Not set", "Set your market price", edit);
+  value.classList.toggle("quiet", !card.market);
+  value.classList.add("value");
+  row.append(span("label", "Market"), value);
+  row.append(
+    iconButton("M3 13l.8-3.2L10.6 3l2.4 2.4-6.8 6.8L3 13zM9.3 4.3l2.4 2.4", "Set your market price", edit),
+    mesoWatchButton(),
+  );
   return row;
-}
-
-const sourceRow = (source: ItemSource) =>
-  source.kind === "quest"
-    ? entry("Quest", source.name, chance(source.reward))
-    : entry("Craft", `${source.discipline}, level ${source.level}`, "");
-
-const useRow = (used: ItemUse) =>
-  used.kind === "quest" ? entry("Quest", used.name, `×${used.count}`) : entry("Craft", used.makes, `×${used.count}`);
-
-/** A list on the card, under its heading: the first few, then how many more. Left out
- * with nothing in it. */
-function list<T>(heading: string, listed: Listed<T>, row: (item: T) => HTMLLIElement): HTMLElement[] {
-  if (listed.shown.length === 0) return [];
-  const section = document.createElement("section");
-  section.className = "item-card-list";
-  const h2 = document.createElement("h2");
-  h2.textContent = heading;
-  const ul = document.createElement("ul");
-  ul.append(...listed.shown.map(row));
-  section.append(h2, ul);
-  if (listed.more > 0) section.append(span("more", `and ${listed.more} more`));
-  return [section];
 }
 
 /** One item's card. */
@@ -143,10 +171,10 @@ function renderCard(card: ItemCard) {
   title.replaceChildren(link(card.name, `Open ${card.name} on MeowDB`, () => invoke("item_card_open_meowdb")));
   const prices = document.createElement("dl");
   prices.className = "item-card-prices";
-  prices.append(shopFigure(card.shop), marketFigure());
+  prices.append(shopFigure(card.shop));
   const box = document.createElement("div");
   box.className = "item-card-box";
-  box.append(prices, ...list("Comes from", card.comesFrom, sourceRow), ...list("Used for", card.usedFor, useRow));
+  box.append(prices, ...(card.marketEdit ? marketField(card) : [marketRow(card)]));
   const parts: Node[] = [box];
   if (card.savedCopyFromUnixMs !== null) {
     const note = document.createElement("p");
@@ -231,7 +259,7 @@ document.fonts.ready.then(reportHeight);
 new ResizeObserver(reportHeight).observe(cardEl);
 
 // Dragged by its bar, never by its button. The window takes clicks only while a card
-// shows, and never the keyboard: it can't be activated.
+// shows, and the keyboard only while its market price's field is open.
 document.addEventListener("mousedown", (e) => {
   const target = e.target instanceof Element ? e.target : null;
   const onBar = !!target?.closest(".drag-handle") && !target?.closest("button");

@@ -1,8 +1,8 @@
 //! The Item Card (ADR 0010): the player hovers an item in the game and presses
 //! Ctrl+Shift+I. The shell captures the game's client area with the pointer, the Item
 //! Tooltip's name is read, and the card shows at the pointer what the game's tooltip
-//! doesn't: what a shop pays for the item, where it comes from and what it's used for, with
-//! links to its MeowDB page and to MesoWatch's market prices. Failures go to the Item
+//! doesn't: what a shop pays for the item, and the market price the player keeps for it,
+//! with links to its MeowDB page and to MesoWatch's market prices. Failures go to the Item
 //! Lookup alert.
 //!
 //! The readings here stand for what the Item Tooltip reader made of a capture. OSMS's item
@@ -16,10 +16,10 @@
 mod common;
 
 use common::{FakeSource, ItemSetAnswer};
-use common::items::{ItemWorld, cash, equip, etc, item_world, quest, recipe, scroll, setup, use_item, weapon};
+use common::items::{ItemWorld, cash, equip, etc, item_world, scroll, setup, use_item, weapon};
 use compass_core::{
-    Action, Compass, ExpBarRegion, Foreground, GameWindow, Hotkey, ItemCard, ItemHit, ItemCardChoice, ItemCardView, ItemLookup, ItemSource, ItemTooltip,
-    ItemTooltipReading, ItemUse, Listed, OurWindow, PanelSizes, QuestReward, PanelState, Rect, Request, ScreenPoint, ScreenRect, Settings, ShopPrice,
+    Action, Compass, ExpBarRegion, Foreground, GameWindow, Hotkey, ItemCard, ItemHit, ItemCardChoice, ItemCardView, ItemLookup, ItemTooltip,
+    ItemTooltipReading, MarketEdit, MarketPrice, OurWindow, PanelSizes, PanelState, Rect, Request, ScreenPoint, ScreenRect, Settings, ShopPrice,
     Recognition, Size, SourceError, TitleRegion, meowdb,
 };
 use compass_core::osms_items::ItemFiles;
@@ -352,7 +352,7 @@ fn a_press_while_the_last_capture_is_still_being_read_is_ignored_whichever_hotke
     compass.on_hotkey("ctrl+shift+i");
 
     assert_eq!(compass.on_hotkey("ctrl+shift+i"), None, "the card's capture is still being read");
-    assert_eq!(compass.on_hotkey("ctrl+shift+o"), None, "Item Lookup waits for it too");
+    assert_eq!(compass.on_hotkey("ctrl+shift+u"), None, "Item Lookup waits for it too");
 
     compass.on_item_tooltip_reading(found("Bronze Ore", 1_000));
     assert_eq!(compass.on_hotkey("ctrl+shift+i"), Some(Request::CaptureItemTooltip));
@@ -558,89 +558,6 @@ fn each_listed_item_shows_its_picture_once_it_is_in() {
     assert_eq!(*asked.lock().unwrap(), ["current/images/items/01002067.png", "current/images/items/01032001.png"]);
 }
 
-/// Quests and recipes that give and need Bronze Ore and Bronze Plate.
-fn bronze_work() -> ItemWorld {
-    shop()
-        .with(etc(4_011_000, "Bronze Plate").sells_for(1_000))
-        .with(equip(1_002_001, "Bronze Koif", "Hat").sells_for(2_000))
-        .with_quest(quest(1_001, "Ore for the Smith").gives(4_010_000, "Bronze Ore", 5))
-        .with_quest(quest(1_002, "A Lucky Find").gives_at_random(4_010_000, "Bronze Ore", 7.14))
-        .with_quest(quest(1_003, "Pick a Reward").gives_as_a_pick(4_010_000, "Bronze Ore"))
-        .with_quest(quest(1_004, "Plates for the Guard").needs(4_011_000, "Bronze Plate", 15))
-        .with_recipe(recipe("Smithing", 2, 4_011_000, "Bronze Plate").from("Bronze Ore", 10))
-        .with_recipe(recipe("Smithing", 3, 1_002_001, "Bronze Koif").from("Bronze Plate", 2).from("Red Potion", 1))
-}
-
-#[test]
-fn the_card_says_which_quests_give_the_item_always_at_random_or_as_a_pick() {
-    let card = card_of(bronze_work(), "Bronze Ore");
-
-    assert_eq!(
-        card.comes_from,
-        Listed {
-            shown: vec![
-                ItemSource::Quest { name: "Ore for the Smith".into(), reward: QuestReward::Always },
-                ItemSource::Quest { name: "A Lucky Find".into(), reward: QuestReward::Chance { hundredths: 714 } },
-                ItemSource::Quest { name: "Pick a Reward".into(), reward: QuestReward::Pick },
-            ],
-            more: 0,
-        }
-    );
-}
-
-#[test]
-fn the_card_says_which_recipes_make_the_item_and_which_quests_and_recipes_need_it() {
-    let card = card_of(bronze_work(), "Bronze Plate");
-
-    assert_eq!(card.comes_from.shown, [ItemSource::Recipe { discipline: "Smithing".into(), level: 2 }]);
-    assert_eq!(
-        card.used_for.shown,
-        [
-            ItemUse::Quest { name: "Plates for the Guard".into(), count: 15 },
-            ItemUse::Recipe { makes: "Bronze Koif".into(), count: 2 },
-        ]
-    );
-}
-
-#[test]
-fn each_list_shows_three_then_how_many_more() {
-    let mut items = shop();
-    for (n, name) in ["One", "Two", "Three", "Four", "Five"].into_iter().enumerate() {
-        items = items.with_quest(quest(2_000 + n as u64, &format!("Ores, Part {name}")).needs(4_010_000, "Bronze Ore", 10));
-    }
-
-    let card = card_of(items, "Bronze Ore");
-
-    let names: Vec<&str> = card
-        .used_for
-        .shown
-        .iter()
-        .map(|used| match used {
-            ItemUse::Quest { name, .. } => name.as_str(),
-            ItemUse::Recipe { makes, .. } => makes.as_str(),
-        })
-        .collect();
-    assert_eq!(names, ["Ores, Part One", "Ores, Part Two", "Ores, Part Three"]);
-    assert_eq!(card.used_for.more, 2);
-}
-
-#[test]
-fn a_quest_that_gives_the_item_twice_over_is_listed_once() {
-    let items = shop().with_quest(quest(1_001, "Ore for the Smith").gives(4_010_000, "Bronze Ore", 5).gives(4_010_000, "Bronze Ore", 5));
-
-    let card = card_of(items, "Bronze Ore");
-
-    assert_eq!(card.comes_from.shown, [ItemSource::Quest { name: "Ore for the Smith".into(), reward: QuestReward::Always }]);
-}
-
-#[test]
-fn an_item_no_quest_or_recipe_gives_or_needs_has_neither_list() {
-    let card = card_of(bronze_work(), "Blue Moon");
-
-    assert_eq!(card.comes_from, Listed { shown: vec![], more: 0 });
-    assert_eq!(card.used_for, Listed { shown: vec![], more: 0 });
-}
-
 /// When a saved copy was made: 2026-10-01 00:00 UTC, in ms since the Unix epoch.
 const SAVED_AT: u64 = 1_790_812_800_000;
 const DAY_MS: u64 = 24 * 60 * 60 * 1000;
@@ -835,18 +752,6 @@ fn of_meowdb_items_sharing_the_name_none_of_the_cards_kind_are_listed_in_the_ale
 }
 
 #[test]
-fn items_sharing_a_name_kind_and_shop_price_look_alike_so_show_one_card_with_the_quests_and_recipes_of_each() {
-    let items = namesakes()
-        .with_quest(quest(1_001, "Potions for the Road").gives(2_000_000, "Red Potion", 10))
-        .with_quest(quest(1_002, "A Potion for Olaf").needs(2_000_007, "Red Potion", 1));
-
-    let card = card_of(items, "Red Potion");
-
-    assert_eq!(card.comes_from.shown, [ItemSource::Quest { name: "Potions for the Road".into(), reward: QuestReward::Always }]);
-    assert_eq!(card.used_for.shown, [ItemUse::Quest { name: "A Potion for Olaf".into(), count: 1 }]);
-}
-
-#[test]
 fn the_cards_market_line_opens_mesowatch_for_the_player_to_look_the_item_up() {
     let mut compass = started();
     assert_eq!(compass.open_card_mesowatch(), None, "no card");
@@ -911,4 +816,169 @@ fn the_next_card_opens_at_the_pointer_again() {
     let state = press_over(&mut compass, "Red Potion", 2_000);
 
     assert_eq!(state.item_card_placement, Some(ScreenRect { x: 1008, y: 588, width: 300, height: 160 }));
+}
+
+/// The market price on the card showing, and whether its field is open.
+fn market(state: &PanelState) -> (Option<MarketPrice>, Option<MarketEdit>) {
+    let card = card(state).expect("a card");
+    (card.market, card.market_edit)
+}
+
+/// The player clicked the card's market price and typed `typed`, then Enter.
+fn set_market(compass: &mut Compass, typed: &str) -> PanelState {
+    compass.act(Action::EditCardMarket);
+    compass.enter_card_market(typed).clone()
+}
+
+#[test]
+fn an_item_has_no_market_price_until_the_player_sets_one() {
+    let mut compass = started();
+
+    let state = press_over(&mut compass, "Bronze Ore", 1_000);
+
+    assert_eq!(market(&state), (None, None));
+}
+
+#[test]
+fn clicking_the_market_price_opens_its_field_for_the_player_to_type_in() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+
+    let state = compass.act(Action::EditCardMarket).clone();
+
+    assert_eq!(market(&state), (None, Some(MarketEdit { not_a_price: None })));
+}
+
+#[test]
+fn the_price_the_player_types_is_kept_with_the_day_they_set_it() {
+    let mut compass = started_at(FakeSource::osms_offline().with_items(shop()), SAVED_AT);
+    press_over(&mut compass, "Bronze Ore", 1_000);
+
+    let state = set_market(&mut compass, "450,000");
+
+    assert_eq!(market(&state), (Some(MarketPrice { mesos: 450_000, set_at_unix_ms: Some(SAVED_AT) }), None));
+}
+
+#[test]
+fn prices_are_typed_as_players_write_them() {
+    for (typed, mesos) in [
+        ("450000", 450_000),
+        ("450k", 450_000),
+        ("450K", 450_000),
+        ("1.2m", 1_200_000),
+        ("1.25M", 1_250_000),
+        ("2b", 2_000_000_000),
+        (" 1 200 000 mesos ", 1_200_000),
+        ("999", 999),
+        ("0", 0),
+    ] {
+        let mut compass = started();
+        press_over(&mut compass, "Bronze Ore", 1_000);
+        let state = set_market(&mut compass, typed);
+        assert_eq!(market(&state).0.map(|price| price.mesos), Some(mesos), "{typed:?}");
+    }
+}
+
+#[test]
+fn what_isnt_a_price_keeps_the_field_open_saying_so_and_the_price_as_it_was() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+    set_market(&mut compass, "450k");
+
+    for typed in ["lots", "4.5.6k", "12x", "k", "-5"] {
+        let state = set_market(&mut compass, typed);
+        assert_eq!(market(&state).0.map(|price| price.mesos), Some(450_000), "{typed:?}");
+        assert_eq!(market(&state).1, Some(MarketEdit { not_a_price: Some(typed.into()) }), "{typed:?}");
+    }
+}
+
+#[test]
+fn an_empty_field_clears_the_price() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+    set_market(&mut compass, "450k");
+
+    let state = set_market(&mut compass, "  ");
+
+    assert_eq!(market(&state), (None, None));
+}
+
+#[test]
+fn cancelling_closes_the_field_and_keeps_the_price_as_it_was() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+    set_market(&mut compass, "450k");
+    compass.act(Action::EditCardMarket);
+
+    let state = compass.act(Action::CancelCardMarket).clone();
+
+    assert_eq!(market(&state), (Some(MarketPrice { mesos: 450_000, set_at_unix_ms: None }), None));
+}
+
+#[test]
+fn each_item_keeps_its_own_price_and_shows_it_on_its_next_card() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+    set_market(&mut compass, "450k");
+
+    let other = press_over(&mut compass, "Red Potion", 2_000);
+    assert_eq!(market(&other).0, None);
+
+    let again = press_over(&mut compass, "Bronze Ore", 3_000);
+    assert_eq!(market(&again).0.map(|price| price.mesos), Some(450_000));
+}
+
+#[test]
+fn items_that_look_alike_keep_one_price() {
+    let mut compass = started_with(FakeSource::osms_offline().with_items(namesakes()));
+    press_over(&mut compass, "Red Potion", 1_000);
+    set_market(&mut compass, "40");
+
+    let state = press_over(&mut compass, "Red Potion", 2_000);
+
+    assert_eq!(market(&state).0.map(|price| price.mesos), Some(40));
+}
+
+#[test]
+fn the_prices_are_saved_and_restored_at_the_next_launch() {
+    let mut compass = started_at(FakeSource::osms_offline().with_items(shop()), SAVED_AT);
+    let before = compass.market_prices_revision();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+    set_market(&mut compass, "450k");
+    assert_ne!(compass.market_prices_revision(), before, "a change to save");
+
+    let saved = serde_json::to_string(&compass.market_prices()).expect("saves as JSON");
+    let mut next = started_at(FakeSource::osms_offline().with_items(shop()), SAVED_AT + DAY_MS);
+    next.restore_market_prices(serde_json::from_str(&saved).expect("reads back"));
+    let state = press_over(&mut next, "Bronze Ore", 1_000);
+
+    assert_eq!(market(&state).0, Some(MarketPrice { mesos: 450_000, set_at_unix_ms: Some(SAVED_AT) }));
+}
+
+#[test]
+fn a_new_card_or_closing_the_card_closes_its_field() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+    compass.act(Action::EditCardMarket);
+
+    let state = press_over(&mut compass, "Bronze Ore", 2_000);
+    assert_eq!(market(&state).1, None, "a new card");
+
+    compass.act(Action::EditCardMarket);
+    let state = compass.close_item_card().clone();
+    assert_eq!(state.item_card, None);
+    compass.enter_card_market("450k");
+    let state = press_over(&mut compass, "Bronze Ore", 3_000);
+    assert_eq!(market(&state).0, None, "nothing was being typed once it closed");
+}
+
+#[test]
+fn without_a_card_there_is_no_price_to_type() {
+    let mut compass = started();
+    compass.act(Action::EditCardMarket);
+    compass.enter_card_market("450k");
+
+    let state = press_over(&mut compass, "Bronze Ore", 1_000);
+
+    assert_eq!(market(&state), (None, None));
 }

@@ -339,7 +339,7 @@
                 <dd>The shown map's picture and its mobs' animations, fetched from OSMS once and kept until they go 30 days unused.</dd>
                 <dt>Item data</dt>
                 <dd>
-                  For the Item Card, four more files from OSMS, about 1.8 MB together, on the same schedule and kept
+                  For the Item Card, two more files from OSMS, about 1.2 MB together, on the same schedule and kept
                   apart from the map data. An item's picture is fetched only when a card lists it to pick from.
                 </dd>
                 <dt>Item searches</dt>
@@ -363,6 +363,7 @@
                   Your Personal Bests, each map's 10 best visits with when each was set, beside them in
                   <code>personal-bests.json</code>, saved as they change.
                 </li>
+                <li>The market prices you keep on Item Cards, beside them in <code>market-prices.json</code>.</li>
                 <li>The map and item data, pictures and animations in <code class="path">%LOCALAPPDATA%\<wbr />com.<wbr />itechify.<wbr />maplecompass\<wbr />cache</code>.</li>
                 <li>The <a href="#bug-reports">Bug Reports</a> you save, the 10 newest, in <code>Bug Reports</code> beside your settings.</li>
               </ul>
@@ -738,7 +739,7 @@
         <section class="tab-page" id="items" aria-labelledby="items-title">
           <header class="tab-opener">
             <h2 id="items-title">Items</h2>
-            <p>What an item is worth, where it comes from and what it's for, from its tooltip in the game.</p>
+            <p>What an item is worth, from its tooltip in the game, and its MeowDB page.</p>
           </header>
 
           <section class="topic" id="item-card" aria-labelledby="item-card-title">
@@ -752,14 +753,19 @@
               </p>
               <ul class="brief">
                 <li><b>Shop pays:</b> what an NPC shop pays for one.</li>
-                <li><b>Market:</b> a link to <a href="https://meso.watch">MesoWatch</a>, where players' prices are.</li>
-                <li><b>Comes from:</b> the quests that give it (with the chance, for a random reward) and the recipes that make it.</li>
-                <li><b>Used for:</b> the quests that need it (with how many) and the recipes that use it.</li>
+                <li><b>Market:</b> the price you keep for it, from what you've seen players pay.</li>
               </ul>
               <p>
-                <b class="run-in">Its links.</b> Click the item's name to open its MeowDB page, as <kbd>Ctrl+Shift+O</kbd>
-                does. Click Look up on MesoWatch to open MesoWatch, then search the item there: it has no page of its own
-                to open.
+                <b class="run-in">Your market price.</b> MapleCompass reads no market prices of its own, so you keep one for
+                each item you care about. Click the price (or "Not set"), or its pencil, and type it as players write it:
+                450,000, 450k or 1.2m. <kbd>Enter</kbd> keeps it, <kbd>Esc</kbd> leaves it as it was, and an empty field clears
+                it. It's saved with the day you set it, which its tooltip shows, and the next card for that item shows it.
+                The button beside it opens <a href="https://meso.watch">MesoWatch</a>, where you search the item to see what
+                players pay: MesoWatch has no page per item to open.
+              </p>
+              <p>
+                <b class="run-in">Its name.</b> Click the item's name to open its MeowDB page, as <kbd>Ctrl+Shift+U</kbd>
+                does: where it drops, the quests that give or need it, and more.
               </p>
               <p>
                 <b class="run-in">Moving and closing it.</b> Drag the card by its bar to move it out of the way; it stays
@@ -780,7 +786,8 @@
               <p class="detail">
                 When no card can show, the alert at the top centre of the game window says why: no tooltip by the pointer,
                 a name it couldn't read, a MapleCompass window covering the name, no item of that name, or the item data not
-                loaded yet. The Item Card has no button, so it can't be used while its hotkey is turned off.
+                loaded yet. The Item Card has no button, so it can't be used while its hotkey is turned off. While you type a
+                price, the card has the keyboard; clicking back into the game gives it back, keeping what you typed.
               </p>
             </div>
           </section>
@@ -789,7 +796,7 @@
             <div class="topic-text">
               <h3 id="item-lookup-title">Item Lookup</h3>
               <p>
-                Hover an item in the game until its tooltip shows, then press <kbd>Ctrl+Shift+O</kbd>. MapleCompass reads the
+                Hover an item in the game until its tooltip shows, then press <kbd>Ctrl+Shift+U</kbd>. MapleCompass reads the
                 name in the tooltip nearest the pointer and opens the item's MeowDB page in your browser, as clicking an Item
                 Card's name does.
               </p>

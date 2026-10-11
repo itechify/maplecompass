@@ -1,7 +1,7 @@
 //! Made-up item data in OSMS Data Explorer's exact JSON shape (ADR 0010): invented items,
-//! scrolls, quests, recipes and Cash Shop items, written out as the four item files the
-//! shell fetches. The names are the game's, as players see them; every figure, quest and
-//! recipe is made up. Nothing from OSMS is committed.
+//! scrolls and Cash Shop items, written out as the two item files the shell fetches. The
+//! names are the game's, as players see them; every figure is made up. Nothing from OSMS
+//! is committed.
 
 use compass_core::osms_items::ItemFiles;
 use serde_json::{Map as Object, Value, json};
@@ -145,120 +145,11 @@ pub fn cash(id: u64, name: &str, category: &str) -> CashItem {
     CashItem { id, name: name.into(), category: category.into() }
 }
 
-/// A quest in `quests.json`, with the items it gives and needs.
-#[derive(Debug, Clone)]
-pub struct Quest {
-    pub id: u64,
-    pub name: String,
-    rewards: Vec<Value>,
-    weighted: Vec<Value>,
-    choices: Vec<Value>,
-    needs: Vec<Value>,
-}
-
-pub fn quest(id: u64, name: &str) -> Quest {
-    Quest { id, name: name.into(), rewards: Vec::new(), weighted: Vec::new(), choices: Vec::new(), needs: Vec::new() }
-}
-
-impl Quest {
-    /// Always gives `count` of the item.
-    pub fn gives(mut self, id: u64, name: &str, count: u32) -> Self {
-        self.rewards.push(json!({"type": "item", "guaranteed": true, "id": id, "name": name, "count": count}));
-        self
-    }
-
-    /// Gives the item at random, `chance_pct` percent of the time, among its weighted
-    /// rewards for any class.
-    pub fn gives_at_random(mut self, id: u64, name: &str, chance_pct: f64) -> Self {
-        self.rewards.push(json!({"type": "item", "guaranteed": false, "id": id, "name": name, "count": 1, "prop": 1}));
-        self.weighted.push(json!({"id": id, "name": name, "count": 1, "label": name, "weight": 1, "chance_pct": chance_pct}));
-        self
-    }
-
-    /// Gives the item if the player picks it from its rewards.
-    pub fn gives_as_a_pick(mut self, id: u64, name: &str) -> Self {
-        self.rewards.push(json!({"type": "item", "guaranteed": false, "id": id, "name": name, "count": 1, "prop": -1}));
-        self.choices.push(json!({"id": id, "name": name, "count": 1, "label": name}));
-        self
-    }
-
-    /// Needs `count` of the item to complete.
-    pub fn needs(mut self, id: u64, name: &str, count: u32) -> Self {
-        self.needs.push(json!({"type": "item", "id": id, "name": name, "count": count, "label": format!("{name} x {count}")}));
-        self
-    }
-
-    fn json(&self) -> Value {
-        let mut rewards = vec![
-            json!({"type": "exp", "value": 100}),
-            json!({"type": "money", "value": 500}),
-            json!({"type": "next_quest", "value": "A Made-up Sequel"}),
-        ];
-        rewards.extend(self.rewards.iter().cloned());
-        // OSMS writes a quest's ID as a string where a quest needs another, unlike every
-        // other ID.
-        let mut needs = vec![
-            json!({"type": "quest", "id": "1000", "name": "A Made-up Start", "state": 2,
-                   "label": "Complete: A Made-up Start (#001000)"}),
-            json!({"type": "citizenship", "grade": 1, "town": 1, "town_name": "Henesys", "label": "Henesys citizen"}),
-            json!({"type": "mob", "id": 100100, "name": "Snail", "count": 10, "label": "Defeat Snail x 10"}),
-        ];
-        needs.extend(self.needs.iter().cloned());
-        let mut quest = json!({
-            "id": self.id.to_string(),
-            "name": self.name,
-            "area": 11,
-            "region": "Maple Island",
-            "description": "A made-up quest.",
-            "npc_name": "Made-up NPC",
-            "rewards": rewards,
-            "requirements": "Made up",
-            "requirements_list": needs,
-        });
-        if !self.weighted.is_empty() {
-            let total = self.weighted.len();
-            quest["reward_weighted"] = json!([{"type": "weighted_random", "class_specific": false, "groups": [
-                {"job_mask": 0, "job_name": "Any Class", "total_weight": total, "items": self.weighted}
-            ]}]);
-        }
-        if !self.choices.is_empty() {
-            quest["reward_choices"] = json!([{"type": "choose_one", "class_specific": false, "groups": [
-                {"job_mask": 0, "job_name": "Any Class", "items": self.choices}
-            ]}]);
-        }
-        quest
-    }
-}
-
-/// A recipe in `crafting.json`: what it makes, at what level of which discipline, from what.
-#[derive(Debug, Clone)]
-pub struct Recipe {
-    pub discipline: String,
-    pub level: u32,
-    pub makes: (u64, String),
-    /// Each ingredient by name, as OSMS gives them, and how many.
-    pub ingredients: Vec<(String, u32)>,
-}
-
-pub fn recipe(discipline: &str, level: u32, makes_id: u64, makes: &str) -> Recipe {
-    Recipe { discipline: discipline.into(), level, makes: (makes_id, makes.into()), ingredients: Vec::new() }
-}
-
-impl Recipe {
-    pub fn from(mut self, name: &str, count: u32) -> Self {
-        self.ingredients.push((name.into(), count));
-        self
-    }
-}
-
-/// Made-up item data: what `items.json`, `quests.json`, `crafting.json` and
-/// `cash_shop.json` hold.
+/// Made-up item data: what `items.json` and `cash_shop.json` hold.
 #[derive(Debug, Clone, Default)]
 pub struct ItemWorld {
     pub items: Vec<Item>,
     pub scrolls: Vec<Scroll>,
-    pub quests: Vec<Quest>,
-    pub recipes: Vec<Recipe>,
     pub cash: Vec<CashItem>,
 }
 
@@ -277,29 +168,14 @@ impl ItemWorld {
         self
     }
 
-    pub fn with_quest(mut self, quest: Quest) -> Self {
-        self.quests.push(quest);
-        self
-    }
-
-    pub fn with_recipe(mut self, recipe: Recipe) -> Self {
-        self.recipes.push(recipe);
-        self
-    }
-
     pub fn with_cash(mut self, item: CashItem) -> Self {
         self.cash.push(item);
         self
     }
 
-    /// The data as OSMS's four item files.
+    /// The data as OSMS's two item files.
     pub fn files(&self) -> ItemFiles {
-        ItemFiles {
-            items: self.items_json().to_string(),
-            quests: self.quests_json().to_string(),
-            crafting: self.crafting_json().to_string(),
-            cash_shop: self.cash_shop_json().to_string(),
-        }
+        ItemFiles { items: self.items_json().to_string(), cash_shop: self.cash_shop_json().to_string() }
     }
 
     fn items_json(&self) -> Value {
@@ -321,39 +197,6 @@ impl ItemWorld {
             "scroll_total": self.scrolls.len(),
             "equipment_meta": {"armor_order": [], "job_filters": [], "weapon_type_order": [], "weapon_types_by_class": {}},
         })
-    }
-
-    fn quests_json(&self) -> Value {
-        json!({
-            "quests": self.quests.iter().map(Quest::json).collect::<Vec<_>>(),
-            "regions": [],
-            "chains": [],
-            "total": self.quests.len(),
-        })
-    }
-
-    fn crafting_json(&self) -> Value {
-        let mut disciplines: Vec<(String, Vec<Value>)> = Vec::new();
-        for (n, recipe) in self.recipes.iter().enumerate() {
-            let ingredients: Vec<Value> =
-                recipe.ingredients.iter().map(|(name, count)| json!({"item_name": name, "count": count})).collect();
-            let row = json!({"level": recipe.level, "recipes": [{
-                "output_id": recipe.makes.0, "result_item_name": recipe.makes.1, "result_count": 1,
-                "req_level": recipe.level, "craft_exp": 20, "meso_cost": 1000, "ingredients": ingredients, "id": n + 1,
-            }]});
-            match disciplines.iter_mut().find(|(name, _)| *name == recipe.discipline) {
-                Some((_, levels)) => levels.push(row),
-                None => disciplines.push((recipe.discipline.clone(), vec![row])),
-            }
-        }
-        let disciplines: Vec<Value> = disciplines
-            .into_iter()
-            .map(|(discipline, levels)| {
-                json!({"discipline": discipline, "skill_id": 92000000, "count": levels.len(),
-                       "output_types": [{"output_type": "Equipment", "count": levels.len(), "levels": levels}]})
-            })
-            .collect();
-        json!({"disciplines": disciplines, "total": self.recipes.len()})
     }
 
     fn cash_shop_json(&self) -> Value {

@@ -10,7 +10,7 @@ use common::osms;
 use common::{FakeSource, SUNSET_SKY_ID, frame};
 use compass_core::bug_report::{self, Answer, Event, Note, Recording, ReplayData, MAX_REPORT_BYTES};
 use compass_core::{
-    BESTS_VERSION, Compass, ExpBar, ExpBarReading, ExpBarRegion, Foreground, Frame, GameWindow, ItemTooltip,
+    Action, BESTS_VERSION, Compass, ExpBar, ExpBarReading, ExpBarRegion, Foreground, Frame, GameWindow, ItemTooltip,
     ItemTooltipReading, MapBests, Rect, ReportAbout, SavedBests, ScreenPoint, ScreenRect, Settings, Size, TitleLines,
     TitleReading, TitleRegion, TrackingState, VisitBest,
 };
@@ -465,12 +465,19 @@ fn item_card(shell: &mut Shell, name: &str) {
     shell.compass.on_item_tooltip_reading(Some(ItemTooltipReading { tooltip, pointer, at_ms: shell.at }));
 }
 
-/// A run with Item Cards: a card, a choice and its pick, the card's MeowDB page and its ×.
+/// A run with Item Cards: the market prices kept restored, a card and its market price
+/// typed (first not a price, then one), a choice and its pick, the card's MeowDB page and
+/// its ×.
 fn run_with_item_cards() -> Shell {
     let mut shell = Shell::new(FakeSource::osms().with_items(items()));
+    let kept = r#"{"version":1,"items":{"01041078":{"mesos":30000,"setAtUnixMs":1791700000000}}}"#;
+    shell.compass.restore_market_prices(serde_json::from_str(kept).unwrap());
     shell.compass.set_item_card_size(Size { width: 280, height: 160 });
     shell.play(10 * S, CONSTRUCTION_SITE, grind);
     item_card(&mut shell, "Bronze Ore");
+    shell.compass.act(Action::EditCardMarket);
+    shell.compass.enter_card_market("lots");
+    shell.compass.enter_card_market("450k");
     shell.play(20 * S, CONSTRUCTION_SITE, grind);
     item_card(&mut shell, "Blue Moon");
     shell.compass.pick_card_item("01032011");
@@ -507,5 +514,5 @@ fn the_report_holds_only_the_item_files_fingerprint() {
         .collect();
     assert_eq!(fingerprints, [bug_report::item_fingerprint(&items().files())]);
     let names = zip_names(&report.zip);
-    assert!(names.iter().all(|name| !name.ends_with("items.json") && !name.ends_with("quests.json")), "{names:?}");
+    assert!(names.iter().all(|name| !name.ends_with("items.json") && !name.ends_with("cash_shop.json")), "{names:?}");
 }

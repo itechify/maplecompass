@@ -5,15 +5,19 @@
 //! `tauri.conf.json`, ADR 0001). Like the Personal Bests window it is declared in
 //! `tauri.conf.json` and never hidden: without a card its page draws nothing, and clicks
 //! pass through it. While a card shows it takes the clicks on it (its bar, its ×, its name,
-//! its market line, an item to pick), and none reach the game. Every decision is the
-//! core's; this only places the window, sends its page what it renders, relays the
-//! player's drags, and moves it out of the way of a capture.
+//! its market price and buttons, an item to pick), and none reach the game. While its
+//! market price's field is open it takes the keyboard too, as the search view does: it
+//! comes to the front right after the player's click, and gives the game the keyboard back
+//! once the field closes. Every decision is the core's; this only places the window, sends
+//! its page what it renders, relays the player's drags, and moves it out of the way of a
+//! capture.
 
 use crate::errors::error;
+use crate::search;
 use crate::sizemove::{self, Gesture, SizeMove};
 use crate::view::{LastView, ViewSender};
 use crate::{Command, LOOP_START_GRACE, keep_on_top, physical, place};
-use compass_core::{PanelState, ShownItemCard, Size};
+use compass_core::{Action, ItemCard, ItemCardView as CardShows, PanelState, ShownItemCard, Size};
 use serde::Serialize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -70,6 +74,8 @@ pub struct ItemCardWindow {
     /// The card's height in CSS px, as the page last reported it.
     height: f64,
     drag: Option<Drag>,
+    /// Its market price's field is open: it takes the keyboard.
+    takes_keyboard: bool,
     view: ViewSender,
 }
 
@@ -90,6 +96,7 @@ impl ItemCardWindow {
             shows_on_top,
             height: DEFAULT_HEIGHT,
             drag: None,
+            takes_keyboard: false,
             view: ViewSender::new(ITEM_CARD, "item-card-state"),
         }
     }
@@ -155,6 +162,24 @@ impl ItemCardWindow {
                 error!("item card click-through toggle failed: {e}");
             }
         }
+        // Only the open market price field takes the typing. Otherwise the card can't be
+        // activated (WS_EX_NOACTIVATE), so a click on it leaves the keyboard with the game.
+        let takes_keyboard = matches!(
+            card.map(|card| &card.view),
+            Some(CardShows::Card(ItemCard { market_edit: Some(_), .. }))
+        );
+        if self.takes_keyboard != takes_keyboard {
+            let _ = self.window.set_focusable(takes_keyboard);
+            // The field opens right after the player's click on the card, so Windows lets
+            // us take the foreground; when it closes, Windows gives focus back to the
+            // window below, the game.
+            if takes_keyboard {
+                search::take_focus(&self.window);
+            } else {
+                search::give_focus_back(&self.window);
+            }
+            self.takes_keyboard = takes_keyboard;
+        }
     }
 
     /// Before a capture of the game while the card shows: move it off the screen now, and
@@ -200,8 +225,26 @@ pub fn item_card_open_meowdb(commands: State<'_, Sender<Command>>) {
     let _ = commands.send(Command::OpenCardMeowdbPage);
 }
 
-/// The player clicked the card's market line: MesoWatch.
+/// The player clicked the card's MesoWatch button.
 #[tauri::command]
 pub fn item_card_open_mesowatch(commands: State<'_, Sender<Command>>) {
     let _ = commands.send(Command::OpenCardMesowatch);
+}
+
+/// The player clicked the card's market price, to type one.
+#[tauri::command]
+pub fn item_card_edit_market(commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::Act(Action::EditCardMarket));
+}
+
+/// The player pressed Enter in the market price field, or left it, holding `typed`.
+#[tauri::command]
+pub fn item_card_enter_market(typed: String, commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::EnterCardMarket(typed));
+}
+
+/// The player pressed Esc in the market price field.
+#[tauri::command]
+pub fn item_card_cancel_market(commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::Act(Action::CancelCardMarket));
 }

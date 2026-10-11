@@ -1,4 +1,4 @@
-//! OSMS Data Explorer's item files (ADR 0010): the four files under
+//! OSMS Data Explorer's item files (ADR 0010): the two files under
 //! [`compass_core::osms::DATA_URL`] the Item Card reads, fetched with MapleCompass's own
 //! user agent, one request at a time and with no other pace. Nothing from OSMS is bundled.
 //!
@@ -63,7 +63,7 @@ impl OsmsItems {
     }
 }
 
-/// Fetch OSMS's four item files, and save them at `file` once they read.
+/// Fetch OSMS's two item files, and save them at `file` once they read.
 async fn fetch_and_save(client: &reqwest::Client, file: &Path) -> Answer {
     let files = fetch(client).await.map_err(SourceError::Unreachable)?;
     osms_items::read(&files)?;
@@ -71,15 +71,14 @@ async fn fetch_and_save(client: &reqwest::Client, file: &Path) -> Answer {
     Ok(files)
 }
 
-/// Fetch OSMS's four item files, one after another: the first that fails fails them all.
+/// Fetch OSMS's two item files, one after another: the first that fails fails both.
 async fn fetch(client: &reqwest::Client) -> Result<ItemFiles, String> {
     let mut texts = Vec::new();
     for name in ItemFiles::NAMES {
         texts.push(http::text(client, &format!("{DATA_URL}{name}")).await?);
     }
-    let [items, quests, crafting, cash_shop]: [String; 4] =
-        texts.try_into().map_err(|_| "not four files".to_string())?;
-    Ok(ItemFiles { items, quests, crafting, cash_shop })
+    let [items, cash_shop]: [String; 2] = texts.try_into().map_err(|_| "not two files".to_string())?;
+    Ok(ItemFiles { items, cash_shop })
 }
 
 /// Fetch OSMS's live item files now, whatever is saved, for the probe.

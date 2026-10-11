@@ -18,6 +18,7 @@ mod map_data;
 mod map_index;
 mod map_mark;
 mod map_preview;
+mod market_prices;
 mod matcher;
 pub mod meowdb;
 mod mob_card;
@@ -46,9 +47,9 @@ pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use grind_tracker::{ClientOffset, GrindTrackerWindow};
 pub use hotkey_settings::{KeyPress, RebindProblem, SettingsNotice, SettingsView};
 pub use item_card::{
-    ITEM_CARD_CREDIT, ItemCard, ItemCardChoice, ItemCardView, ItemSource, ItemUse, Listed, MESOWATCH_URL, QuestReward,
-    ShopPrice, ShownItemCard,
+    ITEM_CARD_CREDIT, ItemCard, ItemCardChoice, ItemCardView, MESOWATCH_URL, MarketEdit, ShopPrice, ShownItemCard,
 };
+pub use market_prices::{MARKET_PRICES_VERSION, MarketPrice, SavedMarketPrices};
 pub use item_lookup::{ItemChoice, ItemHit, ItemLookup, ItemLookupLine, OurWindow};
 pub use item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReader, ItemTooltipReading};
 pub use map_data::{
@@ -81,6 +82,7 @@ use grind_tracker::GrindTracker;
 use hotkey_settings::HotkeySettings;
 use item_card::{ItemCards, Pressed};
 use item_data::ItemFilesLoader;
+use market_prices::MarketPrices;
 use item_lookup::ItemLookups;
 use search::{MobSearch, Searched};
 use shown_map::ShownMap;
@@ -430,6 +432,8 @@ pub struct Compass {
     card_capturing: bool,
     /// The Item Card's size, in physical px for the current display.
     item_card_size: Size,
+    /// The market prices the player keeps, which the Item Card shows.
+    market_prices: MarketPrices,
     /// What the shell must do that came of time passing (a page MeowDB's answer settled),
     /// for [`Compass::take_request`].
     requests: VecDeque<Request>,
@@ -480,6 +484,7 @@ impl Compass {
             item_cards: ItemCards::default(),
             card_capturing: false,
             item_card_size: Size { width: 0, height: 0 },
+            market_prices: MarketPrices::default(),
             requests: VecDeque::new(),
             panel: Panel::default(),
             setup: Setup::default(),
@@ -813,6 +818,8 @@ impl Compass {
                     self.item_cards.moved_to(x, y, game);
                 }
             }
+            Action::EditCardMarket => self.item_cards.edit_market(),
+            Action::CancelCardMarket => self.item_cards.close_market(),
             Action::PersonalBestsMoved { x, y } => {
                 if let Some(game) = &self.panel.game {
                     self.bests_window.moved_to(x, y, game, &self.panel.avoid);
@@ -1112,6 +1119,44 @@ impl Compass {
     pub fn open_card_mesowatch(&self) -> Option<Request> {
         let Some(ShownItemCard { view: ItemCardView::Card(_), .. }) = &self.state.item_card else { return None };
         Some(Request::OpenInBrowser { url: MESOWATCH_URL.to_string() })
+    }
+
+    /// The player pressed Enter in the Item Card's market price field, holding `typed`:
+    /// the price they keep for the item, written as players write prices ("450,000", "450k",
+    /// "1.2m"), dated by the wall clock. Nothing typed forgets the price. Either way the
+    /// field closes; what isn't a price keeps it open, saying so.
+    pub fn enter_card_market(&mut self, typed: &str) -> &PanelState {
+        self.record(Event::EnterCardMarket { typed: typed.to_string() });
+        if let Some(id) = self.item_cards.editing_market() {
+            match market_prices::parse(typed) {
+                Ok(mesos) => {
+                    let price = mesos.map(|mesos| MarketPrice { mesos, set_at_unix_ms: self.wall_clock });
+                    self.market_prices.set(&id, price);
+                    self.item_cards.close_market();
+                }
+                Err(()) => self.item_cards.not_a_price(typed),
+            }
+        }
+        self.sync_panel()
+    }
+
+    /// Pick up the market prices the player kept at earlier launches
+    /// ([`SavedMarketPrices::default`] when none were). The shell restores them at startup.
+    pub fn restore_market_prices(&mut self, prices: SavedMarketPrices) -> &PanelState {
+        self.record(Event::RestoreMarketPrices { prices: prices.clone() });
+        self.market_prices.restore(prices);
+        self.sync_panel()
+    }
+
+    /// The market prices the player keeps, for the shell to save.
+    pub fn market_prices(&self) -> SavedMarketPrices {
+        self.market_prices.saved().clone()
+    }
+
+    /// Changes whenever what [`Compass::market_prices`] holds does, so the shell saves them
+    /// only then.
+    pub fn market_prices_revision(&self) -> u64 {
+        self.market_prices.revision()
     }
 
     /// The player clicked the Item Card's ×: close it.
@@ -1449,10 +1494,13 @@ impl Compass {
     /// cover.
     fn sync_item_card(&mut self) {
         let pictures = &self.pictures;
-        let saved_copy_from = self.item_files.saved_copy_from(self.wall_clock);
-        self.state.item_card = self.item_cards.view(self.item_files.items().ok(), saved_copy_from, |path| {
-            pictures.url(path).map(String::from)
-        });
+        let (prices, saved_copy_from) = (&self.market_prices, self.item_files.saved_copy_from(self.wall_clock));
+        self.state.item_card = self.item_cards.view(
+            self.item_files.items().ok(),
+            saved_copy_from,
+            |id| prices.get(id),
+            |path| pictures.url(path).map(String::from),
+        );
         let shows = self.state.item_card.is_some() && self.panel.layer() != Layer::Hidden && !self.card_capturing;
         self.state.item_card_placement = match &self.panel.game {
             Some(game) if shows => self.item_cards.placement(game, self.item_card_size, &self.panel.avoid),

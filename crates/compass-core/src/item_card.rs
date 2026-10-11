@@ -1,9 +1,10 @@
 //! The Item Card (ADR 0010): the player hovers an item in the game and presses the hotkey
 //! (Ctrl+Shift+I by default). The shell captures the game's client area and the pointer,
 //! the Item Tooltip reader reads the item's name, and the card shows at the pointer what
-//! the game's tooltip doesn't: what a shop pays for the item, where it comes from and what
-//! it's used for, with links to its MeowDB page and to MesoWatch's market prices. The name
-//! is matched against OSMS's items on the player's machine: nothing is asked at the press.
+//! the game's tooltip doesn't: what a shop pays for the item, and the market price the
+//! player keeps for it, with links to its MeowDB page and to MesoWatch's market prices. The
+//! name is matched against OSMS's items on the player's machine: nothing is asked at the
+//! press.
 //!
 //! One card shows at a time, until the player closes it or presses the hotkey again. What
 //! keeps a card from showing goes in the Item Lookup alert.
@@ -11,6 +12,7 @@
 use crate::grind_tracker::ClientOffset;
 use crate::item_lookup::{ItemLookup, OurWindow, item_name, overlaps};
 use crate::item_tooltip::{ItemTooltip, ItemTooltipReading};
+use crate::market_prices::MarketPrice;
 use crate::osms_items::{ItemFacts, ItemSet};
 use crate::panel::{GameWindow, ScreenPoint, ScreenRect, Size, in_view};
 use serde::Serialize;
@@ -30,60 +32,6 @@ pub enum ShopPrice {
     Unknown,
 }
 
-/// Where an item comes from, besides mobs' drops.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum ItemSource {
-    /// Quest `name` gives it, as `reward` says.
-    Quest { name: String, reward: QuestReward },
-    /// A recipe of `discipline` (Smithing, Tailoring...) at `level` makes it.
-    Recipe { discipline: String, level: u32 },
-}
-
-/// How a quest gives an item.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(tag = "status", rename_all = "camelCase")]
-pub enum QuestReward {
-    /// Every time.
-    Always,
-    /// At random, `hundredths` of a percent of the time (714: 7.14%).
-    Chance { hundredths: u32 },
-    /// If the player picks it from the quest's rewards.
-    Pick,
-    /// Not every time, but OSMS gives no chance.
-    Sometimes,
-}
-
-/// What an item is used for.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum ItemUse {
-    /// Quest `name` needs `count` of it.
-    Quest { name: String, count: u32 },
-    /// The recipe that makes `makes` needs `count` of it.
-    Recipe { makes: String, count: u32 },
-}
-
-/// The first few of a list, and how many more there are.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Listed<T> {
-    pub shown: Vec<T>,
-    pub more: u32,
-}
-
-/// How many of each of the card's lists show: "and N more" stands for the rest.
-const LISTED: usize = 3;
-
-impl<T: Clone> Listed<T> {
-    fn of(all: &[T]) -> Self {
-        Listed {
-            shown: all.iter().take(LISTED).cloned().collect(),
-            more: u32::try_from(all.len().saturating_sub(LISTED)).unwrap_or(u32::MAX),
-        }
-    }
-}
-
 /// The Item Card's credit (ADR 0010): its data is OSMS Data Explorer's, its name opens
 /// NiaMeowDB's page and its market line MesoWatch.
 pub const ITEM_CARD_CREDIT: &str = "Data: OSMS Data Explorer · Pages: NiaMeowDB, MesoWatch";
@@ -93,6 +41,14 @@ pub const ITEM_CARD_CREDIT: &str = "Data: OSMS Data Explorer · Pages: NiaMeowDB
 /// prices, so the player looks the item up there themselves.
 pub const MESOWATCH_URL: &str = "https://meso.watch/";
 
+/// The card's market price field, open for the player to type in.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketEdit {
+    /// What the player last entered that isn't a price, to say so; `None` until then.
+    pub not_a_price: Option<String>,
+}
+
 /// One item's Item Card.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -101,10 +57,10 @@ pub struct ItemCard {
     pub id: String,
     pub name: String,
     pub shop: ShopPrice,
-    /// The quests that give it, then the recipes that make it.
-    pub comes_from: Listed<ItemSource>,
-    /// The quests that need it, then the recipes that use it.
-    pub used_for: Listed<ItemUse>,
+    /// The market price the player keeps for it; `None` until they set one.
+    pub market: Option<MarketPrice>,
+    /// The market price's field, while it is open for the player to type in.
+    pub market_edit: Option<MarketEdit>,
     /// When OSMS's item files were saved (ms since the Unix epoch), if that was over 7 days
     /// ago: the card shows a Saved Copy, as OSMS couldn't be reached since. `None` for
     /// files fresher than that.
@@ -174,12 +130,14 @@ struct Shown {
     /// it is at the pointer.
     moved: Option<ClientOffset>,
     showing: Showing,
+    /// Its market price's field, while open.
+    market_edit: Option<MarketEdit>,
 }
 
 /// What the card showing shows.
 enum Showing {
     /// The card of these items, which share their name, kind and shop price: they look
-    /// alike, so their quests and recipes are told together.
+    /// alike, so they show one card.
     Card(Vec<u32>),
     /// These items share their name, but not their kind or shop price: the player picks
     /// one, by its picture and kind. Each is listed once for the items that look alike.
@@ -225,7 +183,7 @@ impl ItemCards {
             _ => Showing::Choose(groups),
         };
         self.cards += 1;
-        self.shown = Some(Shown { card: self.cards, pointer: reading.pointer, moved: None, showing });
+        self.shown = Some(Shown { card: self.cards, pointer: reading.pointer, moved: None, showing, market_edit: None });
         Pressed::Shown
     }
 
@@ -253,6 +211,38 @@ impl ItemCards {
     /// The player closed the card.
     pub fn close(&mut self) {
         self.shown = None;
+    }
+
+    /// The player clicked the card's market price: its field opens, on a card (not a
+    /// choice).
+    pub fn edit_market(&mut self) {
+        if let Some(shown @ Shown { showing: Showing::Card(_), .. }) = &mut self.shown {
+            shown.market_edit = Some(MarketEdit { not_a_price: None });
+        }
+    }
+
+    /// The market price's field closes, as it was.
+    pub fn close_market(&mut self) {
+        if let Some(shown) = &mut self.shown {
+            shown.market_edit = None;
+        }
+    }
+
+    /// The item whose market price's field is open (8 digits): the first of the items that
+    /// look alike, under which they keep one price.
+    pub fn editing_market(&self) -> Option<String> {
+        match &self.shown {
+            Some(Shown { showing: Showing::Card(ids), market_edit: Some(_), .. }) => ids.first().map(|&id| item_id(id)),
+            _ => None,
+        }
+    }
+
+    /// What the player entered in the market price's field, `typed`, isn't a price: the
+    /// field stays open and says so.
+    pub fn not_a_price(&mut self, typed: &str) {
+        if let Some(Shown { market_edit: Some(edit), .. }) = &mut self.shown {
+            edit.not_a_price = Some(typed.to_string());
+        }
     }
 
     /// The name and kind of the item whose card shows, as `items` has it; `None` while no
@@ -287,21 +277,28 @@ impl ItemCards {
     }
 
     /// The card showing, as `items` has its items (a Saved Copy from `saved_copy_from`, if
-    /// they are one), with the pictures in so far (by `picture`, from a path below
+    /// they are one), with the market price the player keeps for its item (by `market`,
+    /// from its ID) and the pictures in so far (by `picture`, from a path below
     /// [`crate::osms::PICTURES_URL`]).
     pub fn view(
         &self,
         items: Option<&ItemSet>,
         saved_copy_from: Option<u64>,
+        market: impl Fn(&str) -> Option<MarketPrice>,
         picture: impl Fn(&str) -> Option<String>,
     ) -> Option<ShownItemCard> {
         let shown = self.shown.as_ref()?;
         let items = items?;
         let view = match &shown.showing {
-            Showing::Card(ids) => ItemCardView::Card(ItemCard {
-                saved_copy_from_unix_ms: saved_copy_from,
-                ..card(ids, items)?
-            }),
+            Showing::Card(ids) => {
+                let card = card(ids, items)?;
+                ItemCardView::Card(ItemCard {
+                    market: market(&card.id),
+                    market_edit: shown.market_edit.clone(),
+                    saved_copy_from_unix_ms: saved_copy_from,
+                    ..card
+                })
+            }
             Showing::Choose(groups) => {
                 let listed: Vec<&ItemFacts> = groups.iter().filter_map(|ids| items.item(*ids.first()?)).collect();
                 ItemCardView::Choose {
@@ -321,33 +318,18 @@ impl ItemCards {
     }
 }
 
-/// The card of the items `ids`, which look alike: the first's, with the quests and
-/// recipes of all of them.
+/// The card of the items `ids`, which look alike: the first's.
 fn card(ids: &[u32], items: &ItemSet) -> Option<ItemCard> {
-    let alike: Vec<&ItemFacts> = ids.iter().filter_map(|&id| items.item(id)).collect();
-    let first = alike.first()?;
-    let comes_from = unique(alike.iter().flat_map(|item| &item.comes_from));
-    let used_for = unique(alike.iter().flat_map(|item| &item.used_for));
+    let first = items.item(*ids.first()?)?;
     Some(ItemCard {
         id: item_id(first.id),
         name: first.name.clone(),
         shop: first.shop,
-        comes_from: Listed::of(&comes_from),
-        used_for: Listed::of(&used_for),
+        market: None,
+        market_edit: None,
         saved_copy_from_unix_ms: None,
         credit: ITEM_CARD_CREDIT,
     })
-}
-
-/// `list` with each entry once, where it first is.
-fn unique<'a, T: Clone + PartialEq + 'a>(list: impl IntoIterator<Item = &'a T>) -> Vec<T> {
-    let mut once: Vec<T> = Vec::new();
-    for entry in list {
-        if !once.contains(entry) {
-            once.push(entry.clone());
-        }
-    }
-    once
 }
 
 /// The game's item ID as the game writes it: 8 digits.

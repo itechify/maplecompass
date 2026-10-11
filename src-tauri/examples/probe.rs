@@ -176,7 +176,7 @@ fn osms() -> Result<(), String> {
     println!("Mobs spawning: {}", mobs.len());
 
     let files = maplecompass_lib::osms_items::fetch_live()?;
-    let sizes = [&files.items, &files.quests, &files.crafting, &files.cash_shop];
+    let sizes = [&files.items, &files.cash_shop];
     for (name, text) in compass_core::osms_items::ItemFiles::NAMES.iter().zip(sizes) {
         println!("{name:>18}: {} KB", text.len() / 1024);
     }
@@ -187,7 +187,6 @@ fn osms() -> Result<(), String> {
         "Items: {} ({} with a shop price, {} a shop won't buy, {} Cash items)",
         counts.items, counts.shop_priced, counts.not_sold, counts.cash
     );
-    println!("  a quest or recipe gives: {}; a quest or recipe needs: {}", counts.with_sources, counts.with_uses);
     Ok(())
 }
 

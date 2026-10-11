@@ -4,7 +4,7 @@
 //! same daily schedule, but read, saved and swapped on its own, so a change in these files
 //! takes down only the Item Card. Credit "OSMS Data Explorer (osmsdataexplorer.com)".
 
-use crate::item_card::{ItemSource, ItemUse, QuestReward, ShopPrice};
+use crate::item_card::ShopPrice;
 use crate::item_lookup::{closest, item_key};
 use crate::map_index::SourceError;
 use serde::{Deserialize, Serialize};
@@ -18,17 +18,13 @@ pub struct ItemFiles {
     /// `items.json`: every item but the Cash Shop's, with its category, figures and price,
     /// and every scroll.
     pub items: String,
-    /// `quests.json`: every quest, with the items it gives and needs.
-    pub quests: String,
-    /// `crafting.json`: every recipe, by discipline and level.
-    pub crafting: String,
     /// `cash_shop.json`: every Cash Shop item.
     pub cash_shop: String,
 }
 
 impl ItemFiles {
     /// The files' names under [`crate::osms::DATA_URL`], in the order of the fields.
-    pub const NAMES: [&str; 4] = ["items.json", "quests.json", "crafting.json", "cash_shop.json"];
+    pub const NAMES: [&str; 2] = ["items.json", "cash_shop.json"];
 }
 
 /// OSMS's item files as the source saved them, at an earlier launch or earlier in this
@@ -51,10 +47,6 @@ pub(crate) struct ItemFacts {
     /// ("Use", "Etc", "Setup"); "Scroll" or "Cash".
     pub kind: String,
     pub shop: ShopPrice,
-    /// The quests that give it, in OSMS's order, then the recipes that make it.
-    pub comes_from: Vec<ItemSource>,
-    /// The quests that need it, in OSMS's order, then the recipes that use it.
-    pub used_for: Vec<ItemUse>,
 }
 
 /// Every item in OSMS's item files: the game's items, its scrolls and the Cash Shop's.
@@ -76,10 +68,6 @@ pub struct ItemCounts {
     /// Those a shop won't buy.
     pub not_sold: usize,
     pub cash: usize,
-    /// Those a quest gives or a recipe makes.
-    pub with_sources: usize,
-    /// Those a quest or a recipe needs.
-    pub with_uses: usize,
 }
 
 impl ItemSet {
@@ -91,8 +79,6 @@ impl ItemSet {
             shop_priced: count(|item| matches!(item.shop, ShopPrice::Sells { .. })),
             not_sold: count(|item| item.shop == ShopPrice::NotSold),
             cash: count(|item| item.shop == ShopPrice::Cash),
-            with_sources: count(|item| !item.comes_from.is_empty()),
-            with_uses: count(|item| !item.used_for.is_empty()),
         }
     }
 
@@ -120,18 +106,9 @@ pub fn read(files: &ItemFiles) -> Result<ItemSet, SourceError> {
 
 fn read_set(files: &ItemFiles) -> Result<ItemSet, String> {
     let file: ItemsFile = parse(&files.items, "items.json")?;
-    let quests: QuestsFile = parse(&files.quests, "quests.json")?;
-    let crafting: CraftingFile = parse(&files.crafting, "crafting.json")?;
     let cash_shop: CashShopFile = parse(&files.cash_shop, "cash_shop.json")?;
     let mut items = Vec::new();
-    let facts = |id, name: &str, kind: String, shop| ItemFacts {
-        id,
-        name: name.trim().to_string(),
-        kind,
-        shop,
-        comes_from: Vec::new(),
-        used_for: Vec::new(),
-    };
+    let facts = |id, name: &str, kind: String, shop| ItemFacts { id, name: name.trim().to_string(), kind, shop };
     for item in &file.items {
         items.push(facts(item.id, &item.name, kind(item), shop_price(item)?));
     }
@@ -141,7 +118,6 @@ fn read_set(files: &ItemFiles) -> Result<ItemSet, String> {
     for item in cash_shop.categories.iter().flat_map(|category| &category.items) {
         items.push(facts(item.id, &item.name, "Cash".into(), ShopPrice::Cash));
     }
-    sources_and_uses(&mut items, &quests, &crafting);
     let mut by_id = HashMap::new();
     let mut names: Vec<(Vec<char>, Vec<usize>)> = Vec::new();
     let mut by_name: HashMap<Vec<char>, usize> = HashMap::new();
@@ -157,84 +133,6 @@ fn read_set(files: &ItemFiles) -> Result<ItemSet, String> {
         }
     }
     Ok(ItemSet { items, by_id, names })
-}
-
-/// Each item's quests and recipes: the quests that give it and the recipes that make it,
-/// the quests that need it and the recipes that use it. Quests name items by ID; recipes
-/// name what they make by ID, and their ingredients by name.
-fn sources_and_uses(items: &mut [ItemFacts], quests: &QuestsFile, crafting: &CraftingFile) {
-    let mut at_id: HashMap<u32, Vec<usize>> = HashMap::new();
-    let mut at_name: HashMap<String, Vec<usize>> = HashMap::new();
-    for (at, item) in items.iter().enumerate() {
-        at_id.entry(item.id).or_default().push(at);
-        at_name.entry(item.name.clone()).or_default().push(at);
-    }
-    let by_id = |id: u32| at_id.get(&id).cloned().unwrap_or_default();
-    for quest in &quests.quests {
-        let name = quest.name.trim();
-        for reward in quest.rewards.iter().filter(|reward| reward.kind == "item") {
-            let Some(id) = reward.id.as_ref().and_then(item_id) else { continue };
-            let source = ItemSource::Quest { name: name.into(), reward: quest_reward(quest, reward, id) };
-            for at in by_id(id) {
-                add(&mut items[at].comes_from, source.clone());
-            }
-        }
-        for need in quest.requirements_list.iter().filter(|need| need.kind == "item") {
-            let (Some(id), Some(count)) = (need.id.as_ref().and_then(item_id), need.count) else { continue };
-            for at in by_id(id) {
-                add(&mut items[at].used_for, ItemUse::Quest { name: name.into(), count });
-            }
-        }
-    }
-    for discipline in &crafting.disciplines {
-        let levels = discipline.output_types.iter().flat_map(|output| &output.levels);
-        for (level, recipe) in levels.flat_map(|level| level.recipes.iter().map(move |recipe| (level.level, recipe))) {
-            let source = ItemSource::Recipe { discipline: discipline.discipline.trim().into(), level };
-            for at in by_id(recipe.output_id) {
-                add(&mut items[at].comes_from, source.clone());
-            }
-            for ingredient in &recipe.ingredients {
-                let used = ItemUse::Recipe { makes: recipe.result_item_name.trim().into(), count: ingredient.count };
-                for &at in at_name.get(ingredient.item_name.trim()).into_iter().flatten() {
-                    add(&mut items[at].used_for, used.clone());
-                }
-            }
-        }
-    }
-}
-
-/// How `quest` gives item `id`, its `reward`: always, at the chance of its weighted
-/// rewards that gives it (the best, if it is among several classes'), or as a pick.
-fn quest_reward(quest: &OsmsQuest, reward: &Reward, id: u32) -> QuestReward {
-    if reward.guaranteed.unwrap_or(true) {
-        return QuestReward::Always;
-    }
-    let weighted = quest.reward_weighted.iter().flat_map(|reward| &reward.groups).flat_map(|group| &group.items);
-    let chance = weighted.filter(|item| item.id == id).map(|item| item.chance_pct).fold(None, |best: Option<f64>, pct| {
-        Some(best.map_or(pct, |best| best.max(pct)))
-    });
-    if let Some(pct) = chance.filter(|pct| pct.is_finite() && *pct >= 0.0) {
-        return QuestReward::Chance { hundredths: (pct * 100.0).round() as u32 };
-    }
-    let mut choices = quest.reward_choices.iter().flat_map(|reward| &reward.groups).flat_map(|group| &group.items);
-    if choices.any(|item| item.id == id) { QuestReward::Pick } else { QuestReward::Sometimes }
-}
-
-/// An item's ID as `quests.json` writes it: a number, though it writes other IDs (the
-/// quests a quest needs) as strings.
-fn item_id(id: &Value) -> Option<u32> {
-    match id {
-        Value::Number(n) => n.as_u64().and_then(|id| u32::try_from(id).ok()),
-        Value::String(s) => s.trim().parse().ok(),
-        _ => None,
-    }
-}
-
-/// `list` with `entry` at its end, unless it has it already.
-fn add<T: PartialEq>(list: &mut Vec<T>, entry: T) {
-    if !list.contains(&entry) {
-        list.push(entry);
-    }
 }
 
 /// What kind of item `item` is: a weapon's kind, spelt out as the game's tooltips do ("1H
@@ -300,121 +198,6 @@ struct ItemsFile {
 struct OsmsScroll {
     id: u32,
     name: String,
-}
-
-/// `quests.json`.
-#[derive(Deserialize)]
-struct QuestsFile {
-    quests: Vec<OsmsQuest>,
-}
-
-/// A quest in `quests.json`.
-#[derive(Deserialize)]
-struct OsmsQuest {
-    name: String,
-    /// What it gives: EXP, mesos, items...
-    #[serde(default)]
-    rewards: Vec<Reward>,
-    /// Its rewards given at random, with each item's chance.
-    #[serde(default)]
-    reward_weighted: Vec<RewardGroups<WeightedItem>>,
-    /// Its rewards the player picks one of.
-    #[serde(default)]
-    reward_choices: Vec<RewardGroups<ChoiceItem>>,
-    /// What it needs: mobs defeated, items, other quests...
-    #[serde(default)]
-    requirements_list: Vec<Requirement>,
-}
-
-/// One of a quest's rewards.
-#[derive(Deserialize)]
-struct Reward {
-    /// "item", "exp", "money"...
-    #[serde(rename = "type")]
-    kind: String,
-    /// An item's ID.
-    #[serde(default)]
-    id: Option<Value>,
-    /// Whether an item is given every time; it is unless `false`.
-    #[serde(default)]
-    guaranteed: Option<bool>,
-}
-
-/// A quest's random or picked rewards, by class.
-#[derive(Deserialize)]
-struct RewardGroups<T> {
-    groups: Vec<RewardGroup<T>>,
-}
-
-#[derive(Deserialize)]
-struct RewardGroup<T> {
-    items: Vec<T>,
-}
-
-/// An item a quest gives at random, and how often (percent).
-#[derive(Deserialize)]
-struct WeightedItem {
-    id: u32,
-    chance_pct: f64,
-}
-
-/// An item a quest gives if the player picks it.
-#[derive(Deserialize)]
-struct ChoiceItem {
-    id: u32,
-}
-
-/// One of the things a quest needs.
-#[derive(Deserialize)]
-struct Requirement {
-    /// "item", "mob", "quest"...
-    #[serde(rename = "type")]
-    kind: String,
-    /// An item's or a mob's ID, or a quest's as a string.
-    #[serde(default)]
-    id: Option<Value>,
-    #[serde(default)]
-    count: Option<u32>,
-}
-
-/// `crafting.json`.
-#[derive(Deserialize)]
-struct CraftingFile {
-    disciplines: Vec<Discipline>,
-}
-
-/// A crafting discipline ("Smithing"), with its recipes by what they make and their level.
-#[derive(Deserialize)]
-struct Discipline {
-    discipline: String,
-    output_types: Vec<OutputType>,
-}
-
-#[derive(Deserialize)]
-struct OutputType {
-    levels: Vec<RecipeLevel>,
-}
-
-/// The recipes of one level of a discipline.
-#[derive(Deserialize)]
-struct RecipeLevel {
-    level: u32,
-    recipes: Vec<OsmsRecipe>,
-}
-
-/// A recipe: what it makes, from what.
-#[derive(Deserialize)]
-struct OsmsRecipe {
-    output_id: u32,
-    result_item_name: String,
-    ingredients: Vec<Ingredient>,
-}
-
-/// One of a recipe's ingredients, by name, and how many.
-#[derive(Deserialize)]
-struct Ingredient {
-    item_name: String,
-    count: u32,
 }
 
 /// `cash_shop.json`.

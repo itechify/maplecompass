@@ -68,4 +68,4 @@ Pictures and mob animations are named by content hash. The core asks for them on
 
 ## Since ADR 0010
 
-The Item Card reads four more of OSMS's files (`items.json`, `quests.json`, `crafting.json` and `cash_shop.json`), fetched on this set's schedule but read, saved and swapped as a set of their own, so a change in them never holds back the map set. Item Lookup's search still opens MeowDB's item pages, now only when the player asks for one.
+The Item Card reads two more of OSMS's files (`items.json` and `cash_shop.json`), fetched on this set's schedule but read, saved and swapped as a set of their own, so a change in them never holds back the map set. Item Lookup's search still opens MeowDB's item pages, now only when the player asks for one.

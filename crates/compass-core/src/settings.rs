@@ -118,7 +118,7 @@ pub struct Hotkeys {
 impl Hotkeys {
     /// A version 4 file's hotkeys, from before the Item Card: the key the player pressed
     /// over an item (Item Lookup's) shows its card now, and Item Lookup, which opens the
-    /// MeowDB page, gets its default, Ctrl+Shift+O, unless another hotkey has it: then it
+    /// MeowDB page, gets its default, Ctrl+Shift+U, unless another hotkey has it: then it
     /// is off. A file without Item Lookup's key has the defaults for both.
     pub(crate) fn give_item_lookup_to_card(&mut self) {
         let lookup_default = Hotkeys::default().item_lookup;
@@ -212,7 +212,7 @@ impl Default for Hotkeys {
             search: "ctrl+shift+f".into(),
             grind_tracker: "ctrl+shift+g".into(),
             item_card: "ctrl+shift+i".into(),
-            item_lookup: "ctrl+shift+o".into(),
+            item_lookup: "ctrl+shift+u".into(),
         }
     }
 }

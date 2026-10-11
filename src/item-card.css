@@ -106,69 +106,75 @@
   color: var(--ink-2);
 }
 
-/* Comes from and Used for: each under a rule, an 11px heading over rows, each a tag naming
-   what it is (Quest, Craft), the quest or recipe, and at the right how many, or how
-   likely. */
-.item-card-list {
+/* The market price the player keeps, under a rule: its label at the left, then the price
+   (a link that opens its field, or "Not set", the day it was set in its tooltip), and the
+   light buttons that change it and look it up on MesoWatch. */
+.item-card-market {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
   padding-top: 5px;
   border-top: 1px solid var(--rule);
 }
 
-.item-card-list h2 {
-  margin: 0 0 2px;
-  font-size: 11px;
-  line-height: 14px;
-  font-weight: 700;
+.item-card-market .label {
+  flex: none;
   color: var(--ink-2);
 }
 
-.item-card-list ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.item-card-list li {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  min-width: 0;
-}
-
-.item-card-body .tag {
-  flex: none;
-  padding: 0 4px;
-  border: 1px solid var(--tag-edge);
-  border-radius: 3px;
-  background: var(--tag-bg);
-  color: var(--tag-ink);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 13px;
-}
-
-.item-card-list .what {
-  flex: 1;
+/* Right-aligned, as the figures are, and cut short rather than push the buttons out. */
+.item-card-market .value {
+  margin-left: auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 700;
   white-space: nowrap;
 }
 
-.item-card-list .aside {
-  flex: none;
-  font-weight: 700;
+.item-card-market .value.quiet {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-2);
 }
 
-.item-card-list .more {
-  display: block;
-  margin-top: 1px;
+/* Open, the field takes the price's place: the app's text input, smaller to sit in the
+   row, with what it does or why the entry isn't a price under it. */
+.item-card-input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 2px 6px;
+  border: 1px solid var(--frame);
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: inset 0 1px 2px rgba(20, 30, 60, 0.15);
+  color: var(--ink);
+  font: 700 13px/17px var(--font);
+  text-align: right;
+  user-select: text;
+}
+
+.item-card-input::placeholder {
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+.item-card-input:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 1px;
+}
+
+.item-card-box .item-card-hint {
   font-size: 11px;
   line-height: 14px;
-  color: var(--ink-3);
+}
+
+.item-card-hint.problem {
+  color: var(--problem-ink);
 }
 
 /* The note and the hint are read in full: the panel cuts its lines short, the card

@@ -20,6 +20,7 @@ mod hotkeys;
 mod http;
 mod item_card;
 mod item_lookup;
+mod market_prices;
 mod meowdb;
 mod old_caches;
 pub mod osms;
@@ -137,8 +138,10 @@ pub(crate) enum Command {
     PickCardItem(String),
     /// The player clicked the Item Card's name: open the item's MeowDB page.
     OpenCardMeowdbPage,
-    /// The player clicked the Item Card's market line: open MesoWatch.
+    /// The player clicked the Item Card's MesoWatch button: open MesoWatch.
     OpenCardMesowatch,
+    /// The player pressed Enter in the Item Card's market price field, holding this.
+    EnterCardMarket(String),
     /// Windows told of a drag of the Item Card's window.
     ItemCardSizeMove(SizeMove),
     /// The player chose Quit in the tray icon's menu: save the settings and exit.
@@ -250,6 +253,10 @@ pub fn run() {
             // read before anything is captured, so no best is set before they are back.
             let (bests_file, saved_bests) = bests::BestsFile::load(bests::path(app.handle())?);
             compass.restore_bests(saved_bests);
+            // The market prices the player keeps on Item Cards, beside them.
+            let (prices_file, saved_prices) =
+                market_prices::MarketPricesFile::load(market_prices::path(app.handle())?);
+            compass.restore_market_prices(saved_prices);
             let (commands, commands_rx) = mpsc::channel();
             // From now on errors go to the core too, for the Bug Report; those from before
             // (the settings or bests not reading) are held for it till now.
@@ -315,7 +322,7 @@ pub fn run() {
                 hotkeys,
             };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
-                let files = Files { settings: settings_path, bests: bests_file };
+                let files = Files { settings: settings_path, bests: bests_file, market_prices: prices_file };
                 compass_loop(handle, windows, compass, reader, channels, files)
             })?;
             Ok(())
@@ -369,6 +376,9 @@ pub fn run() {
             item_card::item_card_pick,
             item_card::item_card_open_meowdb,
             item_card::item_card_open_mesowatch,
+            item_card::item_card_edit_market,
+            item_card::item_card_enter_market,
+            item_card::item_card_cancel_market,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -387,10 +397,11 @@ struct Windows {
     hotkeys: hotkeys::GlobalHotkeys,
 }
 
-/// Where the compass loop saves the settings and the Personal Bests.
+/// Where the compass loop saves the settings, the Personal Bests and the market prices.
 struct Files {
     settings: PathBuf,
     bests: bests::BestsFile,
+    market_prices: market_prices::MarketPricesFile,
 }
 
 /// Save the Personal Bests if the core's bests revision moved on from `saved` (the one
@@ -405,6 +416,20 @@ fn save_bests(compass: &Compass, file: &bests::BestsFile, saved: &mut u64) {
     *saved = revision;
     if let Err(e) = file.save(&compass.bests()) {
         error!("saving personal bests failed: {e}");
+    }
+}
+
+/// Save the market prices the player keeps if the core's revision of them moved on from
+/// `saved`, at once, as the Personal Bests are. Never over a file that didn't read at
+/// startup and couldn't be set aside.
+fn save_market_prices(compass: &Compass, file: &market_prices::MarketPricesFile, saved: &mut u64) {
+    let revision = compass.market_prices_revision();
+    if *saved == revision {
+        return;
+    }
+    *saved = revision;
+    if let Err(e) = file.save(&compass.market_prices()) {
+        error!("saving market prices failed: {e}");
     }
 }
 
@@ -533,6 +558,7 @@ fn compass_loop(
     let settings_path = files.settings;
     // Restored at startup: saved already.
     let mut bests_saved = compass.bests_revision();
+    let mut prices_saved = compass.market_prices_revision();
     let Windows {
         overlay: mut window,
         setup: mut setup_windows,
@@ -599,6 +625,9 @@ fn compass_loop(
                 // Its page comes from `take_request`, once MeowDB's search has answered.
                 compass.open_card_meowdb_page(reader.now_ms());
             }
+            Ok(Command::EnterCardMarket(typed)) => {
+                compass.enter_card_market(&typed);
+            }
             Ok(Command::OpenCardMesowatch) => {
                 let request = compass.open_card_mesowatch();
                 carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
@@ -617,6 +646,7 @@ fn compass_loop(
             Ok(Command::Quit) => {
                 // Whatever the player changed last (a drag, say) is saved first.
                 save_bests(&compass, &files.bests, &mut bests_saved);
+                save_market_prices(&compass, &files.market_prices, &mut prices_saved);
                 let current = compass.settings();
                 if current != saved
                     && let Err(e) = settings::save(&settings_path, &current)
@@ -766,6 +796,7 @@ fn compass_loop(
         let state = compass.panel_state();
         if state.quit {
             save_bests(&compass, &files.bests, &mut bests_saved);
+            save_market_prices(&compass, &files.market_prices, &mut prices_saved);
             app.exit(0);
             return;
         }
@@ -794,6 +825,7 @@ fn compass_loop(
             saved = pending.0.clone();
         }
         save_bests(&compass, &files.bests, &mut bests_saved);
+        save_market_prices(&compass, &files.market_prices, &mut prices_saved);
     }
 }
 

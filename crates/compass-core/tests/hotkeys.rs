@@ -33,27 +33,27 @@ fn the_hotkeys_are_ctrl_shift_letters() {
             search: ctrl_shift("f"),
             grind_tracker: ctrl_shift("g"),
             item_card: ctrl_shift("i"),
-            item_lookup: ctrl_shift("o"),
+            item_lookup: ctrl_shift("u"),
         }
     );
 }
 
 #[test]
-fn ctrl_shift_i_shows_the_item_card_and_ctrl_shift_o_looks_the_item_up_even_with_a_settings_file_from_before_them() {
+fn ctrl_shift_i_shows_the_item_card_and_ctrl_shift_u_looks_the_item_up_even_with_a_settings_file_from_before_them() {
     let before_item_lookup = r#"{"version":4,"hotkeys":{"togglePanel":"ctrl+shift+x","grindTracker":"ctrl+shift+g"}}"#;
     let mut compass = Compass::new(FakeSource::osms());
 
     let state = compass.restore(serde_json::from_str(before_item_lookup).unwrap()).clone();
 
-    assert_eq!((state.hotkeys.item_card.as_str(), state.hotkeys.item_lookup.as_str()), ("ctrl+shift+i", "ctrl+shift+o"));
+    assert_eq!((state.hotkeys.item_card.as_str(), state.hotkeys.item_lookup.as_str()), ("ctrl+shift+i", "ctrl+shift+u"));
     assert_eq!(state.hotkeys.toggle_panel, ctrl_shift("x"), "the player's own bindings are kept");
     let saved = compass.settings();
-    assert_eq!((saved.hotkeys.item_card.as_str(), saved.hotkeys.item_lookup.as_str()), ("ctrl+shift+i", "ctrl+shift+o"));
+    assert_eq!((saved.hotkeys.item_card.as_str(), saved.hotkeys.item_lookup.as_str()), ("ctrl+shift+i", "ctrl+shift+u"));
     assert_eq!(saved.version, 5, "and saved with the rest");
 }
 
 /// The Item Card took Item Lookup's key: the key the player presses over an item now
-/// shows its card, and Item Lookup, which opens the MeowDB page, moved to Ctrl+Shift+O.
+/// shows its card, and Item Lookup, which opens the MeowDB page, moved to Ctrl+Shift+U.
 #[test]
 fn a_settings_file_from_before_the_item_card_gives_its_item_lookup_key_to_the_card() {
     let rebound = r#"{"version":4,"hotkeys":{"itemLookup":"ctrl+shift+k"}}"#;
@@ -62,7 +62,7 @@ fn a_settings_file_from_before_the_item_card_gives_its_item_lookup_key_to_the_ca
     let state = compass.restore(serde_json::from_str(rebound).unwrap()).clone();
 
     assert_eq!(state.hotkeys.item_card, ctrl_shift("k"));
-    assert_eq!(state.hotkeys.item_lookup, ctrl_shift("o"));
+    assert_eq!(state.hotkeys.item_lookup, ctrl_shift("u"));
 }
 
 #[test]
@@ -73,17 +73,17 @@ fn a_settings_file_from_before_the_item_card_with_item_lookup_off_has_the_card_o
     let state = compass.restore(serde_json::from_str(off).unwrap()).clone();
 
     assert_eq!(state.hotkeys.item_card, "");
-    assert_eq!(state.hotkeys.item_lookup, ctrl_shift("o"));
+    assert_eq!(state.hotkeys.item_lookup, ctrl_shift("u"));
 }
 
 #[test]
-fn a_settings_file_from_before_the_item_card_with_ctrl_shift_o_in_use_has_item_lookup_off() {
-    let taken = r#"{"version":4,"hotkeys":{"grindTracker":"ctrl+shift+o","itemLookup":"ctrl+shift+i"}}"#;
+fn a_settings_file_from_before_the_item_card_with_ctrl_shift_u_in_use_has_item_lookup_off() {
+    let taken = r#"{"version":4,"hotkeys":{"grindTracker":"ctrl+shift+u","itemLookup":"ctrl+shift+i"}}"#;
     let mut compass = Compass::new(FakeSource::osms());
 
     let state = compass.restore(serde_json::from_str(taken).unwrap()).clone();
 
-    assert_eq!(state.hotkeys.grind_tracker, ctrl_shift("o"));
+    assert_eq!(state.hotkeys.grind_tracker, ctrl_shift("u"));
     assert_eq!(state.hotkeys.item_card, ctrl_shift("i"));
     assert_eq!(state.hotkeys.item_lookup, "", "off rather than share the Grind Tracker's key");
 }
@@ -107,7 +107,7 @@ fn rebound_item_hotkeys_are_the_ones_that_show_the_card_and_look_the_item_up() {
     compass.on_game_window(Some(GameWindow { client: screen, frame: screen, screens: vec![screen] }));
 
     assert_eq!(compass.on_hotkey("ctrl+shift+i"), None);
-    assert_eq!(compass.on_hotkey("ctrl+shift+o"), None);
+    assert_eq!(compass.on_hotkey("ctrl+shift+u"), None);
     assert_eq!(compass.on_hotkey("ctrl+shift+k"), Some(Request::CaptureItemTooltip));
     compass.on_item_tooltip_reading(None);
     assert_eq!(compass.on_hotkey("ctrl+shift+j"), Some(Request::CaptureItemTooltip));
@@ -343,7 +343,7 @@ fn every_hotkey_the_panel_lists_is_one_to_register_the_search_one_included() {
             "ctrl+shift+n",
             "ctrl+shift+g",
             "ctrl+shift+i",
-            "ctrl+shift+o",
+            "ctrl+shift+u",
             "ctrl+shift+f"
         ]
     );

@@ -30,6 +30,7 @@ use crate::item_lookup::ItemHit;
 use crate::item_tooltip::ItemTooltipReading;
 use crate::map_data::MapSummary;
 use crate::map_index::{Fetched, MapDataSource, SourceError};
+use crate::market_prices::SavedMarketPrices;
 use crate::osms::{OsmsFiles, SavedFiles};
 use crate::osms_items::{ItemFiles, SavedItemFiles};
 use crate::panel::{Action, Foreground, GameWindow, PanelSizes, ScreenRect, Size};
@@ -135,12 +136,15 @@ pub enum Event {
     /// The player clicked the Item Card's name at `at_ms`.
     OpenCardMeowdbPage { at_ms: u64 },
     CloseItemCard {},
+    /// The player pressed Enter in the Item Card's market price field, holding `typed`.
+    EnterCardMarket { typed: String },
     Foreground { foreground: Foreground },
     HotkeysUnavailable { taken: Vec<String>, invalid: Vec<String> },
     Restore { settings: Box<Settings> },
     PickGameWindow { title: String },
     WallClock { unix_ms: u64 },
     RestoreBests { bests: SavedBests },
+    RestoreMarketPrices { prices: SavedMarketPrices },
     /// The player removed the Visit whose best was `visit` from `map`'s Visit History.
     RemoveVisit { map: String, visit: VisitBest },
     /// Not an input: an error the shell or one of our windows ran into (`from`), which
@@ -324,7 +328,7 @@ pub fn fingerprint(files: &OsmsFiles) -> String {
 
 /// OSMS's item files' fingerprint, as [`fingerprint`] the map set's.
 pub fn item_fingerprint(files: &ItemFiles) -> String {
-    texts_fingerprint([&*files.items, &files.quests, &files.crafting, &files.cash_shop])
+    texts_fingerprint([&*files.items, &files.cash_shop])
 }
 
 fn texts_fingerprint<'a>(texts: impl IntoIterator<Item = &'a str>) -> String {
@@ -629,7 +633,7 @@ impl Recorder {
             }
         }
         let Ok(json) = serde_json::to_string(&line) else { return };
-        if matches!(line.event, Event::Restore { .. } | Event::RestoreBests { .. }) {
+        if matches!(line.event, Event::Restore { .. } | Event::RestoreBests { .. } | Event::RestoreMarketPrices { .. }) {
             self.launch.push_str(&json);
             self.launch.push('\n');
         }
@@ -1117,6 +1121,12 @@ pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
             Event::CloseItemCard {} => {
                 compass.close_item_card();
             }
+            Event::EnterCardMarket { typed } => {
+                compass.enter_card_market(&typed);
+            }
+            Event::RestoreMarketPrices { prices } => {
+                compass.restore_market_prices(prices);
+            }
             Event::Foreground { foreground } => {
                 compass.on_foreground(foreground);
             }
@@ -1189,6 +1199,7 @@ impl Recording {
                     | Event::PickCardItem { .. }
                     | Event::OpenCardMeowdbPage { .. }
                     | Event::CloseItemCard {}
+                    | Event::EnterCardMarket { .. }
                     | Event::Restore { .. }
                     | Event::RestoreBests { .. }
                     | Event::RemoveVisit { .. }
@@ -1323,6 +1334,8 @@ impl Event {
             Event::PickCardItem { id } => format!("Item Card's item picked {id}"),
             Event::OpenCardMeowdbPage { .. } => "Item Card's name clicked".to_string(),
             Event::CloseItemCard {} => "Item Card closed".to_string(),
+            Event::EnterCardMarket { typed } => format!("Item Card's market price entered {typed:?}"),
+            Event::RestoreMarketPrices { prices } => format!("market prices restored ({} items)", prices.items.len()),
             Event::HotkeysUnavailable { taken, invalid } => {
                 format!("hotkeys unavailable: taken {taken:?}, invalid {invalid:?}")
             }
