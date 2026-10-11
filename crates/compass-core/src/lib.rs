@@ -151,6 +151,10 @@ pub const OSMS_ONLY_CREDIT: &str = "Data: OSMS Data Explorer (osmsdataexplorer.c
 pub const OSMS_AND_MEOWDB_CREDIT: &str =
     "Data: OSMS Data Explorer (osmsdataexplorer.com) · Pages: NiaMeowDB (meowdb.com)";
 
+/// The MapleCompass site, the player manual on GitHub Pages, which Help & Setup's About &
+/// Credits opens.
+pub const SITE_URL: &str = "https://itechify.github.io/maplecompass/";
+
 /// Whether minimap titles can be recognised as real maps.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
@@ -275,8 +279,9 @@ pub struct PanelState {
 /// What a hotkey asks the shell to do at once, beyond rendering the panel state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
-    /// Open this page in the player's browser (the open-page hotkey, or a click on a
-    /// listed mob's name or on a map's in the Personal Bests window).
+    /// Open this page in the player's browser (the open-page hotkey, a click on a listed
+    /// mob's name or on a map's in the Personal Bests window, or About & Credits' link to
+    /// the MapleCompass site).
     OpenInBrowser { url: String },
     /// Bring the overlay, with the search view already open, back in front (the search
     /// hotkey): the game may have come in front of it. Our own window only (ADR 0001).
@@ -289,8 +294,9 @@ pub enum Request {
 }
 
 /// Something the player can do with a hotkey or with the matching icon at the top of
-/// the panel, or with the panel's settings icon or an icon at the top of the Grind
-/// Tracker's window (which have no hotkeys). Either way it goes through [`Compass::press`].
+/// the panel, or with the panel's settings icon, an icon at the top of the Grind
+/// Tracker's window or About & Credits' link (which have no hotkeys). Either way it goes
+/// through [`Compass::press`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PanelControl {
@@ -325,6 +331,8 @@ pub enum PanelControl {
     TogglePersonalBests,
     /// The Personal Bests window's ×: close it.
     ClosePersonalBests,
+    /// About & Credits' link in Help & Setup: open the MapleCompass site in the browser.
+    OpenSite,
 }
 
 /// The game window's title, unless the player picked another by hand.
@@ -956,6 +964,7 @@ impl Compass {
             PanelControl::OpenMeowdbPage => {
                 return self.state.map.as_ref().map(|map| Request::OpenInBrowser { url: map.url.clone() });
             }
+            PanelControl::OpenSite => return Some(Request::OpenInBrowser { url: SITE_URL.into() }),
         };
         self.apply(action);
         None
