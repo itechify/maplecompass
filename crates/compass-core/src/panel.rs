@@ -21,7 +21,7 @@ pub struct Size {
 }
 
 /// The game window as the shell sees it, in physical screen pixels.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GameWindow {
     /// The client area: what the game draws in, without caption or borders.
     pub client: ScreenRect,
@@ -34,7 +34,8 @@ pub struct GameWindow {
 }
 
 /// Which window is in front: the game, one of MapleCompass's own, or another app's.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Foreground {
     Game,
     MapleCompass,
@@ -42,14 +43,15 @@ pub enum Foreground {
 }
 
 /// The overlay's size when expanded and when collapsed to an icon (physical px).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PanelSizes {
     pub expanded: Size,
     pub collapsed: Size,
 }
 
 /// Something the player did (through a hotkey or the overlay).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Action {
     /// Collapse the panel to its icon, or expand it again.
     ToggleExpanded,

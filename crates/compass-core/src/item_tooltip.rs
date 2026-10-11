@@ -31,7 +31,8 @@ pub struct ItemCapture {
 }
 
 /// What an Item Lookup capture reads as.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ItemTooltipReading {
     pub tooltip: ItemTooltip,
     /// When the frame was captured, as in [`Frame::at_ms`].
@@ -39,7 +40,8 @@ pub struct ItemTooltipReading {
 }
 
 /// The Item Tooltip nearest the pointer, if any.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum ItemTooltip {
     /// No Item Tooltip near the pointer.
     None,

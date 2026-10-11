@@ -82,7 +82,7 @@ pub enum MarkTarget {
 }
 
 /// An arrow key in MapleCompass's own marking window.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SelectionDirection {
     Left,

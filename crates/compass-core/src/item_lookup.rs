@@ -17,11 +17,12 @@ use crate::matcher::{key, levenshtein};
 use crate::meowdb;
 use crate::pace::Pace;
 use crate::panel::{GameWindow, ScreenRect, Size};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::task::Poll;
 
 /// One item in MeowDB's answer to a search.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ItemHit {
     /// MeowDB's own ID for the item, not the game's item ID.
     pub id: String,

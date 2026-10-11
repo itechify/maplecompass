@@ -48,6 +48,7 @@
 //!   first of them, the one the panel shows. Bests outlast Sessions, as Visits do.
 
 use crate::ExpBar;
+use crate::bug_report::{Level, Note};
 use crate::personal_best::{Bests, SavedBests};
 use serde::Serialize;
 
@@ -217,6 +218,11 @@ impl Total {
         (self.hi != u64::MAX).then(|| self.lo + self.hi)
     }
 
+    /// As a Bug Report writes it down.
+    fn level(self) -> Level {
+        Level { lo: self.lo, hi: (self.hi != u64::MAX).then_some(self.hi) }
+    }
+
     /// Whether `other`, which shares no total with this, is within [`RELEARN_PERCENT`]
     /// of it.
     fn close_to(self, other: Total) -> bool {
@@ -269,6 +275,8 @@ pub(crate) struct Session {
     visit: Visit,
     /// Every map's Personal Bests, which outlast Sessions too.
     bests: Bests,
+    /// What it made of the readings since a Bug Report last took them.
+    notes: Vec<Note>,
 }
 
 /// A Visit (GLOSSARY): from the panel confirming a map until it confirms another.
@@ -456,7 +464,10 @@ impl Session {
         // Even a reading no level allows (a misread) shows the bar is there to read.
         self.read_at = Some(at_ms);
         self.unread_since = None;
-        let Some(allowed) = Total::of(bar) else { return };
+        let Some(allowed) = Total::of(bar) else {
+            self.notes.push(Note::NoLevelAllows);
+            return;
+        };
         let (Some(total), Some(last)) = (self.total, self.last) else {
             self.total = Some(allowed);
             self.last = Some(bar);
@@ -465,6 +476,7 @@ impl Session {
         let wrapped = self.wrapped(total, last, bar, allowed);
         if !wrapped && let Some(narrowed) = total.meet(allowed) {
             if unseen {
+                self.notes.push(Note::Unseen);
                 self.accept(narrowed, bar);
             } else {
                 self.same_level(narrowed, last, bar, at_ms);
@@ -474,10 +486,13 @@ impl Session {
         {
             // What was left of the old level, and what is in the new one.
             let gain = (doubled_total as i64 - 2 * last.exp as i64 + 1) / 2 + bar.exp as i64;
+            self.notes.push(Note::LevelUp { gain, level: total.level() });
             // The new level is bigger than the old: of the totals the reading allows,
             // only those count.
             self.accept(Total { lo: allowed.lo.max(total.hi + 1), ..allowed }, bar);
-            if !unseen {
+            if unseen {
+                self.notes.push(Note::Unseen);
+            } else {
                 self.change(gain, at_ms);
             }
             self.level_ups += 1;
@@ -489,10 +504,13 @@ impl Session {
             self.misfits = Some(misfits);
             if misfits.count < SWITCH_READINGS {
                 // Not yet.
+                self.notes.push(Note::Misfit { count: misfits.count, level: total.level() });
             } else if total.close_to(misfits.total) && carries_on(last, bar, self.near(), misfits.total) {
                 // The level was learned wrong: the Session goes on.
+                self.notes.push(Note::Relearned { from: total.level(), to: misfits.total.level() });
                 self.same_level(misfits.total, last, bar, at_ms);
             } else {
+                self.notes.push(Note::CharacterSwitch { level: misfits.total.level() });
                 self.accept(misfits.total, bar);
                 self.reset();
                 self.character_switched = true;
@@ -515,6 +533,7 @@ impl Session {
             figures.deaths.count += 1;
             figures.deaths.exp_lost += last.exp - bar.exp;
             figures.deaths.percent_lost_hundredths += last.percent_hundredths.saturating_sub(bar.percent_hundredths);
+            self.notes.push(Note::Death { exp_lost: last.exp - bar.exp });
         }
     }
 
@@ -616,11 +635,17 @@ impl Session {
     /// The share of the map's ceiling counts only the play since.
     pub fn arrive(&mut self) {
         let now = self.now;
+        self.notes.push(Note::Visit);
         self.visit = Visit { id: self.visit.id + 1, at: now };
         self.bests.end_visit();
         if let Some(figures) = &mut self.figures {
             figures.visit_from = figures.active(now);
         }
+    }
+
+    /// What it made of the readings since this was last asked, for a Bug Report.
+    pub fn take_notes(&mut self) -> Vec<Note> {
+        std::mem::take(&mut self.notes)
     }
 
     /// Every map's Personal Bests.
@@ -662,6 +687,7 @@ impl Session {
             Some(figures) => figures.change(gain, at),
             None => {
                 // A new Session: the one a reset ended is gone for good.
+                self.notes.push(Note::SessionStarted);
                 self.undo = None;
                 self.figures = Some(Figures::new(at));
             }

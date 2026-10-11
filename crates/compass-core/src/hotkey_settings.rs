@@ -10,7 +10,7 @@ use crate::settings::{Hotkey, Hotkeys};
 use serde::{Deserialize, Serialize};
 
 /// A key the player pressed on the settings view, as the overlay saw it.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KeyPress {
     /// The key itself, wherever the keyboard layout puts its letter: the web's

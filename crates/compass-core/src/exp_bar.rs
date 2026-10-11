@@ -17,11 +17,11 @@ use crate::Frame;
 use crate::prep::{PAD, Rect};
 use crate::recogniser::{Recogniser, frame_to_rgb};
 use image::{GrayImage, Luma, RgbImage};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// What the EXP bar shows: the EXP gained in the current level, and how much of the
 /// level that is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpBar {
     pub exp: u64,
