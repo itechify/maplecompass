@@ -1,3 +1,5 @@
+import { mapMark, type MapMarks } from "./map-marks";
+
 /** Mirror of `compass_core::MobChoice`. */
 export type MobChoice = { id: string; name: string; level: number };
 
@@ -11,13 +13,15 @@ export type Distance = { mapChanges: number } | "noRoute" | "questOnly" | "unkno
 export type Step = "portal" | "ship" | "taxi" | "teleportScroll";
 
 /** Mirror of `compass_core::RouteStop`: `by` is null for the first stop, the map you're on. */
-export type RouteStop = { mapId: string; streetName: string; mapName: string; by: Step | null };
+export type RouteStop = { mapId: string; streetName: string; mapName: string; mark: string | null; by: Step | null };
 
 /** Mirror of `compass_core::SearchResult`. */
 export type SearchResult = {
   mapId: string;
   streetName: string;
   mapName: string;
+  /** Its Map Mark, by OSMS's name for it. */
+  mark: string | null;
   densityHundredths: number;
   spawnSharePercent: number;
   tier: DensityTier;
@@ -169,7 +173,7 @@ export function distanceWithTravel(result: SearchResult): { text: string; title:
  * the row with its Distance at the right, then its street under Map, with Density, Spawn
  * Share and tier under theirs.
  */
-export function resultGroup(result: SearchResult): HTMLTableSectionElement {
+export function resultGroup(result: SearchResult, marks: MapMarks): HTMLTableSectionElement {
   const group = document.createElement("tbody");
   group.id = `map-${result.mapId}`;
   group.dataset.id = result.mapId;
@@ -180,6 +184,7 @@ export function resultGroup(result: SearchResult): HTMLTableSectionElement {
     return td;
   };
   const name = cell(result.mapName, "result-map");
+  name.prepend(mapMark(marks, result.mark));
   name.colSpan = 4;
   name.title = result.mapName;
   // "5 · ship": a route that isn't just portals says what else it takes.
@@ -198,7 +203,7 @@ export function resultGroup(result: SearchResult): HTMLTableSectionElement {
 }
 
 /** A route's maps in order, each with how it's reached: "you're here", "portal", "taxi", "scroll"… */
-export function routeStops(result: SearchResult): HTMLLIElement[] {
+export function routeStops(result: SearchResult, marks: MapMarks): HTMLLIElement[] {
   const span = (className: string, text: string) => {
     const el = document.createElement("span");
     el.className = className;
@@ -217,6 +222,8 @@ export function routeStops(result: SearchResult): HTMLLIElement[] {
     // Screen readers hear what the glyph shows.
     const how = span("sr-only", stop.by ? `then by ${STEP_TITLES[stop.by].toLowerCase()}: ` : "you're here: ");
     const map = span("route-map", stop.mapName);
+    // Every stop's mark, so the names line up and the route shows where it crosses areas.
+    map.prepend(mapMark(marks, stop.mark));
     item.append(glyph, how, map);
     if (stop.by) item.title = `By ${STEP_TITLES[stop.by].toLowerCase()}`;
     // Anything but a portal is worth noticing on the way.

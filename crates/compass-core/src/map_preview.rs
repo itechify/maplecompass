@@ -73,6 +73,9 @@ pub struct PortalMark {
     /// the data is named from OSMS's lookups, with no street, or else by its ID.
     pub to_map_name: String,
     pub to_street_name: String,
+    /// The destination's Map Mark, by OSMS's name for it (see [`crate::PanelState::map_marks`]);
+    /// within the map, the map's own.
+    pub to_mark: Option<String>,
     /// For a teleport within the map, where it lands.
     pub lands_at: Option<Landing>,
     /// Its row among the shown map's Hidden Portals (an index into

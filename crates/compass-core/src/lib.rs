@@ -13,6 +13,7 @@ mod item_lookup;
 mod item_tooltip;
 mod map_data;
 mod map_index;
+mod map_mark;
 mod map_preview;
 mod matcher;
 pub mod meowdb;
@@ -45,6 +46,7 @@ pub use map_data::{
     HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty, Portal, PortalKind,
 };
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
+pub use map_mark::MapMark;
 pub use map_preview::{Landing, Leads, MapPreview, PicturePoint, PortalMark, PreviewImage};
 pub use mob_card::{DamageRange, Elements, HpPerExp, MobCard, MobDetails};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
@@ -80,7 +82,7 @@ pub use recogniser::{TitleLines, TitleReader, TitleReading};
 use tracker::Tracker;
 use serde::{Deserialize, Serialize};
 use osms::MapSet;
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::task::Poll;
 
 /// A captured Title Region or EXP Bar Region image, or the game's whole client area for
@@ -131,6 +133,10 @@ pub struct CurrentMap {
     pub map_name: String,
     /// The map's MeowDB page, which the title and the open-page hotkey open.
     pub url: String,
+    /// Its Map Mark, by OSMS's name for it (see [`PanelState::map_marks`]); `None` for a map
+    /// without one. While it isn't settled which of the maps sharing a title the player is
+    /// on, the one they all share, or none.
+    pub mark: Option<String>,
 }
 
 /// Search's credit (ADR 0008): its results and routes are worked out from OSMS Data
@@ -190,6 +196,10 @@ pub struct PanelState {
     pub credit: Option<&'static str>,
     /// The Mob Card of each mob the panel lists, in its order; empty while it lists none.
     pub mob_cards: Vec<MobCard>,
+    /// Every Map Mark, by OSMS's name for it, which each map shown anywhere names its own
+    /// by (the panel's title, Hidden Portals, the Map Preview, search, the route, setup's
+    /// test read and the Personal Bests window); empty until OSMS's file set is read.
+    pub map_marks: BTreeMap<String, MapMark>,
     /// Expanded to the full panel, or collapsed to a small icon.
     pub expanded: bool,
     /// The sections the player collapsed to their headings.
@@ -488,6 +498,7 @@ impl Compass {
                 street_name: entry.street_name.clone(),
                 map_name: entry.map_name.clone(),
                 url: meowdb::map_url(&entry.id),
+                mark: entry.mark.clone(),
             }
         };
         // A test read judges this one frame: the tracker would keep showing the last
@@ -532,7 +543,7 @@ impl Compass {
     }
 
     fn sync_shown_map(&mut self) {
-        let map = self.shown_map.map().cloned();
+        let map = self.shown_map.map().map(|map| CurrentMap { mark: self.shown_map.mark(), ..map.clone() });
         let saved_copy_from = self.saved_copy_from();
         let data = self.set.as_ref().map_or(MapDataStatus::NoMap, |set| self.shown_map.data(&set.maps, saved_copy_from));
         // Distances are measured from the map shown (with Candidates, the one shown).
@@ -553,9 +564,12 @@ impl Compass {
         self.state.credit = self.state.map.as_ref().map(|_| OSMS_AND_MEOWDB_CREDIT);
     }
 
-    /// What shows OSMS's pictures, with those in so far: the Map Preview (its portals on the
-    /// Hunting Target's route marked), the map's mobs' Mob Cards and the Hunting Target's mob.
+    /// What shows OSMS's pictures, with those in so far: the Map Marks, the Map Preview (its
+    /// portals on the Hunting Target's route marked), the map's mobs' Mob Cards and the
+    /// Hunting Target's mob.
     fn sync_pictured(&mut self) {
+        self.state.map_marks =
+            self.set.as_ref().map(|set| map_mark::table(&set.maps, &self.pictures)).unwrap_or_default();
         let next_map = self.state.search.hunting.as_ref().and_then(HuntingTarget::next_map_by_portal);
         self.state.map_preview = self
             .set
@@ -572,15 +586,16 @@ impl Compass {
         }
     }
 
-    /// Ask for the pictures the panel wants, one at a time: the Map Preview's first, then
-    /// the map's mobs' animations, then the Hunting Target mob's.
+    /// Ask for the pictures the panel wants, one at a time: every Map Mark first, few and
+    /// small and shown beside every map's name; then the Map Preview's, then the map's mobs'
+    /// animations, then the Hunting Target mob's.
     fn poll_pictures(&mut self, at_ms: u64) {
         let Some(set) = &self.set else { return };
         let preview = self.state.map_preview.as_ref().map(|preview| map_preview::picture_path(&preview.picture));
         let mobs = self.state.data.data().map_or(&[][..], |data| &data.mobs);
         let hunted = self.state.search.hunting.as_ref().and_then(|hunting| set.maps.animation(&hunting.mob.id));
-        let wanted: Vec<String> = preview
-            .into_iter()
+        let wanted: Vec<String> = map_mark::pictures(&set.maps)
+            .chain(preview)
             .chain(mob_card::animations(mobs, &set.maps))
             .chain(hunted.map(String::from))
             .collect();

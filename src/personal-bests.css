@@ -153,6 +153,21 @@ tbody tr:hover td {
   background: rgba(47, 99, 200, 0.08);
 }
 
+/* The map's Map Mark, then its name, which wraps beside it rather than under it. */
+.row-name {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.row-name .map-mark {
+  margin: -1px 0;
+}
+
+.row-name .row-map {
+  min-width: 0;
+}
+
 /* A map's name opens its MeowDB page: ink at rest, Portal Blue and underlined under the
    pointer, Frame Navy while pressed, as a mob's name in the panel. */
 .row-map {
@@ -187,7 +202,9 @@ tbody tr:hover td {
   box-shadow: 0 0 0 1px var(--you-edge);
 }
 
+/* Under the name, lined up with it: past the mark and its gap. */
 .row-street {
+  margin-left: 24px;
   font-size: 12px;
   line-height: 16px;
   color: var(--ink-2);

@@ -3,12 +3,13 @@ import { listen } from "@tauri-apps/api/event";
 import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { hotkeyAvailable, keyLabel, type Hotkeys } from "./hotkeys";
+import { mapMark, type MapMarks } from "./map-marks";
 import { LOADING_MAP_LIST, recognitionProblem, type Recognition } from "./recognition";
 
 /** Mirror of `compass_core::TestRead`. */
 type TestRead =
   | { status: "reading" }
-  | { status: "recognised"; map: { id: string; streetName: string; mapName: string } }
+  | { status: "recognised"; map: { id: string; streetName: string; mapName: string; mark: string | null } }
   | { status: "failed" };
 
 /** Mirror of `compass_core::ExpBarTestRead`. */
@@ -35,6 +36,8 @@ type SetupView = {
   game: { width: number; height: number } | null;
   gameTitle: string;
   hotkeys: Hotkeys;
+  /** Every Map Mark, by OSMS's name for it, which a recognised map names its own by. */
+  mapMarks: MapMarks;
 };
 
 const STEPS = ["warning", "window", "requirements", "mark", "test", "exp", "expTest"] as const;
@@ -115,7 +118,8 @@ function render() {
 
   const read = setup.testRead;
   const box = $("test-read");
-  const readKey = JSON.stringify([read, recognition.status]);
+  const shownMark = read?.status === "recognised" && read.map.mark ? view.mapMarks[read.map.mark] : undefined;
+  const readKey = JSON.stringify([read, recognition.status, shownMark]);
   if (readKey !== renderedRead) {
     renderedRead = readKey;
     // Recognised, the map shows as the overlay's title bar will show it.
@@ -133,7 +137,10 @@ function render() {
       map.className = "map";
       map.textContent = read.map.mapName;
       title.append(street, map);
-      box.replaceChildren(title, tag("Recognised"));
+      // Its Map Mark beside both lines, as the overlay's title bar draws it; with none, no
+      // room for it.
+      const mark = read.map.mark && view.mapMarks[read.map.mark] ? [mapMark(view.mapMarks, read.map.mark)] : [];
+      box.replaceChildren(...mark, title, tag("Recognised"));
     } else if (recognition.status === "starting") {
       box.textContent = LOADING_MAP_LIST;
     } else if (recognitionProblem(recognition)) {

@@ -74,6 +74,9 @@ pub struct HiddenPortal {
     pub to_map_id: String,
     pub to_map_name: String,
     pub to_street_name: String,
+    /// The destination's Map Mark, by OSMS's name for it (see [`crate::PanelState::map_marks`]);
+    /// `None` for a map without one.
+    pub to_mark: Option<String>,
     /// The destination is a Hidden Street.
     pub to_hidden_street: bool,
     /// A Quest Portal: it only works while the player meets a quest condition.

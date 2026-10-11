@@ -58,6 +58,9 @@ pub struct PersonalBestsMap {
     pub street_name: String,
     pub map_name: String,
     pub region: String,
+    /// The map's Map Mark, by OSMS's name for it (see [`crate::PanelState::map_marks`]);
+    /// `None` for a map without one, or not in the map list.
+    pub mark: Option<String>,
     /// The map's MeowDB page.
     pub url: String,
     /// The lowest and highest of its mobs' levels; `None` if it isn't in the map list, or
@@ -143,6 +146,7 @@ pub(crate) fn rows<'a>(
                 street_name: entry.map_or_else(String::new, |e| e.street_name.clone()),
                 map_name: entry.map_or_else(String::new, |e| e.map_name.clone()),
                 region: entry.map_or_else(String::new, |e| e.region.clone()),
+                mark: entry.and_then(|e| e.mark.clone()),
                 url: meowdb::map_url(&bests.id),
                 mob_levels: data.and_then(mob_levels),
                 exp_per_hour: best.exp_per_hour,

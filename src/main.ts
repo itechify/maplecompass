@@ -6,6 +6,7 @@ import { byId, cardTop, span } from "./dom";
 import { LOADING_MAP_LIST, recognitionProblem, type Recognition } from "./recognition";
 import type { ExpTracking } from "./exp-tracking";
 import { levels } from "./figures";
+import { mapMark, showMark, type MapMarks } from "./map-marks";
 import {
   initMapPreview,
   layOutMapPreview,
@@ -115,7 +116,8 @@ type ExpBar = { exp: number; percentHundredths: number };
 /** Mirror of `compass_core::PanelState`. */
 type PanelState = {
   recognition: Recognition;
-  map: { id: string; streetName: string; mapName: string; url: string } | null;
+  /** The shown map; its `mark` names its Map Mark in `mapMarks`. */
+  map: { id: string; streetName: string; mapName: string; url: string; mark: string | null } | null;
   confidence: number;
   notSure: boolean;
   candidates: Candidates | null;
@@ -125,6 +127,8 @@ type PanelState = {
   credit: string | null;
   /** The Mob Card of each mob the panel lists, in its order. */
   mobCards: MobCard[];
+  /** Every Map Mark, by OSMS's name for it, which each map shown names its own by. */
+  mapMarks: MapMarks;
   expanded: boolean;
   /** Mirror of `compass_core::CollapsedSections`: the sections collapsed to their heading. */
   collapsedSections: Record<Section, boolean>;
@@ -182,6 +186,7 @@ const toolbar = byId("toolbar");
 const icon = document.querySelector<HTMLElement>(".icon")!;
 const nextCandidate = byId("next-candidate");
 const titlebar = byId("titlebar");
+const titleMark = byId("title-mark") as HTMLImageElement;
 const navigation = byId("navigation");
 const huntingSprite = byId("hunting-sprite");
 const huntingTitle = byId("hunting-title");
@@ -308,7 +313,7 @@ function renderData(panel: PanelState) {
     renderedFrom.delete("data");
     return;
   }
-  const inputs = [data, panel.mapPreview, panel.candidates, panel.collapsedSections, panel.recognition];
+  const inputs = [data, panel.mapPreview, panel.candidates, panel.collapsedSections, panel.recognition, panel.mapMarks];
   if (!changed("data", ...inputs, panel.hotkeys, panel.unavailableHotkeys)) return;
 
   const { candidates } = panel;
@@ -346,7 +351,7 @@ function renderData(panel: PanelState) {
   const hiddenPortals: HiddenPortal[] = ready?.hiddenPortals ?? [];
   const pictured = renderMapPreview(ready ? panel.mapPreview : null, panel.map?.mapName ?? "");
   portals.hidden = !ready || (!pictured && hiddenPortals.length === 0);
-  renderPortalRows(hiddenPortals, panel.mapPreview?.marks ?? []);
+  renderPortalRows(hiddenPortals, panel.mapPreview?.marks ?? [], panel.mapMarks);
 
   mapMobs.hidden = !ready;
   noMobs.hidden = !ready || ready.mobs.length > 0;
@@ -505,7 +510,7 @@ const TARGET_SPRITE = 40;
 function renderNavigation(panel: PanelState) {
   const target: HuntingTarget | null = panel.search.hunting;
   navigation.hidden = !target;
-  if (!target || !changed("navigation", target, panel.collapsedSections.navigation)) return;
+  if (!target || !changed("navigation", target, panel.collapsedSections.navigation, panel.mapMarks)) return;
   foldSection(navigation, navigationToggle, panel.collapsedSections.navigation, true);
   const { mob, map } = target;
   fillSprite(huntingSprite, target.image, TARGET_SPRITE);
@@ -515,7 +520,7 @@ function renderNavigation(panel: PanelState) {
   mobLine.textContent = mob.name;
   const mapLine = document.createElement("span");
   mapLine.className = "hunting-map";
-  mapLine.textContent = map.mapName;
+  mapLine.append(mapMark(panel.mapMarks, map.mark), map.mapName);
   huntingTitle.replaceChildren(mobLine, mapLine);
   huntingTitle.title = `${mob.name} (Lv ${mob.level}) on ${map.streetName}: ${map.mapName}`;
   const tier = byId("hunting-tier");
@@ -536,7 +541,7 @@ function renderNavigation(panel: PanelState) {
   const routed = !arrived && map.route.length > 0;
   huntingRouteTitle.textContent = routed ? `Route from ${map.route[0].mapName}` : "";
   huntingRouteTitle.hidden = !routed;
-  huntingRoute.replaceChildren(...(routed ? routeStops(map) : []));
+  huntingRoute.replaceChildren(...(routed ? routeStops(map, panel.mapMarks) : []));
   huntingRoute.hidden = !routed;
   huntingRouteNone.textContent = routed || arrived ? "" : distanceText(map.distance).title;
   huntingRouteNone.hidden = routed || arrived;
@@ -574,7 +579,7 @@ function renderSearchView(panel: PanelState) {
   } else {
     searchTitle.textContent = search.picked?.name ?? "";
     if (search.picked) searchTitle.append(span("level", `Lv ${search.picked.level}`));
-    renderMaps(search);
+    renderMaps(search, panel.mapMarks);
     if (opened) resultsBox.focus({ preventScroll: true });
   }
 }
@@ -782,7 +787,7 @@ function renderMobs(search: SearchState, recognition: Recognition) {
 }
 
 /** The second step: the picked mob's maps, the highlighted one first to Enter, and the travel toggles. */
-function renderMaps(search: SearchState) {
+function renderMaps(search: SearchState, marks: MapMarks) {
   // The core keeps the toggles (and saves them); the checkboxes follow it.
   taxis.checked = search.travel.taxis;
   teleportScrolls.checked = search.travel.teleportScrolls;
@@ -790,9 +795,9 @@ function renderMaps(search: SearchState) {
   searchNearest.hidden = searchNearest.textContent === "";
   searchNote.textContent = resultsNote(search);
   searchNote.hidden = searchNote.textContent === "";
-  if (!changed("results", search.results, search.highlightedResult)) return;
+  if (!changed("results", search.results, search.highlightedResult, marks)) return;
   const groups = search.results.map((result, i) => {
-    const group = resultGroup(result);
+    const group = resultGroup(result, marks);
     const current = i === search.highlightedResult;
     group.classList.toggle("current", current);
     group.setAttribute("aria-selected", String(current));
@@ -1007,6 +1012,7 @@ function render(panel: PanelState) {
   // Street Name slot stays the Street Name's.
   recovery.textContent = "";
   let problem = false;
+  let marked = false;
   street.textContent = "";
   const unrecognisable = recognitionProblem(recognition);
   if (!panel.gameFound) {
@@ -1024,12 +1030,15 @@ function render(panel: PanelState) {
   } else if (current) {
     street.textContent = current.streetName;
     map.textContent = current.mapName;
+    marked = showMark(titleMark, panel.mapMarks, current.mark);
   } else {
     map.textContent = "Reading the minimap title…";
     recovery.textContent = recognition.status === "starting"
       ? LOADING_MAP_LIST
       : `Keep the minimap open with both title lines visible. If this persists, ${setupHint.charAt(0).toLowerCase() + setupHint.slice(1)}`;
   }
+  // The map's Map Mark beside its title, as the Mini Map draws it; with none, no room for it.
+  titleMark.hidden = !marked;
   recovery.hidden = recovery.textContent === "";
   recovery.classList.toggle("problem", problem);
   renderToolbar(panel);

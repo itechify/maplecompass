@@ -16,6 +16,9 @@ pub struct MapEntry {
     /// The region as OSMS gives it: "Maple Island", "Victoria Island", "Event", "Other" or
     /// "Dev".
     pub region: String,
+    /// Its Map Mark, by OSMS's name for it (`"Henesys"`, `"Rith"`); `None` for a map
+    /// without one, or with one OSMS has no picture of.
+    pub mark: Option<String>,
 }
 
 /// The regions of maps the player can't normally enter: event maps, and the developers'

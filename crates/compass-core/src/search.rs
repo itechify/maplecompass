@@ -91,6 +91,9 @@ pub struct SearchResult {
     pub map_id: String,
     pub street_name: String,
     pub map_name: String,
+    /// The map's Map Mark, by OSMS's name for it (see [`crate::PanelState::map_marks`]);
+    /// `None` for a map without one.
+    pub mark: Option<String>,
     /// The mob's Density on the map in hundredths: its Spawn Count times the map's Mob
     /// Rate (10 spawns at a 1.5x Mob Rate is 1500, a Density of 15).
     pub density_hundredths: u32,
@@ -116,6 +119,9 @@ pub struct RouteStop {
     pub street_name: String,
     /// The map's ID for a map that isn't in the map index.
     pub map_name: String,
+    /// The map's Map Mark, by OSMS's name for it (see [`crate::PanelState::map_marks`]);
+    /// `None` for a map without one, or not in the map index.
+    pub mark: Option<String>,
     /// How the player gets here from the stop before; `None` for the first stop, the
     /// map the panel shows.
     pub by: Option<Step>,
@@ -443,11 +449,11 @@ fn route(distances: &Distances, map_id: &str, set: &MapSet) -> Vec<RouteStop> {
         .route_to(map_id)
         .into_iter()
         .map(|(map_id, by)| {
-            let (street_name, map_name) = match set.entry(&map_id) {
-                Some(entry) => (entry.street_name.clone(), entry.map_name.clone()),
-                None => (String::new(), map_id.clone()),
+            let (street_name, map_name, mark) = match set.entry(&map_id) {
+                Some(entry) => (entry.street_name.clone(), entry.map_name.clone(), entry.mark.clone()),
+                None => (String::new(), map_id.clone(), None),
             };
-            RouteStop { map_id, street_name, map_name, by }
+            RouteStop { map_id, street_name, map_name, mark, by }
         })
         .collect()
 }
@@ -487,6 +493,7 @@ fn results(mob_id: &str, set: &MapSet, here: Option<&str>, travel: Travel) -> Ve
             map_id: entry.id.clone(),
             street_name: entry.street_name.clone(),
             map_name: entry.map_name.clone(),
+            mark: entry.mark.clone(),
             density_hundredths: density,
             spawn_share_percent: mob.spawn_share_percent,
             tier: tier(density),

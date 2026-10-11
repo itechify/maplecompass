@@ -59,6 +59,7 @@ impl Matcher {
                     street_name: e.street_name.trim().to_string(),
                     map_name: e.map_name.trim().to_string(),
                     region: e.region.trim().to_string(),
+                    mark: e.mark,
                 };
                 let (stem, numeral) = split_numeral(&entry.map_name);
                 KnownMap {

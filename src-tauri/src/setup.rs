@@ -13,10 +13,11 @@ use crate::gamewin;
 use crate::view::{LastView, ViewSender};
 use crate::Command;
 use compass_core::{
-    Action, Hotkeys, MarkTarget, PanelControl, PanelState, Recognition, Rect, ScreenRect, SelectionDirection,
+    Action, Hotkeys, MapMark, MarkTarget, PanelControl, PanelState, Recognition, Rect, ScreenRect, SelectionDirection,
     SetupState,
 };
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::sync::mpsc::Sender;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewWindow, WindowEvent};
@@ -50,6 +51,8 @@ struct SetupView<'a> {
     unavailable_hotkeys: &'a [String],
     /// Those of them that don't name a key combination.
     invalid_hotkeys: &'a [String],
+    /// Every Map Mark, which a recognised test read's map names its own by.
+    map_marks: &'a BTreeMap<String, MapMark>,
 }
 
 #[derive(Serialize)]
@@ -155,6 +158,7 @@ impl SetupWindows {
             hotkeys: &state.hotkeys,
             unavailable_hotkeys: &state.unavailable_hotkeys,
             invalid_hotkeys: &state.invalid_hotkeys,
+            map_marks: &state.map_marks,
         };
         if self.view.send(&self.app, &view, &self.app.state::<Bridge>().view) {
             let selection = SelectionView { selection: state.setup.selection, target: state.setup.selection_target };

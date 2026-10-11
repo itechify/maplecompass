@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { dayText } from "./dates";
 import { byId, span } from "./dom";
 import { type LevelRange, levels, rate, sharePercent, whole } from "./figures";
+import { mapMark, type MapMarks } from "./map-marks";
 
 /** Mirror of `compass_core::PersonalBestsMap`. */
 type BestsMap = {
@@ -11,6 +12,8 @@ type BestsMap = {
   streetName: string;
   mapName: string;
   region: string;
+  /** Its Map Mark, by OSMS's name for it. */
+  mark: string | null;
   url: string;
   mobLevels: LevelRange | null;
   expPerHour: number;
@@ -20,9 +23,9 @@ type BestsMap = {
   here: boolean;
 };
 
-/** What the shell sends: whether the window shows at all, and the core's rows, highest
- *  EXP/h first. */
-type BestsView = { shown: boolean; maps: BestsMap[]; credit: string };
+/** What the shell sends: whether the window shows at all, the core's rows, highest EXP/h
+ *  first, and every Map Mark, which each row's map names its own by. */
+type BestsView = { shown: boolean; maps: BestsMap[]; credit: string; mapMarks: MapMarks };
 
 type Column = "map" | "region" | "levels" | "exp" | "share" | "set";
 type Way = "ascending" | "descending";
@@ -122,7 +125,7 @@ function star() {
   return svg;
 }
 
-function row(m: BestsMap, best: BestsMap | null) {
+function row(m: BestsMap, best: BestsMap | null, marks: MapMarks) {
   const tr = document.createElement("tr");
   const known = m.mapName !== "";
 
@@ -141,7 +144,11 @@ function row(m: BestsMap, best: BestsMap | null) {
   name.dataset.id = m.id;
   name.title = "Open on MeowDB";
   name.append(known ? m.mapName : `Map ${m.id}`, span("sr-only", " (opens MeowDB in your browser)"));
-  mapCell.append(name);
+  // The map's Map Mark before its name; the street under the name, not under the mark.
+  const named = document.createElement("div");
+  named.className = "row-name";
+  named.append(mapMark(marks, m.mark), name);
+  mapCell.append(named);
   const street = document.createElement("div");
   street.className = known ? "row-street" : "row-street unknown";
   if (known) street.append(m.streetName, span("region", ` · ${m.region}`));
@@ -182,12 +189,13 @@ function row(m: BestsMap, best: BestsMap | null) {
 /** The rows as last sent, and how the player sorted them: kept until MapleCompass closes,
  *  so the window opens again as they left it. */
 let maps: BestsMap[] = [];
+let marks: MapMarks = {};
 let sort: { column: Column; way: Way } = { column: "exp", way: "descending" };
 
 function renderRows() {
   // The best of all maps, which the star marks; none with only one map to compare.
   const best = maps.length > 1 ? maps[0] : null;
-  rows.replaceChildren(...sorted(maps, sort).map((m) => row(m, best)));
+  rows.replaceChildren(...sorted(maps, sort).map((m) => row(m, best, marks)));
   for (const th of headers) {
     if (th.dataset.column === sort.column) th.setAttribute("aria-sort", sort.way);
     else th.removeAttribute("aria-sort");
@@ -198,6 +206,7 @@ function render(view: BestsView) {
   // Not showing, the window draws nothing (the shell lets clicks through it).
   document.body.classList.toggle("hidden", !view.shown);
   maps = view.maps;
+  marks = view.mapMarks;
   count.textContent = `${maps.length === 1 ? "1 map" : `${maps.length} maps`} · shared by all your characters`;
   credit.textContent = view.credit;
   noteMissing.hidden = maps.every((m) => m.mobLevels !== null && m.ceilingShareHundredths !== null);

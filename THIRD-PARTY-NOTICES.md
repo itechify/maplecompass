@@ -4,7 +4,7 @@ MapleCompass bundles or uses the following third-party material. The app shows t
 
 ## Data and pictures
 
-- **Map and mob data, map pictures and mob animations:** [OSMS Data Explorer](https://osmsdataexplorer.com) (by @ohmi), fetched from its site at run time and never bundled. Its data is mined from MapleStory Classic World, and the pictures and animations are NEXON's art.
+- **Map and mob data, map pictures, Map Marks and mob animations:** [OSMS Data Explorer](https://osmsdataexplorer.com) (by @ohmi), fetched from its site at run time and never bundled. Its data is mined from MapleStory Classic World, and the pictures, marks and animations are NEXON's art.
 - **Map, mob and item pages:** [NiaMeowDB](https://meowdb.com). MapleCompass opens its pages in your browser, and Item Lookup asks its search which page to open.
 - MapleStory and its art are NEXON's. MapleCompass isn't made, endorsed or supported by NEXON.
 

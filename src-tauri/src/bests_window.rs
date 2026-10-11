@@ -11,8 +11,9 @@ use crate::grind_tracker::GRIND_TRACKER;
 use crate::sizemove::{self, Gesture, SizeMove};
 use crate::view::{LastView, ViewSender};
 use crate::{Command, LOOP_START_GRACE, keep_on_top, physical, place};
-use compass_core::{PanelState, PersonalBestsMap, Size};
+use compass_core::{MapMark, PanelState, PersonalBestsMap, Size};
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
@@ -42,6 +43,8 @@ struct BestsView<'a> {
     shown: bool,
     maps: &'a [PersonalBestsMap],
     credit: &'a str,
+    /// Every Map Mark, which each map names its own by.
+    map_marks: &'a BTreeMap<String, MapMark>,
 }
 
 /// The player's drag of the window, from the mouse press until Windows' move loop ends.
@@ -136,7 +139,12 @@ impl BestsWindow {
     pub fn sync(&mut self, state: &PanelState) {
         let bests = &state.personal_bests;
         let placement = bests.placement;
-        let view = BestsView { shown: placement.is_some(), maps: &bests.maps, credit: bests.credit };
+        let view = BestsView {
+            shown: placement.is_some(),
+            maps: &bests.maps,
+            credit: bests.credit,
+            map_marks: &state.map_marks,
+        };
         self.view.send(&self.app, &view, &self.app.state::<PersonalBestsView>().0);
         self.shows_on_top.store(placement.is_some(), Ordering::Relaxed);
         let dragging = self.under_way();
