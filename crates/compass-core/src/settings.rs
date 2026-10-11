@@ -53,6 +53,9 @@ pub struct Settings {
     /// Where the player dragged the Grind Tracker's window, relative to the game client;
     /// `None` for just below the panel.
     pub grind_tracker_at: Option<ClientOffset>,
+    /// Where the player dragged the Personal Bests window, relative to the game client;
+    /// `None` for centred over the game.
+    pub personal_bests_at: Option<ClientOffset>,
 }
 
 impl Default for Settings {
@@ -72,6 +75,7 @@ impl Default for Settings {
             collapsed_sections: CollapsedSections::default(),
             grind_tracker_open: true,
             grind_tracker_at: None,
+            personal_bests_at: None,
         }
     }
 }

@@ -45,6 +45,22 @@
         "contentProtected": false
       },
       {
+        "label": "personal-bests",
+        "title": "Personal Bests",
+        "url": "personal-bests.html",
+        "width": 920,
+        "height": 300,
+        "transparent": true,
+        "decorations": false,
+        "shadow": false,
+        "alwaysOnTop": false,
+        "skipTaskbar": true,
+        "resizable": false,
+        "focus": false,
+        "focusable": false,
+        "contentProtected": false
+      },
+      {
         "label": "item-lookup",
         "title": "Item Lookup",
         "url": "item-lookup.html",

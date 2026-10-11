@@ -2,7 +2,7 @@
 //! It shows the Session's figures beside the panel, in a window of its own that the
 //! player drags anywhere and closes with its ×.
 
-use crate::panel::{GameWindow, PlacementMode, ScreenPoint, ScreenRect, Size, clear_of, contains, holds};
+use crate::panel::{GameWindow, PlacementMode, ScreenRect, Size, contains, in_view, screen_at};
 use serde::{Deserialize, Serialize};
 
 /// A window's top-left corner relative to the game client's top-left corner (physical
@@ -25,7 +25,7 @@ pub struct GrindTrackerWindow {
     /// Region: it shows in screen captures, ours included.
     pub placement: Option<ScreenRect>,
     /// Some map has a Personal Best, the Visit under way's included: the window bar's
-    /// button that opens the Personal Bests page shows.
+    /// button that opens the Personal Bests window shows.
     pub personal_bests: bool,
 }
 
@@ -65,19 +65,11 @@ impl GrindTracker {
     /// wholly on a monitor, and moved the shortest way off any of `avoid`.
     pub fn placement(&self, game: &GameWindow, panel: ScreenRect, mode: PlacementMode, avoid: &[ScreenRect]) -> ScreenRect {
         let Size { width, height } = self.size;
-        let (w, h) = (width as i32, height as i32);
         let spot = match self.at {
             Some(at) => ScreenRect { x: game.client.x + at.x, y: game.client.y + at.y, width, height },
             None => self.beside(game, panel, mode),
         };
-        let screen = screen_at(game, spot.x, spot.y);
-        let spot = ScreenRect {
-            x: spot.x.min(screen.x + screen.width as i32 - w).max(screen.x),
-            y: spot.y.min(screen.y + screen.height as i32 - h).max(screen.y),
-            ..spot
-        };
-        let within = if contains(game.client, spot) { game.client } else { screen };
-        clear_of(spot, avoid, within)
+        in_view(game, spot, avoid)
     }
 
     /// Beside the panel, the tops level: the panel's top stays put as it grows and
@@ -98,11 +90,4 @@ impl GrindTracker {
         let screen = screen_at(game, panel.x, panel.y);
         [first, second].into_iter().find(|spot| contains(screen, *spot)).unwrap_or(first)
     }
-}
-
-/// The monitor's work area holding point (x, y), or else the one holding the game's
-/// client area's top-left corner, or else the client area itself.
-fn screen_at(game: &GameWindow, x: i32, y: i32) -> ScreenRect {
-    let holding = |x, y| game.screens.iter().copied().find(|screen| holds(*screen, ScreenPoint { x, y }));
-    holding(x, y).or_else(|| holding(game.client.x, game.client.y)).unwrap_or(game.client)
 }

@@ -3,10 +3,12 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { byId } from "./dom";
 import type { ExpRate, ExpTracking } from "./exp-tracking";
+import { percent, rate, sharePercent, whole } from "./figures";
 
-/** What the shell sends: the figures, whether the window shows at all, and whether some
- *  map has a Personal Best (the Personal Bests button shows). */
-type TrackerView = { shown: boolean; tracking: ExpTracking; personalBests: boolean };
+/** What the shell sends: the figures, whether the window shows at all, whether some map
+ *  has a Personal Best (the Personal Bests button shows), and whether the Personal Bests
+ *  window is open (the button shows as on). */
+type TrackerView = { shown: boolean; tracking: ExpTracking; personalBests: boolean; personalBestsOpen: boolean };
 
 const panelEl = byId("panel");
 const openBests = byId("open-bests");
@@ -36,29 +38,6 @@ const expFigures = byId("exp-figures");
 const expGauge = byId("exp-gauge");
 const expGaugeFill = byId("exp-gauge-fill");
 
-/** "−" (U+2212) for a negative figure. */
-const signed = (text: string) => text.replace(/^-/, "−");
-
-/** A whole number as the game writes it: 8,435. */
-const whole = (n: number) => signed(n.toLocaleString("en-US"));
-
-/** 1234 hundredths -> "12.3%" with one decimal, "12%" with none: no finer than the
- *  figure can be trusted, so it doesn't flicker. From 100% on, whole percents. */
-const percent = (hundredths: number, decimals = Math.abs(hundredths) >= 10_000 ? 0 : 1) =>
-  signed(`${(hundredths / 100).toFixed(decimals)}%`);
-
-/** A share of a rate (a map's solo ceiling): "73%", and "7.3%" under 10%, where one
- *  decimal still says something. The Personal Bests page (src-tauri/src/personal-bests.html)
- *  writes its shares the same way. */
-const sharePercent = (hundredths: number) => percent(hundredths, hundredths < 1000 ? 1 : 0);
-
-/** An EXP rate to 3 significant figures, written out as the panel writes its rates:
- *  840, 6,120, 61,200, 1,230,000; halves up, 66,550 is 66,600. It must agree with
- *  `three_figures` in the core's session.rs, through which the star compares Last 5 min
- *  with the Best row as written here, so it never shows beside two that read the same. The Personal Bests page
- *  (src-tauri/src/personal-bests.html) writes the bests the same way. */
-const rate = (n: number) => whole(Number(n.toPrecision(3)));
-
 /** A Session's length: "7m", "1h 12m". */
 function length(seconds: number) {
   const minutes = Math.floor(seconds / 60);
@@ -77,11 +56,12 @@ function noTimeToLevel(rolling: ExpRate | null) {
  *  and what else the Session carries; the map's Best row from arriving, before the
  *  Session starts too; the EXP bar's last reading at the foot, from the first reading on.
  *  Above them, why the figures went or can't move. */
-function render({ shown, tracking: t, personalBests }: TrackerView) {
+function render({ shown, tracking: t, personalBests, personalBestsOpen }: TrackerView) {
   // Not showing, the window draws nothing (the shell lets clicks through it).
   document.body.classList.toggle("hidden", !shown);
-  // Hidden, not greyed, while no map has a best to show.
+  // Hidden, not greyed, while no map has a best to show; pressed while their window is open.
   openBests.hidden = !personalBests;
+  openBests.setAttribute("aria-pressed", String(personalBestsOpen));
   const started = t.rolling !== null || t.state === "warmingUp" || t.state === "active" || t.state === "paused";
   tracking.dataset.state = t.state;
   // Rates still settling, held while paused, or the bar out of sight: the figures step back.
@@ -168,8 +148,8 @@ document.addEventListener("mousedown", (e) => {
   if (e.button === 0 && onHeader) getCurrentWindow().startDragging();
 });
 
-// Close, reset and its Undo, removing the best and opening the Personal Bests page,
-// through the core like the panel's icons.
+// Close, reset and its Undo, removing the best and opening or closing the Personal Bests
+// window, through the core like the panel's icons.
 panelEl.addEventListener("click", (e) => {
   const button = e.target instanceof Element ? e.target.closest<HTMLButtonElement>("button[data-control]") : null;
   if (button) invoke("panel_press", { control: button.dataset.control });

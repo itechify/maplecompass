@@ -35,7 +35,7 @@ pub fn looking_for() -> String {
 
 #[cfg(windows)]
 pub use win::{
-    Stacking, cursor_position, find_game, foreground, foreground_is_ours, monitor_work_areas, restack,
+    Stacking, below_any, cursor_position, find_game, foreground, foreground_is_ours, monitor_work_areas, restack,
     window_under_cursor,
 };
 
@@ -87,9 +87,10 @@ mod win {
     };
     use windows::Win32::System::Threading::GetCurrentProcessId;
     use windows::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GA_ROOT, GWL_EXSTYLE, GetAncestor, GetClientRect, GetCursorPos, GetForegroundWindow,
-        GetWindowLongPtrW, GetWindowTextW, GetWindowThreadProcessId, HWND_BOTTOM, HWND_NOTOPMOST, HWND_TOPMOST, IsIconic,
-        IsWindowVisible, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, WS_EX_TOPMOST, WindowFromPoint,
+        EnumWindows, GA_ROOT, GW_HWNDPREV, GWL_EXSTYLE, GetAncestor, GetClientRect, GetCursorPos, GetForegroundWindow,
+        GetWindow, GetWindowLongPtrW, GetWindowTextW, GetWindowThreadProcessId, HWND_BOTTOM, HWND_NOTOPMOST,
+        HWND_TOPMOST, IsIconic, IsWindowVisible, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, WS_EX_TOPMOST,
+        WindowFromPoint,
     };
     use windows::core::BOOL;
 
@@ -283,6 +284,28 @@ mod win {
     /// thread too; going by `HWND_NOTOPMOST` first puts it on top every time. Seen on
     /// whichever of our windows the player clicked last.
     ///
+    /// Whether any of `others` (our own windows) is above our `window` in the z-order.
+    /// Reads the window order only, walking up from `window`.
+    pub fn below_any(window: HWND, others: &[HWND]) -> bool {
+        if others.is_empty() {
+            return false;
+        }
+        let mut above = unsafe { GetWindow(window, GW_HWNDPREV) };
+        // However many windows there are, never walk for ever.
+        for _ in 0..10_000 {
+            match above {
+                Ok(hwnd) if !hwnd.is_invalid() => {
+                    if others.contains(&hwnd) {
+                        return true;
+                    }
+                    above = unsafe { GetWindow(hwnd, GW_HWNDPREV) };
+                }
+                _ => return false,
+            }
+        }
+        false
+    }
+
     /// No owner/parent link to the game (that would attach input queues across the
     /// processes, ADR 0001) and no event hook: the caller polls this.
     pub fn restack(window: HWND, to: Stacking, set_before: Option<Stacking>) -> windows::core::Result<bool> {
