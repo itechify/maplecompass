@@ -1154,6 +1154,10 @@
       "site-aside": {
         "displayName": "Site Aside",
         "purpose": "The site's topic asides, inset boxes beside the words."
+      },
+      "site-run-in": {
+        "displayName": "Site Run-in",
+        "purpose": "The bold words a site paragraph opens on, naming what it turns to, at its paragraph's size, so a topic reads down its left edge. A topic's first paragraph has none."
       }
     },
     "shadows": [
