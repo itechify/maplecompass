@@ -31,7 +31,7 @@ use crate::map_data::MapSummary;
 use crate::map_index::{Fetched, MapDataSource, SourceError};
 use crate::osms::{OsmsFiles, SavedFiles};
 use crate::panel::{Action, Foreground, GameWindow, PanelSizes, ScreenRect, Size};
-use crate::personal_best::SavedBests;
+use crate::personal_best::{SavedBests, VisitBest};
 use crate::recogniser::{TitleLines, TitleReading};
 use crate::session::{ExpTracking, TrackingState};
 use crate::settings::Settings;
@@ -134,6 +134,8 @@ pub enum Event {
     PickGameWindow { title: String },
     WallClock { unix_ms: u64 },
     RestoreBests { bests: SavedBests },
+    /// The player removed the Visit whose best was `visit` from `map`'s Visit History.
+    RemoveVisit { map: String, visit: VisitBest },
     /// Not an input: an error the shell or one of our windows ran into (`from`), which
     /// would otherwise go nowhere.
     Error { from: String, message: String },
@@ -1044,6 +1046,9 @@ pub fn replay(recording: &Recording, osms: Option<OsmsFiles>) -> Replay {
             Event::RestoreBests { bests } => {
                 compass.restore_bests(bests);
             }
+            Event::RemoveVisit { map, visit } => {
+                compass.remove_visit(&map, visit);
+            }
             Event::Error { from, message } => compass.note_error(&from, &message),
             Event::BugReport {} => compass.mark_bug_report(),
         }
@@ -1089,6 +1094,7 @@ impl Recording {
                     | Event::Hotkey { .. }
                     | Event::Restore { .. }
                     | Event::RestoreBests { .. }
+                    | Event::RemoveVisit { .. }
                     | Event::Error { .. }
                     | Event::BugReport {}
             );
@@ -1223,6 +1229,10 @@ impl Event {
             Event::ItemTooltip { reading } => format!("Item Tooltip read {}", json(reading)),
             Event::Restore { .. } => "settings restored".to_string(),
             Event::RestoreBests { bests } => format!("Personal Bests restored ({} maps)", bests.maps.len()),
+            Event::RemoveVisit { map, visit } => {
+                let set = visit.set_at_unix_ms.map_or("no date".to_string(), |at| format!("set at {at}"));
+                format!("Visit removed from {map}'s Visit History: {} EXP/h, {set}", thousands(visit.exp_per_hour))
+            }
             Event::WallClock { unix_ms } => format!("wall clock {unix_ms} (ms since 1970)"),
             Event::Error { from, message } => format!("{from} error: {message}"),
             Event::BugReport {} => "Bug Report saved".to_string(),
