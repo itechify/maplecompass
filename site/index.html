@@ -82,7 +82,7 @@
                 <a class="button secondary" href="#safe">How it stays safe</a>
               </div>
               <p class="fine">
-                MapleCompass @VERSION@ · Windows 10 and 11, 64-bit ·
+                MapleCompass @VERSION@ · <span class="whole">Windows 10 and 11, 64-bit</span> ·
                 <a href="@RELEASE_URL@">Other downloads</a> ·
                 <a href="https://github.com/itechify/maplecompass/releases">What's new</a>
               </p>
@@ -126,11 +126,11 @@
                 <li>It never presses keys or clicks for you, and automates nothing.</li>
               </ul>
               <p>
-                Its hotkeys are ordinary hotkeys registered with Windows, not a keyboard hook, and they act only while the
-                game or one of MapleCompass's windows is in front.
+                <b class="run-in">Its hotkeys.</b> They are ordinary hotkeys registered with Windows, not a keyboard hook, and
+                they act only while the game or one of MapleCompass's windows is in front.
               </p>
               <p>
-                You don't have to take this on trust: its source code is public on
+                <b class="run-in">Check for yourself.</b> You don't have to take this on trust: its source code is public on
                 <a href="https://github.com/itechify/maplecompass">GitHub</a>, for anyone to read.
               </p>
             </div>
@@ -144,10 +144,12 @@
                 borderless (not fullscreen), with the minimap open and both lines of its title showing.
               </p>
               <p>
-                The files aren't code-signed, so Windows SmartScreen may say it "protected your PC": choose
-                <strong>More info</strong>, then <strong>Run anyway</strong>. To update, quit the running MapleCompass first
-                (its compass in the notification area: <strong>Quit MapleCompass</strong>). Your settings, hotkeys and
-                Personal Bests carry over.
+                <b class="run-in">If Windows warns you.</b> The files aren't code-signed, so Windows SmartScreen may say it
+                "protected your PC": choose <strong>More info</strong>, then <strong>Run anyway</strong>.
+              </p>
+              <p>
+                <b class="run-in">Updating.</b> Quit the running MapleCompass first (its compass in the notification area:
+                <strong>Quit MapleCompass</strong>). Your settings, hotkeys and Personal Bests carry over.
               </p>
             </div>
             <aside class="aside" aria-labelledby="files-title">
@@ -173,25 +175,30 @@
                 <li>Finding the game window, or picking it by hand.</li>
                 <li>Setting up the game: windowed or borderless, with the minimap open and its title showing.</li>
                 <li>
-                  Marking the minimap title: drag a box around its two lines, or move the box with the Arrow keys and resize
-                  it with Alt+Arrow (hold Shift for ten-pixel steps). Enter tests the box; Esc goes back without changing the
-                  previous mark.
+                  Marking the minimap title: drag a box around its two lines.
+                  <span class="detail">
+                    Or move the box with the Arrow keys and resize it with Alt+Arrow (hold Shift for ten-pixel steps). Enter
+                    tests the box; Esc goes back without changing the previous mark.
+                  </span>
                 </li>
                 <li>A test read, which shows the map it recognised and the keys to use while you play.</li>
                 <li>If you like, marking the EXP bar, for the <a href="#grind-tracker">Grind Tracker</a>.</li>
                 <li>A test read of the EXP bar, if you marked it. Finish starts the overlay.</li>
               </ol>
               <p>
-                Closing setup on first run quits. MapleCompass asks you to set up again when the game window changes size.
-                <kbd>Ctrl+Shift+S</kbd> opens setup again, to mark the title anew or read the Overlay Guide, which lists your
-                hotkeys and explains placement and the hunting figures.
+                <b class="run-in">Opening it again.</b> <kbd>Ctrl+Shift+S</kbd> opens setup again, to mark the title anew or
+                read the Overlay Guide, which lists your hotkeys and explains placement and the hunting figures.
+                MapleCompass asks you to set up again when the game window changes size.
               </p>
               <p>
-                While it runs, its gold compass sits in the notification area (the system tray, by the clock). Click it for
-                <strong>Help &amp; Setup</strong> or <strong>Quit MapleCompass</strong>, the one way to quit, whether or not
-                the game is open.
+                <b class="run-in">In the tray.</b> While it runs, its gold compass sits in the notification area (the system
+                tray, by the clock). Click it for <strong>Help &amp; Setup</strong> or <strong>Quit MapleCompass</strong>, the
+                one way to quit, whether or not the game is open.
               </p>
-              <p class="detail">Only one MapleCompass runs at a time: starting it again shows the one that is running.</p>
+              <p class="detail">
+                Closing setup on first run quits. Only one MapleCompass runs at a time: starting it again shows the one that
+                is running.
+              </p>
             </div>
             <figure class="shot">
               <img
@@ -312,7 +319,7 @@
                 </li>
                 <li>The map data, pictures and animations in <code class="path">%LOCALAPPDATA%\<wbr />com.<wbr />itechify.<wbr />maplecompass\<wbr />cache</code>.</li>
               </ul>
-              <p>
+              <p class="detail">
                 If your Personal Bests file can't be read, MapleCompass renames it <code>personal-bests.json.bad</code> and
                 starts with no bests; if it can't rename it, it leaves it as it is and saves no bests until the next launch.
               </p>
@@ -336,30 +343,42 @@
               <p>
                 Once it knows your map, the panel shows the map's name, then three sections: the <a href="#map">Map</a>,
                 <a href="#navigation">Navigation</a> while you have a Hunting Target (a mob and a map you picked to go and
-                hunt it on), and the <a href="#mobs">Mobs</a>. Click a section's heading to collapse it to its heading, and
+                hunt it on), and the <a href="#mobs">Mobs</a>.
+              </p>
+              <p>
+                <b class="run-in">Clicking it.</b> You can click it at any time, and a click never takes the keyboard from the
+                game: only the search view and Settings do. Click a section's heading to collapse it to its heading, and
                 again to open it; a collapsed section stays collapsed from map to map and the next time you start
                 MapleCompass.
               </p>
               <p>
-                You can click it at any time, and a click never takes the keyboard from the game: only the search view and
-                Settings do. Drag it by its header to move it, or by a side or a bottom corner to make it wider or narrower;
-                its height follows what it shows, and a long list scrolls instead. Dragged onto the minimap title, which
-                MapleCompass reads, it moves just clear of it when you let go. It shows up in your screenshots and streams.
+                <b class="run-in">Moving and sizing it.</b> Drag it by its header to move it, or by a side or a bottom corner
+                to make it wider or narrower; its height follows what it shows, and a long list scrolls instead. Dragged onto
+                the minimap title, which MapleCompass reads, it moves just clear of it when you let go.
               </p>
               <p>
-                It shows on top of everything, but only while the game or one of MapleCompass's windows is in front. While
-                another app is, or the game is minimised, it hides: opening a MeowDB page in your browser hides it until you
-                go back to the game.
+                <b class="run-in">Showing and hiding.</b> It shows on top of everything, but only while the game or one of
+                MapleCompass's windows is in front. While another app is, or the game is minimised, it hides: opening a MeowDB page in your
+                browser hides it until you go back to the game. It shows up in your screenshots and streams.
               </p>
               <h4>Placement</h4>
               <p>
                 The panel starts on the right edge of the game window, its top a third of the way down, and grows downward
-                as its content changes. <kbd>Ctrl+Shift+P</kbd> switches between four placements. <strong>Inside</strong>,
-                the panel keeps the spot you dragged it to relative to the game window. <strong>Docked</strong> right or
-                left, it follows the game window's outside edge, and goes inside when there is no room on screen.
-                <strong>Detached</strong>, you can drag it anywhere, such as onto another monitor, and it stays there, with
-                a taskbar entry of its own.
+                as its content changes. <kbd>Ctrl+Shift+P</kbd> switches between four placements:
               </p>
+              <ul class="terms">
+                <li>
+                  <b class="run-in">Inside.</b> The panel keeps the spot you dragged it to relative to the game window.
+                </li>
+                <li>
+                  <b class="run-in">Docked right or left.</b> It follows the game window's outside edge, and goes inside when
+                  there is no room on screen.
+                </li>
+                <li>
+                  <b class="run-in">Detached.</b> You can drag it anywhere, such as onto another monitor, and it stays there,
+                  with a taskbar entry of its own.
+                </li>
+              </ul>
               <figure class="shot in-text">
                 <img
                   src="./screenshots/game-window.png"
@@ -420,14 +439,17 @@
                 <li><span class="ring-key unknown" aria-hidden="true"></span>grey to a map MapleCompass doesn't know.</li>
               </ul>
               <p>
-                Below it are the map's <strong>Hidden Portals</strong>: exits to other maps the game doesn't show, dashed on
-                the picture. Each row says where it leads, tagged <span class="tag">Hidden Street</span> when it leads to
-                one, or <span class="tag quest">Quest</span> when it only works during a quest. Rest the pointer on a ring to
-                see where it leads, its street and its kind, and to light its row; rest it on a row to light its ring.
+                <b class="run-in">Hidden Portals.</b> Below the picture are the map's exits to other maps the game doesn't
+                show, dashed on it. Each row says where it leads, tagged <span class="tag">Hidden Street</span> when it leads
+                to one, or <span class="tag quest">Quest</span> when it only works during a quest.
               </p>
               <p>
-                While you have a Hunting Target, each portal its route takes next from your map wears
-                a wide magenta ring <span class="ring-key route" aria-hidden="true"></span>as well.
+                <b class="run-in">Pointing at a portal.</b> Rest the pointer on a ring to see where it leads, its street and
+                its kind, and to light its row; rest it on a row to light its ring.
+              </p>
+              <p>
+                <b class="run-in">The next portal.</b> While you have a Hunting Target, each portal its route takes next from
+                your map wears a wide magenta ring <span class="ring-key route" aria-hidden="true"></span>as well.
               </p>
               <p class="detail">
                 On a town, the invisible exits are its building doors, which you can see, so they are ringed like visible
@@ -457,9 +479,9 @@
                 sorted by level, with a line summing up the rest.
               </p>
               <p>
-                Rest the pointer on a mob's name to see its <strong>Mob Card</strong>: the mob as OSMS animates it, and the
-                figures its row doesn't show, such as its element, touch damage, accuracy, avoid and defences. Click the name
-                to open the mob's MeowDB page.
+                <b class="run-in">Mob Cards.</b> Rest the pointer on a mob's name to see its card: the mob as OSMS animates
+                it, and the figures its row doesn't show, such as its element, touch damage, accuracy, avoid and defences.
+                Click the name to open the mob's MeowDB page.
               </p>
             </div>
           </section>
@@ -467,14 +489,20 @@
           <section class="topic" id="shared-titles" data-mini="Shared titles" aria-labelledby="shared-titles-title">
             <div class="topic-text">
               <h3 id="shared-titles-title">When maps share a title</h3>
-              <p>
-                A few maps share a title, such as the two Maple Road / Mushroom Town maps. If they would show the same Map
-                Summary, mobs and Hidden Portals anyway, the panel just shows them, without the map's picture, since each has
-                its own layout. Otherwise it picks the one connected to the map you came from. Failing that, it shows the
-                first, marked <span class="chip-doubt">Not sure</span>, and lists them all, each with its first mobs, mob
-                levels and Hidden Portal count. <kbd>Ctrl+Shift+N</kbd> steps through them, and your pick holds until you
-                change maps. The picture shows once it's settled which map you're on.
-              </p>
+              <p>A few maps share a title, such as the two Maple Road / Mushroom Town maps. Then the panel:</p>
+              <ol>
+                <li>
+                  If they would show the same Map Summary, mobs and Hidden Portals anyway, just shows them, without the map's
+                  picture, since each has its own layout.
+                </li>
+                <li>Otherwise picks the one connected to the map you came from.</li>
+                <li>
+                  Failing that, shows the first, marked <span class="chip-doubt">Not sure</span>, and lists them all, each with
+                  its first mobs, mob levels and Hidden Portal count. <kbd>Ctrl+Shift+N</kbd> steps through them, and your
+                  pick holds until you change maps.
+                </li>
+              </ol>
+              <p>The picture shows once it's settled which map you're on.</p>
               <p class="detail">
                 Many map names differ only in a Roman numeral, such as Rocky Road I, II and III. When MapleCompass can't
                 make the numeral out, it picks the map the one you came from leads to, if it leads to just one of them;
@@ -498,15 +526,18 @@
             <div class="topic-text">
               <h3 id="search-title">Search a mob</h3>
               <p>
-                <kbd>Ctrl+Shift+F</kbd>, or the magnifier at the top of the panel, opens the search view. It takes over the
-                panel, and your typing, until it closes; then the game has the keyboard again. Type part of a mob's name and
-                pick the mob, with the arrow keys and Enter or a click.
+                <kbd>Ctrl+Shift+F</kbd>, or the magnifier at the top of the panel, opens the search view. Type part of a mob's
+                name and pick the mob, with the arrow keys and Enter or a click.
               </p>
               <p>
-                The panel then lists every map the mob spawns on, ranked by <strong>Density Tier</strong> and then the
-                nearest within a tier, each with its figures. Tick <strong>Taxis</strong> or <strong>Teleport Scrolls</strong>
-                to count them as ways to travel. Event maps and the developers' room aren't listed. The back arrow or Esc
-                leaves without changing anything.
+                <b class="run-in">The mob's maps.</b> The panel then lists every map the mob spawns on, ranked by
+                <strong>Density Tier</strong> and then the nearest within a tier, each with its figures. Tick
+                <strong>Taxis</strong> or <strong>Teleport Scrolls</strong> to count them as ways to travel. Event maps and
+                the developers' room aren't listed.
+              </p>
+              <p>
+                <b class="run-in">The keyboard.</b> The search view takes over the panel, and your typing, until it closes;
+                then the game has the keyboard again. The back arrow or Esc leaves without changing anything.
               </p>
             </div>
             <aside class="aside" aria-labelledby="figures-title">
@@ -530,13 +561,19 @@
               <p>
                 Pick a map the same way and it becomes your <strong>Hunting Target</strong>. The panel goes back to its
                 normal view with a Navigation section between the Map and the Mobs: the mob as OSMS animates it, the map,
-                its figures, and the route there from the map you're on, worked out again as you move. On the map's
-                picture, the portal your route takes next wears a wide magenta ring.
+                its figures, and the route there from the map you're on, worked out again as you move.
               </p>
               <p>
-                When you arrive, the route gives way to <strong>You're here</strong>, with how far you came, until you leave
-                the map. Navigation's magnifier reopens the mob's map list to pick another map, and its × clears the
-                Hunting Target. It lasts until you close MapleCompass.
+                <b class="run-in">The next portal.</b> On the map's picture, the portal your route takes next wears a wide
+                magenta ring.
+              </p>
+              <p>
+                <b class="run-in">Arriving.</b> The route gives way to <strong>You're here</strong>, with how far you came,
+                until you leave the map.
+              </p>
+              <p>
+                <b class="run-in">Changing or clearing it.</b> Navigation's magnifier reopens the mob's map list to pick
+                another map, and its × clears the Hunting Target. Otherwise it lasts until you close MapleCompass.
               </p>
             </div>
             <figure class="shot">
@@ -574,17 +611,23 @@
                 <li>At its foot, the EXP bar as it last read it, so you can see it's being read.</li>
               </ul>
               <p>
-                If the bar can't be read for ten seconds, because something covers it or the mark no longer frames it, the
-                window says so rather than counting the time as a break. The circular arrow beside Time to Level resets the
-                Session, which starts afresh at your next EXP gain; until then, Undo brings the old one back. It has no
-                hotkey, so a stray key press while you fight can't clear it. If you switch character, the Session starts
-                afresh by itself.
+                <b class="run-in">When the bar can't be read.</b> If it can't for ten seconds, because something covers it or
+                the mark no longer frames it, the window says so rather than counting the time as a break.
               </p>
               <p>
-                It sits beside the panel with their tops level. Drag it by its bar anywhere, even outside the game window,
-                and it keeps that spot; drag it back beside the panel and it follows the panel again. Like the panel, it
-                hides while another app is in front or the game is minimised. Its × closes the window while the Session
-                carries on; <kbd>Ctrl+Shift+G</kbd> or the panel's button shows it again.
+                <b class="run-in">Resetting the Session.</b> The circular arrow beside Time to Level resets the Session, which
+                starts afresh at your next EXP gain; until then, Undo brings the old one back. It has no hotkey, so a stray
+                key press while you fight can't clear it. If you switch character, the Session starts afresh by itself.
+              </p>
+              <p>
+                <b class="run-in">Moving it.</b> It sits beside the panel with their tops level. Drag it by its bar anywhere,
+                even outside the game window, and it keeps that spot; drag it back beside the panel and it follows the panel
+                again.
+              </p>
+              <p>
+                <b class="run-in">Hiding and closing it.</b> Like the panel, it hides while another app is in front or the game
+                is minimised. Its × closes the window while the Session carries on; <kbd>Ctrl+Shift+G</kbd> or the panel's
+                button shows it again.
               </p>
             </div>
             <figure class="shot">
@@ -603,19 +646,22 @@
               <h3 id="personal-bests-title"><span class="star" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M8 1.6l1.9 4.1 4.5.5-3.3 3.1.9 4.4L8 11.5l-3.9 2.2.9-4.4-3.3-3.1 4.5-.5z" /></svg></span>Personal Bests</h3>
               <p>
                 On a map with mobs, the Grind Tracker keeps your <strong>Personal Best</strong>: the best EXP per hour you've
-                had over 5 minutes of play on that map, with any of your characters. Come back to a map and a Best row shows
-                your best from earlier visits there, from the moment you arrive. Once you've played 5 minutes there, a yellow
-                star marks your last 5 minutes while they beat it.
+                had over 5 minutes of play on that map, with any of your characters.
               </p>
               <p>
-                The visit you're on joins your history when you leave the map. If a best came from a misreading, or from a
-                stretch you can't repeat, the × beside it removes it at once, with no undo, and your next-best visit takes
-                over.
+                <b class="run-in">The Best row.</b> Come back to a map and a Best row shows your best from earlier visits
+                there, from the moment you arrive. Once you've played 5 minutes there, a yellow star marks your last 5 minutes
+                while they beat it. The visit you're on joins your history when you leave the map.
               </p>
               <p>
-                The star on the Grind Tracker's bar opens your Personal Bests in your browser: every map's best side by
-                side, highest first, with each map's region and mob levels, how close your best came to its solo EXP/h
-                ceiling, and when you set it. Click a column to sort by it, or a map to open it on MeowDB.
+                <b class="run-in">Removing a best.</b> If a best came from a misreading, or from a stretch you can't repeat,
+                the × beside it removes it at once, with no undo, and your next-best visit takes over.
+              </p>
+              <p>
+                <b class="run-in">Every map's best.</b> The star on the Grind Tracker's bar opens your Personal Bests in your
+                browser: every map's best side by side, highest first, with each map's region and mob levels, how close your
+                best came to its solo EXP/h ceiling, and when you set it. Click a column to sort by it, or a map to open it on
+                MeowDB.
               </p>
               <p class="detail">
                 Bests are shared by all your characters, so the mob levels say what each was worth. A best on a map that has
@@ -640,16 +686,25 @@
               <p>
                 Hover an item in the game until its tooltip shows, then press <kbd>Ctrl+Shift+I</kbd>. MapleCompass reads the
                 name in the tooltip nearest the pointer (the inventory's, or any window's drawn the same way) and opens the
-                item's MeowDB page in your browser. It reads the name on the line with the blue dot, so a crafted item's
-                maker isn't taken for it.
+                item's MeowDB page in your browser.
               </p>
               <p>
-                It opens a page only when MeowDB has an item of that name, allowing for letters the reading confuses, such
-                as I and l. An alert at the top centre of the game window says what came of it: the page it opened, or why
-                nothing opened (no tooltip by the pointer, a name it couldn't read, a MapleCompass window covering the name,
-                no MeowDB item of that name, or MeowDB out of reach). When several items share the name, the alert lists
-                them with their categories for you to pick.
+                <b class="run-in">Which name.</b> It reads the name on the line with the blue dot, so a crafted item's maker
+                isn't taken for it. It opens a page only when MeowDB has an item of that name, allowing for letters the
+                reading confuses, such as I and l.
               </p>
+              <p>
+                <b class="run-in">The alert.</b> An alert at the top centre of the game window says what came of it: the page
+                it opened, or why nothing opened:
+              </p>
+              <ul class="brief">
+                <li>no tooltip by the pointer;</li>
+                <li>a name it couldn't read;</li>
+                <li>a MapleCompass window covering the name;</li>
+                <li>no MeowDB item of that name;</li>
+                <li>MeowDB out of reach.</li>
+              </ul>
+              <p>When several items share the name, the alert lists them with their categories for you to pick.</p>
               <p class="detail">
                 The alert goes after a few seconds (half a minute with a list), and clicks pass through it to the game unless
                 it lists items. Item Lookup has no button, so it can't be used while its hotkey is turned off.
@@ -695,31 +750,39 @@
           <section class="topic" id="settings" aria-labelledby="settings-title">
             <div class="topic-text">
               <h3 id="settings-title">Changing a hotkey</h3>
+              <p>If one clashes with a key you bind in the game, change it in Settings:</p>
+              <ol>
+                <li>Click the gear at the top of the panel (or Change hotkeys in setup's Overlay Guide).</li>
+                <li>Click the hotkey's <strong>Change</strong>.</li>
+                <li>
+                  Press the new combination, or Esc to cancel.
+                  <span class="detail">
+                    While it waits for your keys, the hotkeys are released, so the combination you press reaches Settings
+                    rather than acting.
+                  </span>
+                </li>
+              </ol>
               <p>
-                If one clashes with a key you bind in the game, change it in Settings: click the gear at the top of the panel
-                (or Change hotkeys in setup's Overlay Guide), then the hotkey's <strong>Change</strong>, and press the new
-                combination. Esc cancels. While it waits for your keys, the hotkeys are released, so the combination you press
-                reaches Settings rather than acting.
+                <b class="run-in">Which keys.</b> A combination must hold Ctrl, Alt or Win. Ctrl+Shift with a key is safest:
+                MapleStory attacks with Ctrl and jumps with Alt by default.
               </p>
-              <ul>
-                <li>
-                  A combination must hold Ctrl, Alt or Win. Ctrl+Shift with a key is safest: MapleStory attacks with Ctrl and
-                  jumps with Alt by default.
-                </li>
-                <li>If another MapleCompass hotkey has it, <strong>Swap</strong> trades the two.</li>
-                <li>
-                  To stop a hotkey taking its keys from the game at all, turn it off: <strong>Turn off</strong>, or Backspace or
-                  Delete, while it waits. Its button at the top of the panel still works.
-                </li>
-                <li>
-                  If Windows or another app already has one, the panel and the setup window say which, and Settings marks the
-                  row.
-                </li>
-              </ul>
               <p>
-                Every change works at once and is saved. <strong>Restore defaults</strong> puts every hotkey back, and on;
-                Undo brings yours back until you change another or close Settings. Like the search view, Settings has the
-                keyboard while it's open, and closes when you click back into the game.
+                <b class="run-in">Keys already taken.</b> If another MapleCompass hotkey has it, <strong>Swap</strong> trades
+                the two. If Windows or another app already has one, the panel and the setup window say which, and Settings
+                marks the row.
+              </p>
+              <p>
+                <b class="run-in">Turning one off.</b> To stop a hotkey taking its keys from the game at all, turn it off:
+                <strong>Turn off</strong>, or Backspace or Delete, while it waits. Its button at the top of the panel still
+                works.
+              </p>
+              <p>
+                <b class="run-in">Saving and undoing.</b> Every change works at once and is saved. <strong>Restore
+                defaults</strong> puts every hotkey back, and on; Undo brings yours back until you change another or close
+                Settings.
+              </p>
+              <p class="detail">
+                Like the search view, Settings has the keyboard while it's open, and closes when you click back into the game.
               </p>
             </div>
           </section>

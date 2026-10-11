@@ -290,6 +290,11 @@ h1 {
 .actions + .fine {
   text-wrap: balance;
 }
+/* A fact or a button's name the fine print never breaks: the platform, "Run anyway". */
+.fine .whole,
+.fine strong {
+  white-space: nowrap;
+}
 /* For a reader on a phone, where the Download is no use: shown only there. */
 .phone-note {
   display: none;
@@ -315,6 +320,8 @@ h1 {
   color: var(--problem-ink);
   font-size: 14px;
   line-height: 21px;
+  /* Two lines of even length, not a third holding "own risk." alone. */
+  text-wrap: balance;
 }
 .note.problem::before {
   content: "";
@@ -419,7 +426,7 @@ figcaption {
   display: grid;
   grid-template-columns: minmax(0, 38em);
   gap: 48px;
-  padding-top: 40px;
+  padding-top: 48px;
 }
 .topic.with-shot,
 .topic.with-aside {
@@ -447,6 +454,11 @@ figcaption {
   font-size: 15px;
   line-height: 22px;
 }
+.aside p,
+.aside ul,
+.aside dl {
+  margin-bottom: 16px;
+}
 .aside > :last-child {
   margin-bottom: 0;
 }
@@ -461,8 +473,8 @@ figcaption {
 .trouble {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px 48px;
-  margin-bottom: 22px;
+  gap: 24px 48px;
+  margin-bottom: 24px;
 }
 .trouble dt {
   font-weight: 700;
@@ -489,26 +501,48 @@ h3 {
   font-weight: 700;
 }
 h4 {
-  margin: 26px 0 8px;
+  margin: 32px 0 8px;
   font-size: 17px;
   line-height: 24px;
   font-weight: 700;
 }
+/* Paragraphs parted by most of a line, so each reads as a unit and a topic never sets as
+   one grey block. */
 p,
 ul,
 ol,
 dl {
-  margin: 0 0 14px;
+  margin: 0 0 20px;
 }
 ul,
 ol {
   padding-left: 1.4em;
 }
 li + li {
-  margin-top: 5px;
+  margin-top: 8px;
 }
 li::marker {
   color: var(--ink-3);
+}
+/* Steps are numbered in bold, as setup counts its own. */
+ol > li::marker {
+  font-weight: 700;
+  color: var(--ink-2);
+}
+/* A run-in: the bold words a paragraph opens on, naming what it turns to, so a topic can
+   be read down its left edge. A topic's first paragraph says what it is and has none. */
+.run-in {
+  font-weight: 700;
+}
+/* A list of one-line fragments (the ring key, Item Lookup's outcomes), set close. */
+.key-list li + li,
+.brief li + li {
+  margin-top: 3px;
+}
+/* A list of named cases (the placements), each led by its run-in rather than a bullet. */
+.terms {
+  list-style: none;
+  padding: 0;
 }
 p,
 li,
@@ -524,6 +558,11 @@ strong {
   font-size: 15px;
   line-height: 23px;
   color: var(--ink-2);
+}
+/* A step's finer points, on their own line under it. */
+li > .detail {
+  display: block;
+  margin-top: 2px;
 }
 
 /* A key as the game's settings view sets it: bold ink, here on an inset chip so it stands
@@ -1140,6 +1179,12 @@ button.icon-button:active {
     font-size: 15px;
     line-height: 24px;
   }
+  p,
+  ul,
+  ol,
+  dl {
+    margin-bottom: 18px;
+  }
   .window {
     margin: 0;
     border: 0;
@@ -1232,7 +1277,7 @@ button.icon-button:active {
     line-height: 26px;
   }
   .topic {
-    padding-top: 32px;
+    padding-top: 40px;
   }
   .credits {
     columns: 1;
