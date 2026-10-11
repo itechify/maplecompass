@@ -149,10 +149,13 @@ fn bullet_blue(p: [u8; 3]) -> bool {
     b >= 200 && g >= 140 && r <= 140 && g - r >= 70
 }
 
-/// The tooltip's slate fill, with whatever is behind it showing through: dark and blue.
+/// The tooltip's slate fill, with whatever is behind it showing through: dark, and no
+/// warmer than neutral. How blue it looks depends on what is behind it: over the Item
+/// Inventory window's edge or a purple icon it is barely bluer than red (Stirge Wing's and
+/// Horny Mushroom Cap's samples), over the game's sky clearly so.
 fn fill(p: [u8; 3]) -> bool {
     let [r, _, b] = p.map(i32::from);
-    luma(p) < 130.0 && b - r >= 25
+    luma(p) < 130.0 && b >= r
 }
 
 fn luma(p: [u8; 3]) -> f32 {
