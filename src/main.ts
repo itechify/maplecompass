@@ -5,6 +5,7 @@ import { dayText } from "./dates";
 import { byId, cardTop, span } from "./dom";
 import { LOADING_MAP_LIST, recognitionProblem, type Recognition } from "./recognition";
 import type { ExpTracking } from "./exp-tracking";
+import { levels } from "./figures";
 import {
   initMapPreview,
   layOutMapPreview,
@@ -57,8 +58,6 @@ type Mob = {
   spawnSharePercent: number;
 };
 
-/** Mirror of `compass_core::LevelRange`. */
-type LevelRange = { lowest: number; highest: number };
 
 /** Mirror of `compass_core::MapData`. */
 type MapData = {
@@ -262,8 +261,6 @@ function hotkeyCauses(panel: PanelState): string {
 
 const number = (n: number) => n.toLocaleString("en-US");
 
-const levels = ({ lowest, highest }: LevelRange) =>
-  lowest === highest ? `Lv ${lowest}` : `Lv ${lowest}–${highest}`;
 
 function cell(text: string): HTMLTableCellElement {
   const td = document.createElement("td");

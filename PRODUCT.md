@@ -44,7 +44,7 @@ The companion follows the player's current Map by recognising the displayed Mini
 
 - Product name: MapleCompass. The app icon is the pixel-art gold compass in [assets/icon.png](assets/icon.png), with packaged variants in `src-tauri/icons`.
 - The windows are set in NEXON's Maplestory typeface, bundled in `assets/fonts` with its provenance in `NOTICE.md`. Help & Setup's About & Credits and `THIRD-PARTY-NOTICES.md` credit it.
-- Each screen credits what it shows. The panel's footer (as the tooltip of its info icon) and the Personal Bests page credit `Data: OSMS Data Explorer (osmsdataexplorer.com) · Pages: NiaMeowDB (meowdb.com)`; the search view, which opens no pages, credits `Data: OSMS Data Explorer (osmsdataexplorer.com)`; setup's test read says `Map names from OSMS Data Explorer`.
+- Each screen credits what it shows. The panel's footer (as the tooltip of its info icon) and the Personal Bests window credit `Data: OSMS Data Explorer (osmsdataexplorer.com) · Pages: NiaMeowDB (meowdb.com)`; the search view, which opens no pages, credits `Data: OSMS Data Explorer (osmsdataexplorer.com)`; setup's test read says `Map names from OSMS Data Explorer`.
 - Preserve the explicit first-run account-risk disclosure. The product is a third-party companion, not made or approved by Nexon.
 - The windows lean into MapleStory: they borrow the game's own window language (the minimap and the Quest Helper), so they read as if they shipped with the game (chosen by the user in the October 2026 critique; see DESIGN.md).
 

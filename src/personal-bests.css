@@ -1,0 +1,378 @@
+/* The Personal Bests window: the panel's window, opened wide over the game to compare
+   maps. The shell lays it out 920 CSS px wide (WIDTH in src-tauri/src/bests_window.rs),
+   narrower over a narrower game, and as tall as the page reports it up to 600 px; past
+   that the table scrolls under its header while the rest keeps its place. Like the
+   panel it stands on the Quest Helper's see-through glass, the table set into it on the
+   near-opaque lavender so the densest reading holds over any scene. It has no corner
+   grips, so no room is kept beside the last line. */
+.view {
+  padding-bottom: 10px;
+  overflow: hidden;
+}
+
+.panel .count {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-2);
+}
+
+/* The maps, set into the body as the Grind Tracker's figures are. */
+.box {
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--body);
+  text-shadow: none;
+}
+
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+th,
+td {
+  padding: 5px 0 5px 14px;
+  text-align: right;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+/* The map's column keeps a gutter at its left for You Yellow's dot, so every name starts
+   on one edge; a long name wraps rather than widening the table. */
+th:first-child,
+td:first-child {
+  padding-left: 24px;
+  text-align: left;
+  white-space: normal;
+}
+
+td:first-child {
+  position: relative;
+}
+
+th:last-child,
+td:last-child {
+  padding-right: 10px;
+}
+
+.text {
+  text-align: left;
+}
+
+/* The header stays in view down a long list, opaque so rows pass under it. */
+thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  background: var(--tag-bg);
+  border-bottom: 1px solid var(--inset-edge);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+thead th:first-child {
+  border-top-left-radius: 3px;
+}
+
+thead th:last-child {
+  border-top-right-radius: 3px;
+}
+
+/* Each header sorts by its column: once the way that column reads best (highest EXP/h,
+   lowest levels, newest first), again the other way. The sorted one is bold Ink with a
+   triangle for the way. Every header keeps the room of its bold label and its triangle,
+   so sorting never moves a figure. */
+.sort {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 2px;
+}
+
+/* The triangle sits on the figures' side: before a right-aligned header. */
+th:not(.text) .sort {
+  flex-direction: row-reverse;
+}
+
+.sort .label {
+  display: inline-flex;
+  flex-direction: column;
+}
+
+.sort .label::after {
+  content: attr(data-label);
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  font-weight: 700;
+}
+
+.sort::after {
+  content: "";
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid transparent;
+}
+
+.sort:hover {
+  color: var(--ink);
+}
+
+.sort:focus-visible,
+.row-map:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 2px;
+}
+
+th[aria-sort] .sort {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+th[aria-sort="descending"] .sort::after {
+  border-top-color: currentColor;
+}
+
+th[aria-sort="ascending"] .sort::after {
+  border-top: 0;
+  border-bottom: 5px solid currentColor;
+}
+
+tbody tr + tr td {
+  border-top: 1px solid var(--rule);
+}
+
+/* A reading aid across the row; only the name opens anything. */
+tbody tr:hover td {
+  background: rgba(47, 99, 200, 0.08);
+}
+
+/* A map's name opens its MeowDB page: ink at rest, Portal Blue and underlined under the
+   pointer, Frame Navy while pressed, as a mob's name in the panel. */
+.row-map {
+  all: unset;
+  cursor: pointer;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  border-radius: 2px;
+}
+
+.row-map:hover {
+  color: var(--portal);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.row-map:active {
+  color: var(--frame);
+}
+
+/* The map the player is on: You Yellow's dot in the gutter, as "You're here" draws it in
+   the panel. Only the dot: the window's emphasis is the best, not where they stand. */
+.here-dot {
+  position: absolute;
+  top: 9px;
+  left: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--you-light) 0 18%, var(--you) 45%);
+  box-shadow: 0 0 0 1px var(--you-edge);
+}
+
+.row-street {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-2);
+}
+
+/* Shown in the street line once the Region column folds away. */
+.row-street .region {
+  display: none;
+}
+
+.row-street.unknown {
+  color: var(--ink-3);
+}
+
+.exp {
+  font-weight: 700;
+}
+
+/* The best of all maps: the Grind Tracker's new-best star, You Yellow lit up and to the
+   left and ringed in its dark gold, before the figure. */
+.best-star {
+  width: 11px;
+  height: 11px;
+  margin-right: 5px;
+  vertical-align: -1px;
+  fill: var(--you);
+  stroke: var(--you-edge);
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+}
+
+.best-star .lit {
+  fill: var(--you-light);
+  stroke: none;
+}
+
+/* The share over what it is of: "21%" over "of 297,499". */
+.ceiling {
+  display: block;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-2);
+}
+
+/* A figure that isn't known: a dash in Ink Slate, the reason for screen readers and under
+   the pointer. */
+.none {
+  color: var(--ink-3);
+}
+
+.notes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+.notes li + li {
+  margin-top: 4px;
+}
+
+.panel .credit-line {
+  padding-top: 6px;
+  border-top: 1px solid var(--rule);
+  white-space: normal;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-3);
+}
+
+/* Short labels where the long ones don't fit. */
+.sort .short {
+  display: none;
+}
+
+/* Narrower, over a smaller game: Region joins the street line, the date may wrap, and
+   the share's header says less. */
+@container (max-width: 700px) {
+  [data-column="region"],
+  .region-cell {
+    display: none;
+  }
+
+  .row-street .region {
+    display: inline;
+  }
+
+  .date {
+    white-space: normal;
+  }
+
+  .sort .long {
+    display: none;
+  }
+
+  .sort .short {
+    display: inline-flex;
+  }
+}
+
+/* Narrowest: each map becomes a card, its name over its four figures side by side, each
+   under its label, as the panel's mob rows do; the headers stay as a row of sort
+   buttons. */
+@container (max-width: 540px) {
+  table,
+  thead,
+  tbody,
+  tr {
+    display: block;
+  }
+
+  thead tr {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 14px;
+    padding: 4px 10px;
+    border-radius: 3px 3px 0 0;
+    background: var(--tag-bg);
+    border-bottom: 1px solid var(--inset-edge);
+  }
+
+  thead th,
+  thead th:first-child,
+  thead th:last-child {
+    position: static;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+
+  th:not(.text) .sort {
+    flex-direction: row;
+  }
+
+  tbody tr {
+    display: grid;
+    grid-template-columns: repeat(4, auto);
+    justify-content: space-between;
+    gap: 4px 12px;
+    padding: 7px 10px 8px 24px;
+    position: relative;
+  }
+
+  tbody tr + tr {
+    border-top: 1px solid var(--rule);
+  }
+
+  tbody td,
+  tbody td:first-child,
+  tbody td:last-child {
+    display: block;
+    padding: 0;
+    border: 0;
+    text-align: left;
+    background: none;
+  }
+
+  tbody tr:hover {
+    background: rgba(47, 99, 200, 0.08);
+  }
+
+  tbody tr:hover td,
+  tbody tr + tr td {
+    border-top: 0;
+    background: none;
+  }
+
+  tbody td:first-child {
+    grid-column: 1 / -1;
+    position: static;
+  }
+
+  tbody td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 400;
+    color: var(--ink-2);
+  }
+
+  .here-dot {
+    top: 11px;
+  }
+}

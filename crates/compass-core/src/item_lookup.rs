@@ -76,6 +76,7 @@ pub enum OurWindow {
     GrindTracker,
     /// The last Item Lookup's alert, still showing.
     Alert,
+    PersonalBests,
 }
 
 /// The latest Item Lookup's alert.

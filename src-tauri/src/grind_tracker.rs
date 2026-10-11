@@ -43,6 +43,8 @@ struct TrackerView<'a> {
     tracking: &'a ExpTracking,
     /// Some map has a Personal Best: the window bar's Personal Bests button shows.
     personal_bests: bool,
+    /// The Personal Bests window is open: that button shows as on.
+    personal_bests_open: bool,
 }
 
 /// The player's drag of the window, from the mouse press until Windows' move loop ends.
@@ -74,7 +76,7 @@ impl GrindTrackerWindow {
         if let Err(e) = sizemove::watch(&window, commands.clone(), Command::GrindTrackerSizeMove, None) {
             eprintln!("{e}");
         }
-        let shows_on_top = keep_on_top(&window, "on-top-grind-tracker", commands);
+        let shows_on_top = keep_on_top(&window, "on-top-grind-tracker", commands, &[]);
         // Clicks pass through until it shows.
         let _ = window.set_ignore_cursor_events(true);
         Self {
@@ -137,6 +139,7 @@ impl GrindTrackerWindow {
             shown: placement.is_some(),
             tracking: &state.exp_tracking,
             personal_bests: state.grind_tracker.personal_bests,
+            personal_bests_open: state.personal_bests.open,
         };
         self.view.send(&self.app, &view, &self.app.state::<GrindTrackerView>().0);
         self.shows_on_top.store(placement.is_some(), Ordering::Relaxed);

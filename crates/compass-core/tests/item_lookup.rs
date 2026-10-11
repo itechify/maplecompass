@@ -16,9 +16,9 @@ mod common;
 
 use common::FakeSource;
 use compass_core::{
-    Action, Compass, ExpBarRegion, Foreground, GameWindow, ItemChoice, ItemHit, ItemLookup, ItemTooltip,
-    ItemTooltipReading, OurWindow, PanelSizes, PanelState, Rect, Request, ScreenRect, Settings, Size, SourceError,
-    TitleRegion, meowdb,
+    Action, BESTS_VERSION, Compass, ExpBarRegion, Foreground, GameWindow, ItemChoice, ItemHit, ItemLookup, ItemTooltip,
+    ItemTooltipReading, MapBests, OurWindow, PanelControl, PanelSizes, PanelState, Rect, Request, SavedBests,
+    ScreenRect, Settings, Size, SourceError, TitleRegion, VisitBest, meowdb,
 };
 
 const GAME: ScreenRect = ScreenRect { x: 812, y: 110, width: 1920, height: 1200 };
@@ -531,6 +531,23 @@ fn the_grind_tracker_over_the_name_says_so() {
     let state = compass.on_item_tooltip_reading(Some(ItemTooltipReading { tooltip, at_ms: 1_000 }));
 
     assert_eq!(line(state), Some(ItemLookup::Covered { by: OurWindow::GrindTracker }));
+}
+
+#[test]
+fn the_personal_bests_window_over_the_name_says_so() {
+    let mut compass = started_with(FakeSource::osms_offline(), settings());
+    let visits = vec![VisitBest { exp_per_hour: 7200, set_at_unix_ms: None }];
+    compass.restore_bests(SavedBests { version: BESTS_VERSION, maps: vec![MapBests { id: "010003070".into(), visits }] });
+    compass.set_personal_bests_size(Size { width: 920, height: 400 });
+    compass.press(PanelControl::TogglePersonalBests);
+    let window = compass.panel_state().personal_bests.placement.expect("the Personal Bests window shows");
+    compass.on_hotkey("ctrl+shift+i");
+
+    let under_window = ScreenRect { x: window.x + 10, y: window.y + 10, width: 170, height: 19 };
+    let tooltip = ItemTooltip::Found { area: under_window, name: Some("Orihalcon Ore".into()) };
+    let state = compass.on_item_tooltip_reading(Some(ItemTooltipReading { tooltip, at_ms: 1_000 }));
+
+    assert_eq!(line(state), Some(ItemLookup::Covered { by: OurWindow::PersonalBests }));
 }
 
 #[test]
