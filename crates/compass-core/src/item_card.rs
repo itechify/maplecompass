@@ -1,10 +1,10 @@
 //! The Item Card (ADR 0010): the player hovers an item in the game and presses the hotkey
 //! (Ctrl+Shift+I by default). The shell captures the game's client area and the pointer,
 //! the Item Tooltip reader reads the item's name, and the card shows at the pointer what
-//! the game's tooltip doesn't: what a shop pays for the item, and the market price the
-//! player keeps for it, with links to its MeowDB page and to MesoWatch's market prices. The
-//! name is matched against OSMS's items on the player's machine: nothing is asked at the
-//! press.
+//! the game's tooltip doesn't: what a shop pays for the item, and the market prices the
+//! player keeps for it on their Market Lines (ADR 0011), with links to its MeowDB page and
+//! to MesoWatch's market prices. The name is matched against OSMS's items on the player's
+//! machine: nothing is asked at the press.
 //!
 //! One card shows at a time, until the player closes it or presses the hotkey again. What
 //! keeps a card from showing goes in the Item Lookup alert.
@@ -12,7 +12,7 @@
 use crate::grind_tracker::ClientOffset;
 use crate::item_lookup::{ItemLookup, OurWindow, item_name, overlaps};
 use crate::item_tooltip::{ItemTooltip, ItemTooltipReading};
-use crate::market_prices::MarketPrice;
+use crate::market_prices::{MarketPrice, MarketPrices};
 use crate::osms_items::{ItemFacts, ItemSet};
 use crate::panel::{GameWindow, ScreenPoint, ScreenRect, Size, in_view};
 use serde::Serialize;
@@ -33,20 +33,55 @@ pub enum ShopPrice {
 }
 
 /// The Item Card's credit (ADR 0010): its data is OSMS Data Explorer's, its name opens
-/// NiaMeowDB's page and its market line MesoWatch.
+/// NiaMeowDB's page and the button on its market heading MesoWatch.
 pub const ITEM_CARD_CREDIT: &str = "Data: OSMS Data Explorer · Pages: NiaMeowDB, MesoWatch";
 
-/// MesoWatch, the market prices players see in Free Market shops: the market line opens it
-/// in the player's browser. It has no page per item, and its terms forbid collecting its
+/// MesoWatch, the market prices players see in Free Market shops: the button on the card's
+/// market heading opens it in the player's browser. It has no page per item, and its terms forbid collecting its
 /// prices, so the player looks the item up there themselves.
 pub const MESOWATCH_URL: &str = "https://meso.watch/";
 
-/// The card's market price field, open for the player to type in.
+/// One of the card's Market Lines, with the price the player keeps on it for the item.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MarketEdit {
-    /// What the player last entered that isn't a price, to say so; `None` until then.
-    pub not_a_price: Option<String>,
+pub struct MarketLine {
+    /// What tells the line from the others, whatever it is named.
+    pub id: String,
+    pub name: String,
+    /// The price the player keeps on it for the item; `None` until they set one.
+    pub price: Option<MarketPrice>,
+}
+
+/// What the card's market section has open: a field for the player to type in, or the
+/// question before a line goes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "field", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum MarketEdit {
+    /// A line's price field.
+    Price {
+        line: String,
+        /// What the player last entered that isn't a price, to say so; `None` until then.
+        not_a_price: Option<String>,
+    },
+    /// A line's name field, to rename it (or remove it, from there); `line` is `None` for
+    /// a line the player is adding.
+    Name {
+        line: Option<String>,
+        /// Why what the player last entered can't be the line's name; `None` until then.
+        problem: Option<NameProblem>,
+    },
+    /// Whether to remove a line: it goes with its prices on `prices` items.
+    Remove { line: String, prices: usize },
+}
+
+/// Why what the player entered can't be a Market Line's name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum NameProblem {
+    /// Nothing but spaces.
+    Empty,
+    /// Another line has the name, whatever its case.
+    Taken { name: String },
 }
 
 /// One item's Item Card.
@@ -57,9 +92,9 @@ pub struct ItemCard {
     pub id: String,
     pub name: String,
     pub shop: ShopPrice,
-    /// The market price the player keeps for it; `None` until they set one.
-    pub market: Option<MarketPrice>,
-    /// The market price's field, while it is open for the player to type in.
+    /// Every Market Line, in the player's order, each with the item's price on it.
+    pub market: Vec<MarketLine>,
+    /// What the market section has open, while it has something.
     pub market_edit: Option<MarketEdit>,
     /// When OSMS's item files were saved (ms since the Unix epoch), if that was over 7 days
     /// ago: the card shows a Saved Copy, as OSMS couldn't be reached since. `None` for
@@ -130,8 +165,17 @@ struct Shown {
     /// it is at the pointer.
     moved: Option<ClientOffset>,
     showing: Showing,
-    /// Its market price's field, while open.
-    market_edit: Option<MarketEdit>,
+    /// What its market section has open.
+    editing: Option<Editing>,
+}
+
+/// What the card's market section has open, as [`MarketEdit`] says it without what the
+/// prices tell (how many a line has).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Editing {
+    Price { line: String, not_a_price: Option<String> },
+    Name { line: Option<String>, problem: Option<NameProblem> },
+    Remove { line: String },
 }
 
 /// What the card showing shows.
@@ -183,7 +227,7 @@ impl ItemCards {
             _ => Showing::Choose(groups),
         };
         self.cards += 1;
-        self.shown = Some(Shown { card: self.cards, pointer: reading.pointer, moved: None, showing, market_edit: None });
+        self.shown = Some(Shown { card: self.cards, pointer: reading.pointer, moved: None, showing, editing: None });
         Pressed::Shown
     }
 
@@ -213,35 +257,32 @@ impl ItemCards {
         self.shown = None;
     }
 
-    /// The player clicked the card's market price: its field opens, on a card (not a
+    /// The market section opens `editing`, in place of what it had open, on a card (not a
     /// choice).
-    pub fn edit_market(&mut self) {
+    pub fn edit(&mut self, editing: Editing) {
         if let Some(shown @ Shown { showing: Showing::Card(_), .. }) = &mut self.shown {
-            shown.market_edit = Some(MarketEdit { not_a_price: None });
+            shown.editing = Some(editing);
         }
     }
 
-    /// The market price's field closes, as it was.
+    /// What the market section has open, if anything.
+    pub fn editing(&self) -> Option<&Editing> {
+        self.shown.as_ref()?.editing.as_ref()
+    }
+
+    /// The market section closes what it had open, the prices as they were.
     pub fn close_market(&mut self) {
         if let Some(shown) = &mut self.shown {
-            shown.market_edit = None;
+            shown.editing = None;
         }
     }
 
-    /// The item whose market price's field is open (8 digits): the first of the items that
-    /// look alike, under which they keep one price.
-    pub fn editing_market(&self) -> Option<String> {
+    /// The item whose card shows (8 digits), not a choice: the first of the items that
+    /// look alike, under which they keep one price on each line.
+    pub fn card_item(&self) -> Option<String> {
         match &self.shown {
-            Some(Shown { showing: Showing::Card(ids), market_edit: Some(_), .. }) => ids.first().map(|&id| item_id(id)),
+            Some(Shown { showing: Showing::Card(ids), .. }) => ids.first().map(|&id| item_id(id)),
             _ => None,
-        }
-    }
-
-    /// What the player entered in the market price's field, `typed`, isn't a price: the
-    /// field stays open and says so.
-    pub fn not_a_price(&mut self, typed: &str) {
-        if let Some(Shown { market_edit: Some(edit), .. }) = &mut self.shown {
-            edit.not_a_price = Some(typed.to_string());
         }
     }
 
@@ -277,14 +318,14 @@ impl ItemCards {
     }
 
     /// The card showing, as `items` has its items (a Saved Copy from `saved_copy_from`, if
-    /// they are one), with the market price the player keeps for its item (by `market`,
-    /// from its ID) and the pictures in so far (by `picture`, from a path below
+    /// they are one), with the market prices the player keeps for its item on each line
+    /// of `market`, and the pictures in so far (by `picture`, from a path below
     /// [`crate::osms::PICTURES_URL`]).
     pub fn view(
         &self,
         items: Option<&ItemSet>,
         saved_copy_from: Option<u64>,
-        market: impl Fn(&str) -> Option<MarketPrice>,
+        market: &MarketPrices,
         picture: impl Fn(&str) -> Option<String>,
     ) -> Option<ShownItemCard> {
         let shown = self.shown.as_ref()?;
@@ -292,9 +333,14 @@ impl ItemCards {
         let view = match &shown.showing {
             Showing::Card(ids) => {
                 let card = card(ids, items)?;
+                let lines = market
+                    .lines()
+                    .iter()
+                    .map(|line| MarketLine { id: line.id.clone(), name: line.name.clone(), price: line.prices.get(&card.id).copied() })
+                    .collect();
                 ItemCardView::Card(ItemCard {
-                    market: market(&card.id),
-                    market_edit: shown.market_edit.clone(),
+                    market: lines,
+                    market_edit: shown.editing.as_ref().and_then(|editing| market_edit(editing, market)),
                     saved_copy_from_unix_ms: saved_copy_from,
                     ..card
                 })
@@ -318,6 +364,21 @@ impl ItemCards {
     }
 }
 
+/// What the market section has open, as the card shows it; nothing for a line that has
+/// gone since it opened.
+fn market_edit(editing: &Editing, market: &MarketPrices) -> Option<MarketEdit> {
+    let known = |line: &str| market.line(line).is_some();
+    Some(match editing.clone() {
+        Editing::Price { line, not_a_price } if known(&line) => MarketEdit::Price { line, not_a_price },
+        Editing::Name { line, problem } if line.as_deref().is_none_or(known) => MarketEdit::Name { line, problem },
+        Editing::Remove { line } => {
+            let prices = market.line(&line)?.prices.len();
+            MarketEdit::Remove { line, prices }
+        }
+        _ => return None,
+    })
+}
+
 /// The card of the items `ids`, which look alike: the first's.
 fn card(ids: &[u32], items: &ItemSet) -> Option<ItemCard> {
     let first = items.item(*ids.first()?)?;
@@ -325,7 +386,7 @@ fn card(ids: &[u32], items: &ItemSet) -> Option<ItemCard> {
         id: item_id(first.id),
         name: first.name.clone(),
         shop: first.shop,
-        market: None,
+        market: Vec::new(),
         market_edit: None,
         saved_copy_from_unix_ms: None,
         credit: ITEM_CARD_CREDIT,

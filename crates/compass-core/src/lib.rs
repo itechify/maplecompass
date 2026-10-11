@@ -47,9 +47,10 @@ pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use grind_tracker::{ClientOffset, GrindTrackerWindow};
 pub use hotkey_settings::{KeyPress, RebindProblem, SettingsNotice, SettingsView};
 pub use item_card::{
-    ITEM_CARD_CREDIT, ItemCard, ItemCardChoice, ItemCardView, MESOWATCH_URL, MarketEdit, ShopPrice, ShownItemCard,
+    ITEM_CARD_CREDIT, ItemCard, ItemCardChoice, ItemCardView, MESOWATCH_URL, MarketEdit, MarketLine, NameProblem, ShopPrice,
+    ShownItemCard,
 };
-pub use market_prices::{MARKET_PRICES_VERSION, MarketPrice, SavedMarketPrices};
+pub use market_prices::{MARKET_PRICES_VERSION, MarketPrice, SavedMarketLine, SavedMarketPrices};
 pub use item_lookup::{ItemChoice, ItemHit, ItemLookup, ItemLookupLine, OurWindow};
 pub use item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReader, ItemTooltipReading};
 pub use map_data::{
@@ -80,7 +81,7 @@ use bests_window::BestsWindow;
 use bug_report::{Event, MapFacts, Outcome, Press, RecordedSource, Recorder, Region};
 use grind_tracker::GrindTracker;
 use hotkey_settings::HotkeySettings;
-use item_card::{ItemCards, Pressed};
+use item_card::{Editing, ItemCards, Pressed};
 use item_data::ItemFilesLoader;
 use market_prices::MarketPrices;
 use item_lookup::ItemLookups;
@@ -826,8 +827,24 @@ impl Compass {
                     self.item_cards.moved_to(x, y, game);
                 }
             }
-            Action::EditCardMarket => self.item_cards.edit_market(),
+            Action::EditCardMarket => {
+                if let Some(first) = self.market_prices.lines().first() {
+                    self.item_cards.edit(Editing::Price { line: first.id.clone(), not_a_price: None });
+                }
+            }
             Action::CancelCardMarket => self.item_cards.close_market(),
+            Action::AddCardMarketLine => self.item_cards.edit(Editing::Name { line: None, problem: None }),
+            Action::AskRemoveCardMarketLine => {
+                if let Some(Editing::Name { line: Some(line), .. }) = self.item_cards.editing() {
+                    self.item_cards.edit(Editing::Remove { line: line.clone() });
+                }
+            }
+            Action::RemoveCardMarketLine => {
+                if let Some(Editing::Remove { line }) = self.item_cards.editing() {
+                    self.market_prices.remove(line);
+                    self.item_cards.close_market();
+                }
+            }
             Action::PersonalBestsMoved { x, y } => {
                 if let Some(game) = &self.panel.game {
                     self.bests_window.moved_to(x, y, game, &self.panel.avoid);
@@ -1137,27 +1154,79 @@ impl Compass {
         self.sync_panel()
     }
 
-    /// The player clicked the Item Card's market line: open MesoWatch, where they look the
-    /// item up (it has no page per item). `None` while no card shows.
+    /// The player clicked the MesoWatch button on the Item Card's market heading: open
+    /// MesoWatch, where they look the item up (it has no page per item). `None` while no
+    /// card shows.
     pub fn open_card_mesowatch(&self) -> Option<Request> {
         let Some(ShownItemCard { view: ItemCardView::Card(_), .. }) = &self.state.item_card else { return None };
         Some(Request::OpenInBrowser { url: MESOWATCH_URL.to_string() })
     }
 
-    /// The player pressed Enter in the Item Card's market price field, holding `typed`:
-    /// the price they keep for the item, written as players write prices ("450,000", "450k",
-    /// "1.2m"), dated by the wall clock. Nothing typed forgets the price. Either way the
-    /// field closes; what isn't a price keeps it open, saying so.
+    /// The player clicked the price on the Item Card's Market Line `line` (its ID), or its
+    /// "Not set": its price field opens, in place of what the market section had open.
+    pub fn edit_card_market_price(&mut self, line: &str) -> &PanelState {
+        self.record(Event::EditCardMarketPrice { line: line.to_string() });
+        if self.market_prices.line(line).is_some() {
+            self.item_cards.edit(Editing::Price { line: line.to_string(), not_a_price: None });
+        }
+        self.sync_panel()
+    }
+
+    /// The player pressed Enter in the Item Card's open price field, holding `typed`: the
+    /// price they keep for the item on that line, written as players write prices
+    /// ("450,000", "450k", "1.2m"), dated by the wall clock. Nothing typed forgets the
+    /// price. Either way the field closes; what isn't a price keeps it open, saying so.
     pub fn enter_card_market(&mut self, typed: &str) -> &PanelState {
         self.record(Event::EnterCardMarket { typed: typed.to_string() });
-        if let Some(id) = self.item_cards.editing_market() {
+        if let (Some(Editing::Price { line, .. }), Some(id)) = (self.item_cards.editing().cloned(), self.item_cards.card_item()) {
             match market_prices::parse(typed) {
                 Ok(mesos) => {
                     let price = mesos.map(|mesos| MarketPrice { mesos, set_at_unix_ms: self.wall_clock });
-                    self.market_prices.set(&id, price);
+                    self.market_prices.set(&line, &id, price);
                     self.item_cards.close_market();
                 }
-                Err(()) => self.item_cards.not_a_price(typed),
+                Err(()) => self.item_cards.edit(Editing::Price { line, not_a_price: Some(typed.to_string()) }),
+            }
+        }
+        self.sync_panel()
+    }
+
+    /// The player clicked the name of the Item Card's Market Line `line` (its ID): its name
+    /// field opens, to rename the line or remove it, in place of what the market section
+    /// had open.
+    pub fn edit_card_market_line(&mut self, line: &str) -> &PanelState {
+        self.record(Event::EditCardMarketLine { line: line.to_string() });
+        if self.market_prices.line(line).is_some() {
+            self.item_cards.edit(Editing::Name { line: Some(line.to_string()), problem: None });
+        }
+        self.sync_panel()
+    }
+
+    /// The player pressed Enter in the Item Card's open line name field, holding `typed`:
+    /// the line is renamed, or the line being added is added at the end, for every item.
+    /// A name must have more than spaces, and no other line may have it in any case: the
+    /// field stays open saying so.
+    pub fn enter_card_market_line(&mut self, typed: &str) -> &PanelState {
+        self.record(Event::EnterCardMarketLine { typed: typed.to_string() });
+        if let Some(Editing::Name { line, .. }) = self.item_cards.editing().cloned() {
+            let name = typed.trim();
+            let problem = if name.is_empty() {
+                Some(NameProblem::Empty)
+            } else if self.market_prices.name_taken(name, line.as_deref()) {
+                Some(NameProblem::Taken { name: name.to_string() })
+            } else {
+                None
+            };
+            match (problem, line) {
+                (Some(problem), line) => self.item_cards.edit(Editing::Name { line, problem: Some(problem) }),
+                (None, Some(line)) => {
+                    self.market_prices.rename(&line, name);
+                    self.item_cards.close_market();
+                }
+                (None, None) => {
+                    self.market_prices.add(name);
+                    self.item_cards.close_market();
+                }
             }
         }
         self.sync_panel()
@@ -1517,11 +1586,11 @@ impl Compass {
     /// cover.
     fn sync_item_card(&mut self) {
         let pictures = &self.pictures;
-        let (prices, saved_copy_from) = (&self.market_prices, self.item_files.saved_copy_from(self.wall_clock));
+        let saved_copy_from = self.item_files.saved_copy_from(self.wall_clock);
         self.state.item_card = self.item_cards.view(
             self.item_files.items().ok(),
             saved_copy_from,
-            |id| prices.get(id),
+            &self.market_prices,
             |path| pictures.url(path).map(String::from),
         );
         let shows = self.state.item_card.is_some() && self.panel.layer() != Layer::Hidden && !self.card_capturing;

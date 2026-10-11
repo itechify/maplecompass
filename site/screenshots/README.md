@@ -26,3 +26,5 @@ The pictures on the MapleCompass site, taken by hand in the game. The site's bui
 ## Retake
 
 When a change alters something a shot shows, the PR that makes it lists the shot here, with what changed. At release, the smoke test retakes every shot listed (`docs/releasing.md`) and empties the list.
+
+- `item-card.png`: the card's market section is now Market Lines: a "Market" heading with its + and MesoWatch buttons, then a row per line. Retake it with two or three lines, some with a price (for example "Your price" and "Lowest ask"), and update its alt text to say so.

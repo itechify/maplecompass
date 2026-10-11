@@ -17,10 +17,12 @@ Every source passes the test OSMS passed in ADR 0008: its terms don't forbid aut
 ## What it shows
 
 - **Shop price:** what a shop pays for one. Otherwise that a shop won't buy it (OSMS's `notSale`, which carries a placeholder price of 1), that it is a Cash item, or that no shop price is known: OSMS gives none for scrolls, starter gear and arrows, and for throwing stars and bullets it gives what recharging them costs, which a sale in the game hasn't yet confirmed is what a shop pays.
-- **Market:** the price the player keeps for the item, or "Not set"; the day they set it in its tooltip. A click on it, or on its pencil, opens its field; the MesoWatch button beside it opens MesoWatch either way.
+- **Market:** the price the player keeps for the item, or "Not set"; the day they set it in its tooltip. A click on it, or on its pencil, opens its field; the MesoWatch button beside it opens MesoWatch either way. (ADR 0011 makes this a Market Line, one of the player's, and moves the MesoWatch button to the market heading.)
 - Not "Untradeable", which the game's tooltip says. Not the quests and recipes that give or need the item, which the card showed at first: MeowDB's page, a click away, has them.
 
 ## The market price the player keeps
+
+_Extended by ADR 0011: the player keeps prices on Market Lines they name, one price per item on each. What follows holds for each line's price._
 
 The player types it as players write prices: "450,000", "450k", "1.2m", with or without "mesos". Enter keeps it, dated by the wall clock; leaving the field keeps what is typed too; Esc leaves the price as it was; an empty field forgets it. What isn't a price keeps the field open, saying so. The core reads what was typed, and keeps the prices by the game's item ID: items that look alike keep one, under the first. They are saved in `market-prices.json` beside the settings, as the Personal Bests are, and a file that doesn't read is set aside rather than written over.
 

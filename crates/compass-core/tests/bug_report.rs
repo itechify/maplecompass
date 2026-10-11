@@ -465,9 +465,10 @@ fn item_card(shell: &mut Shell, name: &str) {
     shell.compass.on_item_tooltip_reading(Some(ItemTooltipReading { tooltip, pointer, at_ms: shell.at }));
 }
 
-/// A run with Item Cards: the market prices kept restored, a card and its market price
-/// typed (first not a price, then one), a choice and its pick, the card's MeowDB page and
-/// its ×.
+/// A run with Item Cards: the market prices kept restored (as 0.8.0 saved them), a card and
+/// its market price typed (first not a price, then one), Market Lines added (first with a
+/// name taken), renamed and removed, a choice and its pick, the card's MeowDB page and its
+/// ×.
 fn run_with_item_cards() -> Shell {
     let mut shell = Shell::new(FakeSource::osms().with_items(items()));
     let kept = r#"{"version":1,"items":{"01041078":{"mesos":30000,"setAtUnixMs":1791700000000}}}"#;
@@ -475,9 +476,22 @@ fn run_with_item_cards() -> Shell {
     shell.compass.set_item_card_size(Size { width: 280, height: 160 });
     shell.play(10 * S, CONSTRUCTION_SITE, grind);
     item_card(&mut shell, "Bronze Ore");
-    shell.compass.act(Action::EditCardMarket);
+    shell.compass.edit_card_market_price("1");
     shell.compass.enter_card_market("lots");
     shell.compass.enter_card_market("450k");
+    shell.compass.act(Action::AddCardMarketLine);
+    shell.compass.enter_card_market_line("your price");
+    shell.compass.enter_card_market_line("Lowest ask");
+    shell.compass.edit_card_market_price("2");
+    shell.compass.enter_card_market("400k");
+    shell.compass.edit_card_market_line("2");
+    shell.compass.enter_card_market_line("Cheapest");
+    shell.compass.edit_card_market_line("1");
+    shell.compass.act(Action::AskRemoveCardMarketLine);
+    shell.compass.act(Action::CancelCardMarket);
+    shell.compass.edit_card_market_line("2");
+    shell.compass.act(Action::AskRemoveCardMarketLine);
+    shell.compass.act(Action::RemoveCardMarketLine);
     shell.play(20 * S, CONSTRUCTION_SITE, grind);
     item_card(&mut shell, "Blue Moon");
     shell.compass.pick_card_item("01032011");

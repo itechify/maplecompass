@@ -137,8 +137,14 @@ pub enum Event {
     /// The player clicked the Item Card's name at `at_ms`.
     OpenCardMeowdbPage { at_ms: u64 },
     CloseItemCard {},
-    /// The player pressed Enter in the Item Card's market price field, holding `typed`.
+    /// The player clicked the price on the Item Card's Market Line `line`.
+    EditCardMarketPrice { line: String },
+    /// The player pressed Enter in the Item Card's price field, holding `typed`.
     EnterCardMarket { typed: String },
+    /// The player clicked the name of the Item Card's Market Line `line`.
+    EditCardMarketLine { line: String },
+    /// The player pressed Enter in the Item Card's line name field, holding `typed`.
+    EnterCardMarketLine { typed: String },
     Foreground { foreground: Foreground },
     HotkeysUnavailable { taken: Vec<String>, invalid: Vec<String> },
     Restore { settings: Box<Settings> },
@@ -1165,8 +1171,17 @@ pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
             Event::CloseItemCard {} => {
                 compass.close_item_card();
             }
+            Event::EditCardMarketPrice { line } => {
+                compass.edit_card_market_price(&line);
+            }
             Event::EnterCardMarket { typed } => {
                 compass.enter_card_market(&typed);
+            }
+            Event::EditCardMarketLine { line } => {
+                compass.edit_card_market_line(&line);
+            }
+            Event::EnterCardMarketLine { typed } => {
+                compass.enter_card_market_line(&typed);
             }
             Event::RestoreMarketPrices { prices } => {
                 compass.restore_market_prices(prices);
@@ -1243,7 +1258,10 @@ impl Recording {
                     | Event::PickCardItem { .. }
                     | Event::OpenCardMeowdbPage { .. }
                     | Event::CloseItemCard {}
+                    | Event::EditCardMarketPrice { .. }
                     | Event::EnterCardMarket { .. }
+                    | Event::EditCardMarketLine { .. }
+                    | Event::EnterCardMarketLine { .. }
                     | Event::Restore { .. }
                     | Event::RestoreBests { .. }
                     | Event::RemoveVisit { .. }
@@ -1378,8 +1396,15 @@ impl Event {
             Event::PickCardItem { id } => format!("Item Card's item picked {id}"),
             Event::OpenCardMeowdbPage { .. } => "Item Card's name clicked".to_string(),
             Event::CloseItemCard {} => "Item Card closed".to_string(),
+            Event::EditCardMarketPrice { line } => format!("Item Card's price on market line {line} clicked"),
             Event::EnterCardMarket { typed } => format!("Item Card's market price entered {typed:?}"),
-            Event::RestoreMarketPrices { prices } => format!("market prices restored ({} items)", prices.items.len()),
+            Event::EditCardMarketLine { line } => format!("Item Card's market line {line} name clicked"),
+            Event::EnterCardMarketLine { typed } => format!("Item Card's market line name entered {typed:?}"),
+            Event::RestoreMarketPrices { prices } => {
+                let names: Vec<String> =
+                    prices.lines.iter().map(|line| format!("{:?} ({} prices)", line.name, line.prices.len())).collect();
+                format!("market prices restored: {}", if names.is_empty() { "no lines".into() } else { names.join(", ") })
+            }
             Event::HotkeysUnavailable { taken, invalid } => {
                 format!("hotkeys unavailable: taken {taken:?}, invalid {invalid:?}")
             }
