@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/item-card.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Item Card</title>
+    <script type="module" src="/src/item-card.ts" defer></script>
+  </head>
+  <body class="draggable hidden">
+    <main class="panel" id="card" aria-labelledby="window-name" aria-live="polite">
+      <div class="view">
+        <header class="window-bar drag-handle">
+          <img class="window-icon" src="/assets/icon.png" alt="" draggable="false" />
+          <p class="window-name" id="window-name">Item Card</p>
+          <div class="toolbar" role="toolbar" aria-label="Item Card window">
+            <button type="button" class="icon-button" id="close" aria-label="Close the Item Card" title="Close the Item Card">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+            </button>
+          </div>
+        </header>
+        <h2 class="item-card-title" id="title"></h2>
+        <div class="item-card-body" id="body"></div>
+      </div>
+    </main>
+  </body>
+</html>

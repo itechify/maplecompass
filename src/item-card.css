@@ -1,0 +1,270 @@
+/* The Item Card: what the game's Item Tooltip doesn't say about the hovered item, at the
+   pointer. The panel's window, sized to the card: the window bar the player drags it by,
+   with its ×; the item's name on the Quest Helper's see-through glass; and its figures and
+   lists set into the body on the near-opaque lavender, as the Grind Tracker's figures are,
+   so they read over any scene. The shell makes the window 280 CSS px wide (WIDTH in
+   src-tauri/src/item_card.rs) and as tall as the card up to its most; past that the card
+   scrolls under its bar. It has no corner grips, so it keeps only a little room under the
+   last line. */
+.view {
+  padding-bottom: 10px;
+}
+
+/* The item's name, a link to its MeowDB page, or the question when items share it. */
+.panel .item-card-title {
+  margin-block: 0;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 15px;
+}
+
+/* A link on the card, as a mob's name in the panel: plain at rest, Portal Blue and
+   underlined under the pointer, Frame Navy while pressed. */
+.item-card-link {
+  all: unset;
+  cursor: pointer;
+}
+
+.item-card-link:hover {
+  color: var(--portal);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.item-card-link:active {
+  color: var(--frame);
+}
+
+.item-card-link:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* The figures and lists, set into the body. */
+.item-card-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 5px 8px 7px 9px;
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--body);
+  text-shadow: none;
+}
+
+/* What a shop pays and where players' prices are: each label at the left of its value,
+   the values right-aligned as the Mob Card's figures. A value that says why there is none
+   is Panel Ink Steel, not bold. */
+.item-card-prices {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+}
+
+.item-card-prices > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.item-card-prices dt {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.item-card-prices dd {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.item-card-prices dd.quiet {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+/* The market price the player keeps, under a rule: its label at the left, then the price
+   (a link that opens its field, or "Not set", the day it was set in its tooltip), and the
+   light buttons that change it and look it up on MesoWatch. */
+.item-card-market {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding-top: 5px;
+  border-top: 1px solid var(--rule);
+}
+
+.item-card-market .label {
+  flex: none;
+  color: var(--ink-2);
+}
+
+/* Right-aligned, as the figures are, and cut short rather than push the buttons out. */
+.item-card-market .value {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.item-card-market .value.quiet {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+/* Open, the field takes the price's place: the app's text input, smaller to sit in the
+   row, with what it does or why the entry isn't a price under it. */
+.item-card-input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 2px 6px;
+  border: 1px solid var(--frame);
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: inset 0 1px 2px rgba(20, 30, 60, 0.15);
+  color: var(--ink);
+  font: 700 13px/17px var(--font);
+  text-align: right;
+  user-select: text;
+}
+
+.item-card-input::placeholder {
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+.item-card-input:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 1px;
+}
+
+.item-card-box .item-card-hint {
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.item-card-hint.problem {
+  color: var(--problem-ink);
+}
+
+/* The note and the hint are read in full: the panel cuts its lines short, the card
+   doesn't. */
+.panel .item-card-note,
+.panel .item-card-hint,
+.panel .item-card-credit {
+  white-space: normal;
+  overflow: visible;
+  text-wrap: pretty;
+}
+
+/* Item data from a Saved Copy: the panel's own note. */
+.item-card-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--ink-2);
+}
+
+.item-card-credit {
+  margin: 0;
+  font-size: 10px;
+  line-height: 13px;
+  color: var(--ink-3);
+}
+
+/* Several items share the name read: each with its picture as the game draws it and its
+   kind, for the player to pick the one their tooltip shows. */
+.item-card-ask {
+  font-weight: 700;
+}
+
+.item-card-hint {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.item-card-choices {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.item-card-choice {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 6px 2px 2px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.item-card-choice:hover {
+  background: var(--select);
+  box-shadow: inset 0 0 0 1px var(--select-edge);
+  color: var(--portal);
+}
+
+.item-card-choice:active {
+  color: var(--frame);
+}
+
+.item-card-choice:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 2px;
+}
+
+/* The same 32px box with or without its picture, so the list doesn't jump when one
+   arrives; the picture at its own size, drawn pixelated, as the game draws it. */
+.item-card-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 3px;
+  background: var(--inset-bg);
+  box-shadow: inset 0 0 0 1px var(--inset-edge);
+}
+
+.item-card-icon img {
+  max-width: 32px;
+  max-height: 32px;
+  image-rendering: pixelated;
+}

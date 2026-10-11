@@ -1,8 +1,10 @@
 //! The map list's entries, and the injected data source the core's data comes from: OSMS
-//! Data Explorer's file set and pictures (ADR 0008), and MeowDB's search (ADR 0007).
+//! Data Explorer's file set and pictures (ADR 0008), MeowDB's search (ADR 0007), and the
+//! Item Card's OSMS item files (ADR 0010).
 
 use crate::item_lookup::ItemHit;
 use crate::osms::{OsmsFiles, SavedFiles};
+use crate::osms_items::{ItemFiles, SavedItemFiles};
 use std::task::Poll;
 
 /// One map in the map list.
@@ -65,7 +67,8 @@ pub enum Fetched<T> {
     SavedCopy { data: T, saved_at_unix_ms: u64 },
 }
 
-/// Where the core gets OSMS's file set and pictures, and MeowDB's search. The shell
+/// Where the core gets OSMS's file set, item files and pictures, and MeowDB's search. The
+/// shell
 /// supplies one that fetches over HTTP with a disk cache; tests supply fakes.
 ///
 /// Every ask but the saved file set's (which is on disk) may take a while over the
@@ -104,4 +107,14 @@ pub trait MapDataSource {
     /// [`crate::meowdb::read_item_search`]. A cached answer may be used as it is; answer at
     /// once when it is.
     fn item_search(&mut self, name: &str) -> Poll<Result<Fetched<Vec<ItemHit>>, SourceError>>;
+
+    /// OSMS Data Explorer's item files as they were last saved (ADR 0010), unread, and
+    /// when; `None` when none are, or they can't be read back. As
+    /// [`MapDataSource::saved_osms_files`], for the Item Card's set.
+    fn saved_item_files(&mut self) -> Option<SavedItemFiles>;
+
+    /// OSMS Data Explorer's item files fetched afresh (ADR 0010), unread: as
+    /// [`MapDataSource::fetch_osms_files`], on the same schedule, but saved apart from the
+    /// map set, once they read with [`crate::osms_items::read`].
+    fn fetch_item_files(&mut self) -> Poll<Result<ItemFiles, SourceError>>;
 }

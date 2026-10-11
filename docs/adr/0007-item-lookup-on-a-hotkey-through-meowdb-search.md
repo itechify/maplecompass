@@ -1,5 +1,5 @@
 ---
-status: accepted, amended by ADR-0008 (its search is MapleCompass's only MeowDB request, and no longer bars a public release)
+status: accepted, amended by ADR-0008 (its search is MapleCompass's only MeowDB request, and no longer bars a public release) and ADR-0010 (its hotkey is Ctrl+Shift+U, and the Item Card's name opens the page too)
 ---
 
 # Item Lookup on a hotkey through MeowDB's search
@@ -35,3 +35,7 @@ What a lookup comes to (looking up, opened, why nothing opened, or the items to 
 ## Since ADR 0008
 
 Maps and mobs now come from OSMS Data Explorer's files (ADR 0008), so this search is MapleCompass's only remaining request to MeowDB. With no crawl left to keep MeowDB's pace of one request every 2 seconds, a lookup now keeps it itself: its search waits until 2 seconds after the last one that went over the network. An answer from the cache still comes at once. The letter of MeowDB's terms (§4, "automated scripts, bots, or scrapers") arguably covers the search, while its Content Reuse Policy, aimed at bulk scraping and republishing, doesn't. We take it as a grey area to raise with MeowDB, not a bar to a public release.
+
+## Since ADR 0010
+
+The Item Card (ADR 0010) took Ctrl+Shift+I: the key the player presses over an item now shows its card, whose name opens the item's MeowDB page through this search. Item Lookup itself moved to Ctrl+Shift+U, and a settings file from before the card gives its Item Lookup key to the card. So MeowDB's search runs only when the player asks for the page. From the card's name, the name searched for is OSMS's, not a reading, and among several MeowDB items with it, the one whose category is the card's kind of item opens, if just one is; otherwise the alert lists them as before. The alert also says what kept an Item Card from showing, naming the card's hotkey.

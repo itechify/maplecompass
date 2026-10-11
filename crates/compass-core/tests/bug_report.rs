@@ -5,13 +5,14 @@
 
 mod common;
 
+use common::items::{ItemWorld, equip, etc, item_world};
 use common::osms;
 use common::{FakeSource, SUNSET_SKY_ID, frame};
-use compass_core::bug_report::{self, Event, Note, Recording, MAX_REPORT_BYTES};
+use compass_core::bug_report::{self, Answer, Event, Note, Recording, ReplayData, MAX_REPORT_BYTES};
 use compass_core::{
-    BESTS_VERSION, Compass, ExpBar, ExpBarReading, ExpBarRegion, Foreground, Frame, GameWindow, MapBests, Rect,
-    ReportAbout, SavedBests, ScreenRect, Settings, Size, TitleLines, TitleReading, TitleRegion, TrackingState,
-    VisitBest,
+    Action, BESTS_VERSION, Compass, ExpBar, ExpBarReading, ExpBarRegion, Foreground, Frame, GameWindow, ItemCapture, ItemTooltip,
+    ItemTooltipReading, MapBests, Rect, ReportAbout, SavedBests, ScreenPoint, ScreenRect, Settings, Size, TitleLines,
+    TitleReading, TitleRegion, TrackingState, VisitBest,
 };
 
 const S: u64 = 1000;
@@ -445,4 +446,166 @@ fn text_in(zip: &[u8], name: &str) -> String {
     let mut text = String::new();
     archive.by_name(name).expect(name).read_to_string(&mut text).expect("text");
     text
+}
+
+/// Made-up item data for the Item Card: two Blue Moons to pick between, and Bronze Ore.
+fn items() -> ItemWorld {
+    item_world(vec![
+        etc(4_010_000, "Bronze Ore").sells_for(450),
+        equip(1_041_078, "Blue Moon", "Top").sells_for(11_000),
+        equip(1_032_011, "Blue Moon", "Earring").sells_for(10_500),
+    ])
+}
+
+/// The Item Tooltip by the pointer read as `name`, after the player pressed Ctrl+Shift+I.
+fn item_card(shell: &mut Shell, name: &str) {
+    assert!(shell.compass.on_hotkey("ctrl+shift+i").is_some());
+    let tooltip = ItemTooltip::Found { area: ScreenRect { x: 900, y: 620, width: 200, height: 19 }, name: Some(name.into()) };
+    let pointer = ScreenPoint { x: 900, y: 600 };
+    shell.compass.on_item_tooltip_reading(Some(ItemTooltipReading { tooltip, pointer, at_ms: shell.at }));
+}
+
+/// A run with Item Cards: the market prices kept restored, a card and its market price
+/// typed (first not a price, then one), a choice and its pick, the card's MeowDB page and
+/// its ×.
+fn run_with_item_cards() -> Shell {
+    let mut shell = Shell::new(FakeSource::osms().with_items(items()));
+    let kept = r#"{"version":1,"items":{"01041078":{"mesos":30000,"setAtUnixMs":1791700000000}}}"#;
+    shell.compass.restore_market_prices(serde_json::from_str(kept).unwrap());
+    shell.compass.set_item_card_size(Size { width: 280, height: 160 });
+    shell.play(10 * S, CONSTRUCTION_SITE, grind);
+    item_card(&mut shell, "Bronze Ore");
+    shell.compass.act(Action::EditCardMarket);
+    shell.compass.enter_card_market("lots");
+    shell.compass.enter_card_market("450k");
+    shell.play(20 * S, CONSTRUCTION_SITE, grind);
+    item_card(&mut shell, "Blue Moon");
+    shell.compass.pick_card_item("01032011");
+    shell.compass.open_card_meowdb_page(shell.at);
+    shell.play(30 * S, CONSTRUCTION_SITE, grind);
+    shell.compass.close_item_card();
+    shell.play(40 * S, CONSTRUCTION_SITE, grind);
+    shell
+}
+
+#[test]
+fn item_cards_replay_through_the_same_states_with_the_runs_item_files() {
+    let (_, recording) = run_with_item_cards().report();
+
+    let with = ReplayData { osms: Some(osms::game().files()), items: Some(items().files()) };
+    let replay = bug_report::replay_with(&recording, with);
+
+    assert_eq!(replay.divergence, None);
+    assert_eq!(replay.lines, recording.lines.len());
+}
+
+#[test]
+fn the_report_holds_only_the_item_files_fingerprint() {
+    let (report, recording) = run_with_item_cards().report();
+
+    let fingerprints: Vec<&str> = recording
+        .lines
+        .iter()
+        .flat_map(|line| &line.answers)
+        .filter_map(|answer| match answer {
+            Answer::Items { answer: Ok(fingerprint) } => Some(fingerprint.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(fingerprints, [bug_report::item_fingerprint(&items().files())]);
+    let names = zip_names(&report.zip);
+    assert!(names.iter().all(|name| !name.ends_with("items.json") && !name.ends_with("cash_shop.json")), "{names:?}");
+}
+
+/// The game's client area as the shell captures it for an Item Card or Item Lookup press:
+/// 1920x1200 at the screen's origin, each pixel's shade telling where it is, so a crop of
+/// it can be told apart by its corner.
+fn client_capture(pointer: ScreenPoint, at_ms: u64) -> ItemCapture {
+    let img = image::RgbaImage::from_fn(1920, 1200, |x, y| image::Rgba([(x % 256) as u8, (y % 256) as u8, 40, 255]));
+    ItemCapture { frame: frame(&img, at_ms), origin: ScreenPoint { x: 0, y: 0 }, pointer }
+}
+
+/// The player pressed Ctrl+Shift+I over (900,600) at `at_ms`, and the capture read as
+/// `name` (`None`: unreadable).
+fn press_item_card(shell: &mut Shell, name: Option<&str>, at_ms: u64) {
+    let pointer = ScreenPoint { x: 900, y: 600 };
+    assert!(shell.compass.on_hotkey("ctrl+shift+i").is_some());
+    let area = ScreenRect { x: 916, y: 650, width: 200, height: 19 };
+    let reading =
+        ItemTooltipReading { tooltip: ItemTooltip::Found { area, name: name.map(String::from) }, pointer, at_ms };
+    shell.compass.on_item_capture_read(client_capture(pointer, at_ms), reading);
+}
+
+fn item_crops(recording: &Recording) -> Vec<&str> {
+    recording.crops.iter().map(String::as_str).filter(|name| name.starts_with("crops/item-tooltip-")).collect()
+}
+
+#[test]
+fn an_item_tooltip_that_couldnt_be_read_keeps_its_capture_around_the_pointer_for_the_run() {
+    let mut shell = Shell::new(FakeSource::osms().with_items(items()));
+    shell.play(10 * S, CONSTRUCTION_SITE, grind);
+    press_item_card(&mut shell, None, 10 * S);
+    shell.play(20 * MIN, CONSTRUCTION_SITE, grind);
+
+    let (report, recording) = shell.report();
+
+    let name = format!("crops/item-tooltip-{:010}@400,400.png", 10 * S);
+    assert_eq!(item_crops(&recording), [name.as_str()]);
+    let line = recording.lines.iter().find(|line| matches!(line.event, Event::ItemTooltip { .. })).expect("its line");
+    assert_eq!(line.crop.as_deref(), Some(name.as_str()), "the line names its crop");
+    let crop = image::load_from_memory(&zip_bytes(&report.zip, &name)).expect("a PNG").to_rgba8();
+    assert_eq!(crop.dimensions(), (800, 800), "400 px each way from the pointer");
+    assert_eq!(crop.get_pixel(0, 0).0, [(500 % 256) as u8, 200, 40, 255], "its corner at (500,200)");
+}
+
+#[test]
+fn an_item_tooltip_read_as_no_item_keeps_its_capture_for_the_run() {
+    let mut shell = Shell::new(FakeSource::osms().with_items(items()));
+    shell.play(10 * S, CONSTRUCTION_SITE, grind);
+    press_item_card(&mut shell, Some("Stlrge Wlng Zz"), 10 * S);
+    shell.play(20 * MIN, CONSTRUCTION_SITE, grind);
+
+    let (_, recording) = shell.report();
+
+    assert_eq!(item_crops(&recording), [format!("crops/item-tooltip-{:010}@400,400.png", 10 * S)]);
+}
+
+#[test]
+fn an_item_tooltip_read_as_an_item_keeps_its_capture_for_10_minutes() {
+    let mut shell = Shell::new(FakeSource::osms().with_items(items()));
+    shell.play(10 * S, CONSTRUCTION_SITE, grind);
+    press_item_card(&mut shell, Some("Bronze Ore"), 10 * S);
+
+    shell.play(5 * MIN, CONSTRUCTION_SITE, grind);
+    let (_, recording) = shell.report();
+    assert_eq!(item_crops(&recording).len(), 1, "kept 10 minutes, as the EXP bar's are");
+
+    shell.play(20 * MIN, CONSTRUCTION_SITE, grind);
+    let (_, recording) = shell.report();
+    assert_eq!(item_crops(&recording), Vec::<&str>::new());
+}
+
+#[test]
+fn a_capture_by_the_game_windows_edge_is_cropped_to_the_window() {
+    let mut shell = Shell::new(FakeSource::osms().with_items(items()));
+    shell.play(10 * S, CONSTRUCTION_SITE, grind);
+    assert!(shell.compass.on_hotkey("ctrl+shift+i").is_some());
+    let pointer = ScreenPoint { x: 1800, y: 100 };
+    let tooltip = ItemTooltip::Found { area: ScreenRect { x: 1500, y: 150, width: 200, height: 19 }, name: None };
+    shell.compass.on_item_capture_read(client_capture(pointer, 10 * S), ItemTooltipReading { tooltip, pointer, at_ms: 10 * S });
+
+    let (report, recording) = shell.report();
+
+    let name = format!("crops/item-tooltip-{:010}@400,100.png", 10 * S);
+    assert_eq!(item_crops(&recording), [name.as_str()]);
+    let crop = image::load_from_memory(&zip_bytes(&report.zip, &name)).expect("a PNG").to_rgba8();
+    assert_eq!(crop.dimensions(), (520, 500), "from (1400,0) to the window's right edge, and 400 px down");
+}
+
+fn zip_bytes(zip: &[u8], name: &str) -> Vec<u8> {
+    use std::io::Read;
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(zip)).expect("a zip");
+    let mut bytes = Vec::new();
+    archive.by_name(name).expect(name).read_to_end(&mut bytes).expect("bytes");
+    bytes
 }

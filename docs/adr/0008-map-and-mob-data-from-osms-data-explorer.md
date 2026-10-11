@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted, amended by ADR-0010 (the Item Card reads OSMS's item files, a set of their own)
 ---
 
 # Map and mob data from OSMS Data Explorer's files, not MeowDB's pages
@@ -65,3 +65,7 @@ Pictures and mob animations are named by content hash. The core asks for them on
 - On the first launch of this version, the shell deletes MeowDB's old caches (the map index, map pages, mob pages and maplestory.io's images) and the crawl's saved world. Settings, Personal Bests and Item Lookup's saved searches stay.
 - Before the repo goes public, MeowDB's pages and search answers are stripped from its history. Closed pull requests on GitHub still reach the old commits, which we accept.
 - Each screen credits what it shows. The panel's footer (as the tooltip of its info icon) and the Personal Bests page read "Data: OSMS Data Explorer (osmsdataexplorer.com) · Pages: NiaMeowDB (meowdb.com)". The search view, and the Hunting section when no map is shown, open no pages, so they read "Data: OSMS Data Explorer (osmsdataexplorer.com)". Setup's test read says "Map names from OSMS Data Explorer", and the Personal Bests page calls solo EXP/h "the map's ceiling, worked out as NiaMeowDB does". The map pictures and mob animations are Nexon's art served by a fan site, as on every fan site.
+
+## Since ADR 0010
+
+The Item Card reads two more of OSMS's files (`items.json` and `cash_shop.json`), fetched on this set's schedule but read, saved and swapped as a set of their own, so a change in them never holds back the map set. Item Lookup's search still opens MeowDB's item pages, now only when the player asks for one.

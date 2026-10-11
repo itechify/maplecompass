@@ -2,11 +2,13 @@
 //! made-up worlds in OSMS's shape (ADR 0008) and whatever item searches a test gives it.
 #![allow(dead_code)]
 
+pub mod items;
 pub mod osms;
 pub mod player;
 pub mod world;
 
 use compass_core::osms::{OsmsFiles, SavedFiles};
+use compass_core::osms_items::{ItemFiles, SavedItemFiles};
 use compass_core::{
     Compass, ExpBarRegion, Fetched, Frame, GameWindow, ItemHit, MapDataSource, PanelState, Rect,
     ScreenRect, Settings, Size, SourceError, TitleRegion, default_title_region,
@@ -134,6 +136,7 @@ pub fn three_sharing_a_title() -> FakeSource {
 type PictureAnswer = Result<String, SourceError>;
 type SearchAnswer = Result<Vec<ItemHit>, SourceError>;
 pub type OsmsAnswer = Poll<Result<OsmsFiles, SourceError>>;
+pub type ItemSetAnswer = Poll<Result<ItemFiles, SourceError>>;
 
 /// A data source that answers from memory and counts what it is asked.
 pub struct FakeSource {
@@ -163,6 +166,12 @@ pub struct FakeSource {
     /// How many polls an item search takes, as `picture_polls` for pictures.
     item_polls: usize,
     item_in_flight: Option<(String, SearchAnswer, usize)>,
+    /// Answers for successive fetches of OSMS's item files; the last one repeats.
+    item_set_answers: Vec<ItemSetAnswer>,
+    /// How many times OSMS's item files were fetched.
+    pub item_set_requests: Arc<AtomicU32>,
+    /// The item files an earlier launch saved; `None`: none were.
+    saved_item_set: Option<SavedItemFiles>,
 }
 
 impl FakeSource {
@@ -181,6 +190,9 @@ impl FakeSource {
             item_requests: Arc::default(),
             item_polls: 0,
             item_in_flight: None,
+            item_set_answers: vec![Poll::Ready(Err(unreachable()))],
+            item_set_requests: Arc::default(),
+            saved_item_set: None,
         }
     }
 
@@ -250,6 +262,21 @@ impl FakeSource {
     pub fn items_taking(self, polls: usize) -> Self {
         Self { item_polls: polls, ..self }
     }
+
+    /// OSMS serves this made-up item data.
+    pub fn with_items(self, items: items::ItemWorld) -> Self {
+        self.answering_item_set(vec![Poll::Ready(Ok(items.files()))])
+    }
+
+    /// OSMS's item files answer these, one ask after another; the last one repeats.
+    pub fn answering_item_set(self, answers: Vec<ItemSetAnswer>) -> Self {
+        Self { item_set_answers: answers, ..self }
+    }
+
+    /// These item files were saved at `saved_at_unix_ms`, at an earlier launch.
+    pub fn with_saved_items(self, items: items::ItemWorld, saved_at_unix_ms: u64) -> Self {
+        Self { saved_item_set: Some(SavedItemFiles { files: items.files(), saved_at_unix_ms }), ..self }
+    }
 }
 
 fn unreachable() -> SourceError {
@@ -317,5 +344,14 @@ impl MapDataSource for FakeSource {
         let answer =
             one_at_a_time(name, &mut self.item_in_flight, &self.item_requests, self.item_polls, &mut self.item_searches);
         self.fetched(answer)
+    }
+
+    fn saved_item_files(&mut self) -> Option<SavedItemFiles> {
+        self.saved_item_set.clone()
+    }
+
+    fn fetch_item_files(&mut self) -> Poll<Result<ItemFiles, SourceError>> {
+        let n = self.item_set_requests.fetch_add(1, Ordering::SeqCst) as usize;
+        self.item_set_answers[n.min(self.item_set_answers.len() - 1)].clone()
     }
 }

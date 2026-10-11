@@ -11,7 +11,7 @@
 use crate::errors::error;
 use crate::view::{LastView, ViewSender};
 use crate::{Command, keep_on_top, physical, place};
-use compass_core::{ItemLookup, ItemLookupLine, PanelState, Size};
+use compass_core::{Hotkey, ItemLookup, ItemLookupLine, PanelState, Size};
 use serde::Serialize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -38,7 +38,8 @@ struct AlertView<'a> {
     /// The window shows: otherwise the page draws nothing.
     shown: bool,
     line: Option<&'a ItemLookupLine>,
-    /// The Item Lookup hotkey, for the alert to name.
+    /// The hotkey the player pressed (Item Lookup's or the Item Card's), for the alert to
+    /// name.
     hotkey: &'a str,
 }
 
@@ -88,7 +89,11 @@ impl ItemLookupWindow {
     pub fn sync(&mut self, state: &PanelState) {
         let placement = state.item_lookup_placement;
         let line = state.item_lookup.as_ref().filter(|_| placement.is_some());
-        let view = AlertView { shown: line.is_some(), line, hotkey: &state.hotkeys.item_lookup };
+        let hotkey = match line.map(|line| line.hotkey) {
+            Some(Hotkey::ItemCard) => &state.hotkeys.item_card,
+            _ => &state.hotkeys.item_lookup,
+        };
+        let view = AlertView { shown: line.is_some(), line, hotkey };
         self.view.send(&self.app, &view, &self.app.state::<ItemLookupView>().0);
         self.shows_on_top.store(placement.is_some(), Ordering::Relaxed);
         if let Some(placement) = placement {

@@ -12,6 +12,7 @@
 //! window, where the player is looking, for a few seconds; the panel is left as it is.
 
 use crate::item_tooltip::{ItemTooltip, ItemTooltipReading};
+use crate::settings::Hotkey;
 use crate::map_index::{Fetched, MapDataSource, SourceError};
 use crate::matcher::{key, levenshtein};
 use crate::meowdb;
@@ -51,6 +52,16 @@ pub enum ItemLookup {
     Covered { by: OurWindow },
     /// No MeowDB item has the name read as `read`.
     NotFound { read: String },
+    /// No item in OSMS's item files has the name read as `read`, so no Item Card shows.
+    NoSuchItem { read: String },
+    /// OSMS's item files haven't arrived yet (they are asked for at startup).
+    ItemsLoading,
+    /// OSMS couldn't be reached and no item files are saved; they are asked for again
+    /// every minute.
+    ItemsUnavailable,
+    /// OSMS's item files don't read, and there are none earlier to fall back on:
+    /// MapleCompass needs an update.
+    ItemsFormatChanged,
     /// MeowDB couldn't be reached.
     Unreachable,
     /// MeowDB's search answered in a shape the reader doesn't know.
@@ -87,6 +98,9 @@ pub struct ItemLookupLine {
     /// Counts the player's lookups, so the overlay can tell a new line from the last one
     /// when both say the same.
     pub lookup: u32,
+    /// The hotkey the player pressed: Item Lookup's, or the Item Card's when it says what
+    /// kept a card from showing.
+    pub hotkey: Hotkey,
     #[serde(flatten)]
     pub outcome: ItemLookup,
 }
@@ -109,6 +123,9 @@ pub(crate) struct ItemLookups {
     capturing: bool,
     /// The name being looked up, until MeowDB answers, and whether it was asked for yet.
     searching: Option<(String, bool)>,
+    /// Of several MeowDB items with the name, open the one of this category if just one
+    /// is: the kind of item the Item Card showed.
+    prefer: Option<String>,
     line: Option<ItemLookupLine>,
     /// When the line goes (capture time); `None` while it stays (looking up).
     line_until: Option<u64>,
@@ -124,6 +141,24 @@ impl ItemLookups {
         !std::mem::replace(&mut self.capturing, true)
     }
 
+    /// A capture for a lookup was asked for and its reading hasn't come back.
+    pub fn capturing(&self) -> bool {
+        self.capturing
+    }
+
+    /// Let the alert go: an Item Card shows in its place.
+    pub fn clear(&mut self) {
+        self.line = None;
+        self.line_until = None;
+    }
+
+    /// Show `outcome` in the alert: what kept an Item Card from showing, at `at_ms`.
+    pub fn alert(&mut self, outcome: ItemLookup, at_ms: u64) {
+        self.lookups += 1;
+        self.now_ms = self.now_ms.max(at_ms);
+        self.show_for(outcome, Hotkey::ItemCard);
+    }
+
     /// What the capture read as (`None`: it failed), with where our windows are on
     /// screen. Returns the page to open, if MeowDB answered at once.
     pub fn read(
@@ -135,6 +170,7 @@ impl ItemLookups {
     ) -> Option<String> {
         self.capturing = false;
         self.searching = None;
+        self.prefer = None;
         self.lookups += 1;
         let at_ms = reading.as_ref().map_or(self.now_ms, |r| r.at_ms);
         self.now_ms = self.now_ms.max(at_ms);
@@ -156,6 +192,25 @@ impl ItemLookups {
             None => ItemLookup::Unreadable,
         };
         self.show(outcome);
+        self.poll(source, pace, at_ms)
+    }
+
+    /// The player clicked the Item Card's name, `name`: look it up as if read from an Item
+    /// Tooltip, preferring the MeowDB item of category `kind` among several with the name.
+    /// Returns the page to open, if MeowDB answered at once.
+    pub fn look_up(
+        &mut self,
+        name: String,
+        kind: String,
+        source: &mut dyn MapDataSource,
+        pace: &mut Pace,
+        at_ms: u64,
+    ) -> Option<String> {
+        self.lookups += 1;
+        self.now_ms = self.now_ms.max(at_ms);
+        self.searching = Some((name.clone(), false));
+        self.prefer = Some(kind);
+        self.show(ItemLookup::LookingUp { read: name });
         self.poll(source, pace, at_ms)
     }
 
@@ -187,6 +242,10 @@ impl ItemLookups {
         let (outcome, open) = match answer {
             Ok(Fetched::Fresh(hits) | Fetched::SavedCopy { data: hits, .. }) => match resolve(&read, &hits) {
                 Resolved::One(hit) => {
+                    let url = meowdb::item_url(&hit.id);
+                    (ItemLookup::Opened { name: hit.name, url: url.clone() }, Some(url))
+                }
+                Resolved::Several(hits) if let Some(hit) = one_of_category(&hits, self.prefer.as_deref()) => {
                     let url = meowdb::item_url(&hit.id);
                     (ItemLookup::Opened { name: hit.name, url: url.clone() }, Some(url))
                 }
@@ -222,12 +281,16 @@ impl ItemLookups {
     }
 
     fn show(&mut self, outcome: ItemLookup) {
+        self.show_for(outcome, Hotkey::ItemLookup);
+    }
+
+    fn show_for(&mut self, outcome: ItemLookup, hotkey: Hotkey) {
         self.line_until = match outcome {
             ItemLookup::LookingUp { .. } => None,
             ItemLookup::Choose { .. } => Some(self.now_ms + CHOICES_MS),
             _ => Some(self.now_ms + LINE_MS),
         };
-        self.line = Some(ItemLookupLine { lookup: self.lookups, outcome });
+        self.line = Some(ItemLookupLine { lookup: self.lookups, hotkey, outcome });
     }
 }
 
@@ -255,7 +318,7 @@ pub(crate) fn alert_placement(game: &GameWindow, size: Size, avoid: &[ScreenRect
     alert
 }
 
-fn overlaps(a: ScreenRect, b: ScreenRect) -> bool {
+pub(crate) fn overlaps(a: ScreenRect, b: ScreenRect) -> bool {
     let (a_right, b_right) = (a.x + a.width as i32, b.x + b.width as i32);
     let (a_bottom, b_bottom) = (a.y + a.height as i32, b.y + b.height as i32);
     a.x < b_right && b.x < a_right && a.y < b_bottom && b.y < a_bottom
@@ -263,7 +326,7 @@ fn overlaps(a: ScreenRect, b: ScreenRect) -> bool {
 
 /// The item's name in what the Item Tooltip's name line read as: trimmed, spaces
 /// collapsed, without a scrolled item's "(+3)". `None` without two letters or digits.
-fn item_name(read: &str) -> Option<String> {
+pub(crate) fn item_name(read: &str) -> Option<String> {
     let mut name = read.split_whitespace().collect::<Vec<_>>().join(" ");
     if let Some(open) = name.rfind('(') {
         let upgrades = name[open + 1..].trim_end_matches(')');
@@ -275,6 +338,17 @@ fn item_name(read: &str) -> Option<String> {
     (name.chars().filter(|c| c.is_alphanumeric()).count() >= 2).then_some(name)
 }
 
+/// The one of `hits` whose MeowDB category is `category`, if just one is.
+fn one_of_category(hits: &[ItemHit], category: Option<&str>) -> Option<ItemHit> {
+    let category = category?;
+    let mut of_category =
+        hits.iter().filter(|hit| hit.category.as_deref().is_some_and(|c| c.trim().eq_ignore_ascii_case(category)));
+    match (of_category.next(), of_category.next()) {
+        (Some(hit), None) => Some(hit.clone()),
+        _ => None,
+    }
+}
+
 /// What a name read resolves to among MeowDB's answer.
 enum Resolved {
     One(ItemHit),
@@ -284,35 +358,39 @@ enum Resolved {
 
 /// A name for matching: the title matcher's (letters and digits only, lower case, the
 /// upright strokes I, l, 1, |, ! as one), with O and 0 as one too.
-fn item_key(name: &str) -> Vec<char> {
+pub(crate) fn item_key(name: &str) -> Vec<char> {
     key(name).into_iter().map(|c| if c == '0' { 'o' } else { c }).collect()
 }
 
 fn resolve(read: &str, hits: &[ItemHit]) -> Resolved {
-    let read = item_key(read);
-    // The answer's names, each with its items and its edits from the name read, closest
-    // first.
-    let mut names: Vec<(Vec<char>, Vec<ItemHit>, usize)> = Vec::new();
+    // The answer's names, each with its items.
+    let mut names: Vec<(Vec<char>, Vec<ItemHit>)> = Vec::new();
     for hit in hits {
         let name = item_key(&hit.name);
-        match names.iter_mut().find(|(known, ..)| *known == name) {
-            Some((_, items, _)) => items.push(hit.clone()),
-            None => {
-                let edits = levenshtein(&read, &name);
-                names.push((name, vec![hit.clone()], edits));
-            }
+        match names.iter_mut().find(|(known, _)| *known == name) {
+            Some((_, items)) => items.push(hit.clone()),
+            None => names.push((name, vec![hit.clone()])),
         }
     }
-    names.sort_by_key(|(_, _, edits)| *edits);
-    let Some((name, items, edits)) = names.first() else { return Resolved::Neither };
-    let len = read.len().max(name.len());
-    let similar = len > 0 && 1.0 - *edits as f32 / len as f32 >= CLOSE_ENOUGH;
-    let clear = names.get(1).is_none_or(|(_, _, next)| *next >= edits + CLEAR_LEAD);
-    if *edits > 0 && !(similar && clear) {
-        return Resolved::Neither;
-    }
-    match &items[..] {
+    let keys: Vec<&[char]> = names.iter().map(|(name, _)| &name[..]).collect();
+    let Some(closest) = closest(&item_key(read), &keys) else { return Resolved::Neither };
+    match &names[closest].1[..] {
         [one] => Resolved::One(one.clone()),
-        _ => Resolved::Several(items.clone()),
+        items => Resolved::Several(items.to_vec()),
     }
+}
+
+/// Which of `names` (as [`item_key`] makes them, each once) the name `read` is: the one
+/// it is, or one clearly closer to it than any other. `None` when none is.
+pub(crate) fn closest(read: &[char], names: &[&[char]]) -> Option<usize> {
+    if let Some(same) = names.iter().position(|name| *name == read) {
+        return Some(same);
+    }
+    let mut edits: Vec<(usize, usize)> = names.iter().map(|name| levenshtein(read, name)).enumerate().collect();
+    edits.sort_by_key(|&(_, edits)| edits);
+    let &(closest, fewest) = edits.first()?;
+    let len = read.len().max(names[closest].len());
+    let similar = len > 0 && 1.0 - fewest as f32 / len as f32 >= CLOSE_ENOUGH;
+    let clear = edits.get(1).is_none_or(|&(_, next)| next >= fewest + CLEAR_LEAD);
+    (similar && clear).then_some(closest)
 }

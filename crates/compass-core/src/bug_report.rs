@@ -21,15 +21,19 @@
 //! - A report is at most [`MAX_REPORT_BYTES`]: crops are left out to keep it so, the
 //!   oldest ordinary ones first, then the oldest kept for the run. The text never is.
 //! - OSMS's file set isn't in a report (ADR 0008), only its fingerprint: a replay is given
-//!   the set to replay with, and a set that has changed since replays differently.
+//!   the set to replay with, and a set that has changed since replays differently. The
+//!   same goes for the Item Card's OSMS item files (ADR 0010).
 
 use crate::exp_bar::{ExpBar, ExpBarReading};
 use crate::hotkey_settings::KeyPress;
 use crate::item_lookup::ItemHit;
-use crate::item_tooltip::ItemTooltipReading;
+use crate::item_lookup::ItemLookup;
+use crate::item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReading};
 use crate::map_data::MapSummary;
 use crate::map_index::{Fetched, MapDataSource, SourceError};
+use crate::market_prices::SavedMarketPrices;
 use crate::osms::{OsmsFiles, SavedFiles};
+use crate::osms_items::{ItemFiles, SavedItemFiles};
 use crate::panel::{Action, Foreground, GameWindow, PanelSizes, ScreenRect, Size};
 use crate::personal_best::{SavedBests, VisitBest};
 use crate::recogniser::{TitleLines, TitleReading};
@@ -118,6 +122,7 @@ pub enum Event {
     GameWindow { game: Option<GameWindow> },
     PanelSizes { sizes: PanelSizes },
     ItemLookupSize { size: Size },
+    ItemCardSize { size: Size },
     GrindTrackerSize { size: Size },
     PersonalBestsSize { size: Size },
     Act { action: Action },
@@ -128,12 +133,19 @@ pub enum Event {
     Press { control: PanelControl },
     ItemTooltip { reading: Option<ItemTooltipReading> },
     PickItem { id: String },
+    PickCardItem { id: String },
+    /// The player clicked the Item Card's name at `at_ms`.
+    OpenCardMeowdbPage { at_ms: u64 },
+    CloseItemCard {},
+    /// The player pressed Enter in the Item Card's market price field, holding `typed`.
+    EnterCardMarket { typed: String },
     Foreground { foreground: Foreground },
     HotkeysUnavailable { taken: Vec<String>, invalid: Vec<String> },
     Restore { settings: Box<Settings> },
     PickGameWindow { title: String },
     WallClock { unix_ms: u64 },
     RestoreBests { bests: SavedBests },
+    RestoreMarketPrices { prices: SavedMarketPrices },
     /// The player removed the Visit whose best was `visit` from `map`'s Visit History.
     RemoveVisit { map: String, visit: VisitBest },
     /// Not an input: an error the shell or one of our windows ran into (`from`), which
@@ -155,9 +167,15 @@ pub enum Answer {
     Picture { path: String, answer: Result<String, SourceError> },
     /// What MeowDB's search gave for an item's name.
     ItemSearch { name: String, answer: Result<ItemSearchAnswer, SourceError> },
+    /// The OSMS item files an earlier launch saved; `None` if none were.
+    SavedItems { saved: Option<SavedSet> },
+    /// OSMS's item files fetched afresh: their [`item_fingerprint`], or why they couldn't
+    /// be had.
+    Items { answer: Result<String, SourceError> },
 }
 
-/// An OSMS file set saved at an earlier launch: its [`fingerprint`], and when.
+/// An OSMS file set (or its item files) saved at an earlier launch: its fingerprint, and
+/// when.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedSet {
@@ -306,8 +324,17 @@ pub struct BugReport {
 /// A fingerprint of an OSMS file set (FNV-1a, 64 bits, in hex): two sets with the same
 /// one are the same set.
 pub fn fingerprint(files: &OsmsFiles) -> String {
+    texts_fingerprint([&*files.maps, &files.portals, &files.monsters, &files.map_manifest, &files.lookups])
+}
+
+/// OSMS's item files' fingerprint, as [`fingerprint`] the map set's.
+pub fn item_fingerprint(files: &ItemFiles) -> String {
+    texts_fingerprint([&*files.items, &files.cash_shop])
+}
+
+fn texts_fingerprint<'a>(texts: impl IntoIterator<Item = &'a str>) -> String {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for text in [&files.maps, &files.portals, &files.monsters, &files.map_manifest, &files.lookups] {
+    for text in texts {
         for byte in text.bytes().chain([0]) {
             hash = (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3);
         }
@@ -320,6 +347,33 @@ pub fn fingerprint(files: &OsmsFiles) -> String {
 pub(crate) enum Region {
     Title,
     ExpBar,
+    /// The game's client area around the pointer, at an Item Card or Item Lookup press,
+    /// with the pointer at (x, y) in it.
+    ItemTooltip { pointer: (u32, u32) },
+}
+
+/// How far the crop of an Item Card or Item Lookup capture reaches from the pointer (px,
+/// each way): far enough for the tooltip wherever the game puts it beside the pointer.
+const ITEM_TOOLTIP_REACH: u32 = 400;
+
+/// The part of an Item Card or Item Lookup capture around the pointer, cut to the game's
+/// client area, for a Bug Report: the Item Tooltip the reader read, or should have.
+pub(crate) fn item_tooltip_crop(capture: &ItemCapture) -> Option<(Region, Frame)> {
+    let frame = &capture.frame;
+    if frame.width == 0 || frame.height == 0 || frame.rgba.len() < (frame.width * frame.height * 4) as usize {
+        return None;
+    }
+    let at = |pointer: i32, origin: i32, size: u32| (pointer - origin).clamp(0, size as i32 - 1) as u32;
+    let (px, py) = (at(capture.pointer.x, capture.origin.x, frame.width), at(capture.pointer.y, capture.origin.y, frame.height));
+    let (x0, y0) = (px.saturating_sub(ITEM_TOOLTIP_REACH), py.saturating_sub(ITEM_TOOLTIP_REACH));
+    let (x1, y1) = ((px + ITEM_TOOLTIP_REACH).min(frame.width), (py + ITEM_TOOLTIP_REACH).min(frame.height));
+    let mut rgba = Vec::with_capacity(((x1 - x0) * (y1 - y0) * 4) as usize);
+    for y in y0..y1 {
+        let row = ((y * frame.width + x0) * 4) as usize;
+        rgba.extend_from_slice(&frame.rgba[row..row + ((x1 - x0) * 4) as usize]);
+    }
+    let crop = Frame { width: x1 - x0, height: y1 - y0, rgba, at_ms: frame.at_ms };
+    Some((Region::ItemTooltip { pointer: (px - x0, py - y0) }, crop))
 }
 
 /// A crop of a captured region, as a PNG.
@@ -364,6 +418,7 @@ struct Last {
     game: Option<Option<GameWindow>>,
     panel_sizes: Option<PanelSizes>,
     item_lookup_size: Option<Size>,
+    item_card_size: Option<Size>,
     grind_tracker_size: Option<Size>,
     personal_bests_size: Option<Size>,
     foreground: Option<Foreground>,
@@ -417,6 +472,7 @@ impl Recorder {
                 game: None,
                 panel_sizes: None,
                 item_lookup_size: None,
+                item_card_size: None,
                 grind_tracker_size: None,
                 personal_bests_size: None,
                 foreground: None,
@@ -446,6 +502,7 @@ impl Recorder {
             Event::GameWindow { game } => changes(&mut last.game, game),
             Event::PanelSizes { sizes } => changes(&mut last.panel_sizes, sizes),
             Event::ItemLookupSize { size } => changes(&mut last.item_lookup_size, size),
+            Event::ItemCardSize { size } => changes(&mut last.item_card_size, size),
             Event::GrindTrackerSize { size } => changes(&mut last.grind_tracker_size, size),
             Event::PersonalBestsSize { size } => changes(&mut last.personal_bests_size, size),
             Event::Foreground { foreground } => changes(&mut last.foreground, foreground),
@@ -517,7 +574,7 @@ impl Recorder {
             self.last.state = outcome.state.clone();
         }
         if let Some((region, frame)) = frame {
-            self.keep_crop(&mut line, region, frame);
+            self.keep_crop(&mut line, region, frame, outcome.state);
         }
         self.write(line);
     }
@@ -539,8 +596,8 @@ impl Recorder {
     }
 
     /// Keep the crop of `frame`, read for `line`: one that changed, or that the core made
-    /// something of.
-    fn keep_crop(&mut self, line: &mut Line, region: Region, frame: Frame) {
+    /// something of (`state` after it).
+    fn keep_crop(&mut self, line: &mut Line, region: Region, frame: Frame, state: &PanelState) {
         let (changed, kept) = match region {
             Region::ExpBar => {
                 let changed = frame.rgba != self.last.exp_bar_rgba;
@@ -550,14 +607,27 @@ impl Recorder {
                 let same = matches!(line.event, Event::Title { same: true, .. });
                 (!same, line.map.is_some())
             }
+            // Each press's, as presses are few; for the run, one whose name couldn't be read
+            // or isn't an item's, as it may have been misread.
+            Region::ItemTooltip { .. } => {
+                let unread = matches!(
+                    &line.event,
+                    Event::ItemTooltip { reading: Some(ItemTooltipReading { tooltip: ItemTooltip::Found { name: None, .. }, .. }) }
+                );
+                let no_such = state.item_lookup.as_ref().is_some_and(|alert| {
+                    matches!(alert.outcome, ItemLookup::NoSuchItem { .. } | ItemLookup::NotFound { .. })
+                });
+                (true, unread || no_such)
+            }
         };
         if changed || kept {
-            let kind = match region {
-                Region::Title => "title",
-                Region::ExpBar => "exp-bar",
+            let name = match region {
+                Region::Title => format!("crops/title-{:010}.png", frame.at_ms),
+                Region::ExpBar => format!("crops/exp-bar-{:010}.png", frame.at_ms),
+                // Named as `samples/item-tooltip` names its frames: the pointer's spot in it.
+                Region::ItemTooltip { pointer: (x, y) } => format!("crops/item-tooltip-{:010}@{x},{y}.png", frame.at_ms),
             };
             if let Some(png) = png(&frame) {
-                let name = format!("crops/{kind}-{:010}.png", frame.at_ms);
                 line.crop = Some(name.clone());
                 self.crops.push_back(Crop { name, at_ms: frame.at_ms, kept, png });
             }
@@ -604,7 +674,7 @@ impl Recorder {
             }
         }
         let Ok(json) = serde_json::to_string(&line) else { return };
-        if matches!(line.event, Event::Restore { .. } | Event::RestoreBests { .. }) {
+        if matches!(line.event, Event::Restore { .. } | Event::RestoreBests { .. } | Event::RestoreMarketPrices { .. }) {
             self.launch.push_str(&json);
             self.launch.push('\n');
         }
@@ -673,11 +743,14 @@ impl Recorder {
                 ("trace.jsonl".to_string(), trace.clone().into_bytes()),
             ]
         };
+        // The crops kept for the run, and the others from the last 10 minutes: one taken
+        // longer ago than that goes even when no crop has come since.
+        let since = self.now.saturating_sub(RECENT_CROPS_MS);
+        let mut crops: Vec<&Crop> = self.crops.iter().filter(|crop| crop.kept || crop.at_ms >= since).collect();
         // The text alone, then as many crops as fit beside it: the oldest ordinary ones
         // go first, then the oldest kept for the run.
-        let text_bytes = zip(&texts(&file(self.crops.len(), 0)), &[]).len();
+        let text_bytes = zip(&texts(&file(crops.len(), 0)), &[]).len();
         let size = |crop: &Crop| crop.png.len() + 2 * crop.name.len() + 100;
-        let mut crops: Vec<&Crop> = self.crops.iter().collect();
         crops.sort_by_key(|crop| crop.at_ms);
         let mut crop_bytes: usize = crops.iter().map(|crop| size(crop)).sum();
         let budget = MAX_REPORT_BYTES - MARGIN_BYTES;
@@ -795,8 +868,8 @@ pub(crate) struct RecordedSource {
 
 enum From {
     Live(Box<dyn MapDataSource + Send>),
-    /// A replay's: OSMS's set to replay with, and the answers due for the line replayed.
-    Replay { osms: Option<OsmsFiles>, due: VecDeque<Answer> },
+    /// A replay's: what to replay with, and the answers due for the line replayed.
+    Replay { with: Box<ReplayData>, due: VecDeque<Answer> },
 }
 
 impl RecordedSource {
@@ -804,8 +877,8 @@ impl RecordedSource {
         Self { from: From::Live(source), answers: Vec::new() }
     }
 
-    fn replaying(osms: Option<OsmsFiles>) -> Self {
-        Self { from: From::Replay { osms, due: VecDeque::new() }, answers: Vec::new() }
+    fn replaying(with: ReplayData) -> Self {
+        Self { from: From::Replay { with: Box::new(with), due: VecDeque::new() }, answers: Vec::new() }
     }
 
     /// What it answered since this was last asked.
@@ -828,11 +901,16 @@ impl RecordedSource {
         }
     }
 
-    fn replayed_set(&self) -> Option<OsmsFiles> {
+    /// In a replay, what it replays with.
+    fn replayed(&self) -> Option<&ReplayData> {
         match &self.from {
-            From::Replay { osms, .. } => osms.clone(),
+            From::Replay { with, .. } => Some(with),
             From::Live(_) => None,
         }
+    }
+
+    fn replayed_set(&self) -> Option<OsmsFiles> {
+        self.replayed()?.osms.clone()
     }
 }
 
@@ -905,6 +983,42 @@ impl MapDataSource for RecordedSource {
         }
         answer
     }
+
+    fn saved_item_files(&mut self) -> Option<SavedItemFiles> {
+        let saved = match &mut self.from {
+            From::Live(source) => source.saved_item_files(),
+            From::Replay { .. } => match self.due(|a| matches!(a, Answer::SavedItems { .. })) {
+                Some(Answer::SavedItems { saved: Some(saved) }) => self
+                    .replayed()
+                    .and_then(|with| with.items.clone())
+                    .map(|files| SavedItemFiles { files, saved_at_unix_ms: saved.saved_at_unix_ms }),
+                _ => None,
+            },
+        };
+        let shape =
+            saved.as_ref().map(|s| SavedSet { fingerprint: item_fingerprint(&s.files), saved_at_unix_ms: s.saved_at_unix_ms });
+        self.answers.push(Answer::SavedItems { saved: shape });
+        saved
+    }
+
+    fn fetch_item_files(&mut self) -> Poll<Result<ItemFiles, SourceError>> {
+        let fetched = match &mut self.from {
+            From::Live(source) => source.fetch_item_files(),
+            From::Replay { .. } => match self.due(|a| matches!(a, Answer::Items { .. })) {
+                Some(Answer::Items { answer: Ok(_) }) => Poll::Ready(
+                    self.replayed()
+                        .and_then(|with| with.items.clone())
+                        .ok_or_else(|| SourceError::Unreachable("not in the Bug Report".into())),
+                ),
+                Some(Answer::Items { answer: Err(e) }) => Poll::Ready(Err(e)),
+                _ => Poll::Pending,
+            },
+        };
+        if let Poll::Ready(answer) = &fetched {
+            self.answers.push(Answer::Items { answer: answer.as_ref().map(item_fingerprint).map_err(Clone::clone) });
+        }
+        fetched
+    }
 }
 
 /// A Bug Report as read back.
@@ -957,13 +1071,25 @@ pub struct Divergence {
     pub replayed: Option<String>,
 }
 
-/// Feed a Bug Report's inputs to a new core, with OSMS's file set `osms` where the report
-/// had one (`None`: as if it couldn't be had), and compare what it writes down with the
-/// report's trace. A set's fingerprint isn't compared, but what the core makes of it is:
+/// What a replay gives the core where the report holds only fingerprints: OSMS's file set
+/// and its item files. `None` answers as if it couldn't be had.
+#[derive(Debug, Clone, Default)]
+pub struct ReplayData {
+    pub osms: Option<OsmsFiles>,
+    pub items: Option<ItemFiles>,
+}
+
+/// [`replay_with`] OSMS's file set `osms`, and no item files.
+pub fn replay(recording: &Recording, osms: Option<OsmsFiles>) -> Replay {
+    replay_with(recording, ReplayData { osms, ..ReplayData::default() })
+}
+
+/// Feed a Bug Report's inputs to a new core, with what `with` holds where the report had
+/// it, and compare what it writes down with the report's trace. A set's fingerprint isn't compared, but what the core makes of it is:
 /// a set other than the run's makes it diverge where that shows, as do a trace that
 /// starts partway and a change to the core since.
-pub fn replay(recording: &Recording, osms: Option<OsmsFiles>) -> Replay {
-    let mut compass = Compass::with_source(RecordedSource::replaying(osms));
+pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
+    let mut compass = Compass::with_source(RecordedSource::replaying(with));
     // The wall clock as last written down, and the capture time then: the shell tells the
     // core it with every tick.
     let mut wall_clock: Option<(u64, u64)> = None;
@@ -997,6 +1123,9 @@ pub fn replay(recording: &Recording, osms: Option<OsmsFiles>) -> Replay {
             Event::ItemLookupSize { size } => {
                 compass.set_item_lookup_size(size);
             }
+            Event::ItemCardSize { size } => {
+                compass.set_item_card_size(size);
+            }
             Event::GrindTrackerSize { size } => {
                 compass.set_grind_tracker_size(size);
             }
@@ -1026,6 +1155,21 @@ pub fn replay(recording: &Recording, osms: Option<OsmsFiles>) -> Replay {
             }
             Event::PickItem { id } => {
                 compass.pick_item(&id);
+            }
+            Event::PickCardItem { id } => {
+                compass.pick_card_item(&id);
+            }
+            Event::OpenCardMeowdbPage { at_ms } => {
+                compass.open_card_meowdb_page(at_ms);
+            }
+            Event::CloseItemCard {} => {
+                compass.close_item_card();
+            }
+            Event::EnterCardMarket { typed } => {
+                compass.enter_card_market(&typed);
+            }
+            Event::RestoreMarketPrices { prices } => {
+                compass.restore_market_prices(prices);
             }
             Event::Foreground { foreground } => {
                 compass.on_foreground(foreground);
@@ -1061,6 +1205,10 @@ pub fn replay(recording: &Recording, osms: Option<OsmsFiles>) -> Replay {
                 Answer::SavedSet { saved: Some(SavedSet { fingerprint: String::new(), ..saved }) }
             }
             Answer::Set { answer: Ok(_) } => Answer::Set { answer: Ok(String::new()) },
+            Answer::SavedItems { saved: Some(saved) } => {
+                Answer::SavedItems { saved: Some(SavedSet { fingerprint: String::new(), ..saved }) }
+            }
+            Answer::Items { answer: Ok(_) } => Answer::Items { answer: Ok(String::new()) },
             other => other,
         });
         let line = Line { crop: None, answers: answers.collect(), ..line.clone() };
@@ -1092,6 +1240,10 @@ impl Recording {
                 Event::Act { .. }
                     | Event::Press { .. }
                     | Event::Hotkey { .. }
+                    | Event::PickCardItem { .. }
+                    | Event::OpenCardMeowdbPage { .. }
+                    | Event::CloseItemCard {}
+                    | Event::EnterCardMarket { .. }
                     | Event::Restore { .. }
                     | Event::RestoreBests { .. }
                     | Event::RemoveVisit { .. }
@@ -1138,7 +1290,7 @@ impl Line {
 
 impl Answer {
     fn is_set(&self) -> bool {
-        matches!(self, Answer::SavedSet { .. } | Answer::Set { .. })
+        matches!(self, Answer::SavedSet { .. } | Answer::Set { .. } | Answer::SavedItems { .. } | Answer::Items { .. })
     }
 
     fn describe(&self) -> Option<String> {
@@ -1151,6 +1303,10 @@ impl Answer {
             Answer::Picture { path, answer: Err(e) } => format!("picture {path}: {e}"),
             Answer::ItemSearch { name, answer: Ok(answer) } => format!("MeowDB's search for {name:?}: {} items", answer.hits.len()),
             Answer::ItemSearch { name, answer: Err(e) } => format!("MeowDB's search for {name:?}: {e}"),
+            Answer::SavedItems { saved: Some(saved) } => format!("OSMS's item files saved earlier ({})", saved.fingerprint),
+            Answer::SavedItems { saved: None } => "no OSMS item files saved earlier".to_string(),
+            Answer::Items { answer: Ok(fingerprint) } => format!("OSMS's item files fetched ({fingerprint})"),
+            Answer::Items { answer: Err(e) } => format!("OSMS's item files: {e}"),
         })
     }
 }
@@ -1185,7 +1341,7 @@ impl Event {
     /// When a reading's frame was captured.
     fn at_ms(&self) -> Option<u64> {
         match self {
-            Event::Title { at_ms, .. } | Event::ExpBar { at_ms, .. } => Some(*at_ms),
+            Event::Title { at_ms, .. } | Event::ExpBar { at_ms, .. } | Event::OpenCardMeowdbPage { at_ms } => Some(*at_ms),
             _ => None,
         }
     }
@@ -1213,11 +1369,17 @@ impl Event {
                 format!("panel sizes {}x{}, collapsed {}x{}", e.width, e.height, c.width, c.height)
             }
             Event::ItemLookupSize { size } => format!("Item Lookup alert size {}x{}", size.width, size.height),
+            Event::ItemCardSize { size } => format!("Item Card size {}x{}", size.width, size.height),
             Event::GrindTrackerSize { size } => format!("Grind Tracker size {}x{}", size.width, size.height),
             Event::PersonalBestsSize { size } => format!("Personal Bests window size {}x{}", size.width, size.height),
             Event::RebindKey { press } => format!("key pressed in the settings view {}", json(press)),
             Event::SearchPick { id } => format!("search picked {id}"),
             Event::PickItem { id } => format!("item picked {id}"),
+            Event::PickCardItem { id } => format!("Item Card's item picked {id}"),
+            Event::OpenCardMeowdbPage { .. } => "Item Card's name clicked".to_string(),
+            Event::CloseItemCard {} => "Item Card closed".to_string(),
+            Event::EnterCardMarket { typed } => format!("Item Card's market price entered {typed:?}"),
+            Event::RestoreMarketPrices { prices } => format!("market prices restored ({} items)", prices.items.len()),
             Event::HotkeysUnavailable { taken, invalid } => {
                 format!("hotkeys unavailable: taken {taken:?}, invalid {invalid:?}")
             }

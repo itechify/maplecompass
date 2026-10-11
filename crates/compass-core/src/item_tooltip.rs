@@ -35,6 +35,9 @@ pub struct ItemCapture {
 #[serde(rename_all = "camelCase")]
 pub struct ItemTooltipReading {
     pub tooltip: ItemTooltip,
+    /// Where the mouse pointer was on screen, as in [`ItemCapture::pointer`]: where the
+    /// Item Card goes.
+    pub pointer: ScreenPoint,
     /// When the frame was captured, as in [`Frame::at_ms`].
     pub at_ms: u64,
 }
@@ -64,7 +67,7 @@ impl ItemTooltipReader {
 
     pub fn read(&self, capture: &ItemCapture) -> ItemTooltipReading {
         let tooltip = frame_to_rgb(&capture.frame).map_or(ItemTooltip::None, |img| self.read_rgb(&img, capture));
-        ItemTooltipReading { tooltip, at_ms: capture.frame.at_ms }
+        ItemTooltipReading { tooltip, pointer: capture.pointer, at_ms: capture.frame.at_ms }
     }
 
     fn read_rgb(&self, img: &RgbImage, capture: &ItemCapture) -> ItemTooltip {
@@ -146,10 +149,13 @@ fn bullet_blue(p: [u8; 3]) -> bool {
     b >= 200 && g >= 140 && r <= 140 && g - r >= 70
 }
 
-/// The tooltip's slate fill, with whatever is behind it showing through: dark and blue.
+/// The tooltip's slate fill, with whatever is behind it showing through: dark, and no
+/// warmer than neutral. How blue it looks depends on what is behind it: over the Item
+/// Inventory window's edge or a purple icon it is barely bluer than red (Stirge Wing's and
+/// Horny Mushroom Cap's samples), over the game's sky clearly so.
 fn fill(p: [u8; 3]) -> bool {
     let [r, _, b] = p.map(i32::from);
-    luma(p) < 130.0 && b - r >= 25
+    luma(p) < 130.0 && b >= r
 }
 
 fn luma(p: [u8; 3]) -> f32 {

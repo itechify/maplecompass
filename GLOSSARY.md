@@ -166,10 +166,14 @@ Something the player can hold in the inventory: equipment, potions, scrolls, cha
 _Avoid_: drop, loot (when meaning the item itself)
 
 **Item Tooltip**:
-The box the game draws by the mouse pointer when the player hovers an item: the item's name on the line with the blue bullet (a crafted item's maker sits above it), then its picture and figures. It is the game's, not ours: the Mob Card is MapleCompass's own.
+The box the game draws by the mouse pointer when the player hovers an item: the item's name on the line with the blue bullet (a crafted item's maker sits above it), then its picture and figures. It is the game's, not ours: the Item Card and the Mob Card are MapleCompass's own.
+
+**Item Card**:
+The card the hotkey (Ctrl+Shift+I by default) shows at the pointer for the item whose Item Tooltip the game shows there: what a shop pays for it, and the market price the player keeps for it (typed into the card, with a button that opens MesoWatch to look it up). It stays until the player closes it or presses the hotkey again, where the player drags it by its bar, and its name opens the item's MeowDB page. When items that don't look alike share the name, it first lists them, with their pictures, for the player to pick.
+_Avoid_: item tooltip (the game's), price check, popup
 
 **Item Lookup**:
-The hotkey (Ctrl+Shift+I by default) that reads the Item Tooltip nearest the pointer and opens the item's MeowDB page. An alert at the top centre of the game window says what came of it, and when several items share the name, lists them for the player to pick.
+The hotkey (Ctrl+Shift+U by default) that reads the Item Tooltip nearest the pointer and opens the item's MeowDB page. An alert at the top centre of the game window says what came of it, and when several items share the name, lists them for the player to pick. The same alert says what kept an Item Card from showing.
 _Avoid_: item search (mob search is the search view's)
 
 ### Reporting bugs

@@ -1,0 +1,392 @@
+//! The Item Card (ADR 0010): the player hovers an item in the game and presses the hotkey
+//! (Ctrl+Shift+I by default). The shell captures the game's client area and the pointer,
+//! the Item Tooltip reader reads the item's name, and the card shows at the pointer what
+//! the game's tooltip doesn't: what a shop pays for the item, and the market price the
+//! player keeps for it, with links to its MeowDB page and to MesoWatch's market prices. The
+//! name is matched against OSMS's items on the player's machine: nothing is asked at the
+//! press.
+//!
+//! One card shows at a time, until the player closes it or presses the hotkey again. What
+//! keeps a card from showing goes in the Item Lookup alert.
+
+use crate::grind_tracker::ClientOffset;
+use crate::item_lookup::{ItemLookup, OurWindow, item_name, overlaps};
+use crate::item_tooltip::{ItemTooltip, ItemTooltipReading};
+use crate::market_prices::MarketPrice;
+use crate::osms_items::{ItemFacts, ItemSet};
+use crate::panel::{GameWindow, ScreenPoint, ScreenRect, Size, in_view};
+use serde::Serialize;
+
+/// What a shop pays for an item.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum ShopPrice {
+    /// A shop pays this for one.
+    Sells { mesos: u64 },
+    /// A shop won't buy it.
+    NotSold,
+    /// A Cash Shop item.
+    Cash,
+    /// OSMS has no price for it (scrolls, starter gear, arrows), or it is a throwing star or
+    /// a bullet: OSMS gives what recharging them costs, not what a shop pays for them.
+    Unknown,
+}
+
+/// The Item Card's credit (ADR 0010): its data is OSMS Data Explorer's, its name opens
+/// NiaMeowDB's page and its market line MesoWatch.
+pub const ITEM_CARD_CREDIT: &str = "Data: OSMS Data Explorer · Pages: NiaMeowDB, MesoWatch";
+
+/// MesoWatch, the market prices players see in Free Market shops: the market line opens it
+/// in the player's browser. It has no page per item, and its terms forbid collecting its
+/// prices, so the player looks the item up there themselves.
+pub const MESOWATCH_URL: &str = "https://meso.watch/";
+
+/// The card's market price field, open for the player to type in.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketEdit {
+    /// What the player last entered that isn't a price, to say so; `None` until then.
+    pub not_a_price: Option<String>,
+}
+
+/// One item's Item Card.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemCard {
+    /// The game's item ID, 8 digits as the game writes them (`"02000000"`).
+    pub id: String,
+    pub name: String,
+    pub shop: ShopPrice,
+    /// The market price the player keeps for it; `None` until they set one.
+    pub market: Option<MarketPrice>,
+    /// The market price's field, while it is open for the player to type in.
+    pub market_edit: Option<MarketEdit>,
+    /// When OSMS's item files were saved (ms since the Unix epoch), if that was over 7 days
+    /// ago: the card shows a Saved Copy, as OSMS couldn't be reached since. `None` for
+    /// files fresher than that.
+    pub saved_copy_from_unix_ms: Option<u64>,
+    /// [`ITEM_CARD_CREDIT`].
+    pub credit: &'static str,
+}
+
+/// One of several items sharing the name read, for the player to pick.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemCardChoice {
+    /// The game's item ID, 8 digits.
+    pub id: String,
+    /// What kind of item it is: a weapon's kind ("One-Handed Sword"), other equipment's
+    /// slot ("Overall"), or its inventory tab ("Use", "Etc", "Setup"); "Scroll" or "Cash".
+    pub kind: String,
+    /// Where the overlay loads its picture from (OSMS's, as the game draws it), once it is
+    /// in; `None` until then.
+    pub icon: Option<String>,
+}
+
+/// What the Item Card shows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum ItemCardView {
+    /// One item's card.
+    Card(ItemCard),
+    /// Several items have the name read, and don't look alike (their kinds or shop prices
+    /// differ): the player picks theirs, by the picture the game's tooltip shows.
+    Choose { name: String, items: Vec<ItemCardChoice> },
+}
+
+/// The Item Card showing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShownItemCard {
+    /// Counts the cards the player opened, so the window can tell a new card from the last
+    /// one when both show the same item.
+    pub card: u32,
+    #[serde(flatten)]
+    pub view: ItemCardView,
+}
+
+/// What a press of the Item Card's hotkey came to.
+pub(crate) enum Pressed {
+    /// The card of the item read shows.
+    Shown,
+    /// No Item Tooltip by the pointer: the card showing closed, and nothing is said.
+    Closed,
+    /// The alert says why no card shows.
+    Alert(ItemLookup),
+}
+
+/// The Item Card showing, if any.
+#[derive(Default)]
+pub(crate) struct ItemCards {
+    shown: Option<Shown>,
+    cards: u32,
+}
+
+/// The card showing: which items, where the pointer was, and where the player dragged it.
+struct Shown {
+    card: u32,
+    pointer: ScreenPoint,
+    /// Where the player dragged the card, relative to the game's client area; `None` while
+    /// it is at the pointer.
+    moved: Option<ClientOffset>,
+    showing: Showing,
+    /// Its market price's field, while open.
+    market_edit: Option<MarketEdit>,
+}
+
+/// What the card showing shows.
+enum Showing {
+    /// The card of these items, which share their name, kind and shop price: they look
+    /// alike, so they show one card.
+    Card(Vec<u32>),
+    /// These items share their name, but not their kind or shop price: the player picks
+    /// one, by its picture and kind. Each is listed once for the items that look alike.
+    Choose(Vec<Vec<u32>>),
+}
+
+impl ItemCards {
+    /// What the capture read as (`None`: it failed), with where our windows are on screen,
+    /// matched against `items`.
+    pub fn read(
+        &mut self,
+        reading: Option<ItemTooltipReading>,
+        ours: &[(OurWindow, ScreenRect)],
+        items: Result<&ItemSet, ItemLookup>,
+    ) -> Pressed {
+        // One card at a time: the press replaces the card showing, or closes it.
+        let had_card = self.shown.take().is_some();
+        let Some(reading) = reading else { return Pressed::Alert(ItemLookup::Unreadable) };
+        let (area, name) = match &reading.tooltip {
+            ItemTooltip::None if had_card => return Pressed::Closed,
+            ItemTooltip::None => return Pressed::Alert(ItemLookup::NoTooltip),
+            ItemTooltip::Found { area, name } => (*area, name),
+        };
+        if let Some((by, _)) = ours.iter().find(|(_, window)| overlaps(*window, area)) {
+            return Pressed::Alert(ItemLookup::Covered { by: *by });
+        }
+        let Some(read) = name.as_deref().and_then(item_name) else { return Pressed::Alert(ItemLookup::Unreadable) };
+        let items = match items {
+            Ok(items) => items,
+            Err(missing) => return Pressed::Alert(missing),
+        };
+        let mut alike: Vec<(&ItemFacts, Vec<u32>)> = Vec::new();
+        for item in items.named(&read) {
+            match alike.iter_mut().find(|(first, _)| first.kind == item.kind && first.shop == item.shop) {
+                Some((_, ids)) => ids.push(item.id),
+                None => alike.push((item, vec![item.id])),
+            }
+        }
+        let mut groups: Vec<Vec<u32>> = alike.into_iter().map(|(_, ids)| ids).collect();
+        let showing = match groups.len() {
+            0 => return Pressed::Alert(ItemLookup::NoSuchItem { read }),
+            1 => Showing::Card(groups.remove(0)),
+            _ => Showing::Choose(groups),
+        };
+        self.cards += 1;
+        self.shown = Some(Shown { card: self.cards, pointer: reading.pointer, moved: None, showing, market_edit: None });
+        Pressed::Shown
+    }
+
+    /// The player picked item `id` from the items listed: its card shows in the list's
+    /// place. Nothing changes for an item not listed.
+    pub fn pick(&mut self, id: &str) {
+        let Some(Shown { showing, .. }) = &mut self.shown else { return };
+        let Showing::Choose(groups) = showing else { return };
+        if let Some(picked) = groups.iter().find(|ids| ids.first().is_some_and(|&first| item_id(first) == id)) {
+            *showing = Showing::Card(picked.clone());
+        }
+    }
+
+    /// The pictures of the items listed to pick from, if the card lists any, below
+    /// [`crate::osms::PICTURES_URL`].
+    pub fn pictures(&self) -> Vec<String> {
+        match &self.shown {
+            Some(Shown { showing: Showing::Choose(groups), .. }) => {
+                groups.iter().filter_map(|ids| ids.first()).map(|&id| icon_path(id)).collect()
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// The player closed the card.
+    pub fn close(&mut self) {
+        self.shown = None;
+    }
+
+    /// The player clicked the card's market price: its field opens, on a card (not a
+    /// choice).
+    pub fn edit_market(&mut self) {
+        if let Some(shown @ Shown { showing: Showing::Card(_), .. }) = &mut self.shown {
+            shown.market_edit = Some(MarketEdit { not_a_price: None });
+        }
+    }
+
+    /// The market price's field closes, as it was.
+    pub fn close_market(&mut self) {
+        if let Some(shown) = &mut self.shown {
+            shown.market_edit = None;
+        }
+    }
+
+    /// The item whose market price's field is open (8 digits): the first of the items that
+    /// look alike, under which they keep one price.
+    pub fn editing_market(&self) -> Option<String> {
+        match &self.shown {
+            Some(Shown { showing: Showing::Card(ids), market_edit: Some(_), .. }) => ids.first().map(|&id| item_id(id)),
+            _ => None,
+        }
+    }
+
+    /// What the player entered in the market price's field, `typed`, isn't a price: the
+    /// field stays open and says so.
+    pub fn not_a_price(&mut self, typed: &str) {
+        if let Some(Shown { market_edit: Some(edit), .. }) = &mut self.shown {
+            edit.not_a_price = Some(typed.to_string());
+        }
+    }
+
+    /// The name and kind of the item whose card shows, as `items` has it; `None` while no
+    /// card shows, or a choice does.
+    pub fn item<'a>(&self, items: &'a ItemSet) -> Option<&'a ItemFacts> {
+        match &self.shown {
+            Some(Shown { showing: Showing::Card(ids), .. }) => items.item(*ids.first()?),
+            _ => None,
+        }
+    }
+
+    /// The player dragged the card showing so its top-left corner is at (x, y) on screen,
+    /// over `game`: it stays there, with the game window, until it closes.
+    pub fn moved_to(&mut self, x: i32, y: i32, game: &GameWindow) {
+        if let Some(shown) = &mut self.shown {
+            shown.moved = Some(ClientOffset { x: x - game.client.x, y: y - game.client.y });
+        }
+    }
+
+    /// Where the card showing of `size` goes over `game`: where the player dragged it,
+    /// wholly on a monitor and moved off any of `avoid`; or else at the pointer
+    /// ([`card_placement`]). `None` while no card shows.
+    pub fn placement(&self, game: &GameWindow, size: Size, avoid: &[ScreenRect]) -> Option<ScreenRect> {
+        let shown = self.shown.as_ref()?;
+        Some(match shown.moved {
+            Some(at) => {
+                let (x, y) = (game.client.x + at.x, game.client.y + at.y);
+                in_view(game, ScreenRect { x, y, width: size.width, height: size.height.min(game.client.height) }, avoid)
+            }
+            None => card_placement(game, shown.pointer, size, avoid),
+        })
+    }
+
+    /// The card showing, as `items` has its items (a Saved Copy from `saved_copy_from`, if
+    /// they are one), with the market price the player keeps for its item (by `market`,
+    /// from its ID) and the pictures in so far (by `picture`, from a path below
+    /// [`crate::osms::PICTURES_URL`]).
+    pub fn view(
+        &self,
+        items: Option<&ItemSet>,
+        saved_copy_from: Option<u64>,
+        market: impl Fn(&str) -> Option<MarketPrice>,
+        picture: impl Fn(&str) -> Option<String>,
+    ) -> Option<ShownItemCard> {
+        let shown = self.shown.as_ref()?;
+        let items = items?;
+        let view = match &shown.showing {
+            Showing::Card(ids) => {
+                let card = card(ids, items)?;
+                ItemCardView::Card(ItemCard {
+                    market: market(&card.id),
+                    market_edit: shown.market_edit.clone(),
+                    saved_copy_from_unix_ms: saved_copy_from,
+                    ..card
+                })
+            }
+            Showing::Choose(groups) => {
+                let listed: Vec<&ItemFacts> = groups.iter().filter_map(|ids| items.item(*ids.first()?)).collect();
+                ItemCardView::Choose {
+                    name: listed.first()?.name.clone(),
+                    items: listed
+                        .iter()
+                        .map(|item| ItemCardChoice {
+                            id: item_id(item.id),
+                            kind: item.kind.clone(),
+                            icon: picture(&icon_path(item.id)),
+                        })
+                        .collect(),
+                }
+            }
+        };
+        Some(ShownItemCard { card: shown.card, view })
+    }
+}
+
+/// The card of the items `ids`, which look alike: the first's.
+fn card(ids: &[u32], items: &ItemSet) -> Option<ItemCard> {
+    let first = items.item(*ids.first()?)?;
+    Some(ItemCard {
+        id: item_id(first.id),
+        name: first.name.clone(),
+        shop: first.shop,
+        market: None,
+        market_edit: None,
+        saved_copy_from_unix_ms: None,
+        credit: ITEM_CARD_CREDIT,
+    })
+}
+
+/// The game's item ID as the game writes it: 8 digits.
+fn item_id(id: u32) -> String {
+    format!("{id:08}")
+}
+
+/// Where OSMS keeps item `id`'s picture, below [`crate::osms::PICTURES_URL`].
+fn icon_path(id: u32) -> String {
+    format!("current/images/items/{}.png", item_id(id))
+}
+
+/// The card's corner sits this far right of and below the pointer's tip (physical px), like
+/// the game's own tooltip: a click without moving the mouse still lands on the item.
+const POINTER_GAP: i32 = 8;
+/// Gap kept between the card and a captured region it moves clear of (physical px).
+const REGION_GAP: i32 = 8;
+
+/// Where the card of `size` goes for the pointer at `pointer`: its corner just below and
+/// right of the pointer, or left of it, or above it, whichever first stays inside the
+/// game's client area and off `avoid` (the captured regions, since our windows show in our
+/// captures). With none of them clear, below and right of the pointer, moved below (or
+/// above) the regions it would cover.
+fn card_placement(game: &GameWindow, pointer: ScreenPoint, size: Size, avoid: &[ScreenRect]) -> ScreenRect {
+    let client = game.client;
+    let (width, height) = (size.width.min(client.width), size.height.min(client.height));
+    let (right, left) = (pointer.x + POINTER_GAP, pointer.x - POINTER_GAP - width as i32);
+    let (below, above) = (pointer.y + POINTER_GAP, pointer.y - POINTER_GAP - height as i32);
+    let at = |x, y| ScreenRect { x, y, width, height };
+    let spots = [at(right, below), at(left, below), at(right, above), at(left, above)];
+    let clear = |card: &ScreenRect| !avoid.iter().any(|region| overlaps(*card, *region));
+    if let Some(card) = spots.iter().find(|card| inside(**card, client) && clear(card)) {
+        return *card;
+    }
+    let mut card = clamp(at(right, below), client);
+    // Each region is gone over twice, as a move off one may cover another.
+    for _ in 0..2 {
+        for region in avoid {
+            if overlaps(card, *region) {
+                let under = region.y + region.height as i32 + REGION_GAP;
+                card.y = if inside(at(card.x, under), client) { under } else { region.y - REGION_GAP - height as i32 };
+            }
+        }
+    }
+    card
+}
+
+fn inside(card: ScreenRect, client: ScreenRect) -> bool {
+    card.x >= client.x
+        && card.y >= client.y
+        && card.x + card.width as i32 <= client.x + client.width as i32
+        && card.y + card.height as i32 <= client.y + client.height as i32
+}
+
+/// `card` moved the least to lie inside `client`, which is at least as big.
+fn clamp(card: ScreenRect, client: ScreenRect) -> ScreenRect {
+    let x = card.x.clamp(client.x, client.x + (client.width - card.width) as i32);
+    let y = card.y.clamp(client.y, client.y + (client.height - card.height) as i32);
+    ScreenRect { x, y, ..card }
+}

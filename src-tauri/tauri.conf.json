@@ -77,6 +77,22 @@
         "contentProtected": false
       },
       {
+        "label": "item-card",
+        "title": "Item Card",
+        "url": "item-card.html",
+        "width": 280,
+        "height": 160,
+        "transparent": true,
+        "decorations": false,
+        "shadow": false,
+        "alwaysOnTop": false,
+        "skipTaskbar": true,
+        "resizable": false,
+        "focus": false,
+        "focusable": false,
+        "contentProtected": false
+      },
+      {
         "label": "setup",
         "title": "MapleCompass Setup",
         "url": "setup.html",

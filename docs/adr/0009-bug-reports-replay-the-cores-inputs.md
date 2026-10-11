@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted, amended by ADR-0010 (crops of the game around the pointer at an Item Card or Item Lookup press)
 ---
 
 # A Bug Report is a replayable trace of the core's inputs, not a log
@@ -25,9 +25,10 @@ The core holds no clock, and all the logic is in it, so feeding the same inputs 
 - **Crops:**
   - The EXP Bar Region's from the last 10 minutes, where they changed.
   - The Title Region's where its reading changed.
-  - For the whole run, the crops behind a reading the core found unusual or that changed the map shown.
+  - The game's client area 400 px each way from the pointer, at each Item Card or Item Lookup press, from the last 10 minutes; named with the pointer's spot in it, as `samples/item-tooltip` names its frames.
+  - For the whole run, the crops behind a reading the core found unusual or that changed the map shown, and behind an Item Tooltip whose name couldn't be read or isn't an item's.
 
-  Without the pixels, a reading of 84,350 can't be told from a misread 8,435. With them, a frame read wrong becomes a sample, as the repo requires. The crops cover only the two regions the player marked: no chat, no names.
+  Without the pixels, a reading of 84,350 can't be told from a misread 8,435. With them, a frame read wrong becomes a sample, as the repo requires. The crops cover the two regions the player marked, and the game around the pointer when they press an item hotkey, which may take in their inventory and whatever is beside it: the player chooses to attach the report.
 - **At most 5 MB**, well under GitHub's 25 MB for an attachment. Crops are left out to keep it so, the oldest ordinary ones first, then the oldest kept for the run. The text never is.
 - **No OSMS data.** OSMS's file set isn't in a report (ADR 0008: nothing grants redistribution, and reports go into public issues), only its fingerprint, and the Map Summary of each map shown. A replay is given a set: OSMS's live one, or the `osms-set.json` from the cache of the PC the report came from. Fingerprints aren't compared, but what the core makes of the set is, so a set that has changed since diverges only where the change shows.
 - **Errors:** the shell's (which a release build, without a console, loses) and our windows' uncaught ones, the same one at most once a minute.

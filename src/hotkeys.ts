@@ -7,6 +7,7 @@ export type Hotkeys = {
   chooseCandidate: string;
   search: string;
   grindTracker: string;
+  itemCard: string;
   itemLookup: string;
 };
 
@@ -23,13 +24,14 @@ export const HOTKEY_NAMES: [Hotkey, string][] = [
   ["chooseCandidate", "Next map with this title"],
   ["openMeowdbPage", "Open the map's MeowDB page"],
   ["search", "Search a mob"],
-  ["itemLookup", "Look up the hovered item"],
+  ["itemCard", "Show the hovered item's card"],
+  ["itemLookup", "Open the hovered item's MeowDB page"],
   ["grindTracker", "Show / hide the Grind Tracker"],
   ["setup", "Help & Setup"],
 ];
 
-/** The one hotkey whose action has no button: turned off, it can't be used at all. */
-export const KEY_ONLY: Hotkey = "itemLookup";
+/** The hotkeys whose actions have no button: turned off, they can't be used at all. */
+export const KEY_ONLY: Hotkey[] = ["itemCard", "itemLookup"];
 
 /** Mirror of `compass_core::RebindProblem`. */
 export type RebindProblem =

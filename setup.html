@@ -141,11 +141,12 @@
           <dt>Next map with this title</dt><dd data-shortcut="chooseCandidate"></dd>
           <dt>Open the map's MeowDB page</dt><dd data-shortcut="openMeowdbPage"></dd>
           <dt>Search a mob</dt><dd data-shortcut="search"></dd>
-          <dt>Look up the hovered item</dt><dd data-shortcut="itemLookup"></dd>
+          <dt>Show the hovered item's card</dt><dd data-shortcut="itemCard"></dd>
+          <dt>Open the hovered item's MeowDB page</dt><dd data-shortcut="itemLookup"></dd>
           <dt>Show / hide the Grind Tracker</dt><dd data-shortcut="grindTracker"></dd>
           <dt>Help & Setup</dt><dd data-shortcut="setup"></dd>
         </dl>
-        <p>Drag the panel by its header to move it, Inside or Detached; Docked panels stay beside the game. Placement cycles through Inside, Docked Right, Docked Left, and Detached. The magnifier at the top of the panel, or the search shortcut, finds a mob and the maps it spawns on; pick one to make it your Hunting Target, and the panel shows the way there until you arrive. To look an item up, hover it in the game until its tooltip shows and press the item shortcut: its MeowDB page opens in your browser.</p>
+        <p>Drag the panel by its header to move it, Inside or Detached; Docked panels stay beside the game. Placement cycles through Inside, Docked Right, Docked Left, and Detached. The magnifier at the top of the panel, or the search shortcut, finds a mob and the maps it spawns on; pick one to make it your Hunting Target, and the panel shows the way there until you arrive. To see what an item is worth, hover it in the game until its tooltip shows and press the item card shortcut: its card shows what a shop pays for it, and the market price you keep for it, with a button to look it up on MesoWatch. Its name opens its MeowDB page in your browser, as the MeowDB shortcut does at once.</p>
         <p class="muted"><strong>Map Summary:</strong> 6+ means a party of six or more players. Share is a mob's share of all spawns on the Map.</p>
         <p class="muted"><strong>Something wrong?</strong> Choose Bug Report in the menu of MapleCompass's compass in the notification area, by the clock. It saves what MapleCompass read and made of it, and opens a form to report the bug on GitHub with it.</p>
         <p class="muted" id="change-hotkeys-note" role="status" hidden></p>
@@ -160,10 +161,12 @@
         <p>MapleCompass <span id="app-version"></span> is a free helper overlay for MapleStory Classic World. Its source and releases are at github.com/itechify/maplecompass. It isn't made, endorsed or supported by NEXON. Using any third-party tool with MapleStory is at your own risk.</p>
         <p><button type="button" class="link" id="site-open">The MapleCompass site</button> (itechify.github.io/maplecompass) explains each feature and how to use it. The link opens it in your browser.</p>
         <dl class="credits">
-          <dt>Map and mob data, map pictures and mob animations</dt>
+          <dt>Map, mob and item data, map pictures, mob animations and item pictures</dt>
           <dd>OSMS Data Explorer (osmsdataexplorer.com), mined from the game. The pictures and animations are NEXON's art.</dd>
           <dt>Map, mob and item pages</dt>
           <dd>NiaMeowDB (meowdb.com)</dd>
+          <dt>Market prices</dt>
+          <dd>MesoWatch (meso.watch), which the Item Card opens. MapleCompass reads nothing from it.</dd>
           <dt>Title and item recognition</dt>
           <dd>The text-recognition model of ocrs by Robert Knight (github.com/robertknight/ocrs), bundled unmodified under the Creative Commons Attribution-ShareAlike 4.0 licence (creativecommons.org/licenses/by-sa/4.0). Trained on HierText (CC BY-SA 4.0) and synthetic data. Provided as is, without warranties of any kind.</dd>
           <dt>Typeface</dt>

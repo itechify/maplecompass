@@ -691,7 +691,7 @@ function hotkeyRow(hotkey: Hotkey, name: string, panel: PanelState, view: Settin
     if (turnOff) turnOff.title = "Turn off (Backspace)";
     turnOff?.addEventListener("click", () => invoke("rebind_turn_off"));
     row.append(rowNote("Hold Ctrl+Shift and press a key · Esc cancels", "help", undefined, turnOff));
-  } else if (binding === "" && hotkey === KEY_ONLY) {
+  } else if (binding === "" && KEY_ONLY.includes(hotkey)) {
     row.append(rowNote("It has no button, so it can't be used while it is off.", "help"));
   } else if (binding !== "" && !hotkeyAvailable(binding, panel.unavailableHotkeys)) {
     const invalid = panel.invalidHotkeys.some((key) => sameHotkey(key, binding));

@@ -30,4 +30,6 @@ When a change alters something a shot shows, the PR that makes it lists the shot
 - `hero.png`: the title shows the map's Map Mark beside its two lines, and the route its stops' marks.
 - `map.png`: the Hidden Portal's row has its destination's Map Mark between its ring and its name, and so does the mark card.
 - `navigation.png`: the Hidden Portal's row, the Hunting Target's map and every stop on the route have their Map Marks.
+- `item-card.png` (new, not taken yet): an Item Card at the pointer over the inventory, on an item with a shop price and a market price you set (Garnet, say), with its window bar, the game's tooltip beside or under it. Add it to the table above, and its figure to the Item Card topic in `site/index.html` (a `with-shot full-shot` topic, as Item Lookup's), once taken.
+- `item-lookup.png`: Item Lookup's hotkey is Ctrl+Shift+U. The alert in the shot reads the same either way; retake only if it shows the hotkey.
 - `setup.png`: the shot is setup opened again ("Step 3 of 6", with Keep the current title), and the Setup topic describes first run. Retake it on first run, at "Step 4 of 7", and set its alt text and caption back to first run.

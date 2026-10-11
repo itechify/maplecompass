@@ -18,10 +18,13 @@ mod grind_tracker;
 mod hotkey_settings;
 mod hotkeys;
 mod http;
+mod item_card;
 mod item_lookup;
+mod market_prices;
 mod meowdb;
 mod old_caches;
 pub mod osms;
+pub mod osms_items;
 mod pictures;
 mod search;
 mod settings;
@@ -40,6 +43,7 @@ use source::WebSource;
 use bests_window::{BestsWindow, PersonalBestsView};
 use errors::error;
 use grind_tracker::{GrindTrackerView, GrindTrackerWindow};
+use item_card::{ItemCardView, ItemCardWindow};
 use item_lookup::{ItemLookupView, ItemLookupWindow};
 use setup::{Bridge, SetupPageView, SetupWindows};
 use sizemove::{Gesture, SizeMove};
@@ -126,6 +130,20 @@ pub(crate) enum Command {
     PersonalBestsSizeMove(SizeMove),
     /// The Item Lookup alert is this tall (CSS px).
     ItemLookupHeight(f64),
+    /// The Item Card is this tall (CSS px).
+    ItemCardHeight(f64),
+    /// The player clicked the Item Card's ×.
+    CloseItemCard,
+    /// The player picked the item with this game ID from those the Item Card lists.
+    PickCardItem(String),
+    /// The player clicked the Item Card's name: open the item's MeowDB page.
+    OpenCardMeowdbPage,
+    /// The player clicked the Item Card's MesoWatch button: open MesoWatch.
+    OpenCardMesowatch,
+    /// The player pressed Enter in the Item Card's market price field, holding this.
+    EnterCardMarket(String),
+    /// Windows told of a drag of the Item Card's window.
+    ItemCardSizeMove(SizeMove),
     /// The player chose Quit in the tray icon's menu: save the settings and exit.
     Quit,
     /// The player chose Bug Report in the tray icon's menu: save one, and open the bug
@@ -144,8 +162,9 @@ pub(crate) enum Command {
     /// The reader is done with a capture of the EXP Bar Region `region`: the frame and
     /// what it read, or `None` if the capture failed.
     ReadExpBar { region: ScreenRect, reading: Option<(Frame, ExpBarReading)> },
-    /// The reader is done with an Item Lookup's capture: what it read.
-    ReadItemTooltip(ItemTooltipReading),
+    /// The reader is done with an Item Card's or Item Lookup's capture: the capture, and
+    /// what it read.
+    ReadItemTooltip { capture: Box<ItemCapture>, reading: ItemTooltipReading },
 }
 
 /// The overlay's drags and resizes, as the compass loop hears them.
@@ -200,6 +219,7 @@ pub fn run() {
         .manage(GrindTrackerView::default())
         .manage(PersonalBestsView::default())
         .manage(ItemLookupView::default())
+        .manage(ItemCardView::default())
         // OSMS's pictures, such as the Mob Cards' animations, from our saved copies.
         .register_uri_scheme_protocol(pictures::SCHEME, |ctx, request| match cache_dir(ctx.app_handle()) {
             Ok(dir) => pictures::serve(&dir, &request),
@@ -234,6 +254,10 @@ pub fn run() {
             // read before anything is captured, so no best is set before they are back.
             let (bests_file, saved_bests) = bests::BestsFile::load(bests::path(app.handle())?);
             compass.restore_bests(saved_bests);
+            // The market prices the player keeps on Item Cards, beside them.
+            let (prices_file, saved_prices) =
+                market_prices::MarketPricesFile::load(market_prices::path(app.handle())?);
+            compass.restore_market_prices(saved_prices);
             let (commands, commands_rx) = mpsc::channel();
             // From now on errors go to the core too, for the Bug Report; those from before
             // (the settings or bests not reading) are held for it till now.
@@ -262,6 +286,7 @@ pub fn run() {
             // The page earlier versions wrote for the browser, which this window replaces.
             let _ = std::fs::remove_file(app.path().app_config_dir()?.join("personal-bests.html"));
             let item_lookup = ItemLookupWindow::new(app.handle(), commands.clone());
+            let item_card = ItemCardWindow::new(app.handle(), commands.clone());
             let overlay_window = OverlayWindow::new(overlay.clone(), commands.clone());
             overlay.on_window_event(move |event| match event {
                 // Only moves during a drag the overlay started are the player's.
@@ -294,10 +319,11 @@ pub fn run() {
                 grind_tracker,
                 personal_bests,
                 item_lookup,
+                item_card,
                 hotkeys,
             };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
-                let files = Files { settings: settings_path, bests: bests_file };
+                let files = Files { settings: settings_path, bests: bests_file, market_prices: prices_file };
                 compass_loop(handle, windows, compass, reader, channels, files)
             })?;
             Ok(())
@@ -346,27 +372,38 @@ pub fn run() {
             bests_window::personal_bests_remove_visit,
             item_lookup::item_lookup_height,
             item_lookup::item_lookup_view,
+            item_card::item_card_height,
+            item_card::item_card_view,
+            item_card::item_card_close,
+            item_card::item_card_pick,
+            item_card::item_card_open_meowdb,
+            item_card::item_card_open_mesowatch,
+            item_card::item_card_edit_market,
+            item_card::item_card_enter_market,
+            item_card::item_card_cancel_market,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
 /// Our windows: the overlay (with mob search in it), setup (with its region window), the
-/// Grind Tracker's, the Personal Bests window and the Item Lookup alert's.
+/// Grind Tracker's, the Personal Bests window, the Item Lookup alert's and the Item Card's.
 struct Windows {
     overlay: OverlayWindow,
     setup: SetupWindows,
     grind_tracker: GrindTrackerWindow,
     personal_bests: BestsWindow,
     item_lookup: ItemLookupWindow,
+    item_card: ItemCardWindow,
     /// Not a window, but registered and released as the foreground changes.
     hotkeys: hotkeys::GlobalHotkeys,
 }
 
-/// Where the compass loop saves the settings and the Personal Bests.
+/// Where the compass loop saves the settings, the Personal Bests and the market prices.
 struct Files {
     settings: PathBuf,
     bests: bests::BestsFile,
+    market_prices: market_prices::MarketPricesFile,
 }
 
 /// Save the Personal Bests if the core's bests revision moved on from `saved` (the one
@@ -381,6 +418,20 @@ fn save_bests(compass: &Compass, file: &bests::BestsFile, saved: &mut u64) {
     *saved = revision;
     if let Err(e) = file.save(&compass.bests()) {
         error!("saving personal bests failed: {e}");
+    }
+}
+
+/// Save the market prices the player keeps if the core's revision of them moved on from
+/// `saved`, at once, as the Personal Bests are. Never over a file that didn't read at
+/// startup and couldn't be set aside.
+fn save_market_prices(compass: &Compass, file: &market_prices::MarketPricesFile, saved: &mut u64) {
+    let revision = compass.market_prices_revision();
+    if *saved == revision {
+        return;
+    }
+    *saved = revision;
+    if let Err(e) = file.save(&compass.market_prices()) {
+        error!("saving market prices failed: {e}");
     }
 }
 
@@ -456,7 +507,10 @@ impl ReaderThread {
                         });
                         Command::ReadExpBar { region, reading }
                     }
-                    Capture::Item(capture) => Command::ReadItemTooltip(item_reader.read(&capture)),
+                    Capture::Item(capture) => {
+                        let reading = item_reader.read(&capture);
+                        Command::ReadItemTooltip { capture, reading }
+                    }
                 };
                 if commands.send(command).is_err() {
                     return;
@@ -509,12 +563,14 @@ fn compass_loop(
     let settings_path = files.settings;
     // Restored at startup: saved already.
     let mut bests_saved = compass.bests_revision();
+    let mut prices_saved = compass.market_prices_revision();
     let Windows {
         overlay: mut window,
         setup: mut setup_windows,
         mut grind_tracker,
         mut personal_bests,
         mut item_lookup,
+        mut item_card,
         mut hotkeys,
     } = windows;
     let mut saved = compass.settings();
@@ -534,11 +590,11 @@ fn compass_loop(
             }
             Ok(Command::Hotkey(pressed)) => {
                 let request = compass.on_hotkey(&pressed);
-                carry_out(&app, &window.overlay, &reader, &mut compass, request);
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
             }
             Ok(Command::Press(control)) => {
                 let request = compass.press(control);
-                carry_out(&app, &window.overlay, &reader, &mut compass, request);
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
             }
             Ok(Command::SearchQuery(query)) => {
                 compass.search_query(&query);
@@ -551,18 +607,35 @@ fn compass_loop(
             }
             Ok(Command::OpenMobPage(id)) => {
                 let request = compass.open_mob_page(&id);
-                carry_out(&app, &window.overlay, &reader, &mut compass, request);
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
             }
             Ok(Command::OpenBestsMapPage(id)) => {
                 let request = compass.open_bests_map_page(&id);
-                carry_out(&app, &window.overlay, &reader, &mut compass, request);
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
             }
             Ok(Command::RemoveVisit { map, visit }) => {
                 compass.remove_visit(&map, visit);
             }
             Ok(Command::PickItem(id)) => {
                 let request = compass.pick_item(&id);
-                carry_out(&app, &window.overlay, &reader, &mut compass, request);
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
+            }
+            Ok(Command::CloseItemCard) => {
+                compass.close_item_card();
+            }
+            Ok(Command::PickCardItem(id)) => {
+                compass.pick_card_item(&id);
+            }
+            Ok(Command::OpenCardMeowdbPage) => {
+                // Its page comes from `take_request`, once MeowDB's search has answered.
+                compass.open_card_meowdb_page(reader.now_ms());
+            }
+            Ok(Command::EnterCardMarket(typed)) => {
+                compass.enter_card_market(&typed);
+            }
+            Ok(Command::OpenCardMesowatch) => {
+                let request = compass.open_card_mesowatch();
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
             }
             Ok(Command::PanelHeight(height)) => {
                 expanded_height = height.clamp(MIN_EXPANDED_HEIGHT, MAX_EXPANDED_HEIGHT);
@@ -578,6 +651,7 @@ fn compass_loop(
             Ok(Command::Quit) => {
                 // Whatever the player changed last (a drag, say) is saved first.
                 save_bests(&compass, &files.bests, &mut bests_saved);
+                save_market_prices(&compass, &files.market_prices, &mut prices_saved);
                 let current = compass.settings();
                 if current != saved
                     && let Err(e) = settings::save(&settings_path, &current)
@@ -621,6 +695,12 @@ fn compass_loop(
                     compass.set_item_lookup_size(size);
                 }
             }
+            Ok(Command::ItemCardHeight(height)) => {
+                item_card.set_height(height);
+                if let Some(size) = item_card.size() {
+                    compass.set_item_card_size(size);
+                }
+            }
             Ok(Command::GrindTrackerSizeMove(what)) => {
                 if let Some(at) = grind_tracker.size_move(what) {
                     compass.act(Action::GrindTrackerMoved { x: at.x, y: at.y });
@@ -630,6 +710,11 @@ fn compass_loop(
                 personal_bests.set_height(height);
                 if let Some(size) = personal_bests.size() {
                     compass.set_personal_bests_size(size);
+                }
+            }
+            Ok(Command::ItemCardSizeMove(what)) => {
+                if let Some(at) = item_card.size_move(what) {
+                    compass.act(Action::ItemCardMoved { x: at.x, y: at.y });
                 }
             }
             Ok(Command::PersonalBestsSizeMove(what)) => {
@@ -651,8 +736,9 @@ fn compass_loop(
                     compass.on_exp_bar_frame_read(frame, reading);
                 }
             }
-            Ok(Command::ReadItemTooltip(reading)) => {
-                compass.on_item_tooltip_reading(Some(reading));
+            Ok(Command::ReadItemTooltip { capture, reading }) => {
+                // With the capture, whose part around the pointer a Bug Report keeps.
+                compass.on_item_capture_read(*capture, reading);
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
@@ -676,6 +762,9 @@ fn compass_loop(
             if let Some(size) = item_lookup.size() {
                 compass.set_item_lookup_size(size);
             }
+            if let Some(size) = item_card.size() {
+                compass.set_item_card_size(size);
+            }
             // The hotkeys are live, and our windows show, only while the game or one of our
             // windows is in front.
             compass.on_foreground(gamewin::foreground(game.map(|g| g.handle)));
@@ -693,7 +782,7 @@ fn compass_loop(
         compass.tick(reader.now_ms());
         // An Item Lookup's page, once MeowDB has answered.
         while let Some(request) = compass.take_request() {
-            carry_out(&app, &window.overlay, &reader, &mut compass, Some(request));
+            carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, Some(request));
         }
         if Instant::now() >= next_capture {
             next_capture = Instant::now() + TICK;
@@ -713,6 +802,7 @@ fn compass_loop(
         let state = compass.panel_state();
         if state.quit {
             save_bests(&compass, &files.bests, &mut bests_saved);
+            save_market_prices(&compass, &files.market_prices, &mut prices_saved);
             app.exit(0);
             return;
         }
@@ -727,6 +817,7 @@ fn compass_loop(
         grind_tracker.sync(state);
         personal_bests.sync(state);
         item_lookup.sync(state);
+        item_card.sync(state);
 
         // Save once the settings settle, not on every move of a drag.
         let current = compass.settings();
@@ -740,6 +831,7 @@ fn compass_loop(
             saved = pending.0.clone();
         }
         save_bests(&compass, &files.bests, &mut bests_saved);
+        save_market_prices(&compass, &files.market_prices, &mut prices_saved);
     }
 }
 
@@ -772,6 +864,7 @@ fn set_panel_sizes(compass: &mut Compass, overlay: &WebviewWindow, expanded_heig
 fn carry_out(
     app: &AppHandle,
     overlay: &WebviewWindow,
+    item_card: &mut ItemCardWindow,
     reader: &ReaderThread,
     compass: &mut Compass,
     request: Option<Request>,
@@ -780,6 +873,9 @@ fn carry_out(
         Some(Request::OpenInBrowser { url }) => open_in_browser(app, &url),
         Some(Request::RaiseOverlay) => search::take_focus(overlay),
         Some(Request::CaptureItemTooltip) => {
+            // The Item Card shows in our captures: it would be read in place of the Item
+            // Tooltip it covers.
+            item_card.out_of_the_capture();
             if let Err(e) = reader.read_item_tooltip() {
                 error!("Item Lookup: {e}");
                 compass.on_item_tooltip_reading(None);
