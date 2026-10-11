@@ -23,7 +23,10 @@
     />
     <meta property="og:url" content="@SITE_URL@" />
     <meta property="og:image" content="@CARD_IMAGE@" />
-    <meta property="og:image:alt" content="The MapleCompass panel beside a MapleStory map." />
+    <meta
+      property="og:image:alt"
+      content="MapleStory's minimap and, under it, the MapleCompass panel showing the same map: its picture with every portal ringed, and the way to a mob to hunt."
+    />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="@CARD_IMAGE@" />
     <link rel="preload" href="./fonts/Maplestory-Light.woff2" as="font" type="font/woff2" crossorigin />
@@ -55,9 +58,9 @@
       <main class="window-body">
         <!-- Get started: what it is, whether it's safe, and how to install and set it up. -->
         <section class="tab-page" id="get-started" aria-labelledby="title">
-          <div class="hero">
+          <div class="hero" data-mini="At a glance">
             <div class="hero-text">
-              <h1 id="title">The map you're on, at a glance</h1>
+              <h1 id="title">The map you're&nbsp;on, at a glance</h1>
               <p class="lede">
                 MapleCompass is a free helper overlay for MapleStory Classic World. It reads the minimap title the way a
                 screenshot does and shows you the map you're on: a picture of the whole map with every portal ringed, the
@@ -71,6 +74,9 @@
                 MapleCompass isn't made, endorsed or supported by NEXON. Using any third-party tool with MapleStory is at
                 your own risk.
               </p>
+              <p class="phone-note">
+                On a phone? MapleCompass runs on a Windows PC, beside the game: open this page there to download it.
+              </p>
               <div class="actions">
                 <a class="button" href="@SETUP_URL@">Download for Windows</a>
                 <a class="button secondary" href="#safe">How it stays safe</a>
@@ -80,22 +86,26 @@
                 <a href="@RELEASE_URL@">Other downloads</a> ·
                 <a href="https://github.com/itechify/maplecompass/releases">What's new</a>
               </p>
+              <p class="fine">
+                The files aren't code-signed, so Windows may say it "protected your PC": choose <strong>More info</strong>,
+                then <strong>Run anyway</strong>. Play the game windowed or borderless, not fullscreen.
+              </p>
             </div>
             <figure class="shot hero-shot">
               <img
                 id="hero-shot"
                 src="./screenshots/hero.png"
-                alt="MapleStory on Henesys Hunting Ground I, with the MapleCompass panel inside the game window under the minimap: the map's picture with its portals ringed and the next one on the route ringed in magenta, Navigation to Orange Mushrooms on Henesys Hunting Ground II, and the map's EXP and mobs per hour."
+                alt="MapleStory's minimap on Victoria Road, Henesys Hunting Ground I, and under it the MapleCompass panel naming the same map: its picture with every portal ringed and the next one on the way ringed in magenta, then Navigation to Orange Mushrooms on Henesys Hunting Ground II, with the route there."
                 fetchpriority="high"
               />
-              <figcaption>The panel inside the game window, under the minimap, on Henesys Hunting Ground I.</figcaption>
+              <figcaption>The minimap's title, and the panel under it showing that map.</figcaption>
             </figure>
           </div>
 
           <h2 class="vh">Get started</h2>
           <p class="in-tab start-index">
-            <a href="#safe">How it stays safe</a> · <a href="#data">What it fetches and keeps</a> ·
-            <a href="#install">Install</a> · <a href="#setup">Setup</a>
+            <a href="#safe">How it stays safe</a> · <a href="#install">Install</a> · <a href="#setup">Setup</a> ·
+            <a href="#trouble">When it doesn't work</a> · <a href="#data">What it fetches and keeps</a>
           </p>
 
           <section class="topic" id="safe" aria-labelledby="safe-title">
@@ -119,10 +129,153 @@
                 Its hotkeys are ordinary hotkeys registered with Windows, not a keyboard hook, and they act only while the
                 game or one of MapleCompass's windows is in front.
               </p>
+              <p>
+                You don't have to take this on trust: its source code is public on
+                <a href="https://github.com/itechify/maplecompass">GitHub</a>, for anyone to read.
+              </p>
             </div>
           </section>
 
-          <section class="topic with-aside" id="data" aria-labelledby="data-title">
+          <section class="topic with-aside" id="install" aria-labelledby="install-title">
+            <div class="topic-text">
+              <h3 id="install-title">Install</h3>
+              <p>
+                MapleCompass runs on Windows 10 and 11, 64-bit, beside MapleStory Classic World played windowed or
+                borderless (not fullscreen), with the minimap open and both lines of its title showing.
+              </p>
+              <p>
+                The files aren't code-signed, so Windows SmartScreen may say it "protected your PC": choose
+                <strong>More info</strong>, then <strong>Run anyway</strong>. To update, quit the running MapleCompass first
+                (its compass in the notification area: <strong>Quit MapleCompass</strong>). Your settings, hotkeys and
+                Personal Bests carry over.
+              </p>
+            </div>
+            <aside class="aside" aria-labelledby="files-title">
+              <h4 id="files-title">The files</h4>
+              <dl class="files">
+                <dt><a href="@SETUP_URL@">MapleCompass_@VERSION@_x64-setup.exe</a> <span class="tag">Recommended</span></dt>
+                <dd>Installs for your user, over earlier versions, with a Start menu entry and an uninstaller.</dd>
+                <dt>MapleCompass_@VERSION@_x64_en-US.msi</dt>
+                <dd>The same, as an MSI package. It installs for all users, so it asks for admin rights.</dd>
+                <dt>maplecompass-@VERSION@-portable.exe</dt>
+                <dd>No install: run it from any folder. It needs the Microsoft Edge WebView2 runtime, which Windows 11 already has.</dd>
+              </dl>
+              <p>The MSI and portable files are on <a href="@RELEASE_URL@">the release's page</a>.</p>
+            </aside>
+          </section>
+
+          <section class="topic with-shot" id="setup" aria-labelledby="setup-title">
+            <div class="topic-text">
+              <h3 id="setup-title">Setup</h3>
+              <p>On first run, a setup window walks you through:</p>
+              <ol>
+                <li>The account warning above.</li>
+                <li>Finding the game window, or picking it by hand.</li>
+                <li>Setting up the game: windowed or borderless, with the minimap open and its title showing.</li>
+                <li>
+                  Marking the minimap title: drag a box around its two lines, or move the box with the Arrow keys and resize
+                  it with Alt+Arrow (hold Shift for ten-pixel steps). Enter tests the box; Esc goes back without changing the
+                  previous mark.
+                </li>
+                <li>A test read, which shows the map it recognised and the keys to use while you play.</li>
+                <li>If you like, marking the EXP bar, for the <a href="#grind-tracker">Grind Tracker</a>.</li>
+                <li>A test read of the EXP bar, if you marked it. Finish starts the overlay.</li>
+              </ol>
+              <p>
+                Closing setup on first run quits. MapleCompass asks you to set up again when the game window changes size.
+                <kbd>Ctrl+Shift+S</kbd> opens setup again, to mark the title anew or read the Overlay Guide, which lists your
+                hotkeys and explains placement and the hunting figures.
+              </p>
+              <p>
+                While it runs, its gold compass sits in the notification area (the system tray, by the clock). Click it for
+                <strong>Help &amp; Setup</strong> or <strong>Quit MapleCompass</strong>, the one way to quit, whether or not
+                the game is open.
+              </p>
+              <p class="detail">Only one MapleCompass runs at a time: starting it again shows the one that is running.</p>
+            </div>
+            <figure class="shot">
+              <img
+                src="./screenshots/setup.png"
+                alt="Setup opened again, at its step for marking the minimap title: draw or adjust a box around its two lines, with Back, Keep the current title and Mark the title."
+                loading="lazy"
+                decoding="async"
+              />
+              <figcaption>Setup opened again, to mark the minimap title anew.</figcaption>
+            </figure>
+          </section>
+          <section class="topic wide" id="trouble" aria-labelledby="trouble-title">
+            <div class="topic-text">
+              <h3 id="trouble-title">When it doesn't work</h3>
+              <dl class="trouble">
+                <div>
+                  <dt>Windows says it "protected your PC"</dt>
+                  <dd>The files aren't code-signed: choose <strong>More info</strong>, then <strong>Run anyway</strong>.</dd>
+                </div>
+                <div>
+                  <dt>Setup can't find the game window</dt>
+                  <dd>
+                    Start MapleStory first, or pick its window by hand: choose <strong>Select game window</strong>, then hold
+                    the pointer over the game while setup counts down.
+                  </dd>
+                </div>
+                <div>
+                  <dt>The test read says "No map recognised in the marked box"</dt>
+                  <dd>
+                    Open the minimap with both lines of its title showing, then mark the box again around both lines, with a
+                    little of the blue panel around them. Setup waits on this step until a map is recognised.
+                  </dd>
+                </div>
+                <div>
+                  <dt>The panel doesn't show</dt>
+                  <dd>
+                    It shows only while the game is open and not minimised, and the game or one of MapleCompass's windows is in
+                    front: click into the game. Screen capture can't see exclusive fullscreen, so play windowed or borderless.
+                  </dd>
+                </div>
+                <div>
+                  <dt>The panel can't tell which map you're on</dt>
+                  <dd>
+                    It says "Reading the minimap title…", or shows the last map it read marked
+                    <span class="chip-doubt">Not sure</span>. Keep the minimap open with both lines of its title showing; if it
+                    goes on, mark the title again with <kbd>Ctrl+Shift+S</kbd>.
+                  </dd>
+                </div>
+                <div>
+                  <dt>The panel says "The game window changed size"</dt>
+                  <dd>
+                    The title and the EXP bar have moved with it, so setup opens by itself: mark them again.
+                  </dd>
+                </div>
+                <div>
+                  <dt>The panel says "Map recognition unavailable"</dt>
+                  <dd>
+                    It couldn't load the map list from OSMS Data Explorer, which the first launch needs. Check your connection:
+                    it tries again every minute. If it says OSMS's data has changed format, MapleCompass needs an update.
+                  </dd>
+                </div>
+                <div>
+                  <dt>A hotkey does nothing</dt>
+                  <dd>
+                    The panel says when another app has its keys: close that app, or <a href="#settings">change the hotkey</a>.
+                    Hotkeys act only while the game or one of MapleCompass's windows is in front.
+                  </dd>
+                </div>
+                <div>
+                  <dt>The Grind Tracker says "Can't read the EXP bar"</dt>
+                  <dd>
+                    Move whatever covers the bar. If nothing does, open setup with <kbd>Ctrl+Shift+S</kbd>, keep the current
+                    title, and choose <strong>Mark the EXP bar</strong>.
+                  </dd>
+                </div>
+              </dl>
+              <p>
+                Something else? <a href="https://github.com/itechify/maplecompass/issues">Report it on GitHub</a>: what you
+                did, what you expected, and what MapleCompass showed.
+              </p>
+            </div>
+          </section>
+
+          <section class="topic with-aside" id="data" data-mini="Fetches and keeps" aria-labelledby="data-title">
             <div class="topic-text">
               <h3 id="data-title">What it fetches and keeps</h3>
               <dl class="facts">
@@ -166,71 +319,6 @@
             </aside>
           </section>
 
-          <section class="topic with-aside" id="install" aria-labelledby="install-title">
-            <div class="topic-text">
-              <h3 id="install-title">Install</h3>
-              <p>
-                MapleCompass runs on Windows 10 and 11, 64-bit, beside MapleStory Classic World played windowed or
-                borderless (not fullscreen), with the minimap open and both lines of its title showing.
-              </p>
-              <p>
-                The files aren't code-signed, so Windows SmartScreen may say it "protected your PC": choose
-                <strong>More info</strong>, then <strong>Run anyway</strong>. To update, quit the running MapleCompass first
-                (its compass in the notification area: <strong>Quit MapleCompass</strong>). Your settings, hotkeys and
-                Personal Bests carry over.
-              </p>
-            </div>
-            <aside class="aside" aria-labelledby="files-title">
-              <h4 id="files-title">The files</h4>
-              <dl class="files">
-                <dt><a href="@SETUP_URL@">MapleCompass_@VERSION@_x64-setup.exe</a> <span class="tag">Recommended</span></dt>
-                <dd>Installs for your user, over earlier versions, with a Start menu entry and an uninstaller.</dd>
-                <dt>MapleCompass_@VERSION@_x64_en-US.msi</dt>
-                <dd>The same, as an MSI package. It installs for all users, so it asks for admin rights.</dd>
-                <dt>maplecompass-@VERSION@-portable.exe</dt>
-                <dd>No install: run it from any folder. It needs the Microsoft Edge WebView2 runtime, which Windows 11 already has.</dd>
-              </dl>
-              <p>The MSI and portable files are on <a href="@RELEASE_URL@">the release's page</a>.</p>
-            </aside>
-          </section>
-
-          <section class="topic with-shot" id="setup" aria-labelledby="setup-title">
-            <div class="topic-text">
-              <h3 id="setup-title">Setup</h3>
-              <p>On first run, a setup window walks you through:</p>
-              <ol>
-                <li>The account warning above.</li>
-                <li>Finding the game window, or picking it by hand.</li>
-                <li>Setting up the game: the minimap open with its title showing.</li>
-                <li>
-                  Marking the minimap title: drag a box around its two lines, or move the box with the Arrow keys and resize
-                  it with Alt+Arrow (hold Shift for ten-pixel steps). Enter starts a test read, which shows the map it
-                  recognised; Esc goes back without changing the previous mark.
-                </li>
-                <li>If you like, marking the EXP bar, for the <a href="#grind-tracker">Grind Tracker</a>.</li>
-                <li>The overlay's shortcuts. Finish starts the overlay.</li>
-              </ol>
-              <p>
-                Closing setup on first run quits. MapleCompass asks you to set up again when the game window changes size.
-                <kbd>Ctrl+Shift+S</kbd> opens setup again, to mark the title anew or read the Overlay Guide, which lists your
-                hotkeys and explains placement and the hunting figures.
-              </p>
-              <p>
-                While it runs, the gold compass sits in the notification area. Click it for <strong>Help &amp; Setup</strong>
-                or <strong>Quit MapleCompass</strong>, the one way to quit, whether or not the game is open. Only one
-                MapleCompass runs at a time: starting it again shows the one that is running.
-              </p>
-            </div>
-            <figure class="shot">
-              <img
-                src="./screenshots/setup.png"
-                alt="Setup's step for marking the minimap title: draw or adjust a box around its two lines, with Back, Keep the current title and Mark the title."
-                loading="lazy"
-                decoding="async"
-              />
-              <figcaption>Setup, marking the minimap title.</figcaption>
-            </figure>
-          </section>
           <p class="next"><a class="button secondary" href="#where-you-are">Next: Where you are</a></p>
         </section>
 
@@ -246,11 +334,11 @@
             <div class="topic-text">
               <h3 id="panel-title">The panel</h3>
               <p>
-                The panel starts on the right edge of the game window, its top a third of the way down, and grows downward
-                as its content changes. Once it knows your map it shows the map's name, then three sections: the
-                <a href="#map">Map</a>, <a href="#navigation">Navigation</a> while you have a Hunting Target, and the
-                <a href="#mobs">Mobs</a>. Click a section's heading to collapse it to its heading, and again to open it; a
-                collapsed section stays collapsed from map to map and the next time you start MapleCompass.
+                Once it knows your map, the panel shows the map's name, then three sections: the <a href="#map">Map</a>,
+                <a href="#navigation">Navigation</a> while you have a Hunting Target (a mob and a map you picked to go and
+                hunt it on), and the <a href="#mobs">Mobs</a>. Click a section's heading to collapse it to its heading, and
+                again to open it; a collapsed section stays collapsed from map to map and the next time you start
+                MapleCompass.
               </p>
               <p>
                 You can click it at any time, and a click never takes the keyboard from the game: only the search view and
@@ -265,11 +353,23 @@
               </p>
               <h4>Placement</h4>
               <p>
-                <kbd>Ctrl+Shift+P</kbd> switches between four placements. <strong>Inside</strong>, the panel keeps the spot
-                you dragged it to relative to the game window. <strong>Docked</strong> right or left, it follows the game
-                window's outside edge, and goes inside when there is no room on screen. <strong>Detached</strong>, you can
-                drag it anywhere, such as onto another monitor, and it stays there, with a taskbar entry of its own.
+                The panel starts on the right edge of the game window, its top a third of the way down, and grows downward
+                as its content changes. <kbd>Ctrl+Shift+P</kbd> switches between four placements. <strong>Inside</strong>,
+                the panel keeps the spot you dragged it to relative to the game window. <strong>Docked</strong> right or
+                left, it follows the game window's outside edge, and goes inside when there is no room on screen.
+                <strong>Detached</strong>, you can drag it anywhere, such as onto another monitor, and it stays there, with
+                a taskbar entry of its own.
               </p>
+              <figure class="shot in-text">
+                <img
+                  src="./screenshots/game-window.png"
+                  sizes="(max-width: 640px) calc(100vw - 36px), 608px"
+                  alt="MapleStory on Henesys Hunting Ground I, with the MapleCompass panel inside the game window, dragged under the minimap: the map's picture, Navigation to Orange Mushrooms, and the map's EXP and mobs per hour."
+                  loading="lazy"
+                  decoding="async"
+                />
+                <figcaption>Inside, dragged under the minimap: the whole game window on Henesys Hunting Ground I.</figcaption>
+              </figure>
             </div>
             <aside class="aside" aria-labelledby="buttons-title">
               <h4 id="buttons-title">Its buttons</h4>
@@ -307,7 +407,7 @@
             </aside>
           </section>
 
-          <section class="topic with-shot" id="map" aria-labelledby="map-title">
+          <section class="topic with-shot" id="map" data-mini="The Map" aria-labelledby="map-title">
             <div class="topic-text">
               <h3 id="map-title"><span class="mark ring" aria-hidden="true"></span>The Map and its Hidden Portals</h3>
               <p>
@@ -326,14 +426,14 @@
                 see where it leads, its street and its kind, and to light its row; rest it on a row to light its ring.
               </p>
               <p>
+                While you have a Hunting Target, each portal its route takes next from your map wears
+                a wide magenta ring <span class="ring-key route" aria-hidden="true"></span>as well.
+              </p>
+              <p class="detail">
                 On a town, the invisible exits are its building doors, which you can see, so they are ringed like visible
                 portals and not listed. A teleport within the map is never listed, though an invisible one is dashed. While
                 the picture loads the section says "Loading map…", and if it can't be loaded, "Couldn't load the map
                 picture" above the rows; a map with no picture and no Hidden Portals has no Map section.
-              </p>
-              <p>
-                While you have a Hunting Target, each portal its route takes next from your map wears
-                a wide magenta ring <span class="ring-key route" aria-hidden="true"></span>as well.
               </p>
             </div>
             <figure class="shot">
@@ -364,7 +464,7 @@
             </div>
           </section>
 
-          <section class="topic" id="shared-titles" aria-labelledby="shared-titles-title">
+          <section class="topic" id="shared-titles" data-mini="Shared titles" aria-labelledby="shared-titles-title">
             <div class="topic-text">
               <h3 id="shared-titles-title">When maps share a title</h3>
               <p>
@@ -375,10 +475,10 @@
                 levels and Hidden Portal count. <kbd>Ctrl+Shift+N</kbd> steps through them, and your pick holds until you
                 change maps. The picture shows once it's settled which map you're on.
               </p>
-              <p>
-                Many map names differ only in a Roman numeral, such as Rocky Road I, II and III. MapleCompass counts the
-                numeral's strokes. When it still can't make one out, it picks the map the one you came from leads to, if it
-                leads to just one of them; otherwise it says it isn't sure rather than guess.
+              <p class="detail">
+                Many map names differ only in a Roman numeral, such as Rocky Road I, II and III. When MapleCompass can't
+                make the numeral out, it picks the map the one you came from leads to, if it leads to just one of them;
+                otherwise it says it isn't sure rather than guess.
               </p>
             </div>
           </section>
@@ -394,7 +494,7 @@
             <p class="in-tab"><a href="#search">Search a mob</a> · <a href="#navigation">Navigation to your Hunting Target</a></p>
           </header>
 
-          <section class="topic" id="search" aria-labelledby="search-title">
+          <section class="topic with-aside" id="search" aria-labelledby="search-title">
             <div class="topic-text">
               <h3 id="search-title">Search a mob</h3>
               <p>
@@ -404,14 +504,27 @@
               </p>
               <p>
                 The panel then lists every map the mob spawns on, ranked by <strong>Density Tier</strong> and then the
-                nearest within a tier, each with its Density, Spawn Share and Distance (the fewest map changes to get there).
-                Tick <strong>Taxis</strong> or <strong>Teleport Scrolls</strong> to count them as ways to travel. Event maps
-                and the developers' room aren't listed. The back arrow or Esc leaves without changing anything.
+                nearest within a tier, each with its figures. Tick <strong>Taxis</strong> or <strong>Teleport Scrolls</strong>
+                to count them as ways to travel. Event maps and the developers' room aren't listed. The back arrow or Esc
+                leaves without changing anything.
               </p>
             </div>
+            <aside class="aside" aria-labelledby="figures-title">
+              <h4 id="figures-title">Each map's figures</h4>
+              <dl class="facts">
+                <dt>Density</dt>
+                <dd>How many of the mob you can kill there: its spawns, times how fast the map refills.</dd>
+                <dt>Share</dt>
+                <dd>The mob's share of all the map's spawns: the higher, the fewer other mobs in your way.</dd>
+                <dt>Tier</dt>
+                <dd>The map's Density Tier: High, Medium or Low against the mob's densest map.</dd>
+                <dt>Distance</dt>
+                <dd>The fewest map changes to get there.</dd>
+              </dl>
+            </aside>
           </section>
 
-          <section class="topic with-shot" id="navigation" aria-labelledby="navigation-title">
+          <section class="topic with-shot" id="navigation" data-mini="Navigation" aria-labelledby="navigation-title">
             <div class="topic-text">
               <h3 id="navigation-title"><span class="mark route" aria-hidden="true"></span>Navigation to your Hunting Target</h3>
               <p>
@@ -504,7 +617,7 @@
                 side, highest first, with each map's region and mob levels, how close your best came to its solo EXP/h
                 ceiling, and when you set it. Click a column to sort by it, or a map to open it on MeowDB.
               </p>
-              <p>
+              <p class="detail">
                 Bests are shared by all your characters, so the mob levels say what each was worth. A best on a map that has
                 left the map list stays, marked "Not in the map list". The page shows your bests as they were when you
                 opened it, so open it again to see newer ones.
@@ -521,7 +634,7 @@
             <p>An item's MeowDB page, from its tooltip in the game.</p>
           </header>
 
-          <section class="topic with-shot" id="item-lookup" aria-labelledby="item-lookup-title">
+          <section class="topic with-shot full-shot" id="item-lookup" aria-labelledby="item-lookup-title">
             <div class="topic-text">
               <h3 id="item-lookup-title">Item Lookup</h3>
               <p>
@@ -537,7 +650,7 @@
                 no MeowDB item of that name, or MeowDB out of reach). When several items share the name, the alert lists
                 them with their categories for you to pick.
               </p>
-              <p>
+              <p class="detail">
                 The alert goes after a few seconds (half a minute with a list), and clicks pass through it to the game unless
                 it lists items. Item Lookup has no button, so it can't be used while its hotkey is turned off.
               </p>

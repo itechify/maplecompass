@@ -1,5 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import sharp from "sharp";
 import { defineConfig, type Plugin } from "vite";
 import pkg from "../package.json" with { type: "json" };
 import { hotkeyRows } from "./hotkeys.ts";
@@ -85,6 +86,48 @@ function screenshotSizes(): Plugin {
 }
 
 /**
+ * Each screenshot also as WebP, a fraction of the PNG's size, made with sharp when the page
+ * is served or built (into site/screenshots/webp, which isn't committed): the PNGs stay the
+ * shots as taken, and a browser takes the WebP. A picture whose <img> says how wide it
+ * shows (`sizes`) gets a half-size copy too, for a phone. A shot not taken yet gets none,
+ * so the build still fails on it.
+ */
+function webpScreenshots(): Plugin {
+  const dir = fileURLToPath(new URL("./screenshots/webp/", import.meta.url));
+  /** Writes the PNG as WebP, at `width` if given, unless a copy newer than the PNG is there. */
+  async function webp(png: string, name: string, width?: number) {
+    const file = `${dir}${name}`;
+    if (existsSync(file) && statSync(file).mtimeMs >= statSync(png).mtimeMs) return;
+    mkdirSync(dir, { recursive: true });
+    await sharp(png).resize(width ? { width } : undefined).webp({ quality: 90 }).toFile(file);
+  }
+  return {
+    name: "maplecompass-site:webp-screenshots",
+    transformIndexHtml: {
+      order: "pre",
+      async handler(html) {
+        for (const [tag, name] of html.matchAll(/<img\b[^>]*\bsrc="\.\/screenshots\/([\w-]+)\.png"[^>]*>/g)) {
+          const png = fileURLToPath(new URL(`./screenshots/${name}.png`, import.meta.url));
+          if (!existsSync(png)) continue;
+          await webp(png, `${name}.webp`);
+          let srcset = `./screenshots/webp/${name}.webp`;
+          const sizes = /\bsizes="([^"]+)"/.exec(tag)?.[1];
+          if (sizes) {
+            const { width } = await sharp(png).metadata();
+            const half = Math.round(width / 2);
+            await webp(png, `${name}-${half}.webp`, half);
+            srcset = `./screenshots/webp/${name}-${half}.webp ${half}w, ${srcset} ${width}w`;
+          }
+          const source = `<source type="image/webp" srcset="${srcset}"${sizes ? ` sizes="${sizes}"` : ""} />`;
+          html = html.replace(tag, `<picture>${source}${tag}</picture>`);
+        }
+        return html;
+      },
+    },
+  };
+}
+
+/**
  * The page names the app's theme and icon outside site/ (../src, ../assets), as the build
  * takes them. The dev server serves only its root, so it serves those from the repo.
  */
@@ -123,7 +166,14 @@ export default defineConfig({
   root: "site",
   base: "/maplecompass/",
   publicDir: false,
-  plugins: [fillPlaceholders(), screenshotSizes(), screenshots(), serveAppFiles(), themeWithoutFonts()],
+  plugins: [
+    fillPlaceholders(),
+    screenshotSizes(),
+    webpScreenshots(),
+    screenshots(),
+    serveAppFiles(),
+    themeWithoutFonts(),
+  ],
   build: {
     outDir: "dist",
     emptyOutDir: true,
