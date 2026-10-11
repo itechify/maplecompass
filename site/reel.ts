@@ -13,13 +13,13 @@ type Rect = { x: number; y: number; w: number; h: number };
 // Where things are in game-window.png (site/screenshots/README.md: retaking it means
 // checking these). The hero shot, hero.png, is its top-left corner at full size.
 const WHOLE: Rect = { x: 0, y: 0, w: 1922, h: 1232 };
-const HERO: Rect = { x: 0, y: 0, w: 600, h: 872 };
+const HERO: Rect = { x: 0, y: 0, w: 600, h: 960 };
 /** The box marked around the minimap title's two lines, with a little of its blue panel. */
 const MARK: Rect = { x: 70, y: 68, w: 248, h: 58 };
-/** The panel's title panel, under the minimap, where the read lands. */
-const TITLE: Rect = { x: 10, y: 383, w: 302, h: 56 };
+/** The panel's title panel, under the minimap, where the read lands: beside its Map Mark. */
+const TITLE: Rect = { x: 60, y: 406, w: 290, h: 56 };
 /** Close on the minimap's title, with the panel's under it, in the hero's shape. */
-const CLOSE: Rect = { x: 0, y: 28, w: 330, h: (330 * HERO.h) / HERO.w };
+const CLOSE: Rect = { x: 0, y: 28, w: 360, h: (360 * HERO.h) / HERO.w };
 /** What the minimap's title says. */
 const STREET = "Victoria Road";
 const MAP = "Henesys Hunting Ground I";
