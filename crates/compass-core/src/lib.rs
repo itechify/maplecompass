@@ -936,8 +936,9 @@ impl Compass {
         self.apply_press(control)
     }
 
-    /// The player used a control: its hotkey, or its icon at the top of the panel. Returns
-    /// what the shell must do at once, if anything.
+    /// The player used a control: its hotkey, its icon at the top of the panel, or its
+    /// button or link in another of our windows. Returns what the shell must do at once,
+    /// if anything.
     pub fn press(&mut self, control: PanelControl) -> Option<Request> {
         self.record(Event::Press { control });
         self.apply_press(control)
