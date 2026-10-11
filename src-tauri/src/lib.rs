@@ -34,14 +34,14 @@ mod view;
 use compass_core::{
     Action, Compass, ExpBarReader, ExpBarReading, Frame, GameWindow, ItemCapture, ItemTooltipReader,
     ItemTooltipReading, KeyPress, Layer, MIN_PANEL_WIDTH, PanelControl, PanelSizes, PlacementMode, PanelState, Request,
-    ScreenPoint, ScreenRect, Size, TitleReader, TitleReading, default_title_region,
+    ScreenPoint, ScreenRect, Size, TitleReader, TitleReading, VisitBest, default_title_region,
 };
 use source::WebSource;
-use bests_window::BestsWindow;
+use bests_window::{BestsWindow, PersonalBestsView};
 use errors::error;
-use grind_tracker::GrindTrackerWindow;
-use item_lookup::ItemLookupWindow;
-use setup::{Bridge, SetupWindows};
+use grind_tracker::{GrindTrackerView, GrindTrackerWindow};
+use item_lookup::{ItemLookupView, ItemLookupWindow};
+use setup::{Bridge, SetupPageView, SetupWindows};
 use sizemove::{Gesture, SizeMove};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -93,6 +93,9 @@ pub(crate) enum Command {
     OpenMobPage(String),
     /// The player clicked the name of the map with this ID in the Personal Bests window.
     OpenBestsMapPage(String),
+    /// The player removed the Visit whose best was `visit` from `map`'s Visit History, in
+    /// the Personal Bests window.
+    RemoveVisit { map: String, visit: VisitBest },
     /// The player picked the item with this MeowDB ID from the ones an Item Lookup found
     /// sharing the name it read.
     PickItem(String),
@@ -190,6 +193,13 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
+        // The views last sent to our pages, managed before the windows in tauri.conf.json
+        // are made: a page loads and asks for its view while the rest are still being made,
+        // before `setup` below runs.
+        .manage(SetupPageView::default())
+        .manage(GrindTrackerView::default())
+        .manage(PersonalBestsView::default())
+        .manage(ItemLookupView::default())
         // OSMS's pictures, such as the Mob Cards' animations, from our saved copies.
         .register_uri_scheme_protocol(pictures::SCHEME, |ctx, request| match cache_dir(ctx.app_handle()) {
             Ok(dir) => pictures::serve(&dir, &request),
@@ -238,7 +248,6 @@ pub fn run() {
                 commands: commands.clone(),
                 picks,
                 game: Mutex::new(None),
-                view: Default::default(),
             });
             let setup_windows = SetupWindows::new(app.handle())?;
             // Without it the player's drags and resizes don't stick, but the panel works.
@@ -333,6 +342,7 @@ pub fn run() {
             bests_window::personal_bests_height,
             bests_window::personal_bests_view,
             bests_window::personal_bests_open_map,
+            bests_window::personal_bests_remove_visit,
             item_lookup::item_lookup_height,
             item_lookup::item_lookup_view,
         ])
@@ -545,6 +555,9 @@ fn compass_loop(
             Ok(Command::OpenBestsMapPage(id)) => {
                 let request = compass.open_bests_map_page(&id);
                 carry_out(&app, &window.overlay, &reader, &mut compass, request);
+            }
+            Ok(Command::RemoveVisit { map, visit }) => {
+                compass.remove_visit(&map, visit);
             }
             Ok(Command::PickItem(id)) => {
                 let request = compass.pick_item(&id);

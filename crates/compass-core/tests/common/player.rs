@@ -2,7 +2,7 @@
 //! 10 s, the panel confirming maps, the Grind Tracker's buttons pressed, and, if a test
 //! asks, the shell's saves of the bests followed after each.
 
-use compass_core::{Compass, ExpBar, ExpBarReading, PanelControl, PanelState, SavedBests};
+use compass_core::{Compass, ExpBar, ExpBarReading, PanelControl, PanelState, SavedBests, VisitBest};
 
 const S: u64 = 1000;
 
@@ -126,6 +126,12 @@ impl Player {
     pub fn press(&mut self, control: PanelControl) -> PanelState {
         self.compass.press(control);
         self.shell_loop(&format!("{control:?}"))
+    }
+
+    /// Remove the Visit whose best was `visit` from `map`'s, in the Personal Bests window.
+    pub fn remove_visit(&mut self, map: &str, visit: VisitBest) -> PanelState {
+        self.compass.remove_visit(map, visit);
+        self.shell_loop(&format!("removing {visit:?} from {map}"))
     }
 }
 

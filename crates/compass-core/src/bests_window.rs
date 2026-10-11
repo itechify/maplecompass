@@ -14,6 +14,10 @@
 //!   share of the ceiling say what a best was worth. A best on a map not in the map list
 //!   is kept, with none of these, and a map without mobs has no levels or ceiling.
 //! - The map the player is on is marked: only while the panel is certain of it.
+//! - Each map's row holds its Visit History, highest first, for the player to open: each
+//!   Visit's EXP/h, its share of the ceiling and its date. The Visit under way's best is
+//!   among them, marked, where it makes the map's 10, but it isn't in the history yet, so
+//!   it can't be removed. The page keeps which maps are open; the core never knows.
 //! - Where it goes: centred over the game's client area until the player drags it, then
 //!   where they left it relative to the client area, until they drag it back to the
 //!   middle. As wide as its page lays it out, unless the client area is narrower, and no
@@ -80,6 +84,24 @@ pub struct PersonalBestsMap {
     pub set_at_unix_ms: Option<u64>,
     /// The panel shows this map and is certain the player is on it.
     pub here: bool,
+    /// Its Visit History, highest first, the Visit under way's best among them: the first
+    /// is the one the row's figures are of.
+    pub visits: Vec<PersonalBestsVisit>,
+}
+
+/// One of a map's Visits in the Personal Bests window: what the player removes it by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalBestsVisit {
+    /// Its best: the Rolling Rate's EXP/h, and when it was set.
+    pub exp_per_hour: u64,
+    pub set_at_unix_ms: Option<u64>,
+    /// The best as a share of the map's solo EXP/h ceiling, in hundredths of a percent, as
+    /// the row's; `None` with no ceiling.
+    pub ceiling_share_hundredths: Option<u64>,
+    /// It is the Visit under way's best: not in the Visit History until the Visit ends, so
+    /// it can't be removed yet.
+    pub this_visit: bool,
 }
 
 /// The Personal Bests window: whether the player wants it, and where it goes on screen.
@@ -126,11 +148,13 @@ impl BestsWindow {
     }
 }
 
-/// The Personal Bests window's rows for the bests `saved`. `map` gives a map's entry in
-/// the map list and its data, if it is in the list; `here` is the map the player is
-/// certainly on, if any.
+/// The Personal Bests window's rows for the bests `saved`, with `this_visit` the Visit
+/// under way's best among them: its map, and its place in the map's Visits. `map` gives a
+/// map's entry in the map list and its data, if it is in the list; `here` is the map the
+/// player is certainly on, if any.
 pub(crate) fn rows<'a>(
     saved: &SavedBests,
+    this_visit: Option<(&str, usize)>,
     map: impl Fn(&str) -> Option<(&'a MapEntry, &'a MapData)>,
     here: Option<&str>,
 ) -> Vec<PersonalBestsMap> {
@@ -141,6 +165,17 @@ pub(crate) fn rows<'a>(
             let best = bests.visits.first()?;
             let (entry, data) = map(&bests.id).unzip();
             let ceiling = data.and_then(|d| d.summary).map(|s| s.exp_per_hour.solo).filter(|&c| c > 0);
+            let visits = bests
+                .visits
+                .iter()
+                .enumerate()
+                .map(|(at, visit)| PersonalBestsVisit {
+                    exp_per_hour: visit.exp_per_hour,
+                    set_at_unix_ms: visit.set_at_unix_ms,
+                    ceiling_share_hundredths: ceiling.map(|c| share_hundredths(visit.exp_per_hour, c)),
+                    this_visit: this_visit == Some((bests.id.as_str(), at)),
+                })
+                .collect();
             Some(PersonalBestsMap {
                 id: bests.id.clone(),
                 street_name: entry.map_or_else(String::new, |e| e.street_name.clone()),
@@ -154,6 +189,7 @@ pub(crate) fn rows<'a>(
                 ceiling_share_hundredths: ceiling.map(|c| share_hundredths(best.exp_per_hour, c)),
                 set_at_unix_ms: best.set_at_unix_ms,
                 here: here == Some(bests.id.as_str()),
+                visits,
             })
         })
         .collect();
