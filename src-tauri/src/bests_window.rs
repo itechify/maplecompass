@@ -72,7 +72,6 @@ pub struct BestsWindow {
 impl BestsWindow {
     pub fn new(app: &AppHandle, commands: Sender<Command>) -> Self {
         let window = app.get_webview_window(PERSONAL_BESTS).expect("personal-bests window in tauri.conf.json");
-        app.manage(PersonalBestsView::default());
         // Without it the player's drags don't stick, but the window works.
         if let Err(e) = sizemove::watch(&window, commands.clone(), Command::PersonalBestsSizeMove, None) {
             error!("{e}");

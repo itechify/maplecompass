@@ -72,7 +72,6 @@ pub struct GrindTrackerWindow {
 impl GrindTrackerWindow {
     pub fn new(app: &AppHandle, commands: Sender<Command>) -> Self {
         let window = app.get_webview_window(GRIND_TRACKER).expect("grind-tracker window in tauri.conf.json");
-        app.manage(GrindTrackerView::default());
         // Without it the player's drags don't stick, but the window works.
         if let Err(e) = sizemove::watch(&window, commands.clone(), Command::GrindTrackerSizeMove, None) {
             error!("{e}");

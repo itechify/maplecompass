@@ -37,11 +37,11 @@ use compass_core::{
     ScreenPoint, ScreenRect, Size, TitleReader, TitleReading, default_title_region,
 };
 use source::WebSource;
-use bests_window::BestsWindow;
+use bests_window::{BestsWindow, PersonalBestsView};
 use errors::error;
-use grind_tracker::GrindTrackerWindow;
-use item_lookup::ItemLookupWindow;
-use setup::{Bridge, SetupWindows};
+use grind_tracker::{GrindTrackerView, GrindTrackerWindow};
+use item_lookup::{ItemLookupView, ItemLookupWindow};
+use setup::{Bridge, SetupPageView, SetupWindows};
 use sizemove::{Gesture, SizeMove};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -190,6 +190,13 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
+        // The views last sent to our pages, managed before the windows in tauri.conf.json
+        // are made: a page loads and asks for its view while the rest are still being made,
+        // before `setup` below runs.
+        .manage(SetupPageView::default())
+        .manage(GrindTrackerView::default())
+        .manage(PersonalBestsView::default())
+        .manage(ItemLookupView::default())
         // OSMS's pictures, such as the Mob Cards' animations, from our saved copies.
         .register_uri_scheme_protocol(pictures::SCHEME, |ctx, request| match cache_dir(ctx.app_handle()) {
             Ok(dir) => pictures::serve(&dir, &request),
@@ -238,7 +245,6 @@ pub fn run() {
                 commands: commands.clone(),
                 picks,
                 game: Mutex::new(None),
-                view: Default::default(),
             });
             let setup_windows = SetupWindows::new(app.handle())?;
             // Without it the player's drags and resizes don't stick, but the panel works.

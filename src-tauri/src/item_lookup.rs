@@ -59,7 +59,6 @@ pub struct ItemLookupWindow {
 impl ItemLookupWindow {
     pub fn new(app: &AppHandle, commands: Sender<Command>) -> Self {
         let window = app.get_webview_window(ITEM_LOOKUP).expect("item-lookup window in tauri.conf.json");
-        app.manage(ItemLookupView::default());
         let shows_on_top = keep_on_top(&window, "on-top-item-lookup", commands, &[]);
         // Clicks pass through until it lists items to pick from.
         let _ = window.set_ignore_cursor_events(true);
