@@ -7,6 +7,16 @@ import { byId, span } from "./dom";
 import { type LevelRange, levels, rate, sharePercent, whole } from "./figures";
 import { mapMark, type MapMarks } from "./map-marks";
 
+/** Mirror of `compass_core::PersonalBestsVisit`: one of a map's Visits. */
+type BestsVisit = {
+  expPerHour: number;
+  setAtUnixMs: number | null;
+  ceilingShareHundredths: number | null;
+  /** The Visit under way's best: not in the Visit History until the Visit ends, so it
+   *  can't be removed yet. */
+  thisVisit: boolean;
+};
+
 /** Mirror of `compass_core::PersonalBestsMap`. */
 type BestsMap = {
   id: string;
@@ -22,6 +32,8 @@ type BestsMap = {
   ceilingShareHundredths: number | null;
   setAtUnixMs: number | null;
   here: boolean;
+  /** Its Visit History, highest first, the Visit under way's best among them. */
+  visits: BestsVisit[];
 };
 
 /** What the shell sends: whether the window shows at all, the core's rows, highest EXP/h
@@ -37,7 +49,7 @@ const count = byId("count");
 const rows = byId("rows");
 const noteMissing = byId("note-missing");
 const credit = byId("credit");
-const announce = byId("sorted");
+const announce = byId("announce");
 const headers = [...document.querySelectorAll<HTMLTableCellElement>("th[data-column]")];
 
 /** What each column sorts by, which way it reads best first, and how a sort by it is
@@ -106,6 +118,16 @@ function missing(td: HTMLTableCellElement, why: string) {
  *  share, no mobs spawn there. */
 const NOT_LISTED = "Not in the map list";
 const NO_MOBS = "No mobs spawn on this map";
+const NO_DATE = "Set before MapleCompass knew the date";
+
+/** A map's name as the window writes it. */
+const mapName = (m: BestsMap) => m.mapName || `Map ${m.id}`;
+
+/** Why a map's share isn't known. */
+function noShare(m: BestsMap) {
+  if (m.mapName === "") return NOT_LISTED;
+  return m.mobLevels ? "No solo EXP/h for this map" : NO_MOBS;
+}
 
 /** The star on the best of all maps: the Grind Tracker's new-best star. */
 function star() {
@@ -144,7 +166,7 @@ function row(m: BestsMap, best: BestsMap | null, marks: MapMarks) {
   name.className = "row-map";
   name.dataset.id = m.id;
   name.title = "Open on MeowDB";
-  name.append(known ? m.mapName : `Map ${m.id}`, span("sr-only", " (opens MeowDB in your browser)"));
+  name.append(mapName(m), span("sr-only", " (opens MeowDB in your browser)"));
   // The map's Map Mark before its name; the street under the name, not under the mark.
   const named = document.createElement("div");
   named.className = "row-name";
@@ -176,15 +198,109 @@ function row(m: BestsMap, best: BestsMap | null, marks: MapMarks) {
   if (m.ceilingShareHundredths !== null && m.soloExpCeiling !== null) {
     share.append(sharePercent(m.ceilingShareHundredths), span("ceiling", `of ${whole(m.soloExpCeiling)}`));
   } else {
-    missing(share, !known ? NOT_LISTED : m.mobLevels ? "No solo EXP/h for this map" : NO_MOBS);
+    missing(share, noShare(m));
   }
   tr.append(share);
 
   const date = cell("Date set", "date");
   if (m.setAtUnixMs !== null) date.textContent = day(m.setAtUnixMs);
-  else missing(date, "Set before MapleCompass knew the date");
+  else missing(date, NO_DATE);
   tr.append(date);
+
+  // Its Visit History opens under the row, and the count says how many it holds.
+  const controls = cell(null, "controls");
+  const open = opened.has(m.id);
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "visits-toggle";
+  toggle.dataset.id = m.id;
+  toggle.setAttribute("aria-expanded", String(open));
+  toggle.title = open ? "Hide its visits" : "Show its visits";
+  const count = m.visits.length === 1 ? "1 visit" : `${m.visits.length} visits`;
+  toggle.append(count, span("sr-only", ` on ${mapName(m)}`), chevron());
+  controls.append(toggle);
+  tr.append(controls);
   return tr;
+}
+
+/** The disclosure's chevron: pointing right while the map is closed, down while open. */
+function chevron() {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("class", "chevron");
+  svg.setAttribute("viewBox", "0 0 8 8");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(ns, "path");
+  path.setAttribute("d", "M3 1.5L5.5 4L3 6.5");
+  svg.append(path);
+  return svg;
+}
+
+/** Each of a map's Visits by a key of its own: its map, its best and, for Visits whose
+ *  bests are the same, which of them it is. `null` for the Visit under way's, which has no
+ *  ×. */
+function visitKeys(m: BestsMap): (string | null)[] {
+  const seen = new Map<string, number>();
+  return m.visits.map((v) => {
+    if (v.thisVisit) return null;
+    const best = `${m.id} ${v.expPerHour} ${v.setAtUnixMs ?? "-"}`;
+    const n = seen.get(best) ?? 0;
+    seen.set(best, n + 1);
+    return `${best} ${n}`;
+  });
+}
+
+/** One of an opened map's Visits, under its row: its best's EXP/h, share and date under
+ *  the row's, then its × (or, for the Visit under way's, "This visit"). */
+function visitRow(m: BestsMap, v: BestsVisit, key: string | null, place: number, last: boolean) {
+  const tr = document.createElement("tr");
+  tr.className = last ? "visit last" : "visit";
+
+  const first = cell(null, "text blank");
+  first.append(span("sr-only", `${mapName(m)}, visit ${place} of ${m.visits.length}`));
+  tr.append(first, cell(null, "text region-cell blank"), cell(null, "blank"));
+
+  const exp = cell(null, "visit-exp");
+  exp.textContent = rate(v.expPerHour);
+  tr.append(exp);
+
+  const share = cell(null, "visit-share");
+  if (v.ceilingShareHundredths !== null) share.textContent = sharePercent(v.ceilingShareHundredths);
+  else missing(share, noShare(m));
+  tr.append(share);
+
+  const date = cell(null, "date visit-date");
+  if (v.setAtUnixMs !== null) date.textContent = day(v.setAtUnixMs);
+  else missing(date, NO_DATE);
+  tr.append(date);
+
+  const controls = cell(null, "controls");
+  if (key === null) controls.append(span("this-visit", "This visit"));
+  else controls.append(removeButton(m, v, key));
+  tr.append(controls);
+  return tr;
+}
+
+/** A Visit's ×, as the Grind Tracker's Best row has; once clicked, "Remove?", which
+ *  removes it with a second click. */
+function removeButton(m: BestsMap, v: BestsVisit, key: string) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.dataset.visit = key;
+  button.dataset.id = m.id;
+  button.dataset.exp = String(v.expPerHour);
+  if (v.setAtUnixMs !== null) button.dataset.set = String(v.setAtUnixMs);
+  if (armed === key) {
+    button.className = "text-button remove armed";
+    button.textContent = "Remove?";
+    button.title = "Click again to remove this visit from your history";
+  } else {
+    button.className = "icon-button light remove";
+    button.setAttribute("aria-label", "Remove this visit from your history");
+    button.title = "Remove this visit from your history";
+    button.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>';
+  }
+  return button;
 }
 
 /** The rows as last sent, and how the player sorted them: kept until MapleCompass closes,
@@ -192,11 +308,25 @@ function row(m: BestsMap, best: BestsMap | null, marks: MapMarks) {
 let maps: BestsMap[] = [];
 let marks: MapMarks = {};
 let sort: { column: Column; way: Way } = { column: "exp", way: "descending" };
+/** The maps opened to their Visit History, by ID, kept as the sort is. */
+const opened = new Set<string>();
+/** The × clicked once, by its Visit's key, until the second click removes it, a click
+ *  anywhere else, the window hiding or the Visit going: one at a time. */
+let armed: string | null = null;
 
 function renderRows() {
   // The best of all maps, which the star marks; none with only one map to compare.
   const best = maps.length > 1 ? maps[0] : null;
-  rows.replaceChildren(...sorted(maps, sort).map((m) => row(m, best, marks)));
+  const keys = new Map(maps.map((m) => [m.id, visitKeys(m)]));
+  if (armed !== null && ![...keys.values()].some((k) => k.includes(armed))) armed = null;
+  rows.replaceChildren(
+    ...sorted(maps, sort).flatMap((m) => {
+      if (!opened.has(m.id)) return [row(m, best, marks)];
+      const mapKeys = keys.get(m.id)!;
+      const visits = m.visits.map((v, i) => visitRow(m, v, mapKeys[i], i + 1, i === m.visits.length - 1));
+      return [row(m, best, marks), ...visits];
+    }),
+  );
   for (const th of headers) {
     if (th.dataset.column === sort.column) th.setAttribute("aria-sort", sort.way);
     else th.removeAttribute("aria-sort");
@@ -208,6 +338,12 @@ function render(view: BestsView) {
   document.body.classList.toggle("hidden", !view.shown);
   maps = view.maps;
   marks = view.mapMarks;
+  // Hidden, nothing stays armed. Closed, the window has no rows, and the maps opened stay
+  // opened for when it opens again; open, a map whose row went is no longer opened.
+  if (!view.shown) armed = null;
+  if (maps.length > 0) {
+    for (const id of opened) if (!maps.some((m) => m.id === id)) opened.delete(id);
+  }
   count.textContent = `${maps.length === 1 ? "1 map" : `${maps.length} maps`} · shared by all your characters`;
   credit.textContent = view.credit;
   noteMissing.hidden = maps.every((m) => m.mobLevels !== null && m.ceilingShareHundredths !== null);
@@ -252,13 +388,38 @@ document.addEventListener("mousedown", (e) => {
   if (e.button === 0 && onHeader) getCurrentWindow().startDragging();
 });
 
-// Its ×, through the core like the panel's icons; a map's name, to its MeowDB page.
-panelEl.addEventListener("click", (e) => {
+// Its ×, through the core like the panel's icons; a map's name, to its MeowDB page; a
+// map's count, opening or closing its Visit History; a Visit's ×, arming it, and again,
+// removing it through the core. Any other click disarms it.
+document.addEventListener("click", (e) => {
   const target = e.target instanceof Element ? e.target : null;
   const control = target?.closest<HTMLButtonElement>("button[data-control]");
   if (control) invoke("panel_press", { control: control.dataset.control });
   const map = target?.closest<HTMLButtonElement>("button.row-map");
   if (map) invoke("personal_bests_open_map", { id: map.dataset.id });
+  const toggle = target?.closest<HTMLButtonElement>("button.visits-toggle");
+  const remove = target?.closest<HTMLButtonElement>("button.remove");
+  const before = armed;
+  armed = null;
+  if (remove && remove.dataset.visit === before) {
+    const set = remove.dataset.set;
+    invoke("personal_bests_remove_visit", {
+      map: remove.dataset.id,
+      expPerHour: Number(remove.dataset.exp),
+      setAtUnixMs: set === undefined ? null : Number(set),
+    });
+  } else if (remove) {
+    armed = remove.dataset.visit ?? null;
+    announce.textContent = "Click Remove? again to remove this visit from your history.";
+  }
+  if (toggle) {
+    const id = toggle.dataset.id!;
+    if (!opened.delete(id)) opened.add(id);
+  }
+  if (toggle || armed !== before) {
+    renderRows();
+    reportHeight();
+  }
 });
 
 listen<BestsView>("personal-bests-state", (e) => render(e.payload));

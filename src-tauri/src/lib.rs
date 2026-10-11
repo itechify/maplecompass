@@ -34,7 +34,7 @@ mod view;
 use compass_core::{
     Action, Compass, ExpBarReader, ExpBarReading, Frame, GameWindow, ItemCapture, ItemTooltipReader,
     ItemTooltipReading, KeyPress, Layer, MIN_PANEL_WIDTH, PanelControl, PanelSizes, PlacementMode, PanelState, Request,
-    ScreenPoint, ScreenRect, Size, TitleReader, TitleReading, default_title_region,
+    ScreenPoint, ScreenRect, Size, TitleReader, TitleReading, VisitBest, default_title_region,
 };
 use source::WebSource;
 use bests_window::{BestsWindow, PersonalBestsView};
@@ -93,6 +93,9 @@ pub(crate) enum Command {
     OpenMobPage(String),
     /// The player clicked the name of the map with this ID in the Personal Bests window.
     OpenBestsMapPage(String),
+    /// The player removed the Visit whose best was `visit` from `map`'s Visit History, in
+    /// the Personal Bests window.
+    RemoveVisit { map: String, visit: VisitBest },
     /// The player picked the item with this MeowDB ID from the ones an Item Lookup found
     /// sharing the name it read.
     PickItem(String),
@@ -339,6 +342,7 @@ pub fn run() {
             bests_window::personal_bests_height,
             bests_window::personal_bests_view,
             bests_window::personal_bests_open_map,
+            bests_window::personal_bests_remove_visit,
             item_lookup::item_lookup_height,
             item_lookup::item_lookup_view,
         ])
@@ -551,6 +555,9 @@ fn compass_loop(
             Ok(Command::OpenBestsMapPage(id)) => {
                 let request = compass.open_bests_map_page(&id);
                 carry_out(&app, &window.overlay, &reader, &mut compass, request);
+            }
+            Ok(Command::RemoveVisit { map, visit }) => {
+                compass.remove_visit(&map, visit);
             }
             Ok(Command::PickItem(id)) => {
                 let request = compass.pick_item(&id);
