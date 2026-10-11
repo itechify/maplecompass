@@ -11,8 +11,8 @@ mod common;
 
 use common::FakeSource;
 use compass_core::{
-    Action, Compass, CurrentMap, GameWindow, MarkTarget, Rect, ScreenRect, SelectionDirection, SetupReason,
-    TestRead,
+    Action, Compass, CurrentMap, GameWindow, MarkTarget, PanelControl, Rect, Request, ScreenRect, SelectionDirection,
+    SetupReason, TestRead,
 };
 
 const KERNING: &str = "victoria-road__kerning-city--window";
@@ -354,6 +354,19 @@ fn a_recognised_test_read_credits_osms_for_the_names_it_shows() {
     mark_and_test_read(&mut compass, KERNING);
 
     assert_eq!(compass.panel_state().setup.credit, Some("Map names from OSMS Data Explorer"));
+}
+
+#[test]
+fn about_and_credits_opens_the_maplecompass_site_in_the_browser_and_changes_nothing_else() {
+    let mut compass = Compass::new(FakeSource::osms());
+    compass.on_game_window(window(game(KERNING)));
+    let before = compass.panel_state().clone();
+
+    assert_eq!(
+        compass.press(PanelControl::OpenSite),
+        Some(Request::OpenInBrowser { url: "https://itechify.github.io/maplecompass/".into() })
+    );
+    assert_eq!(compass.panel_state(), &before);
 }
 
 /// The width of the region the core captures after marking `MARK` and reading one frame

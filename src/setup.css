@@ -380,6 +380,31 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+/* About & Credits' link to the MapleCompass site, the window's one link: Ink with a 1px
+   Selection Edge underline at rest, Portal Blue under the pointer, Frame Navy while
+   pressed, as the site draws its links. */
+button.link {
+  all: unset;
+  cursor: pointer;
+  text-decoration: underline 1px var(--select-edge);
+  text-underline-offset: 3px;
+}
+
+button.link:hover {
+  color: var(--portal);
+  text-decoration-color: currentColor;
+}
+
+button.link:active {
+  color: var(--frame);
+}
+
+button.link:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 /* The EXP figures read, as the EXP bar writes them. */
 .test-read .figures {
   font-size: 16px;

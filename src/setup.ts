@@ -269,6 +269,10 @@ $("change-hotkeys").addEventListener("click", () => {
 $("guide-back").addEventListener("click", () => show(returnStep));
 $("about-open").addEventListener("click", () => show("about"));
 $("about-back").addEventListener("click", () => show(returnStep));
+$("site-open").addEventListener("click", () => {
+  $("action-error").hidden = true;
+  invoke("open_site").catch(actionError);
+});
 getVersion().then((version) => ($("app-version").textContent = version));
 
 function actionError(error: unknown) {
