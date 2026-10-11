@@ -7,6 +7,7 @@
 //! it, and the file's modification time says when it was saved. If it can't be fetched,
 //! or doesn't read, nothing is saved, and the core keeps the list it has.
 
+use crate::errors::error;
 use crate::http;
 use compass_core::SourceError;
 use compass_core::basilmarket::{self, SavedPrices};
@@ -49,7 +50,7 @@ impl PriceList {
             let Poll::Ready(answer) = http::collect(arriving) else { return Poll::Pending };
             self.in_flight = None;
             if let Err(e) = &answer {
-                eprintln!("BasilMarket's price list: {e}");
+                error!("BasilMarket's price list: {e}");
             }
             return Poll::Ready(answer);
         }
@@ -64,7 +65,7 @@ async fn fetch_and_save(client: &reqwest::Client, file: &Path) -> Answer {
     let text = http::text(client, basilmarket::PRICE_INDEX_URL).await.map_err(SourceError::Unreachable)?;
     basilmarket::read(&text)?;
     if let Err(e) = crate::files::write_atomically(file, text.as_bytes()) {
-        eprintln!("BasilMarket: couldn't save {}: {e}", file.display());
+        error!("BasilMarket: couldn't save {}: {e}", file.display());
     }
     Ok(text)
 }

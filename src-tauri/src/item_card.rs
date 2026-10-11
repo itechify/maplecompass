@@ -8,6 +8,7 @@
 //! decision is the core's; this only places the window, sends its page what it renders,
 //! and moves it out of the way of a capture.
 
+use crate::errors::error;
 use crate::view::{LastView, ViewSender};
 use crate::{Command, keep_on_top, physical, place};
 use compass_core::{PanelState, ShownItemCard, Size};
@@ -103,7 +104,7 @@ impl ItemCardWindow {
         if self.shown != shown {
             self.shown = shown;
             if let Err(e) = self.window.set_ignore_cursor_events(!shown) {
-                eprintln!("item card click-through toggle failed: {e}");
+                error!("item card click-through toggle failed: {e}");
             }
         }
     }

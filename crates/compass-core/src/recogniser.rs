@@ -17,7 +17,7 @@ const LINE_MARGIN: f32 = 3.0;
 
 /// The two raw text lines read from the minimap title, before they are snapped to a
 /// real map.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TitleLines {
     pub street: String,
     pub map: String,

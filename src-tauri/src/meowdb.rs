@@ -7,6 +7,7 @@
 //! the same item up again asks MeowDB nothing. Every answer MeowDB gives is cached, even
 //! one the core can't read.
 
+use crate::errors::error;
 use crate::http;
 use compass_core::{Fetched, ItemHit, SourceError, meowdb};
 use std::path::{Path, PathBuf};
@@ -43,7 +44,7 @@ impl ItemSearch {
                 let Poll::Ready(items) = http::collect(arriving) else { return Poll::Pending };
                 self.in_flight = None;
                 if let Err(e) = &items {
-                    eprintln!("item search {name:?}: {e}");
+                    error!("item search {name:?}: {e}");
                 }
                 return Poll::Ready(items);
             }
@@ -95,12 +96,12 @@ fn settle(path: &Path, fetched: Result<String, String>) -> Answer {
     match fetched {
         Ok(page) => {
             if let Err(e) = crate::files::write_atomically(path, page.as_bytes()) {
-                eprintln!("MeowDB cache: couldn't write {}: {e}", path.display());
+                error!("MeowDB cache: couldn't write {}: {e}", path.display());
             }
             read(&page).map(Fetched::Fresh)
         }
         Err(e) => {
-            eprintln!("MeowDB: {e}");
+            error!("MeowDB: {e}");
             match saved_copy(path) {
                 Some((page, saved_at_unix_ms)) => read(&page).map(|data| Fetched::SavedCopy { data, saved_at_unix_ms }),
                 None => Err(SourceError::Unreachable(e)),

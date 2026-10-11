@@ -171,3 +171,9 @@ _Avoid_: item tooltip (the game's), price check, popup
 **Item Lookup**:
 The hotkey (Ctrl+Shift+O by default) that reads the Item Tooltip nearest the pointer and opens the item's MeowDB page. An alert at the top centre of the game window says what came of it, and when several items share the name, lists them for the player to pick. The same alert says what kept an Item Card from showing.
 _Avoid_: item search (mob search is the search view's)
+
+### Reporting bugs
+
+**Bug Report**:
+The `.zip` MapleCompass saves when the player chooses Bug Report in the tray menu, to go with a bug's issue: everything it read and made of it since launch (up to a day), with crops of the regions it captured. Fed back to the core, it goes through the same states again (ADR 0009).
+_Avoid_: log, diagnostics, dump, trace (to the player; "trace" is its record of inputs, in the code)

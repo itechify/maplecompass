@@ -8,6 +8,7 @@
 //! touched whenever it is reused or served, and one untouched for [`KEPT_FOR`] (30 days)
 //! is deleted at launch ([`sweep`]).
 
+use crate::errors::error;
 use crate::http;
 use compass_core::SourceError;
 use compass_core::osms::PICTURES_URL;
@@ -57,7 +58,7 @@ impl Pictures {
                 (Poll::Ready(answer), true) => {
                     self.in_flight = None;
                     if let Err(e) = &answer {
-                        eprintln!("OSMS picture {path}: {e}");
+                        error!("OSMS picture {path}: {e}");
                     }
                     return Poll::Ready(answer);
                 }
@@ -153,7 +154,7 @@ fn content_type(path: &str) -> &'static str {
 fn touch(file: &Path) {
     let touched = std::fs::File::options().write(true).open(file).and_then(|f| f.set_modified(SystemTime::now()));
     if let Err(e) = touched {
-        eprintln!("OSMS picture: couldn't touch {}: {e}", file.display());
+        error!("OSMS picture: couldn't touch {}: {e}", file.display());
     }
 }
 
@@ -172,7 +173,7 @@ fn sweep_older_than(dir: &Path, cutoff: SystemTime) {
             sweep_older_than(&entry.path(), cutoff);
         } else if entry.metadata().and_then(|m| m.modified()).is_ok_and(|touched| touched < cutoff) {
             if let Err(e) = std::fs::remove_file(entry.path()) {
-                eprintln!("OSMS picture: couldn't delete {}: {e}", entry.path().display());
+                error!("OSMS picture: couldn't delete {}: {e}", entry.path().display());
             }
         }
     }

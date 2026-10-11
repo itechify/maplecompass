@@ -8,6 +8,7 @@
 //! Fetched files are saved only once the core's reader reads them. If any file fails, or
 //! they don't read, nothing is saved, and the core keeps the files it has.
 
+use crate::errors::error;
 use crate::http;
 use compass_core::SourceError;
 use compass_core::osms::DATA_URL;
@@ -52,7 +53,7 @@ impl OsmsItems {
             let Poll::Ready(answer) = http::collect(arriving) else { return Poll::Pending };
             self.in_flight = None;
             if let Err(e) = &answer {
-                eprintln!("OSMS's item files: {e}");
+                error!("OSMS's item files: {e}");
             }
             return Poll::Ready(answer);
         }
@@ -93,7 +94,7 @@ fn save(file: &Path, files: &ItemFiles) {
         .map_err(std::io::Error::other)
         .and_then(|json| crate::files::write_atomically(file, &json));
     if let Err(e) = written {
-        eprintln!("OSMS items: couldn't save {}: {e}", file.display());
+        error!("OSMS items: couldn't save {}: {e}", file.display());
     }
 }
 

@@ -7,6 +7,7 @@
 
 pub mod basilmarket;
 mod bests_window;
+pub mod bug_report;
 mod exp_bar;
 mod grind_tracker;
 mod hotkey_settings;
@@ -41,6 +42,7 @@ mod travel_links;
 mod world;
 
 pub use bests_window::{PersonalBestsMap, PersonalBestsWindow};
+pub use bug_report::{BugReport, ReportAbout};
 pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use grind_tracker::{ClientOffset, GrindTrackerWindow};
 pub use hotkey_settings::{KeyPress, RebindProblem, SettingsNotice, SettingsView};
@@ -75,6 +77,7 @@ pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
 pub use world::{Distance, Step, Travel};
 
 use bests_window::BestsWindow;
+use bug_report::{Event, MapFacts, Outcome, Press, RecordedSource, Recorder, Region};
 use grind_tracker::GrindTracker;
 use hotkey_settings::HotkeySettings;
 use item_card::{ItemCards, Pressed};
@@ -305,7 +308,7 @@ pub enum Request {
 /// Something the player can do with a hotkey or with the matching icon at the top of
 /// the panel, or with the panel's settings icon or an icon at the top of the Grind
 /// Tracker's window (which have no hotkeys). Either way it goes through [`Compass::press`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PanelControl {
     /// Collapse the panel to its icon, or expand it again.
@@ -382,7 +385,8 @@ pub struct Compass {
     grind_tracker: GrindTracker,
     /// The Personal Bests window.
     bests_window: BestsWindow,
-    source: Box<dyn MapDataSource + Send>,
+    /// The data source, whose answers a Bug Report writes down.
+    source: RecordedSource,
     /// Every map's data, once OSMS's file set has been read: the map list, and the
     /// shown map's figures.
     set: Option<HeldSet>,
@@ -437,12 +441,19 @@ pub struct Compass {
     /// The last settings restored; the panel's own fields live in `panel`.
     settings: Settings,
     state: PanelState,
+    /// The run so far, for a Bug Report (ADR 0009).
+    recorder: Recorder,
 }
 
 impl Compass {
     /// A core using the given data source and default settings. OSMS's file set is
     /// asked for on the first tick or frame.
     pub fn new(source: impl MapDataSource + Send + 'static) -> Self {
+        Self::with_source(RecordedSource::live(Box::new(source)))
+    }
+
+    /// A core asking `source`: a live one, or a replay's.
+    pub(crate) fn with_source(source: RecordedSource) -> Self {
         let mut compass = Self {
             reader: None,
             exp_bar_reader: None,
@@ -450,7 +461,7 @@ impl Compass {
             session: Session::default(),
             grind_tracker: GrindTracker::default(),
             bests_window: BestsWindow::default(),
-            source: Box::new(source),
+            source,
             set: None,
             ask_osms_at: 0,
             osms_in_flight: false,
@@ -478,8 +489,10 @@ impl Compass {
             setup: Setup::default(),
             settings: Settings::default(),
             state: PanelState::default(),
+            recorder: Recorder::new(&PanelState::default()),
         };
         compass.sync_panel();
+        compass.recorder = Recorder::new(&compass.state);
         compass
     }
 
@@ -493,15 +506,28 @@ impl Compass {
     }
 
     /// Read a captured Title Region frame and update the panel state: the same as
-    /// [`Compass::on_reading`] with what a [`TitleReader`] reads in the frame, here.
+    /// [`Compass::on_title_frame_read`] with what a [`TitleReader`] reads in the frame, here.
     pub fn on_frame(&mut self, frame: Frame) -> &PanelState {
         let reading = self.reader.get_or_insert_with(TitleReader::bundled).read(&frame);
-        self.on_reading(reading)
+        self.on_title_frame_read(frame, reading)
     }
 
     /// Take what a Title Region frame read as (read by a [`TitleReader`], possibly on
     /// another thread) and update the panel state.
     pub fn on_reading(&mut self, reading: TitleReading) -> &PanelState {
+        let event = Event::Title { at_ms: reading.at_ms, lines: reading.lines.clone(), same: false };
+        self.record_input(event, Some(reading.at_ms), None);
+        self.take_title_reading(reading)
+    }
+
+    /// As [`Compass::on_reading`], with the frame read, whose crop a Bug Report may keep.
+    pub fn on_title_frame_read(&mut self, frame: Frame, reading: TitleReading) -> &PanelState {
+        let event = Event::Title { at_ms: reading.at_ms, lines: reading.lines.clone(), same: false };
+        self.record_input(event, Some(reading.at_ms), Some((Region::Title, frame)));
+        self.take_title_reading(reading)
+    }
+
+    fn take_title_reading(&mut self, reading: TitleReading) -> &PanelState {
         self.load_osms(reading.at_ms);
         let (Some(matcher), Some(set)) = (&self.matcher, &self.set) else {
             // Without the map list nothing can be recognised.
@@ -551,10 +577,18 @@ impl Compass {
     }
 
     /// Read a captured EXP Bar Region frame and update the panel state: the same as
-    /// [`Compass::on_exp_bar_reading`] with what an [`ExpBarReader`] reads in it, here.
+    /// [`Compass::on_exp_bar_frame_read`] with what an [`ExpBarReader`] reads in it, here.
     pub fn on_exp_bar_frame(&mut self, frame: Frame) -> &PanelState {
         let reading = self.exp_bar_reader.get_or_insert_with(ExpBarReader::bundled).read(&frame);
-        self.on_exp_bar_reading(reading)
+        self.on_exp_bar_frame_read(frame, reading)
+    }
+
+    /// As [`Compass::on_exp_bar_reading`], with the frame read, whose crop a Bug Report
+    /// may keep.
+    pub fn on_exp_bar_frame_read(&mut self, frame: Frame, reading: ExpBarReading) -> &PanelState {
+        let event = Event::ExpBar { at_ms: reading.at_ms, bar: reading.bar };
+        self.record_input(event, Some(reading.at_ms), Some((Region::ExpBar, frame)));
+        self.take_exp_bar_reading(reading)
     }
 
     /// Take what an EXP Bar Region frame read as (read by an [`ExpBarReader`], possibly
@@ -562,6 +596,11 @@ impl Compass {
     /// whole keeps the last reading; time still passes for the Session, which says so
     /// once the bar has gone unread for a while.
     pub fn on_exp_bar_reading(&mut self, reading: ExpBarReading) -> &PanelState {
+        self.record_input(Event::ExpBar { at_ms: reading.at_ms, bar: reading.bar }, Some(reading.at_ms), None);
+        self.take_exp_bar_reading(reading)
+    }
+
+    fn take_exp_bar_reading(&mut self, reading: ExpBarReading) -> &PanelState {
         self.setup.on_exp_bar_read(reading.bar);
         match reading.bar {
             Some(bar) if self.tracking_on() => self.session.on_bar(bar, reading.at_ms),
@@ -635,7 +674,7 @@ impl Compass {
                     .chain(hunted.map(String::from)),
             );
         }
-        self.pictures.poll(&wanted, &mut *self.source, at_ms);
+        self.pictures.poll(&wanted, &mut self.source, at_ms);
         if self.set.is_some() {
             self.sync_pictured();
         }
@@ -644,6 +683,7 @@ impl Compass {
     /// The game window moved, resized, appeared or went away (`None`: not found, or
     /// minimised).
     pub fn on_game_window(&mut self, game: Option<GameWindow>) -> &PanelState {
+        self.record(Event::GameWindow { game: game.clone() });
         self.setup.game = game.as_ref().map(|g| g.client);
         if let Some(game) = &game {
             self.panel.screens = game.screens.clone();
@@ -654,24 +694,28 @@ impl Compass {
 
     /// The overlay's expanded and collapsed sizes, in physical px for the current display.
     pub fn set_panel_sizes(&mut self, sizes: PanelSizes) -> &PanelState {
+        self.record(Event::PanelSizes { sizes });
         self.panel.sizes = sizes;
         self.sync_panel()
     }
 
     /// The Item Lookup alert's size, in physical px for the current display.
     pub fn set_item_lookup_size(&mut self, size: Size) -> &PanelState {
+        self.record(Event::ItemLookupSize { size });
         self.item_lookup_size = size;
         self.sync_panel()
     }
 
     /// The Item Card's size, in physical px for the current display.
     pub fn set_item_card_size(&mut self, size: Size) -> &PanelState {
+        self.record(Event::ItemCardSize { size });
         self.item_card_size = size;
         self.sync_panel()
     }
 
     /// The Grind Tracker window's size, in physical px for the current display.
     pub fn set_grind_tracker_size(&mut self, size: Size) -> &PanelState {
+        self.record(Event::GrindTrackerSize { size });
         self.grind_tracker.size = size;
         self.sync_panel()
     }
@@ -679,12 +723,18 @@ impl Compass {
     /// The size the Personal Bests window's page lays it out at, in physical px for the
     /// current display.
     pub fn set_personal_bests_size(&mut self, size: Size) -> &PanelState {
+        self.record(Event::PersonalBestsSize { size });
         self.bests_window.size = size;
         self.sync_panel()
     }
 
     /// Apply something the player did.
     pub fn act(&mut self, action: Action) -> &PanelState {
+        self.record(Event::Act { action });
+        self.apply(action)
+    }
+
+    fn apply(&mut self, action: Action) -> &PanelState {
         match action {
             Action::ToggleExpanded => {
                 self.panel.expanded = !self.panel.expanded;
@@ -848,6 +898,7 @@ impl Compass {
     /// [`SettingsView`]). Saved with the settings, and registered in place of the old one
     /// once the hotkeys are live again.
     pub fn rebind_key(&mut self, press: KeyPress) -> &PanelState {
+        self.record(Event::RebindKey { press: press.clone() });
         if self.hotkey_settings.press(&press, &mut self.settings.hotkeys) {
             self.forget_unbound_hotkeys();
         }
@@ -865,6 +916,7 @@ impl Compass {
 
     /// The player typed in the search view: `query` is everything in the query box.
     pub fn search_query(&mut self, query: &str) -> &PanelState {
+        self.record(Event::SearchQuery { query: query.to_string() });
         self.search.type_query(query);
         self.sync_search();
         self.sync_panel()
@@ -873,6 +925,7 @@ impl Compass {
     /// The player clicked one of the search view's items: the mob (in the suggestions)
     /// or the map (in the map list) with this ID. Like Enter on it.
     pub fn search_pick(&mut self, id: &str) -> &PanelState {
+        self.record(Event::SearchPick { id: id.to_string() });
         self.search.pick(id, &searched(&self.set, &self.state, &self.settings));
         self.sync_search();
         self.sync_panel()
@@ -892,6 +945,7 @@ impl Compass {
     /// anything: open a page, or bring the overlay with the search view open back in
     /// front.
     pub fn on_hotkey(&mut self, pressed: &str) -> Option<Request> {
+        self.record(Event::Hotkey { pressed: pressed.to_string() });
         let hotkeys = &self.settings.hotkeys;
         let is = |hotkey: &str| same_hotkey(hotkey, pressed);
         // Only over a game window, and not while the last capture is being read.
@@ -924,12 +978,17 @@ impl Compass {
         } else {
             return None;
         };
-        self.press(control)
+        self.apply_press(control)
     }
 
     /// The player used a control: its hotkey, or its icon at the top of the panel. Returns
     /// what the shell must do at once, if anything.
     pub fn press(&mut self, control: PanelControl) -> Option<Request> {
+        self.record(Event::Press { control });
+        self.apply_press(control)
+    }
+
+    fn apply_press(&mut self, control: PanelControl) -> Option<Request> {
         let action = match control {
             PanelControl::TogglePanel => Action::ToggleExpanded,
             PanelControl::CyclePlacement => Action::CyclePlacement,
@@ -951,7 +1010,7 @@ impl Compass {
                 return self.state.map.as_ref().map(|map| Request::OpenInBrowser { url: map.url.clone() });
             }
         };
-        self.act(action);
+        self.apply(action);
         None
     }
 
@@ -984,6 +1043,7 @@ impl Compass {
     /// arrives. For the Item Card, show the card of the item OSMS's item files have by
     /// that name, at the pointer.
     pub fn on_item_tooltip_reading(&mut self, reading: Option<ItemTooltipReading>) -> &PanelState {
+        self.record(Event::ItemTooltip { reading: reading.clone() });
         // Our windows show in the capture: one over the name would be read instead.
         let panel = self.state.placement.filter(|_| self.state.layer != Layer::Hidden);
         let ours: Vec<(OurWindow, ScreenRect)> = [
@@ -1000,14 +1060,14 @@ impl Compass {
             match self.item_cards.read(reading, &ours, self.item_files.items()) {
                 Pressed::Shown => {
                     self.item_lookups.clear();
-                    self.prices.card_opened(&mut *self.source, at_ms, self.wall_clock);
+                    self.prices.card_opened(&mut self.source, at_ms, self.wall_clock);
                 }
                 Pressed::Closed => {}
                 Pressed::Alert(outcome) => self.item_lookups.alert(outcome, at_ms),
             }
             return self.sync_panel();
         }
-        let open = self.item_lookups.read(reading, &ours, &mut *self.source, &mut self.meowdb_pace);
+        let open = self.item_lookups.read(reading, &ours, &mut self.source, &mut self.meowdb_pace);
         self.requests.extend(open.map(|url| Request::OpenInBrowser { url }));
         self.sync_panel()
     }
@@ -1015,6 +1075,7 @@ impl Compass {
     /// The player picked item `id` from those the Item Card lists as sharing the name read:
     /// its card shows.
     pub fn pick_card_item(&mut self, id: &str) -> &PanelState {
+        self.record(Event::PickCardItem { id: id.to_string() });
         self.item_cards.pick(id);
         self.sync_panel()
     }
@@ -1024,11 +1085,12 @@ impl Compass {
     /// The page comes from [`Compass::take_request`], and the Item Lookup alert says what
     /// came of it.
     pub fn open_card_meowdb_page(&mut self, at_ms: u64) -> &PanelState {
+        self.record(Event::OpenCardMeowdbPage { at_ms });
         let Some(item) = self.item_files.items().ok().and_then(|items| self.item_cards.item(items)) else {
             return self.sync_panel();
         };
         let (name, kind) = (item.name.clone(), item.kind.clone());
-        let open = self.item_lookups.look_up(name, kind, &mut *self.source, &mut self.meowdb_pace, at_ms);
+        let open = self.item_lookups.look_up(name, kind, &mut self.source, &mut self.meowdb_pace, at_ms);
         self.requests.extend(open.map(|url| Request::OpenInBrowser { url }));
         self.sync_panel()
     }
@@ -1047,6 +1109,7 @@ impl Compass {
 
     /// The player clicked the Item Card's ×: close it.
     pub fn close_item_card(&mut self) -> &PanelState {
+        self.record(Event::CloseItemCard {});
         self.item_cards.close();
         self.sync_panel()
     }
@@ -1054,6 +1117,7 @@ impl Compass {
     /// The player picked one of the items an Item Lookup found sharing the name read:
     /// open its MeowDB page. `None` for an item the panel doesn't list.
     pub fn pick_item(&mut self, id: &str) -> Option<Request> {
+        self.record(Event::PickItem { id: id.to_string() });
         let url = self.item_lookups.pick(id)?;
         self.sync_panel();
         Some(Request::OpenInBrowser { url })
@@ -1070,6 +1134,7 @@ impl Compass {
     /// Tracker's window and the Item Lookup alert show (with the game), while the game or
     /// one of our windows is in front, and nowhere else (see [`Layer`]).
     pub fn on_foreground(&mut self, foreground: Foreground) -> &PanelState {
+        self.record(Event::Foreground { foreground });
         self.panel.foreground = Some(foreground);
         self.sync_panel()
     }
@@ -1077,6 +1142,7 @@ impl Compass {
     /// These hotkeys couldn't be registered: `taken` because another app has them,
     /// `invalid` because they don't name a key combination.
     pub fn hotkeys_unavailable(&mut self, taken: Vec<String>, invalid: Vec<String>) -> &PanelState {
+        self.record(Event::HotkeysUnavailable { taken: taken.clone(), invalid: invalid.clone() });
         self.state.unavailable_hotkeys = taken.into_iter().chain(invalid.iter().cloned()).collect();
         self.state.invalid_hotkeys = invalid;
         self.sync_panel()
@@ -1087,6 +1153,7 @@ impl Compass {
     /// defaults, and version 4's Item Lookup key goes to the Item Card; files without an
     /// EXP Bar Region (all before version 3) start with EXP tracking off.
     pub fn restore(&mut self, mut settings: Settings) -> &PanelState {
+        self.record(Event::Restore { settings: Box::new(settings.clone()) });
         // Version 4 brought the Ctrl+Shift defaults, and version 5 the Item Card; a later
         // version keeps the hotkeys.
         match settings.version {
@@ -1114,6 +1181,7 @@ impl Compass {
     /// The player picked the game window by hand: look for windows with this title
     /// from now on.
     pub fn pick_game_window(&mut self, title: String) -> &PanelState {
+        self.record(Event::PickGameWindow { title: title.clone() });
         self.settings.game_window_title = Some(title);
         self.sync_panel()
     }
@@ -1138,12 +1206,16 @@ impl Compass {
     /// The wall clock now, in ms since the Unix epoch: what tells how old a saved copy of
     /// OSMS's file set is, and dates Personal Bests. The shell tells it as time passes.
     pub fn on_wall_clock(&mut self, now_unix_ms: u64) {
+        if self.recorder.wall_clock(now_unix_ms) {
+            self.record(Event::WallClock { unix_ms: now_unix_ms });
+        }
         self.wall_clock = Some(now_unix_ms);
     }
 
     /// Pick up the Personal Bests an earlier launch saved ([`SavedBests::default`] when
     /// none were). The shell restores them at startup, before any reading.
     pub fn restore_bests(&mut self, bests: SavedBests) -> &PanelState {
+        self.record(Event::RestoreBests { bests: bests.clone() });
         self.session.restore_bests(bests);
         self.sync_panel()
     }
@@ -1163,16 +1235,17 @@ impl Compass {
     /// this many times a second (`at_ms` on the same clock as frames), so nothing waits for
     /// the network.
     pub fn tick(&mut self, at_ms: u64) -> &PanelState {
+        self.record_input(Event::Tick {}, Some(at_ms), None);
         self.session.tick(at_ms);
         self.load_osms(at_ms);
         if self.set.is_some() {
             self.sync_shown_map();
         }
         self.poll_pictures(at_ms);
-        self.item_files.load(&mut *self.source, at_ms, self.wall_clock);
-        self.prices.poll(&mut *self.source, at_ms, self.wall_clock);
+        self.item_files.load(&mut self.source, at_ms, self.wall_clock);
+        self.prices.poll(&mut self.source, at_ms, self.wall_clock);
         // An Item Lookup's search, which the player waits on.
-        let open = self.item_lookups.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
+        let open = self.item_lookups.poll(&mut self.source, &mut self.meowdb_pace, at_ms);
         self.requests.extend(open.map(|url| Request::OpenInBrowser { url }));
         self.sync_panel()
     }
@@ -1262,6 +1335,62 @@ impl Compass {
 
     pub fn panel_state(&self) -> &PanelState {
         &self.state
+    }
+
+    /// The shell, or one of our windows (`from`), ran into an error that would otherwise
+    /// go nowhere: a Bug Report keeps it.
+    pub fn note_error(&mut self, from: &str, message: &str) {
+        self.record(Event::Error { from: from.to_string(), message: message.to_string() });
+    }
+
+    /// A Bug Report of the run so far (ADR 0009), with what the shell knows of it.
+    pub fn bug_report(&mut self, about: &ReportAbout) -> BugReport {
+        self.mark_bug_report();
+        let maps = self
+            .recorder
+            .maps_shown()
+            .filter_map(|id| {
+                let maps = &self.set.as_ref()?.maps;
+                let entry = maps.entry(id)?;
+                Some(MapFacts {
+                    id: id.to_string(),
+                    street_name: entry.street_name.clone(),
+                    map_name: entry.map_name.clone(),
+                    region: entry.region.clone(),
+                    summary: maps.data(id).and_then(|data| data.summary),
+                })
+            })
+            .collect();
+        let game_client = self.panel.game.as_ref().map(|game| game.client);
+        let press = Press { state: &self.state, game_client, maps, wall_clock: self.wall_clock };
+        self.recorder.report(about, press)
+    }
+
+    /// Write down that a Bug Report was saved here.
+    fn mark_bug_report(&mut self) {
+        self.record(Event::BugReport {});
+        self.close_input();
+    }
+
+    /// Write `event` down for a Bug Report, after what came of the input before it: an
+    /// input at `at_ms` if it has a time, read from `frame` if it has one.
+    fn record_input(&mut self, event: Event, at_ms: Option<u64>, frame: Option<(Region, Frame)>) {
+        if self.recorder.takes(&event) {
+            self.close_input();
+            self.recorder.open(event, at_ms, frame);
+        }
+    }
+
+    fn record(&mut self, event: Event) {
+        self.record_input(event, None, None);
+    }
+
+    /// Write down what came of the input being taken.
+    fn close_input(&mut self) {
+        let answers = self.source.take_answers();
+        let notes = self.session.take_notes();
+        let bests_revision = self.session.bests().revision();
+        self.recorder.close(Outcome { answers, notes, state: &self.state, bests_revision });
     }
 
     fn sync_panel(&mut self) -> &PanelState {

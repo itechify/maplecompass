@@ -9,6 +9,7 @@
 //! what each press does; this only registers them and hands presses over. When the player
 //! rebinds one, the new list replaces the old.
 
+use crate::errors::error;
 use crate::Command;
 use compass_core::Hotkeys;
 use std::sync::mpsc::Sender;
@@ -63,7 +64,7 @@ fn parse(hotkeys: &Hotkeys) -> (Vec<(Shortcut, String)>, Vec<String>) {
         match text.parse::<Shortcut>() {
             Ok(shortcut) => bindings.push((shortcut, text.to_string())),
             Err(e) => {
-                eprintln!("hotkey {text:?} invalid: {e}");
+                error!("hotkey {text:?} invalid: {e}");
                 invalid.push(text.to_string());
             }
         }
@@ -85,7 +86,7 @@ impl GlobalHotkeys {
         let shortcuts = app.global_shortcut();
         for shortcut in self.registered.drain(..) {
             if let Err(e) = shortcuts.unregister(shortcut) {
-                eprintln!("releasing a hotkey failed: {e}");
+                error!("releasing a hotkey failed: {e}");
             }
         }
         if rebound {
@@ -104,7 +105,7 @@ impl GlobalHotkeys {
             match shortcuts.register(*shortcut) {
                 Ok(()) => self.registered.push(*shortcut),
                 Err(e) => {
-                    eprintln!("hotkey {text} unavailable: {e}");
+                    error!("hotkey {text} unavailable: {e}");
                     taken.push(text.clone());
                 }
             }

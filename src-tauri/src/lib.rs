@@ -12,6 +12,8 @@ pub mod capture;
 pub mod gamewin;
 mod bests;
 mod bests_window;
+mod bug_reports;
+mod errors;
 mod files;
 mod grind_tracker;
 mod hotkey_settings;
@@ -39,6 +41,7 @@ use compass_core::{
 };
 use source::WebSource;
 use bests_window::BestsWindow;
+use errors::error;
 use grind_tracker::GrindTrackerWindow;
 use item_card::ItemCardWindow;
 use item_lookup::ItemLookupWindow;
@@ -136,17 +139,22 @@ pub(crate) enum Command {
     OpenCardMarketPage,
     /// The player chose Quit in the tray icon's menu: save the settings and exit.
     Quit,
+    /// The player chose Bug Report in the tray icon's menu: save one, and open the bug
+    /// form for it.
+    BugReport,
+    /// The shell or one of our windows (`from`) ran into an error, for the Bug Report.
+    Error { from: String, message: String },
     /// The player started MapleCompass again; that one exited, and this one shows itself.
     LaunchedAgain,
     /// A watcher took one of our windows out of sight, with another app in front, while
     /// the core still showed it: check the game window and the foreground now.
     CheckForeground,
-    /// The reader is done with a capture of the Title Region `region`: what it read, or
-    /// `None` if the capture failed.
-    Read { region: ScreenRect, reading: Option<TitleReading> },
-    /// The reader is done with a capture of the EXP Bar Region `region`: what it read,
-    /// or `None` if the capture failed.
-    ReadExpBar { region: ScreenRect, reading: Option<ExpBarReading> },
+    /// The reader is done with a capture of the Title Region `region`: the frame and what
+    /// it read, or `None` if the capture failed.
+    Read { region: ScreenRect, reading: Option<(Frame, TitleReading)> },
+    /// The reader is done with a capture of the EXP Bar Region `region`: the frame and
+    /// what it read, or `None` if the capture failed.
+    ReadExpBar { region: ScreenRect, reading: Option<(Frame, ExpBarReading)> },
     /// The reader is done with an Item Lookup's capture: what it read.
     ReadItemTooltip(ItemTooltipReading),
 }
@@ -231,6 +239,9 @@ pub fn run() {
             let (bests_file, saved_bests) = bests::BestsFile::load(bests::path(app.handle())?);
             compass.restore_bests(saved_bests);
             let (commands, commands_rx) = mpsc::channel();
+            // From now on errors go to the core too, for the Bug Report; those from before
+            // (the settings or bests not reading) are held for it till now.
+            errors::send_to(commands.clone());
             // Registered only while the game or one of our windows is in front.
             let hotkeys = hotkeys::install(app, &compass.panel_state().hotkeys, commands.clone())?;
             // The one way to quit at any time, the game open or not.
@@ -248,7 +259,7 @@ pub fn run() {
             if let Err(e) =
                 sizemove::watch(&overlay, commands.clone(), overlay_size_move, sizemove::overlay_resizable())
             {
-                eprintln!("{e}");
+                error!("{e}");
             }
             let grind_tracker = GrindTrackerWindow::new(app.handle(), commands.clone());
             // After the overlay and the Grind Tracker's window, which it stays above.
@@ -300,6 +311,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             panel_height,
+            errors::window_error,
             setup::setup_view,
             setup::pick_game_window,
             setup::start_marking,
@@ -380,7 +392,7 @@ fn save_bests(compass: &Compass, file: &bests::BestsFile, saved: &mut u64) {
     }
     *saved = revision;
     if let Err(e) = file.save(&compass.bests()) {
-        eprintln!("saving personal bests failed: {e}");
+        error!("saving personal bests failed: {e}");
     }
 }
 
@@ -436,17 +448,25 @@ impl ReaderThread {
                     Some(Frame { width: r.width, height: r.height, rgba, at_ms })
                 }
                 Err(e) => {
-                    eprintln!("capture failed: {e}");
+                    error!("capture failed: {e}");
                     None
                 }
             };
             for capture in asked {
                 let command = match capture {
                     Capture::Title(region) => {
-                        Command::Read { region, reading: grab(region).map(|f| title_reader.read(&f)) }
+                        let reading = grab(region).map(|f| {
+                            let read = title_reader.read(&f);
+                            (f, read)
+                        });
+                        Command::Read { region, reading }
                     }
                     Capture::ExpBar(region) => {
-                        Command::ReadExpBar { region, reading: grab(region).map(|f| exp_bar_reader.read(&f)) }
+                        let reading = grab(region).map(|f| {
+                            let read = exp_bar_reader.read(&f);
+                            (f, read)
+                        });
+                        Command::ReadExpBar { region, reading }
                     }
                     Capture::Item(capture) => Command::ReadItemTooltip(item_reader.read(&capture)),
                 };
@@ -577,6 +597,8 @@ fn compass_loop(
                 setup_windows.bring_to_front();
             }
             Ok(Command::CheckForeground) => next_window_check = Instant::now(),
+            Ok(Command::BugReport) => bug_reports::save(&app, &mut compass, &window.overlay),
+            Ok(Command::Error { from, message }) => compass.note_error(&from, &message),
             Ok(Command::Quit) => {
                 // Whatever the player changed last (a drag, say) is saved first.
                 save_bests(&compass, &files.bests, &mut bests_saved);
@@ -584,7 +606,7 @@ fn compass_loop(
                 if current != saved
                     && let Err(e) = settings::save(&settings_path, &current)
                 {
-                    eprintln!("saving settings failed: {e}");
+                    error!("saving settings failed: {e}");
                 }
                 app.exit(0);
                 return;
@@ -649,14 +671,14 @@ fn compass_loop(
                 reader.title_busy = false;
                 // A reading of a region no longer captured (setup marked a new one, or
                 // the game window moved) would judge the wrong spot.
-                if let (Some(reading), true) = (reading, compass.panel_state().title_region == Some(region)) {
-                    compass.on_reading(reading);
+                if let (Some((frame, reading)), true) = (reading, compass.panel_state().title_region == Some(region)) {
+                    compass.on_title_frame_read(frame, reading);
                 }
             }
             Ok(Command::ReadExpBar { region, reading }) => {
                 reader.exp_bar_busy = false;
-                if let (Some(reading), true) = (reading, compass.panel_state().exp_bar_region == Some(region)) {
-                    compass.on_exp_bar_reading(reading);
+                if let (Some((frame, reading)), true) = (reading, compass.panel_state().exp_bar_region == Some(region)) {
+                    compass.on_exp_bar_frame_read(frame, reading);
                 }
             }
             Ok(Command::ReadItemTooltip(reading)) => {
@@ -730,7 +752,7 @@ fn compass_loop(
         setup_windows.sync(state, game.map(|g| g.client));
         if emitted.as_ref() != Some(state) {
             if let Err(e) = app.emit_to("overlay", "overlay-state", state) {
-                eprintln!("emit failed: {e}");
+                error!("emit failed: {e}");
             }
             emitted = Some(state.clone());
         }
@@ -747,7 +769,7 @@ fn compass_loop(
         }
         if pending.0 != saved && pending.1.elapsed() >= SAVE_DELAY {
             if let Err(e) = settings::save(&settings_path, &pending.0) {
-                eprintln!("saving settings failed: {e}");
+                error!("saving settings failed: {e}");
             }
             saved = pending.0.clone();
         }
@@ -797,7 +819,7 @@ fn carry_out(
             // Tooltip it covers.
             item_card.out_of_the_capture();
             if let Err(e) = reader.read_item_tooltip() {
-                eprintln!("Item Lookup: {e}");
+                error!("Item Lookup: {e}");
                 compass.on_item_tooltip_reading(None);
             }
         }
@@ -808,7 +830,7 @@ fn carry_out(
 /// Open a page (the shown map's on MeowDB) in the player's browser.
 fn open_in_browser(app: &AppHandle, url: &str) {
     if let Err(e) = app.opener().open_url(url, None::<&str>) {
-        eprintln!("couldn't open {url}: {e}");
+        error!("couldn't open {url}: {e}");
     }
 }
 
@@ -944,7 +966,7 @@ impl OverlayWindow {
         if self.click_through != click_through {
             self.click_through = click_through;
             if let Err(e) = self.overlay.set_ignore_cursor_events(click_through) {
-                eprintln!("click-through toggle failed: {e}");
+                error!("click-through toggle failed: {e}");
             }
         }
         // The search view or the settings view opens right after our hotkey or a click on
@@ -1002,10 +1024,10 @@ pub(crate) fn keep_on_top(
                 .name(name.into())
                 .spawn(move || keep_on_top_while_in_front(handle, beneath, watcher_flag, commands));
             if let Err(e) = spawned {
-                eprintln!("{name} watcher not started: {e}");
+                error!("{name} watcher not started: {e}");
             }
         }
-        Err(e) => eprintln!("{name} watcher not started: no {} window handle: {e}", window.label()),
+        Err(e) => error!("{name} watcher not started: no {} window handle: {e}", window.label()),
     }
     #[cfg(not(windows))]
     let _ = (window, name, commands, beneath);
@@ -1059,7 +1081,7 @@ fn keep_on_top_while_in_front(window: isize, beneath: Vec<isize>, shows: Arc<Ato
         // Polled 20 times a second: report a failure once, not every time.
         let error = moved.err().map(|e| e.to_string());
         if error.is_some() && error != last_error {
-            eprintln!("putting our window on top or out of sight failed: {}", error.as_deref().unwrap_or_default());
+            error!("putting our window on top or out of sight failed: {}", error.as_deref().unwrap_or_default());
         }
         last_error = error;
     }
