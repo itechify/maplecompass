@@ -1081,13 +1081,6 @@ td:first-child {
   line-height: 16px;
 }
 
-.panel .more {
-  margin-top: 3px;
-  font-size: 12px;
-  line-height: 15px;
-  color: var(--ink-2);
-}
-
 /* The long parts (the route, the suggestions, the map list) scroll once the panel is as
    tall as the space where it is placed; the rest keeps its height. */
 .view > *,

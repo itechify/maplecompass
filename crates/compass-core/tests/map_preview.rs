@@ -356,7 +356,7 @@ fn no_picture_is_asked_for_while_no_map_preview_shows() {
     assert_eq!(map_pictures(&requests), Vec::<String>::new());
 }
 
-/// The map comes first: its picture is asked for ahead of the listed mobs' animations.
+/// The map comes first: its picture is asked for ahead of its mobs' animations.
 #[test]
 fn the_maps_picture_is_asked_for_before_the_mob_cards_animations() {
     let source = FakeSource::osms().pictures_taking(1);
