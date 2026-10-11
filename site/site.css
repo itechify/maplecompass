@@ -385,6 +385,165 @@ figcaption {
   aspect-ratio: 16 / 10;
 }
 
+/* ---- The hero's film (reel.ts): how MapleCompass reads the map, run by the scroll ---- */
+
+/* The shot's place becomes a stretch of scroll, and the film holds still at the top of it
+   under the window's head while that stretch goes by. Side by side, the words hold with it
+   where they fit under the head (reel.ts). */
+.hero.reeling .hero-shot {
+  position: relative;
+}
+.reel-pin {
+  position: sticky;
+  top: var(--reel-top);
+}
+.hero.reel-side .hero-text {
+  position: sticky;
+  top: var(--reel-top);
+}
+/* The shot's own caption stays for screen readers; the film's say each step on screen. */
+.hero.reeling .hero-shot > figcaption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The frame onto the game window, framed as every screenshot is. reel.ts sets its height
+   from the camera: as wide as the game window at first, as tall as the shot at the end. */
+.reel-frame {
+  position: absolute;
+  left: 0;
+  width: var(--reel-w);
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--select);
+  contain: strict;
+}
+.reel-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--window-edge);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* The game window at its own size in its own pixels, which the camera scales and moves:
+   the whole window at half size, and over its top-left corner the shot at full size. */
+.reel-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1922px;
+  height: 1232px;
+  transform-origin: 0 0;
+}
+.reel-world > picture,
+.reel-world > img {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.reel-world img {
+  display: block;
+  max-width: none;
+  width: 600px;
+  height: 872px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.reel-world img.reel-base {
+  width: 1922px;
+  height: 1232px;
+}
+/* While the whole window is in view, the shot's right and bottom edges fade into the window
+   at half size, so where one gives way to the other shows no line. Close in, those edges
+   are out of the frame, and the shot ends the film as it is. */
+.reel-world.feather > .reel-shot {
+  mask-image:
+    linear-gradient(to right, #000 calc(100% - 64px), transparent),
+    linear-gradient(to bottom, #000 calc(100% - 64px), transparent);
+  mask-composite: intersect;
+}
+/* Closer than its own size, the game window shows its pixels, as a screenshot does. */
+.reel-world.close img {
+  image-rendering: pixelated;
+}
+
+/* The read: the minimap's title in MapleCompass's own lettering, on the panel's title panel,
+   set as the panel sets it, so it lands on the panel's title in the shot letter for letter. */
+.reel-read {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 6px 10px 8px 11px;
+  color: var(--title-ink);
+  font-weight: 700;
+  text-shadow: var(--title-lettering);
+  white-space: nowrap;
+}
+.reel-read p {
+  margin: 0;
+  white-space: nowrap;
+}
+.reel-street {
+  font-size: 14px;
+  line-height: 18px;
+}
+.reel-read .reel-map {
+  margin-top: 1px;
+  font-size: 18px;
+  line-height: 23px;
+  letter-spacing: 0.01em;
+}
+
+/* The title-marking window over the game: its navy veil, and the box being marked, dashed
+   Edit Blue over a white band (region.html). Clear inside, so what it frames reads. */
+.reel-veil,
+.reel-box {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.reel-box {
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  outline: 2px dashed var(--edit);
+  outline-offset: -2px;
+}
+
+/* The read's line, Edit Blue on a white edge, so it holds over the title's light lettering. */
+.reel-sweep {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2px;
+  background: var(--edit);
+  box-shadow:
+    -1px 0 0 rgba(255, 255, 255, 0.9),
+    1px 0 0 rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
+
+/* Each step's caption under the frame, one at a time, the last the shot's own. */
+.reel-captions {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  width: var(--reel-w);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.reel-captions > span {
+  grid-area: 1 / 1;
+}
+
 /* ---- The tabs' pages ---- */
 
 .tab-page {
