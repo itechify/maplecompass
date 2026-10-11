@@ -1,7 +1,6 @@
 //! One map's hunting information, and how the panel shows it.
 
 use crate::map_preview::PortalMark;
-use crate::shown_map::LevelRange;
 use serde::{Deserialize, Serialize};
 
 /// One map's data, as read from OSMS's file set.
@@ -39,22 +38,6 @@ pub struct MapData {
     /// them, in the source's order. Rendered in the Map Preview, not here.
     #[serde(skip_serializing)]
     pub marks: Vec<PortalMark>,
-    /// In the panel, the mobs it lists: the [`LISTED_MOBS`] with the largest spawn
-    /// share, sorted as `mobs` is. From a source, empty.
-    pub listed_mobs: Vec<Mob>,
-    /// In the panel, the mobs it doesn't list, summed up; `None` when it lists them all.
-    pub more_mobs: Option<MoreMobs>,
-}
-
-/// How many mobs the panel lists; the rest are summed up in [`MoreMobs`].
-pub const LISTED_MOBS: usize = 5;
-
-/// The mobs the panel doesn't list: how many, and their levels.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MoreMobs {
-    pub count: usize,
-    pub levels: LevelRange,
 }
 
 /// A portal from a map to another map.
@@ -91,6 +74,9 @@ pub struct HiddenPortal {
     pub to_map_id: String,
     pub to_map_name: String,
     pub to_street_name: String,
+    /// The destination's Map Mark, by OSMS's name for it (see [`crate::PanelState::map_marks`]);
+    /// `None` for a map without one.
+    pub to_mark: Option<String>,
     /// The destination is a Hidden Street.
     pub to_hidden_street: bool,
     /// A Quest Portal: it only works while the player meets a quest condition.
@@ -179,24 +165,8 @@ impl MapData {
     }
 }
 
-/// A source's data as the panel shows it: mobs sorted by level (then name), and the
-/// ones it lists picked out.
+/// A source's data as the panel shows it: every mob, sorted by level (then name).
 pub(crate) fn for_panel(mut data: MapData) -> MapData {
     data.mobs.sort_by(|a, b| a.level.cmp(&b.level).then_with(|| a.name.cmp(&b.name)));
-    // The most common mobs, ties going to the lower level, as they come in `mobs`.
-    let mut by_share: Vec<usize> = (0..data.mobs.len()).collect();
-    by_share.sort_by_key(|&i| std::cmp::Reverse(data.mobs[i].spawn_share_percent));
-    let listed = &by_share[..by_share.len().min(LISTED_MOBS)];
-    let (shown, rest): (Vec<_>, Vec<_>) =
-        data.mobs.iter().enumerate().partition(|(i, _)| listed.contains(i));
-    // Both in level order, so the rest's first and last are its lowest and highest.
-    data.more_mobs = match (rest.first(), rest.last()) {
-        (Some((_, lowest)), Some((_, highest))) => Some(MoreMobs {
-            count: rest.len(),
-            levels: LevelRange { lowest: lowest.level, highest: highest.level },
-        }),
-        _ => None,
-    };
-    data.listed_mobs = shown.into_iter().map(|(_, mob)| mob.clone()).collect();
     data
 }

@@ -5,6 +5,8 @@ import { dayText } from "./dates";
 import { byId, cardTop, span } from "./dom";
 import { LOADING_MAP_LIST, recognitionProblem, type Recognition } from "./recognition";
 import type { ExpTracking } from "./exp-tracking";
+import { levels } from "./figures";
+import { mapMark, showMark, type MapMarks } from "./map-marks";
 import {
   initMapPreview,
   layOutMapPreview,
@@ -57,17 +59,13 @@ type Mob = {
   spawnSharePercent: number;
 };
 
-/** Mirror of `compass_core::LevelRange`. */
-type LevelRange = { lowest: number; highest: number };
 
 /** Mirror of `compass_core::MapData`. */
 type MapData = {
   summary: { mobsPerHour: PerParty; expPerHour: PerParty } | null;
+  /** Every mob on the map, all listed, by level (then name). */
   mobs: Mob[];
   hiddenPortals: HiddenPortal[];
-  /** The mobs the panel lists: the five with the largest Spawn Share, by level. */
-  listedMobs: Mob[];
-  moreMobs: { count: number; levels: LevelRange } | null;
 };
 
 /**
@@ -118,7 +116,8 @@ type ExpBar = { exp: number; percentHundredths: number };
 /** Mirror of `compass_core::PanelState`. */
 type PanelState = {
   recognition: Recognition;
-  map: { id: string; streetName: string; mapName: string; url: string } | null;
+  /** The shown map; its `mark` names its Map Mark in `mapMarks`. */
+  map: { id: string; streetName: string; mapName: string; url: string; mark: string | null } | null;
   confidence: number;
   notSure: boolean;
   candidates: Candidates | null;
@@ -128,6 +127,8 @@ type PanelState = {
   credit: string | null;
   /** The Mob Card of each mob the panel lists, in its order. */
   mobCards: MobCard[];
+  /** Every Map Mark, by OSMS's name for it, which each map shown names its own by. */
+  mapMarks: MapMarks;
   expanded: boolean;
   /** Mirror of `compass_core::CollapsedSections`: the sections collapsed to their heading. */
   collapsedSections: Record<Section, boolean>;
@@ -172,7 +173,6 @@ const grindTracker = byId("grind-tracker");
 const badge = byId("badge");
 const mapMobs = byId("map-mobs");
 const noMobs = byId("no-mobs");
-const moreMobs = byId("more-mobs");
 const portalsToggle = byId("portals-toggle") as HTMLButtonElement;
 const mobsToggle = byId("mobs-toggle") as HTMLButtonElement;
 const navigationToggle = byId("navigation-toggle") as HTMLButtonElement;
@@ -186,6 +186,7 @@ const toolbar = byId("toolbar");
 const icon = document.querySelector<HTMLElement>(".icon")!;
 const nextCandidate = byId("next-candidate");
 const titlebar = byId("titlebar");
+const titleMark = byId("title-mark") as HTMLImageElement;
 const navigation = byId("navigation");
 const huntingSprite = byId("hunting-sprite");
 const huntingTitle = byId("hunting-title");
@@ -265,8 +266,6 @@ function hotkeyCauses(panel: PanelState): string {
 
 const number = (n: number) => n.toLocaleString("en-US");
 
-const levels = ({ lowest, highest }: LevelRange) =>
-  lowest === highest ? `Lv ${lowest}` : `Lv ${lowest}–${highest}`;
 
 function cell(text: string): HTMLTableCellElement {
   const td = document.createElement("td");
@@ -281,13 +280,7 @@ function candidateRow(id: string, outline: Outline): HTMLLIElement {
   facts.className = "candidate-facts";
   const { mobLevels, firstMobs, hiddenPortals } = outline;
   row.append(span("candidate-mobs", firstMobs.length ? firstMobs.join(", ") : "No mobs"));
-  if (mobLevels) {
-    facts.append(span("candidate-levels",
-      mobLevels.lowest === mobLevels.highest
-        ? `Lv ${mobLevels.lowest}`
-        : `Lv ${mobLevels.lowest}–${mobLevels.highest}`,
-    ));
-  }
+  if (mobLevels) facts.append(span("candidate-levels", levels(mobLevels)));
   facts.append(span("candidate-portals", `${hiddenPortals} hidden portal${hiddenPortals === 1 ? "" : "s"}`));
   facts.append(span("candidate-id", `Map ${id}`));
   row.append(facts);
@@ -320,7 +313,7 @@ function renderData(panel: PanelState) {
     renderedFrom.delete("data");
     return;
   }
-  const inputs = [data, panel.mapPreview, panel.candidates, panel.collapsedSections, panel.recognition];
+  const inputs = [data, panel.mapPreview, panel.candidates, panel.collapsedSections, panel.recognition, panel.mapMarks];
   if (!changed("data", ...inputs, panel.hotkeys, panel.unavailableHotkeys)) return;
 
   const { candidates } = panel;
@@ -358,10 +351,10 @@ function renderData(panel: PanelState) {
   const hiddenPortals: HiddenPortal[] = ready?.hiddenPortals ?? [];
   const pictured = renderMapPreview(ready ? panel.mapPreview : null, panel.map?.mapName ?? "");
   portals.hidden = !ready || (!pictured && hiddenPortals.length === 0);
-  renderPortalRows(hiddenPortals, panel.mapPreview?.marks ?? []);
+  renderPortalRows(hiddenPortals, panel.mapPreview?.marks ?? [], panel.mapMarks);
 
   mapMobs.hidden = !ready;
-  noMobs.hidden = !ready || ready.listedMobs.length > 0;
+  noMobs.hidden = !ready || ready.mobs.length > 0;
   summary.hidden = !ready?.summary;
   if (ready?.summary) {
     const { mobsPerHour, expPerHour } = ready.summary;
@@ -370,9 +363,9 @@ function renderData(panel: PanelState) {
     byId("exp-solo").textContent = number(expPerHour.solo);
     byId("exp-party").textContent = number(expPerHour.fullParty);
   }
-  mobsTable.hidden = !ready || ready.listedMobs.length === 0;
+  mobsTable.hidden = !ready || ready.mobs.length === 0;
   mobRows.replaceChildren(
-    ...(ready?.listedMobs ?? []).map((mob) => {
+    ...(ready?.mobs ?? []).map((mob) => {
       const row = document.createElement("tr");
       // The name opens the mob's MeowDB page, and resting on it shows its Mob Card.
       const name = document.createElement("td");
@@ -398,14 +391,11 @@ function renderData(panel: PanelState) {
       return row;
     }),
   );
-  const more = ready?.moreMobs;
-  moreMobs.hidden = !more;
-  if (more) moreMobs.textContent = `+${more.count} more · ${levels(more.levels)} · all on MeowDB`;
 
   // Each section collapses to its heading; Mobs then says how many it holds. With nothing
   // to list, Mobs has nothing to collapse: its heading and "No mobs on this map" show as
   // ever. The Map shows only with something in it.
-  const mobCount = (ready?.listedMobs.length ?? 0) + (ready?.moreMobs?.count ?? 0);
+  const mobCount = ready?.mobs.length ?? 0;
   foldSection(portals, portalsToggle, panel.collapsedSections.hiddenPortals, true);
   foldSection(mapMobs, mobsToggle, panel.collapsedSections.mobs, mobCount > 0, mobCount);
   // Opened again, the picture is fitted to the section.
@@ -520,7 +510,7 @@ const TARGET_SPRITE = 40;
 function renderNavigation(panel: PanelState) {
   const target: HuntingTarget | null = panel.search.hunting;
   navigation.hidden = !target;
-  if (!target || !changed("navigation", target, panel.collapsedSections.navigation)) return;
+  if (!target || !changed("navigation", target, panel.collapsedSections.navigation, panel.mapMarks)) return;
   foldSection(navigation, navigationToggle, panel.collapsedSections.navigation, true);
   const { mob, map } = target;
   fillSprite(huntingSprite, target.image, TARGET_SPRITE);
@@ -530,7 +520,7 @@ function renderNavigation(panel: PanelState) {
   mobLine.textContent = mob.name;
   const mapLine = document.createElement("span");
   mapLine.className = "hunting-map";
-  mapLine.textContent = map.mapName;
+  mapLine.append(mapMark(panel.mapMarks, map.mark), map.mapName);
   huntingTitle.replaceChildren(mobLine, mapLine);
   huntingTitle.title = `${mob.name} (Lv ${mob.level}) on ${map.streetName}: ${map.mapName}`;
   const tier = byId("hunting-tier");
@@ -551,7 +541,7 @@ function renderNavigation(panel: PanelState) {
   const routed = !arrived && map.route.length > 0;
   huntingRouteTitle.textContent = routed ? `Route from ${map.route[0].mapName}` : "";
   huntingRouteTitle.hidden = !routed;
-  huntingRoute.replaceChildren(...(routed ? routeStops(map) : []));
+  huntingRoute.replaceChildren(...(routed ? routeStops(map, panel.mapMarks) : []));
   huntingRoute.hidden = !routed;
   huntingRouteNone.textContent = routed || arrived ? "" : distanceText(map.distance).title;
   huntingRouteNone.hidden = routed || arrived;
@@ -589,7 +579,7 @@ function renderSearchView(panel: PanelState) {
   } else {
     searchTitle.textContent = search.picked?.name ?? "";
     if (search.picked) searchTitle.append(span("level", `Lv ${search.picked.level}`));
-    renderMaps(search);
+    renderMaps(search, panel.mapMarks);
     if (opened) resultsBox.focus({ preventScroll: true });
   }
 }
@@ -797,7 +787,7 @@ function renderMobs(search: SearchState, recognition: Recognition) {
 }
 
 /** The second step: the picked mob's maps, the highlighted one first to Enter, and the travel toggles. */
-function renderMaps(search: SearchState) {
+function renderMaps(search: SearchState, marks: MapMarks) {
   // The core keeps the toggles (and saves them); the checkboxes follow it.
   taxis.checked = search.travel.taxis;
   teleportScrolls.checked = search.travel.teleportScrolls;
@@ -805,9 +795,9 @@ function renderMaps(search: SearchState) {
   searchNearest.hidden = searchNearest.textContent === "";
   searchNote.textContent = resultsNote(search);
   searchNote.hidden = searchNote.textContent === "";
-  if (!changed("results", search.results, search.highlightedResult)) return;
+  if (!changed("results", search.results, search.highlightedResult, marks)) return;
   const groups = search.results.map((result, i) => {
-    const group = resultGroup(result);
+    const group = resultGroup(result, marks);
     const current = i === search.highlightedResult;
     group.classList.toggle("current", current);
     group.setAttribute("aria-selected", String(current));
@@ -945,7 +935,7 @@ function renderMobCard() {
     ? mobRows.querySelector<HTMLElement>(`.mob-name[data-id="${CSS.escape(hoveredMob)}"]`)
     : null;
   const ready = panel?.data.status === "ready" || panel?.data.status === "savedCopy" ? panel.data : null;
-  const mob = ready?.listedMobs.find((m) => m.id === hoveredMob);
+  const mob = ready?.mobs.find((m) => m.id === hoveredMob);
   const card = panel?.mobCards.find((c) => c.id === hoveredMob);
   if (!mobCardDue || !panel?.expanded || step !== null || !button || !mob || !card) {
     mobCardEl.hidden = true;
@@ -1022,6 +1012,7 @@ function render(panel: PanelState) {
   // Street Name slot stays the Street Name's.
   recovery.textContent = "";
   let problem = false;
+  let marked = false;
   street.textContent = "";
   const unrecognisable = recognitionProblem(recognition);
   if (!panel.gameFound) {
@@ -1039,12 +1030,15 @@ function render(panel: PanelState) {
   } else if (current) {
     street.textContent = current.streetName;
     map.textContent = current.mapName;
+    marked = showMark(titleMark, panel.mapMarks, current.mark);
   } else {
     map.textContent = "Reading the minimap title…";
     recovery.textContent = recognition.status === "starting"
       ? LOADING_MAP_LIST
       : `Keep the minimap open with both title lines visible. If this persists, ${setupHint.charAt(0).toLowerCase() + setupHint.slice(1)}`;
   }
+  // The map's Map Mark beside its title, as the Mini Map draws it; with none, no room for it.
+  titleMark.hidden = !marked;
   recovery.hidden = recovery.textContent === "";
   recovery.classList.toggle("problem", problem);
   renderToolbar(panel);

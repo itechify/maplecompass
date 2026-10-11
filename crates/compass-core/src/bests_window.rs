@@ -1,0 +1,176 @@
+//! The Personal Bests window (GLOSSARY): every map's Personal Best side by side, over the
+//! game, to compare maps. The Grind Tracker's star and its Best row's "Best" open it,
+//! while some map has a best, and close it again; so does its own ×. Each launch starts
+//! with it closed.
+//!
+//! - Live: the bests as saved now, the Visit under way's included, as closing MapleCompass
+//!   would keep them. So a map's row may be higher than the Best row there, which shows
+//!   only the earlier Visits'.
+//! - One row a map, its Personal Best, highest EXP/h first. The window re-sorts as the
+//!   player likes; the core gives the figures, never text.
+//! - Each map's names, region, mob levels and solo EXP/h ceiling (its Map Summary, worked
+//!   out as NiaMeowDB does) from OSMS's file set (ADR 0008), the same for every map. Bests
+//!   are shared by all the player's characters and record no level, so the levels and the
+//!   share of the ceiling say what a best was worth. A best on a map not in the map list
+//!   is kept, with none of these, and a map without mobs has no levels or ceiling.
+//! - The map the player is on is marked: only while the panel is certain of it.
+//! - Where it goes: centred over the game's client area until the player drags it, then
+//!   where they left it relative to the client area, until they drag it back to the
+//!   middle. As wide as its page lays it out, unless the client area is narrower, and no
+//!   taller than the client area. Always wholly on a monitor and never over a captured
+//!   region (it shows in screen captures, ours included), but over the panel and the
+//!   Grind Tracker if that's where it goes.
+
+use crate::grind_tracker::ClientOffset;
+use crate::map_data::MapData;
+use crate::map_index::MapEntry;
+use crate::panel::{GameWindow, ScreenRect, Size, in_view};
+use crate::personal_best::SavedBests;
+use crate::shown_map::LevelRange;
+use crate::meowdb;
+use serde::Serialize;
+
+/// The Personal Bests window, as the shell shows it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalBestsWindow {
+    /// The player opened it and hasn't closed it since: the Grind Tracker's star shows as
+    /// on.
+    pub open: bool,
+    /// Where it goes on screen; `None` while it is hidden: closed, with no game window,
+    /// while setup is open, or while another app is in front (see [`crate::Layer`]).
+    pub placement: Option<ScreenRect>,
+    /// Every map with a Personal Best, highest EXP/h first; none while it is closed.
+    pub maps: Vec<PersonalBestsMap>,
+    /// [`crate::OSMS_AND_MEOWDB_CREDIT`]: the names, levels and ceilings are from OSMS's data,
+    /// and the rows open MeowDB's pages.
+    pub credit: &'static str,
+}
+
+/// One map's row in the Personal Bests window.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalBestsMap {
+    /// The 9-digit map ID.
+    pub id: String,
+    /// The map's names and region, as OSMS's map list gives them; empty while no file set
+    /// has arrived, or if the map isn't in the list: the window goes by the ID.
+    pub street_name: String,
+    pub map_name: String,
+    pub region: String,
+    /// The map's Map Mark, by OSMS's name for it (see [`crate::PanelState::map_marks`]);
+    /// `None` for a map without one, or not in the map list.
+    pub mark: Option<String>,
+    /// The map's MeowDB page.
+    pub url: String,
+    /// The lowest and highest of its mobs' levels; `None` if it isn't in the map list, or
+    /// has no mobs.
+    pub mob_levels: Option<LevelRange>,
+    /// Its Personal Best: the Rolling Rate's EXP/h, as the Visit's best was set.
+    pub exp_per_hour: u64,
+    /// The map's solo EXP/h ceiling (its Map Summary), what the share is of; `None` if it
+    /// isn't in the map list, or has no Map Summary.
+    pub solo_exp_ceiling: Option<u64>,
+    /// The best as a share of the map's solo EXP/h ceiling (its Map Summary), in
+    /// hundredths of a percent, as the Grind Tracker writes its share: 322 for "3.2%".
+    /// `None` with no ceiling.
+    pub ceiling_share_hundredths: Option<u64>,
+    /// When it was set, by the wall clock (ms since the Unix epoch); `None` if the shell
+    /// hadn't told the wall clock by then.
+    pub set_at_unix_ms: Option<u64>,
+    /// The panel shows this map and is certain the player is on it.
+    pub here: bool,
+}
+
+/// The Personal Bests window: whether the player wants it, and where it goes on screen.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct BestsWindow {
+    pub open: bool,
+    /// Where the player dragged it; `None` until they do, and again once they drag it
+    /// back to the middle of the game: it stays centred over the game.
+    pub at: Option<ClientOffset>,
+    /// The size its page lays it out at, in physical px for the current display, as the
+    /// shell measures it.
+    pub size: Size,
+}
+
+impl Default for BestsWindow {
+    fn default() -> Self {
+        Self { open: false, at: None, size: Size { width: 0, height: 0 } }
+    }
+}
+
+impl BestsWindow {
+    /// The player dragged the window so its top-left corner is at (x, y), physical screen
+    /// px: it keeps that spot relative to the `game` window. Let go within an eighth of its
+    /// width of its spot in the middle of the game, it goes back to staying centred.
+    pub fn moved_to(&mut self, x: i32, y: i32, game: &GameWindow, avoid: &[ScreenRect]) {
+        let home = Self { at: None, ..*self }.placement(game, avoid);
+        let snap = home.width / 8;
+        let near = home.x.abs_diff(x) <= snap && home.y.abs_diff(y) <= snap;
+        self.at = (!near).then_some(ClientOffset { x: x - game.client.x, y: y - game.client.y });
+    }
+
+    /// Where the window goes over the `game`: where the player dragged it, or else centred
+    /// over the client area. No wider or taller than the client area, wholly on a monitor,
+    /// and moved the shortest way off any of `avoid`.
+    pub fn placement(&self, game: &GameWindow, avoid: &[ScreenRect]) -> ScreenRect {
+        let client = game.client;
+        let width = self.size.width.min(client.width);
+        let height = self.size.height.min(client.height);
+        let (x, y) = match self.at {
+            Some(at) => (client.x + at.x, client.y + at.y),
+            None => (client.x + ((client.width - width) / 2) as i32, client.y + ((client.height - height) / 2) as i32),
+        };
+        in_view(game, ScreenRect { x, y, width, height }, avoid)
+    }
+}
+
+/// The Personal Bests window's rows for the bests `saved`. `map` gives a map's entry in
+/// the map list and its data, if it is in the list; `here` is the map the player is
+/// certainly on, if any.
+pub(crate) fn rows<'a>(
+    saved: &SavedBests,
+    map: impl Fn(&str) -> Option<(&'a MapEntry, &'a MapData)>,
+    here: Option<&str>,
+) -> Vec<PersonalBestsMap> {
+    let mut maps: Vec<PersonalBestsMap> = saved
+        .maps
+        .iter()
+        .filter_map(|bests| {
+            let best = bests.visits.first()?;
+            let (entry, data) = map(&bests.id).unzip();
+            let ceiling = data.and_then(|d| d.summary).map(|s| s.exp_per_hour.solo).filter(|&c| c > 0);
+            Some(PersonalBestsMap {
+                id: bests.id.clone(),
+                street_name: entry.map_or_else(String::new, |e| e.street_name.clone()),
+                map_name: entry.map_or_else(String::new, |e| e.map_name.clone()),
+                region: entry.map_or_else(String::new, |e| e.region.clone()),
+                mark: entry.and_then(|e| e.mark.clone()),
+                url: meowdb::map_url(&bests.id),
+                mob_levels: data.and_then(mob_levels),
+                exp_per_hour: best.exp_per_hour,
+                solo_exp_ceiling: ceiling,
+                ceiling_share_hundredths: ceiling.map(|c| share_hundredths(best.exp_per_hour, c)),
+                set_at_unix_ms: best.set_at_unix_ms,
+                here: here == Some(bests.id.as_str()),
+            })
+        })
+        .collect();
+    maps.sort_by(|a, b| b.exp_per_hour.cmp(&a.exp_per_hour).then_with(|| a.id.cmp(&b.id)));
+    maps
+}
+
+/// The lowest and highest of the map's mobs' levels.
+fn mob_levels(data: &MapData) -> Option<LevelRange> {
+    let lowest = data.mobs.iter().map(|m| m.level).min()?;
+    let highest = data.mobs.iter().map(|m| m.level).max()?;
+    Some(LevelRange { lowest, highest })
+}
+
+/// `exp_per_hour` as a share of `ceiling` (> 0), in hundredths of a percent, rounded, halves
+/// up.
+fn share_hundredths(exp_per_hour: u64, ceiling: u64) -> u64 {
+    let scaled = u128::from(exp_per_hour) * 10_000;
+    ((scaled + u128::from(ceiling) / 2) / u128::from(ceiling)) as u64
+}

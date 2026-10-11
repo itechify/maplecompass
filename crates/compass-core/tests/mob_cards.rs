@@ -1,7 +1,7 @@
-//! Each mob the panel lists has a Mob Card, shown when the player hovers its name: OSMS's
-//! animation of the mob, and the figures from OSMS's set that the row doesn't show. The
-//! figures come with the set, so a card is ready as soon as its map is shown. Clicking a
-//! mob's name opens its MeowDB page.
+//! Every mob on the map, all of which the panel lists, has a Mob Card, shown when the
+//! player hovers its name: OSMS's animation of the mob, and the figures from OSMS's set
+//! that the row doesn't show. The figures come with the set, so a card is ready as soon
+//! as its map is shown. Clicking a mob's name opens its MeowDB page.
 
 mod common;
 
@@ -41,7 +41,7 @@ fn details<'a>(state: &'a PanelState, id: &str) -> &'a MobDetails {
 
 fn listed_ids(state: &PanelState) -> Vec<String> {
     let data = state.data.data().expect("the map's data");
-    data.listed_mobs.iter().map(|m| m.id.clone()).collect()
+    data.mobs.iter().map(|m| m.id.clone()).collect()
 }
 
 /// The made-up game world, but Sunset Sky lists these mobs and nothing else, each on 4
@@ -326,16 +326,14 @@ fn an_animation_on_its_way_when_the_player_leaves_its_map_is_seen_through_before
 }
 
 #[test]
-fn only_the_listed_mobs_animations_are_asked_for_and_each_only_once() {
+fn every_shown_maps_mobs_animations_are_asked_for_and_each_only_once() {
     let source = FakeSource::osms();
     let requests = source.picture_requests.clone();
     let mut compass = Compass::new(source);
 
     let state = arrive(&mut compass, CONSTRUCTION_SITE, 0);
     let construction_site = listed_ids(&state);
-    let all_mobs: Vec<String> =
-        state.data.data().expect("data").mobs.iter().map(|m| m.id.clone()).collect();
-    assert!(all_mobs.len() > construction_site.len(), "a map with more mobs than the panel lists");
+    assert!(construction_site.len() > 5, "a map with more mobs than the panel once listed");
     tick_through(&mut compass, 400, 20_000);
     arrive(&mut compass, KERNING, 20_050);
     tick_through(&mut compass, 20_400, 40_000);
@@ -345,13 +343,15 @@ fn only_the_listed_mobs_animations_are_asked_for_and_each_only_once() {
     arrive(&mut compass, CONSTRUCTION_SITE, 60_050);
     tick_through(&mut compass, 60_400, 80_000);
 
-    for id in &all_mobs {
-        let expected = usize::from(construction_site.contains(id) || sunset.contains(id));
-        assert_eq!(requests_for(&requests, &animation(&format!("gif{id}"))), expected, "mob {id}'s animation");
+    let shown: Vec<&String> = construction_site.iter().chain(&sunset).collect();
+    for id in &shown {
+        assert_eq!(requests_for(&requests, &animation(&format!("gif{id}"))), 1, "mob {id}'s animation");
     }
-    for id in &sunset {
-        assert_eq!(requests_for(&requests, &animation(&format!("gif{id}"))), 1, "mob {id}");
-    }
+    let asked = animations_asked(&requests);
+    assert!(
+        asked.iter().all(|path| shown.iter().any(|id| *path == animation(&format!("gif{id}")))),
+        "only the shown maps' mobs: {asked:?}"
+    );
 }
 
 #[test]

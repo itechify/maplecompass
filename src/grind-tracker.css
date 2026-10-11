@@ -166,7 +166,7 @@
   stroke: none;
 }
 
-/* "Best" opens the Personal Bests page: plain at rest, so the row reads as before; Portal
+/* "Best" opens the Personal Bests window: plain at rest, so the row reads as before; Portal
    Blue and underlined under the pointer, deeper while pressed, as a mob's name in the
    panel. */
 .rates .best-link {

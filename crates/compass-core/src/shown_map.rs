@@ -154,6 +154,18 @@ impl ShownMap {
         self.maps.get(self.shown())
     }
 
+    /// The shown map's Map Mark. While it isn't settled which of the maps sharing the title
+    /// the player is on, only one they all share: the mark says where the player is.
+    pub fn mark(&self) -> Option<String> {
+        let mark = self.map()?.mark.clone();
+        match self.settling {
+            Settling::Settled(_) | Settling::Choosing { chosen: true, .. } => mark,
+            Settling::Alike | Settling::Choosing { chosen: false, .. } => {
+                mark.filter(|mark| self.maps.iter().all(|m| m.mark.as_ref() == Some(mark)))
+            }
+        }
+    }
+
     /// The shown map's data from `set`, as the panel shows it: a Saved Copy, saved at
     /// `saved_copy_from`, when the set is one the panel must say is old.
     pub fn data(&self, set: &MapSet, saved_copy_from: Option<u64>) -> MapDataStatus {

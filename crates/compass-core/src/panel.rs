@@ -114,6 +114,14 @@ pub enum Action {
     /// The player dragged the Grind Tracker's window so its top-left corner is at
     /// (x, y), physical screen px.
     GrindTrackerMoved { x: i32, y: i32 },
+    /// Open the Personal Bests window, or close it (the Grind Tracker's star, or its Best
+    /// row's "Best"). It opens only while some map has a best.
+    TogglePersonalBests,
+    /// Close the Personal Bests window (its ×).
+    ClosePersonalBests,
+    /// The player dragged the Personal Bests window so its top-left corner is at (x, y),
+    /// physical screen px.
+    PersonalBestsMoved { x: i32, y: i32 },
     /// Open the search view on its mobs, with nothing typed yet (the search hotkey, or
     /// the 🔍 at the top of the panel). A collapsed panel expands to show it.
     OpenSearch,
@@ -493,6 +501,28 @@ pub(crate) fn clear_of(panel: ScreenRect, avoid: &[ScreenRect], within: ScreenRe
         .filter(|spot| contains(within, *spot) && clear(*spot, avoid))
         .min_by_key(|spot| (spot.x - panel.x).abs() + (spot.y - panel.y).abs())
         .unwrap_or(panel)
+}
+
+/// Our window at `spot` (the Grind Tracker's or the Personal Bests window), kept wholly on
+/// a monitor and moved the shortest way off any of `avoid`: within the game's client area
+/// if it lies inside it, else within its monitor.
+pub(crate) fn in_view(game: &GameWindow, spot: ScreenRect, avoid: &[ScreenRect]) -> ScreenRect {
+    let (w, h) = (spot.width as i32, spot.height as i32);
+    let screen = screen_at(game, spot.x, spot.y);
+    let spot = ScreenRect {
+        x: spot.x.min(screen.x + screen.width as i32 - w).max(screen.x),
+        y: spot.y.min(screen.y + screen.height as i32 - h).max(screen.y),
+        ..spot
+    };
+    let within = if contains(game.client, spot) { game.client } else { screen };
+    clear_of(spot, avoid, within)
+}
+
+/// The monitor's work area holding point (x, y), or else the one holding the game's
+/// client area's top-left corner, or else the client area itself.
+pub(crate) fn screen_at(game: &GameWindow, x: i32, y: i32) -> ScreenRect {
+    let holding = |x, y| game.screens.iter().copied().find(|screen| holds(*screen, ScreenPoint { x, y }));
+    holding(x, y).or_else(|| holding(game.client.x, game.client.y)).unwrap_or(game.client)
 }
 
 /// Whether `panel` overlaps none of `avoid`.

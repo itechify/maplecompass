@@ -64,6 +64,7 @@ fn the_construction_sites_invisible_exit_is_a_hidden_portal_up_to_a_hidden_stree
             to_map_id: "010003081".into(),
             to_map_name: "Northern Top of Construction Site".into(),
             to_street_name: "Hidden Street".into(),
+            to_mark: None,
             to_hidden_street: true,
             quest: false,
         }]

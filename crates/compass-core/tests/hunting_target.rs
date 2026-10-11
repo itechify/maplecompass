@@ -98,10 +98,10 @@ fn the_hunting_target_shows_the_mobs_animation_once_it_is_in() {
     assert_eq!(target(&state).image.as_deref(), Some("picture:images/monsters/gif9.webp"));
 }
 
-/// The panel's own pictures come first: the shown map's, then its listed mobs' animations,
+/// The panel's own pictures come first: the shown map's, then its mobs' animations,
 /// then the Hunting Target mob's.
 #[test]
-fn the_mobs_animation_is_asked_for_after_the_maps_picture_and_the_listed_mobs() {
+fn the_mobs_animation_is_asked_for_after_the_maps_picture_and_its_mobs() {
     let source = world(vec![
         map("100000000", "Sunset Sky", 100, vec![mob("4", "Shroom", 2, 6)]).to(&["100000001"]),
         map("100000001", "Mushroom Field", 100, vec![orange(4)]),

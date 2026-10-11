@@ -5,7 +5,7 @@
 //! is a [`PanelState`] holding everything the overlay renders. No OS or UI dependencies
 //! live here.
 
-mod bests_page;
+mod bests_window;
 mod exp_bar;
 mod grind_tracker;
 mod hotkey_settings;
@@ -13,6 +13,7 @@ mod item_lookup;
 mod item_tooltip;
 mod map_data;
 mod map_index;
+mod map_mark;
 mod map_preview;
 mod matcher;
 pub mod meowdb;
@@ -35,17 +36,17 @@ mod tracker;
 mod travel_links;
 mod world;
 
-pub use bests_page::{BestsPage, BestsPageMap};
+pub use bests_window::{PersonalBestsMap, PersonalBestsWindow};
 pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use grind_tracker::{ClientOffset, GrindTrackerWindow};
 pub use hotkey_settings::{KeyPress, RebindProblem, SettingsNotice, SettingsView};
 pub use item_lookup::{ItemChoice, ItemHit, ItemLookup, ItemLookupLine, OurWindow};
 pub use item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReader, ItemTooltipReading};
 pub use map_data::{
-    HiddenPortal, LISTED_MOBS, MapData, MapDataStatus, MapSummary, Mob, MoreMobs, PerParty,
-    Portal, PortalKind,
+    HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty, Portal, PortalKind,
 };
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
+pub use map_mark::MapMark;
 pub use map_preview::{Landing, Leads, MapPreview, PicturePoint, PortalMark, PreviewImage};
 pub use mob_card::{DamageRange, Elements, HpPerExp, MobCard, MobDetails};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
@@ -65,6 +66,7 @@ pub use setup::{
 pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
 pub use world::{Distance, Step, Travel};
 
+use bests_window::BestsWindow;
 use grind_tracker::GrindTracker;
 use hotkey_settings::HotkeySettings;
 use item_lookup::ItemLookups;
@@ -80,7 +82,7 @@ pub use recogniser::{TitleLines, TitleReader, TitleReading};
 use tracker::Tracker;
 use serde::{Deserialize, Serialize};
 use osms::MapSet;
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::task::Poll;
 
 /// A captured Title Region or EXP Bar Region image, or the game's whole client area for
@@ -131,6 +133,10 @@ pub struct CurrentMap {
     pub map_name: String,
     /// The map's MeowDB page, which the title and the open-page hotkey open.
     pub url: String,
+    /// Its Map Mark, by OSMS's name for it (see [`PanelState::map_marks`]); `None` for a map
+    /// without one. While it isn't settled which of the maps sharing a title the player is
+    /// on, the one they all share, or none.
+    pub mark: Option<String>,
 }
 
 /// Search's credit (ADR 0008): its results and routes are worked out from OSMS Data
@@ -190,6 +196,10 @@ pub struct PanelState {
     pub credit: Option<&'static str>,
     /// The Mob Card of each mob the panel lists, in its order; empty while it lists none.
     pub mob_cards: Vec<MobCard>,
+    /// Every Map Mark, by OSMS's name for it, which each map shown anywhere names its own
+    /// by (the panel's title, Hidden Portals, the Map Preview, search, the route, setup's
+    /// test read and the Personal Bests window); empty until OSMS's file set is read.
+    pub map_marks: BTreeMap<String, MapMark>,
     /// Expanded to the full panel, or collapsed to a small icon.
     pub expanded: bool,
     /// The sections the player collapsed to their headings.
@@ -226,6 +236,10 @@ pub struct PanelState {
     pub exp_tracking: ExpTracking,
     /// The Grind Tracker's window, which shows `exp_tracking`.
     pub grind_tracker: GrindTrackerWindow,
+    /// The Personal Bests window, with its rows: sent to that window alone, not with the
+    /// overlay's state.
+    #[serde(skip_serializing)]
+    pub personal_bests: PersonalBestsWindow,
     /// The title of the game window to look for: "MapleStory", or one the player
     /// picked by hand.
     pub game_window_title: String,
@@ -259,7 +273,7 @@ pub struct PanelState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
     /// Open this page in the player's browser (the open-page hotkey, or a click on a
-    /// listed mob's name).
+    /// listed mob's name or on a map's in the Personal Bests window).
     OpenInBrowser { url: String },
     /// Bring the overlay, with the search view already open, back in front (the search
     /// hotkey): the game may have come in front of it. Our own window only (ADR 0001).
@@ -269,9 +283,6 @@ pub enum Request {
     /// (or [`Compass::on_item_tooltip_reading`] with what an [`ItemTooltipReader`] reads
     /// in it, or `None` if the capture failed).
     CaptureItemTooltip,
-    /// Open the Personal Bests page in the player's browser (the Grind Tracker's button):
-    /// the shell renders `page` into a page of its own.
-    OpenBestsPage { page: BestsPage },
 }
 
 /// Something the player can do with a hotkey or with the matching icon at the top of
@@ -306,9 +317,11 @@ pub enum PanelControl {
     RemoveBest,
     /// The Grind Tracker window's ×: close it.
     CloseGrindTracker,
-    /// The Grind Tracker window's Personal Bests button: open the Personal Bests page in
-    /// the browser.
-    OpenBestsPage,
+    /// The Grind Tracker window's Personal Bests button, or its Best row's "Best": open
+    /// the Personal Bests window, or close it.
+    TogglePersonalBests,
+    /// The Personal Bests window's ×: close it.
+    ClosePersonalBests,
 }
 
 /// The game window's title, unless the player picked another by hand.
@@ -350,6 +363,8 @@ pub struct Compass {
     session: Session,
     /// The Grind Tracker's window.
     grind_tracker: GrindTracker,
+    /// The Personal Bests window.
+    bests_window: BestsWindow,
     source: Box<dyn MapDataSource + Send>,
     /// Every map's data, once OSMS's file set has been read: the map list, and the
     /// shown map's figures.
@@ -372,8 +387,8 @@ pub struct Compass {
     shown_map: ShownMap,
     /// The wall clock (ms since the Unix epoch), as the shell last told it.
     wall_clock: Option<u64>,
-    /// OSMS's pictures the panel asked for: the Map Preview's picture, and the listed
-    /// mobs' animations for their Mob Cards.
+    /// OSMS's pictures the panel asked for: the Map Preview's picture, and the map's mobs'
+    /// animations for their Mob Cards.
     pictures: Pictures,
     /// MeowDB's pace, kept by Item Lookup's searches.
     meowdb_pace: Pace,
@@ -407,6 +422,7 @@ impl Compass {
             exp_bar: None,
             session: Session::default(),
             grind_tracker: GrindTracker::default(),
+            bests_window: BestsWindow::default(),
             source: Box::new(source),
             set: None,
             ask_osms_at: 0,
@@ -482,6 +498,7 @@ impl Compass {
                 street_name: entry.street_name.clone(),
                 map_name: entry.map_name.clone(),
                 url: meowdb::map_url(&entry.id),
+                mark: entry.mark.clone(),
             }
         };
         // A test read judges this one frame: the tracker would keep showing the last
@@ -526,7 +543,7 @@ impl Compass {
     }
 
     fn sync_shown_map(&mut self) {
-        let map = self.shown_map.map().cloned();
+        let map = self.shown_map.map().map(|map| CurrentMap { mark: self.shown_map.mark(), ..map.clone() });
         let saved_copy_from = self.saved_copy_from();
         let data = self.set.as_ref().map_or(MapDataStatus::NoMap, |set| self.shown_map.data(&set.maps, saved_copy_from));
         // Distances are measured from the map shown (with Candidates, the one shown).
@@ -547,18 +564,21 @@ impl Compass {
         self.state.credit = self.state.map.as_ref().map(|_| OSMS_AND_MEOWDB_CREDIT);
     }
 
-    /// What shows OSMS's pictures, with those in so far: the Map Preview (its portals on the
-    /// Hunting Target's route marked), the listed mobs' Mob Cards and the Hunting Target's mob.
+    /// What shows OSMS's pictures, with those in so far: the Map Marks, the Map Preview (its
+    /// portals on the Hunting Target's route marked), the map's mobs' Mob Cards and the
+    /// Hunting Target's mob.
     fn sync_pictured(&mut self) {
+        self.state.map_marks =
+            self.set.as_ref().map(|set| map_mark::table(&set.maps, &self.pictures)).unwrap_or_default();
         let next_map = self.state.search.hunting.as_ref().and_then(HuntingTarget::next_map_by_portal);
         self.state.map_preview = self
             .set
             .as_ref()
             .and_then(|set| self.shown_map.preview(&set.maps, &self.pictures))
             .map(|preview| preview.on_route_to(next_map));
-        let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
+        let mobs = self.state.data.data().map_or(&[][..], |data| &data.mobs);
         self.state.mob_cards = match &self.set {
-            Some(set) => mob_card::cards(listed, &set.maps, &self.pictures),
+            Some(set) => mob_card::cards(mobs, &set.maps, &self.pictures),
             None => Vec::new(),
         };
         if let (Some(hunting), Some(set)) = (&mut self.state.search.hunting, &self.set) {
@@ -566,16 +586,17 @@ impl Compass {
         }
     }
 
-    /// Ask for the pictures the panel wants, one at a time: the Map Preview's first, then
-    /// the listed mobs' animations, then the Hunting Target mob's.
+    /// Ask for the pictures the panel wants, one at a time: every Map Mark first, few and
+    /// small and shown beside every map's name; then the Map Preview's, then the map's mobs'
+    /// animations, then the Hunting Target mob's.
     fn poll_pictures(&mut self, at_ms: u64) {
         let Some(set) = &self.set else { return };
         let preview = self.state.map_preview.as_ref().map(|preview| map_preview::picture_path(&preview.picture));
-        let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
+        let mobs = self.state.data.data().map_or(&[][..], |data| &data.mobs);
         let hunted = self.state.search.hunting.as_ref().and_then(|hunting| set.maps.animation(&hunting.mob.id));
-        let wanted: Vec<String> = preview
-            .into_iter()
-            .chain(mob_card::animations(listed, &set.maps))
+        let wanted: Vec<String> = map_mark::pictures(&set.maps)
+            .chain(preview)
+            .chain(mob_card::animations(mobs, &set.maps))
             .chain(hunted.map(String::from))
             .collect();
         self.pictures.poll(&wanted, &mut *self.source, at_ms);
@@ -608,6 +629,13 @@ impl Compass {
     /// The Grind Tracker window's size, in physical px for the current display.
     pub fn set_grind_tracker_size(&mut self, size: Size) -> &PanelState {
         self.grind_tracker.size = size;
+        self.sync_panel()
+    }
+
+    /// The size the Personal Bests window's page lays it out at, in physical px for the
+    /// current display.
+    pub fn set_personal_bests_size(&mut self, size: Size) -> &PanelState {
+        self.bests_window.size = size;
         self.sync_panel()
     }
 
@@ -676,12 +704,23 @@ impl Compass {
                 if let Some(map) = bests_map(&self.state) {
                     self.session.remove_best(map);
                 }
+                // With no best left, there is nothing for the Personal Bests window to show.
+                self.bests_window.open &= self.session.bests().any();
             }
             Action::ToggleGrindTracker => self.grind_tracker.open = !self.grind_tracker.open,
             Action::CloseGrindTracker => self.grind_tracker.open = false,
             Action::GrindTrackerMoved { x, y } => {
                 if let (Some(game), Some(panel)) = (&self.panel.game, self.panel.placement()) {
                     self.grind_tracker.moved_to(x, y, game, panel, self.panel.mode, &self.panel.avoid);
+                }
+            }
+            Action::TogglePersonalBests => {
+                self.bests_window.open = !self.bests_window.open && self.session.bests().any();
+            }
+            Action::ClosePersonalBests => self.bests_window.open = false,
+            Action::PersonalBestsMoved { x, y } => {
+                if let Some(game) = &self.panel.game {
+                    self.bests_window.moved_to(x, y, game, &self.panel.avoid);
                 }
             }
             Action::OpenSearch => {
@@ -849,6 +888,8 @@ impl Compass {
             PanelControl::UndoReset => Action::UndoReset,
             PanelControl::RemoveBest => Action::RemoveBest,
             PanelControl::CloseGrindTracker => Action::CloseGrindTracker,
+            PanelControl::TogglePersonalBests => Action::TogglePersonalBests,
+            PanelControl::ClosePersonalBests => Action::ClosePersonalBests,
             // An open search view stays as it is; the shell brings the overlay in front on
             // opening it.
             PanelControl::Search if self.search.is_open() => return Some(Request::RaiseOverlay),
@@ -857,24 +898,16 @@ impl Compass {
             PanelControl::OpenMeowdbPage => {
                 return self.state.map.as_ref().map(|map| Request::OpenInBrowser { url: map.url.clone() });
             }
-            // None while no map has a best: the button is hidden then.
-            PanelControl::OpenBestsPage => {
-                let page = self.bests_page();
-                return (!page.maps.is_empty()).then_some(Request::OpenBestsPage { page });
-            }
         };
         self.act(action);
         None
     }
 
-    /// The Personal Bests page now: every map's best as saved, with what OSMS's file set
-    /// held says of the map.
-    fn bests_page(&self) -> BestsPage {
-        let map = |id: &str| {
-            let maps = &self.set.as_ref()?.maps;
-            Some((maps.entry(id)?, maps.data(id)?))
-        };
-        bests_page::page(&self.session.bests().saved(), map, certain_map(&self.state), self.wall_clock)
+    /// The player clicked a map's name in the Personal Bests window: open its MeowDB page.
+    /// `None` for a map the window doesn't list.
+    pub fn open_bests_map_page(&self, id: &str) -> Option<Request> {
+        let map = self.state.personal_bests.maps.iter().find(|map| map.id == id)?;
+        Some(Request::OpenInBrowser { url: map.url.clone() })
     }
 
     /// The player clicked a listed mob's name in the panel: open its MeowDB page. `None`
@@ -902,6 +935,7 @@ impl Compass {
         let ours: Vec<(OurWindow, ScreenRect)> = [
             panel.map(|at| (OurWindow::Panel, at)),
             self.state.grind_tracker.placement.map(|at| (OurWindow::GrindTracker, at)),
+            self.state.personal_bests.placement.map(|at| (OurWindow::PersonalBests, at)),
             self.state.item_lookup_placement.map(|at| (OurWindow::Alert, at)),
         ]
         .into_iter()
@@ -962,6 +996,7 @@ impl Compass {
         self.setup.saved_exp_bar = settings.exp_bar_region;
         self.grind_tracker.open = settings.grind_tracker_open;
         self.grind_tracker.at = settings.grind_tracker_at;
+        self.bests_window.at = settings.personal_bests_at;
         self.settings = settings;
         // The travel toggles change Distances.
         self.sync_search();
@@ -987,6 +1022,7 @@ impl Compass {
             exp_bar_region: self.setup.saved_exp_bar,
             grind_tracker_open: self.grind_tracker.open,
             grind_tracker_at: self.grind_tracker.at,
+            personal_bests_at: self.bests_window.at,
             ..self.settings.clone()
         }
     }
@@ -1137,6 +1173,7 @@ impl Compass {
         self.state.layer = self.panel.layer();
         self.state.draggable = self.panel.draggable();
         self.sync_grind_tracker();
+        self.sync_personal_bests();
         self.sync_item_lookup();
         self.state.hotkeys = self.settings.hotkeys.clone();
         let in_front = self.panel.foreground.is_some_and(|foreground| foreground != Foreground::OtherApp);
@@ -1198,6 +1235,30 @@ impl Compass {
             placement,
             personal_bests: self.session.bests().any(),
         };
+    }
+
+    /// The Personal Bests window shows while the player wants it, but not while setup is
+    /// open, and only while the overlay can show (see [`Layer`]); EXP tracking needn't be
+    /// on. Its rows are the bests as saved now, with what OSMS's file set held says of
+    /// each map, and only while it is open.
+    fn sync_personal_bests(&mut self) {
+        let window = self.bests_window;
+        let shows = window.open && !self.state.setup.window_open && self.panel.layer() != Layer::Hidden;
+        let placement = match &self.panel.game {
+            Some(game) if shows => Some(window.placement(game, &self.panel.avoid)),
+            _ => None,
+        };
+        let maps = if window.open {
+            let map = |id: &str| {
+                let maps = &self.set.as_ref()?.maps;
+                Some((maps.entry(id)?, maps.data(id)?))
+            };
+            bests_window::rows(&self.session.bests().saved(), map, certain_map(&self.state))
+        } else {
+            Vec::new()
+        };
+        self.state.personal_bests =
+            PersonalBestsWindow { open: window.open, placement, maps, credit: OSMS_AND_MEOWDB_CREDIT };
     }
 
     /// Whether EXP tracking is on: there is an EXP Bar Region to read, kept and fitting

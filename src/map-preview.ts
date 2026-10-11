@@ -9,6 +9,7 @@
  */
 
 import { byId, cardTop, span } from "./dom";
+import { mapMark, type MapMarks } from "./map-marks";
 
 /** Mirror of `compass_core::HiddenPortal`. */
 export type HiddenPortal = {
@@ -16,6 +17,8 @@ export type HiddenPortal = {
   toMapId: string;
   toMapName: string;
   toStreetName: string;
+  /** The destination's Map Mark, by OSMS's name for it. */
+  toMark: string | null;
   toHiddenStreet: boolean;
   quest: boolean;
 };
@@ -35,6 +38,8 @@ type PortalMark = {
   toMapId: string;
   toMapName: string;
   toStreetName: string;
+  /** The destination's Map Mark, by OSMS's name for it; within the map, the map's own. */
+  toMark: string | null;
   /**
    * A teleport within the map: where it lands, the mark there if it has one, and whether
    * that mark lands back here (a pair).
@@ -86,6 +91,8 @@ const panelEl = byId("panel");
 /** The preview last rendered, and the shown map's name for its label. */
 let shown: MapPreview | null = null;
 let mapName = "";
+/** Every Map Mark, as the rows were last drawn with, for the card's destination. */
+let cardMarks: MapMarks = {};
 /** The overlay couldn't load the picture at this URL. */
 let brokenUrl: string | null = null;
 /** What the rings were last drawn for: the marks and the picture's drawn size. */
@@ -137,6 +144,7 @@ function rowRing(mark: PortalMark | undefined): SVGSVGElement {
     toMapId: "",
     toMapName: "",
     toStreetName: "",
+    toMark: null,
     landsAt: null,
     hiddenPortal: null,
     nextOnRoute: false,
@@ -149,7 +157,8 @@ function rowRing(mark: PortalMark | undefined): SVGSVGElement {
  * A row per Hidden Portal, each led by its mark's ring: "Northern Top of Construction Site
  * [Hidden Street]". Hovering one lights its mark.
  */
-export function renderPortalRows(portals: HiddenPortal[], marks: PortalMark[]) {
+export function renderPortalRows(portals: HiddenPortal[], marks: PortalMark[], mapMarks: MapMarks) {
+  cardMarks = mapMarks;
   rows.replaceChildren(
     ...portals.map((portal, i) => {
       const at = marks.findIndex((m) => m.hiddenPortal === i);
@@ -157,7 +166,7 @@ export function renderPortalRows(portals: HiddenPortal[], marks: PortalMark[]) {
       if (at >= 0) row.dataset.mark = String(at);
       const to = document.createElement("div");
       to.className = "dest";
-      to.append(rowRing(marks[at]), span("to", portal.toMapName));
+      to.append(rowRing(marks[at]), mapMark(mapMarks, portal.toMark), span("to", portal.toMapName));
       if (portal.toHiddenStreet) to.append(span("tag", "Hidden Street"));
       if (portal.quest) to.append(span("tag quest", "Quest"));
       row.append(to);
@@ -350,7 +359,7 @@ function renderCard() {
   }
   const head = document.createElement("div");
   head.className = "mark-card-to";
-  head.textContent = mark.toMapName;
+  head.append(mapMark(cardMarks, mark.toMark), mark.toMapName);
   const parts: Node[] = [head];
   if (mark.toStreetName) parts.push(span("mark-card-street", mark.toStreetName));
   const tags = kindTags(mark);

@@ -2,14 +2,15 @@
 //! captures the Title Region and the EXP Bar Region (and, for Item Lookup, the client
 //! area with the pointer), feeds frames, hotkeys and drags to the core and renders the
 //! panel state in an overlay on top of everything (detached, with a taskbar entry), the
-//! Grind Tracker in a window of its own beside it, and the Item Lookup alert at the top
-//! centre of the game window: all three only while the game or one of our windows is in
-//! front. All logic lives in the core.
+//! Grind Tracker in a window of its own beside it, the Personal Bests window over the game
+//! while the player has it open, and the Item Lookup alert at the top centre of the game
+//! window: all four only while the game or one of our windows is in front. All logic
+//! lives in the core.
 
 pub mod capture;
 pub mod gamewin;
 mod bests;
-mod bests_page;
+mod bests_window;
 mod files;
 mod grind_tracker;
 mod hotkey_settings;
@@ -34,6 +35,7 @@ use compass_core::{
     ScreenPoint, ScreenRect, Size, TitleReader, TitleReading, default_title_region,
 };
 use source::WebSource;
+use bests_window::BestsWindow;
 use grind_tracker::GrindTrackerWindow;
 use item_lookup::ItemLookupWindow;
 use setup::{Bridge, SetupWindows};
@@ -86,6 +88,8 @@ pub(crate) enum Command {
     SearchPick(String),
     /// The player clicked the name of the listed mob with this ID in the panel.
     OpenMobPage(String),
+    /// The player clicked the name of the map with this ID in the Personal Bests window.
+    OpenBestsMapPage(String),
     /// The player picked the item with this MeowDB ID from the ones an Item Lookup found
     /// sharing the name it read.
     PickItem(String),
@@ -110,6 +114,10 @@ pub(crate) enum Command {
     GrindTrackerHeight(f64),
     /// Windows told of a drag of the Grind Tracker's window.
     GrindTrackerSizeMove(SizeMove),
+    /// The Personal Bests window's content is this tall (CSS px).
+    PersonalBestsHeight(f64),
+    /// Windows told of a drag of the Personal Bests window.
+    PersonalBestsSizeMove(SizeMove),
     /// The Item Lookup alert is this tall (CSS px).
     ItemLookupHeight(f64),
     /// The player chose Quit in the tray icon's menu: save the settings and exit.
@@ -229,6 +237,10 @@ pub fn run() {
                 eprintln!("{e}");
             }
             let grind_tracker = GrindTrackerWindow::new(app.handle(), commands.clone());
+            // After the overlay and the Grind Tracker's window, which it stays above.
+            let personal_bests = BestsWindow::new(app.handle(), commands.clone());
+            // The page earlier versions wrote for the browser, which this window replaces.
+            let _ = std::fs::remove_file(app.path().app_config_dir()?.join("personal-bests.html"));
             let item_lookup = ItemLookupWindow::new(app.handle(), commands.clone());
             let overlay_window = OverlayWindow::new(overlay.clone(), commands.clone());
             overlay.on_window_event(move |event| match event {
@@ -256,8 +268,14 @@ pub fn run() {
             // Per-Monitor-V2 DPI aware.
             let reader = ReaderThread::spawn(app.state::<Sender<Command>>().inner().clone())?;
             let channels = Channels { commands: commands_rx, picks: picks_rx };
-            let windows =
-                Windows { overlay: overlay_window, setup: setup_windows, grind_tracker, item_lookup, hotkeys };
+            let windows = Windows {
+                overlay: overlay_window,
+                setup: setup_windows,
+                grind_tracker,
+                personal_bests,
+                item_lookup,
+                hotkeys,
+            };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
                 let files = Files { settings: settings_path, bests: bests_file };
                 compass_loop(handle, windows, compass, reader, channels, files)
@@ -300,6 +318,9 @@ pub fn run() {
             setup::open_hotkey_settings,
             grind_tracker::grind_tracker_height,
             grind_tracker::grind_tracker_view,
+            bests_window::personal_bests_height,
+            bests_window::personal_bests_view,
+            bests_window::personal_bests_open_map,
             item_lookup::item_lookup_height,
             item_lookup::item_lookup_view,
         ])
@@ -308,11 +329,12 @@ pub fn run() {
 }
 
 /// Our windows: the overlay (with mob search in it), setup (with its region window), the
-/// Grind Tracker's and the Item Lookup alert's.
+/// Grind Tracker's, the Personal Bests window and the Item Lookup alert's.
 struct Windows {
     overlay: OverlayWindow,
     setup: SetupWindows,
     grind_tracker: GrindTrackerWindow,
+    personal_bests: BestsWindow,
     item_lookup: ItemLookupWindow,
     /// Not a window, but registered and released as the foreground changes.
     hotkeys: hotkeys::GlobalHotkeys,
@@ -456,8 +478,14 @@ fn compass_loop(
     let settings_path = files.settings;
     // Restored at startup: saved already.
     let mut bests_saved = compass.bests_revision();
-    let Windows { overlay: mut window, setup: mut setup_windows, mut grind_tracker, mut item_lookup, mut hotkeys } =
-        windows;
+    let Windows {
+        overlay: mut window,
+        setup: mut setup_windows,
+        mut grind_tracker,
+        mut personal_bests,
+        mut item_lookup,
+        mut hotkeys,
+    } = windows;
     let mut saved = compass.settings();
     let mut pending = (saved.clone(), Instant::now());
     let mut emitted: Option<PanelState> = None;
@@ -492,6 +520,10 @@ fn compass_loop(
             }
             Ok(Command::OpenMobPage(id)) => {
                 let request = compass.open_mob_page(&id);
+                carry_out(&app, &window.overlay, &reader, &mut compass, request);
+            }
+            Ok(Command::OpenBestsMapPage(id)) => {
+                let request = compass.open_bests_map_page(&id);
                 carry_out(&app, &window.overlay, &reader, &mut compass, request);
             }
             Ok(Command::PickItem(id)) => {
@@ -558,6 +590,17 @@ fn compass_loop(
                     compass.act(Action::GrindTrackerMoved { x: at.x, y: at.y });
                 }
             }
+            Ok(Command::PersonalBestsHeight(height)) => {
+                personal_bests.set_height(height);
+                if let Some(size) = personal_bests.size() {
+                    compass.set_personal_bests_size(size);
+                }
+            }
+            Ok(Command::PersonalBestsSizeMove(what)) => {
+                if let Some(at) = personal_bests.size_move(what) {
+                    compass.act(Action::PersonalBestsMoved { x: at.x, y: at.y });
+                }
+            }
             Ok(Command::Read { region, reading }) => {
                 reader.title_busy = false;
                 // A reading of a region no longer captured (setup marked a new one, or
@@ -590,6 +633,9 @@ fn compass_loop(
             // For the display they are on now.
             if let Some(size) = grind_tracker.size() {
                 compass.set_grind_tracker_size(size);
+            }
+            if let Some(size) = personal_bests.size() {
+                compass.set_personal_bests_size(size);
             }
             if let Some(size) = item_lookup.size() {
                 compass.set_item_lookup_size(size);
@@ -643,6 +689,7 @@ fn compass_loop(
         }
         window.show(state);
         grind_tracker.sync(state);
+        personal_bests.sync(state);
         item_lookup.sync(state);
 
         // Save once the settings settle, not on every move of a drag.
@@ -702,7 +749,6 @@ fn carry_out(
                 compass.on_item_tooltip_reading(None);
             }
         }
-        Some(Request::OpenBestsPage { page }) => bests_page::open(app, &page),
         None => {}
     }
 }
@@ -753,7 +799,7 @@ struct OverlayWindow {
 
 impl OverlayWindow {
     fn new(overlay: WebviewWindow, commands: Sender<Command>) -> Self {
-        let shows_on_top = keep_on_top(&overlay, "on-top", commands);
+        let shows_on_top = keep_on_top(&overlay, "on-top", commands, &[]);
         Self {
             overlay,
             layer: None,
@@ -881,22 +927,28 @@ impl OverlayWindow {
 /// Keep our `window` on top of every other window while the core shows it (the flag
 /// returned, which the compass loop sets) and the game or one of our windows is in front,
 /// and out of sight otherwise: on a thread of its own (named `name`), at its own steady
-/// pace. The core decides what shows, but the compass loop can stall for a while (setting
+/// pace. On top, it stays above our windows `beneath` too. The core decides what shows, but the compass loop can stall for a while (setting
 /// window sizes and positions), and a window on top of everything must not sit over
 /// another app meanwhile: this watcher checks what is in front itself, takes the window
 /// out of sight within a tick of another app coming to the front, and tells the compass
 /// loop (`commands`) to check the foreground at once. It gets the window's handle once,
 /// here: asking Tauri for it from another thread waits on the main thread's event loop,
 /// which can leave the watcher idle for seconds while another app is in front.
-pub(crate) fn keep_on_top(window: &WebviewWindow, name: &str, commands: Sender<Command>) -> Arc<AtomicBool> {
+pub(crate) fn keep_on_top(
+    window: &WebviewWindow,
+    name: &str,
+    commands: Sender<Command>,
+    beneath: &[WebviewWindow],
+) -> Arc<AtomicBool> {
     let shows = Arc::new(AtomicBool::new(false));
     #[cfg(windows)]
     match window.hwnd() {
         Ok(hwnd) => {
             let (handle, watcher_flag) = (hwnd.0 as isize, shows.clone());
+            let beneath: Vec<isize> = beneath.iter().filter_map(|w| w.hwnd().ok()).map(|h| h.0 as isize).collect();
             let spawned = std::thread::Builder::new()
                 .name(name.into())
-                .spawn(move || keep_on_top_while_in_front(handle, watcher_flag, commands));
+                .spawn(move || keep_on_top_while_in_front(handle, beneath, watcher_flag, commands));
             if let Err(e) = spawned {
                 eprintln!("{name} watcher not started: {e}");
             }
@@ -904,13 +956,14 @@ pub(crate) fn keep_on_top(window: &WebviewWindow, name: &str, commands: Sender<C
         Err(e) => eprintln!("{name} watcher not started: no {} window handle: {e}", window.label()),
     }
     #[cfg(not(windows))]
-    let _ = (window, name, commands);
+    let _ = (window, name, commands, beneath);
     shows
 }
 
 /// Every `WINDOW_TICK`, put our window (its handle) on top of everything if `shows` is
 /// set and the game or one of our windows is in front, and at the bottom, out of sight,
-/// if not. Nothing here waits on the main thread.
+/// if not; on top, back above our windows `beneath` should one have come over it. Nothing
+/// here waits on the main thread.
 ///
 /// The core alone decides what shows (`Panel::layer` in compass-core's panel.rs: a game
 /// window, and the game or one of ours in front), and `shows` is its last word. The
@@ -920,10 +973,12 @@ pub(crate) fn keep_on_top(window: &WebviewWindow, name: &str, commands: Sender<C
 /// app while it does. So the rule here must agree with the core's: never show what the
 /// core wouldn't. Should they part, change both.
 #[cfg(windows)]
-fn keep_on_top_while_in_front(window: isize, shows: Arc<AtomicBool>, commands: Sender<Command>) {
+fn keep_on_top_while_in_front(window: isize, beneath: Vec<isize>, shows: Arc<AtomicBool>, commands: Sender<Command>) {
     use compass_core::Foreground;
     use gamewin::Stacking;
-    let window = windows::Win32::Foundation::HWND(window as *mut _);
+    use windows::Win32::Foundation::HWND;
+    let window = HWND(window as *mut _);
+    let beneath: Vec<HWND> = beneath.into_iter().map(|handle| HWND(handle as *mut _)).collect();
     let mut last_error = None;
     // On top or at the bottom, as this watcher last put it: the window's style alone can't
     // be trusted to say (see `gamewin::restack`).
@@ -937,7 +992,10 @@ fn keep_on_top_while_in_front(window: isize, shows: Arc<AtomicBool>, commands: S
             gamewin::find_game().is_some_and(|game| gamewin::foreground(Some(game.handle)) != Foreground::OtherApp)
         };
         let to = if shows && in_front() { Stacking::OnTop } else { Stacking::Bottom };
-        let moved = gamewin::restack(window, to, set_before);
+        // One of `beneath` came over it (on top again after another app, say): on top
+        // afresh.
+        let covered = to == Stacking::OnTop && gamewin::below_any(window, &beneath);
+        let moved = gamewin::restack(window, to, if covered { None } else { set_before });
         if moved.is_ok() {
             set_before = Some(to);
         }

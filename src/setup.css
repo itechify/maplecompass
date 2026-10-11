@@ -259,6 +259,20 @@ button.secondary:disabled {
   min-width: 0;
 }
 
+/* The map's Map Mark beside both lines at the Mini Map's own size, 8px clear of them, as
+   the overlay's title bar draws it; empty until its picture is in. */
+.test-read .map-mark {
+  flex: none;
+  align-self: flex-start;
+  width: 38px;
+  height: 38px;
+  margin: 2px -2px 0 0;
+}
+
+.test-read .map-mark:not([src]) {
+  visibility: hidden;
+}
+
 .test-read p {
   margin: 0;
 }
