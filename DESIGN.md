@@ -128,6 +128,41 @@ typography:
     fontSize: "11px"
     fontWeight: 700
     lineHeight: "15px"
+  site-title:
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontSize: "42px"
+    fontWeight: 700
+    lineHeight: "48px"
+  site-opener:
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontSize: "30px"
+    fontWeight: 700
+    lineHeight: "36px"
+  site-topic:
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontSize: "23px"
+    fontWeight: 700
+    lineHeight: "30px"
+  site-subhead:
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontSize: "17px"
+    fontWeight: 700
+    lineHeight: "24px"
+  site-lede:
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontSize: "17px"
+    fontWeight: 400
+    lineHeight: "28px"
+  site-body:
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontSize: "16px"
+    fontWeight: 400
+    lineHeight: "26px"
+  site-aside:
+    fontFamily: "Maplestory, Arial, \"Segoe UI\", system-ui, sans-serif"
+    fontSize: "15px"
+    fontWeight: 400
+    lineHeight: "23px"
 rounded:
   game-button: "2px"
   chip: "3px"
@@ -351,6 +386,43 @@ components:
     textColor: "{colors.ink}"
     rounded: "{rounded.hint}"
     padding: "9px 14px 10px"
+  site-window:
+    backgroundColor: "{colors.body-solid}"
+    textColor: "{colors.ink}"
+    typography: "{typography.site-body}"
+    rounded: "{rounded.window}"
+    width: "1200px"
+  site-tab:
+    backgroundColor: "{colors.button-light-base}"
+    textColor: "{colors.ink-2}"
+    rounded: "{rounded.window}"
+    padding: "5px 16px"
+  site-tab-current:
+    backgroundColor: "{colors.body-solid}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.window}"
+    padding: "9px 16px 5px"
+  site-button:
+    backgroundColor: "{colors.button-base}"
+    textColor: "#ffffff"
+    rounded: "{rounded.window}"
+    padding: "9px 20px 10px"
+  site-button-secondary:
+    backgroundColor: "{colors.button-light-base}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.window}"
+    padding: "9px 20px 10px"
+  site-aside:
+    backgroundColor: "{colors.inset-bg}"
+    textColor: "{colors.ink}"
+    typography: "{typography.site-aside}"
+    rounded: "{rounded.window}"
+    padding: "14px 18px 16px"
+  site-icon-button:
+    backgroundColor: "{colors.game-button-mid}"
+    textColor: "#ffffff"
+    rounded: "{rounded.game-button}"
+    size: "21px"
 ---
 
 # Design System: MapleCompass
@@ -361,7 +433,7 @@ components:
 
 The overlay is one more of the game's windows laid over the screen, built from the two it sits beside. From the Mini Map it takes the light grey window bar with the window's name and small bright blue buttons, and the sky-blue title panel with the Street Name over the Map Name in light lettering outlined in blue. From the Quest Helper it takes the see-through periwinkle body with near-black text. The minimap's legend supplies the glyphs: blue portal rings, red mob dots, and the player's yellow dot. The pixel-art gold compass, the app icon, is the window's mark. The game supplies the materials and one signature move; organisation, hierarchy and density come from a working tool: EXP pace first when it is tracked, then the map and its hidden exits, then the way to the Hunting Target, then the mobs, then the credit. It is not a screenshot of a game window.
 
-It is light because the game's windows are light, see-through because the game's windows over the screen are, and dense because it is read in glances between attacks. Every state is drawn in the same window. Doubt and problems get the game's orange, and nothing else does. The confirmed rejection is the generic dark dev-tools card with a stats table on top, which this world replaced. Setup is a window on the desktop rather than over the game: it keeps an opaque lavender body, navy ink and steel buttons under the same grey window bar, and shows a recognised map exactly as the overlay's title panel will. The title-marking window's hint is a small translucent lavender window.
+It is light because the game's windows are light, see-through because the game's windows over the screen are, and dense because it is read in glances between attacks. Every state is drawn in the same window. Doubt and problems get the game's orange, and nothing else does. The confirmed rejection is the generic dark dev-tools card with a stats table on top, which this world replaced. Setup is a window on the desktop rather than over the game: it keeps an opaque lavender body, navy ink and steel buttons under the same grey window bar, and shows a recognised map exactly as the overlay's title panel will. The title-marking window's hint is a small translucent lavender window. The project's site, the player manual, is that same opaque window opened wide in the browser, its raised tabs filing the manual.
 
 Every window takes the pointer. The overlay is always clickable, but a click never takes the keyboard from the game except in the search view, where the query field needs it, and the settings view, where a hotkey's new keys are pressed. The panel is dragged by its window bar or title panel when it sits inside the game or is detached, and resized by its sides or bottom corners, width only. Its buttons and setup's buttons carry the game's hover, pressed and keyboard-focus states; list rows in the search view take a faint hover tint. Its height follows its content. There is no transition or animation anywhere: the Grind Tracker's EXP gauge changes with each reading, as the game's own does, without easing.
 
@@ -393,9 +465,9 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 - **EXP Lime** (exp-top, exp-mid, exp-base), on **EXP Track** grey (exp-track) under an **EXP Frame** (exp-frame): the game's own EXP gauge, sampled from its status bar (a lime fill on a light grey track, a dark grey frame with a white line beneath it). The Grind Tracker's EXP gauge, and nothing else. A yellow-green, kept apart from You Yellow's gold.
 
 ### Neutral
-- **Quest Helper Glass** (glass): the overlay's see-through periwinkle body, at 62% so the game shows through as it does through the Quest Helper. Over white, the ground the Personal Bests page's window stands on.
+- **Quest Helper Glass** (glass): the overlay's see-through periwinkle body, at 62% so the game shows through as it does through the Quest Helper. Over white, the ground the Personal Bests page's window and the site's window stand on.
 - **Window Edge** (window-edge): the 1px frame of the panel, the rules under its window bar and title panel, the light icon buttons' border, and setup's window bar and recognised test read.
-- **Window Bar Grey** (window-bar-top, window-bar-mid, window-bar-base): the three stops of the Mini Map's and Quest Helper's light grey bar, one custom property `--window-bar` (`linear-gradient(180deg, #ececec 0%, #dfdfdf 55%, #d6d6d6 100%)`), shared by the overlay's, the search view's and the Grind Tracker's window bars, setup's and the Personal Bests page's. **Window Bar Ink** (window-bar-ink): the window's name, the search view's title and setup's window name and step count on that bar.
+- **Window Bar Grey** (window-bar-top, window-bar-mid, window-bar-base): the three stops of the Mini Map's and Quest Helper's light grey bar, one custom property `--window-bar` (`linear-gradient(180deg, #ececec 0%, #dfdfdf 55%, #d6d6d6 100%)`), shared by the overlay's, the search view's and the Grind Tracker's window bars, setup's, the Personal Bests page's and the site's. **Window Bar Ink** (window-bar-ink): the window's name, the search view's title and setup's window name and step count on that bar.
 - **Mini Map Sky** (title-panel): the title panel under the window bar, and setup's recognised test read. **Title Lettering** (title-ink, outlined in title-outline): the Street Name and Map Name on it.
 - **Game Button Blue** (game-button-top, game-button-mid, game-button-base, edged by game-button-edge): the game's bright blue window buttons, the overlay's and the Grind Tracker's toolbars and the search view's back button. Hover and pressed gradients are one step lighter and one step deeper.
 - **Panel Ink** (panel-ink), **Panel Ink Steel** (panel-ink-2) and **Panel Ink Slate** (panel-ink-3): the Quest Helper's near-black text on the glass, for primary text and values; secondary text such as notes, positions, units, labels and table headers; and tertiary text and glyphs such as the footer's credit icon, candidate map IDs, key hints and placeholders.
@@ -403,12 +475,12 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 - **Inset** (inset-bg, inset-edge): white at 50% edged in navy at 30%, for a list or box set into the panel's body: the search suggestions. Inset Edge alone frames the Map Preview's paper. The Grind Tracker's figures, the Navigation section's route and arrival, and the search results sit on near-opaque Window Lavender instead, edged the same. The Personal Bests page's table is the Inset tint on opaque lavender.
 - **Results Header** (results-head): the opaque tone of the glass behind the search results' sticky header, so rows scrolled under it don't show through.
 - **Ink** (ink), **Ink Steel** (ink-2) and **Ink Slate** (ink-3): navy text on lavender, in setup, the title-marking hint and the Personal Bests page; Ink is also the ground of the collapsed icon's count chip and Time to Level badge; Ink Steel is the badge's ground while its figure is held.
-- **Window Lavender** (body) and **Window Lavender, Opaque** (body-solid): the title-marking hint's translucent body, and setup's and the Personal Bests page's opaque one; at 95%, the ground of the Grind Tracker's figures. **Frame Navy** (frame): the hint's border, setup's secondary buttons and the search field. **Window Rule** (rule): the hairline above setup's button row.
-- **Selection Periwinkle** (select, edged by select-edge): the selected row wherever there is one: the shown candidate, the suggestion Enter picks, the result Enter makes the Hunting Target, the hotkey waiting for its new keys, the Hidden Portal row whose ring is lit; and the Personal Bests page's text selection. select-edge also colours every scrollbar thumb.
+- **Window Lavender** (body) and **Window Lavender, Opaque** (body-solid): the title-marking hint's translucent body, and setup's, the Personal Bests page's and the site's opaque one (the site's tab band and credits foot are this lavender mixed 12% toward Frame Navy); at 95%, the ground of the Grind Tracker's figures. **Frame Navy** (frame): the hint's border, setup's secondary buttons and the search field. **Window Rule** (rule): the hairline above setup's button row.
+- **Selection Periwinkle** (select, edged by select-edge): the selected row wherever there is one: the shown candidate, the suggestion Enter picks, the result Enter makes the Hunting Target, the hotkey waiting for its new keys, the Hidden Portal row whose ring is lit; and the Personal Bests page's and the site's text selection. select-edge also colours every scrollbar thumb, and underlines the site's links at rest.
 - **Tag Periwinkle** (tag-bg, tag-edge, tag-ink): the "Hidden Street" tag, the mark card's "Hidden", "Door", "Within the map", "Not in the map list" and "Next on your route" tags, the route's ride tags ("Taxi"), setup's "Recognised" and "Read" tags, and (tag-bg alone) the Personal Bests page's table header. **Quest Violet** (quest-bg, quest-edge, quest-ink): the "Quest" tag, on a Hidden Portal's row and on the mark card. Violet because no other meaning holds it: green now means a teleport within the map, and cream and amber tags already mean a state to notice (the Orange Means Doubt Rule keeps the game's orange for problems).
-- **Edit Blue** (edit): the 2px keyboard-focus ring in every window, the dashed drag box when marking, the checked travel checkboxes (`accent-color`), and, at 8%, the hover tint on suggestion and result rows and the Personal Bests page's rows.
+- **Edit Blue** (edit): the 2px keyboard-focus ring in every window, the dashed drag box when marking, the checked travel checkboxes (`accent-color`), and, at 8%, the hover tint on suggestion and result rows and the Personal Bests page's rows. On the site, the dashed box where a screenshot not yet taken belongs.
 - **Minimap Paper** (minimap-paper): the Map Preview's paper under OSMS's see-through picture of the map, itself see-through at 45%: the game shows through the picture's empty parts, paler than through the glass beside it, as it shows through every window over the game (the Over the Game, See-Through Rule). Inset Edge still frames the box, and every ring keeps its white halo, so the marks hold over the game.
-- **Button Steel** (button-top, button-base, edged by button-edge): the deep-steel gradient of setup's primary button, deep enough that white holds 4.5:1 even at its light top. **Light Steel** (button-light-top, button-light-base): setup's secondary buttons and the overlay's light icon and text buttons in the body. Hover gradients sit one step darker (deep) or lighter (light).
+- **Button Steel** (button-top, button-base, edged by button-edge): the deep-steel gradient of setup's primary button, deep enough that white holds 4.5:1 even at its light top. **Light Steel** (button-light-top, button-light-base): setup's secondary buttons, the overlay's light icon and text buttons in the body, and the site's tabs and secondary buttons. Hover gradients sit one step darker (deep) or lighter (light).
 - **Greyed** (disabled-bg, disabled-edge, disabled-ink): a button the window won't take, flat with no highlight.
 - **Navy Veil** (veil): the title-marking window's whole surface, so the game reads as paused behind it. It is non-zero on purpose: a fully transparent pixel would not take the mouse.
 
@@ -445,6 +517,8 @@ Cool periwinkles, sky blue and light grey from the game's own windows, near-blac
 
 The collapsed icon carries the system's two sizes below the Label step, held there because they share a 44px square with the compass: the Hidden Portal count at 10px/13px bold and the Time to Level badge at 9px/12px bold, both white on Ink (the badge in Light on Ink Steel while its figure is held). They are exceptions, not scale steps.
 
+The site has a reading scale of its own, outside the overlay's ramp on purpose: it is read at rest, like setup, but in a window up to 1200px wide, so every step is larger. **Site Body** (400, 16px/26px; 15px/24px under 640px) for its prose; **Site Title** (700, 42px/48px, balanced; 32px/38px on phones) once, at the top of Get started; **Site Opener** (700, 30px/36px; 26px/32px on phones) heading each tab's part, its line under it in 17px/26px Ink Steel; **Site Topic** (700, 23px/30px; 20px/26px on phones) heading each topic; **Site Subhead** (700, 17px/24px) for the h4s within a topic; **Site Lede** (400, 17px/28px; 16px/26px on phones) for Get started's opening paragraphs; **Site Aside** (400, 15px/23px, its heading 15px/22px bold) in the topic asides. Around them: the window name 15px/20px bold and the version 12px/16px bold in Window Bar Ink; tabs 14px/20px bold (13px on phones, 12px under 340px); buttons 15px/20px bold, the Download in the bar 13px/18px; the in-tab link rows 14px/22px; the problem note 14px/21px; the credits 14px/21px under a 19px/26px heading; captions, the fine print and the hotkey table's caption 13px in Ink Steel. The site serves WOFF2 copies of the two Maplestory files with `font-display: swap`, so over the web the text draws in Arial first rather than not at all; the app keeps `block`.
+
 ### Named Rules
 **The Right-Aligned Figures Rule.** Numeric columns are right-aligned so EXP, HP, rates and share line up at their ends from one glance to the next. Maplestory's figures are proportional and it has no tabular ones; the body still asks for `tabular-nums`, which the Arial fallback honours.
 
@@ -470,6 +544,8 @@ Collapsed, the window becomes a 44px square holding the compass. One container q
 
 The setup window is a fixed 520×560 opaque window: a full-width window bar (padding 9px 20px 10px, 10px gaps, wrapping) holding the 28px compass, the window name, the step count ("Step N of 7" on first run, "of 6" when setup reopens, "Guide" in the Overlay Guide, "About & Credits" there) and, at the right, the Overlay Guide and About & Credits buttons 10px apart, then a column with 22px side insets and 18px bottom padding that scrolls if it must. Each step is a heading (18px above, 8px below), prose in 10px-spaced paragraphs, and a footer pinned to the bottom of the window above a Window Rule, buttons right-aligned with 10px between them, the step forward always last. Notices sit above the step, 14px below the window bar and 8px apart. About & Credits is a page like the Overlay Guide, its Back to setup returning to the step left: the version and what MapleCompass is (free, not made or endorsed by NEXON, at your own risk), then a credit list of 13px bold labels over Ink Steel lines, 10px apart (the data and pictures, the pages, the recognition model with its licence and warranty, the typeface, the open-source software), its addresses as plain text, since the window opens no links.
 
+The site is one window up to 1200px wide, centred 28px down (40px of glass below it), on Quest Helper Glass over white. Its head sticks to the top as the page scrolls: setup's window bar (padding 8px 18px 9px, 10px gaps) with the 32px compass, the window's name, the version and platform pushed right, and the steel Download; then the tab strip (padding 8px 18px 0, 3px between tabs) on its band, the tabs sitting on its bottom Window Edge rule, the strip scrolling sideways rather than wrapping. A jump to a heading lands 16px below the head, however tall it is. The body has 40px side insets; each tab's part opens with its opener (the in-tab row of links to its topics 10px under it), and the parts are parted by a Window Rule with 40px above the next. A topic is its words at a 38em measure, with its screenshot or its aside beside them in the remaining width, 48px apart, 40px between topics; two short topics may sit side by side, each at its own measure. Get started opens on a hero: the words at up to 30em, the hero shot beside them, 48px apart. Each part ends on its "Next:" button at the right, 36px down. The credits close the window in its foot, 28px 40px 32px, in two columns 48px apart. Under 960px every topic, pair and hero is one column at the measure, 24px apart, asides under their words. Under 640px the window meets the page's edges, unframed and square-cornered, the bar padded 7px 12px 8px with a 28px compass and no version; the tabs become a grid of three columns in two rows (gap 4px, padding 6px 10px 8px), every tab whole; the hero's buttons run the full width, one above the other; the body's insets are 18px and the credits one column.
+
 The title-marking window covers the game client exactly. Its hint is centred horizontally, 12% up from the bottom, or 12% down from the top while marking the EXP bar so it never covers what is being marked; it is as wide as its longest line, up to the window less 64px.
 
 ## Elevation & Depth
@@ -481,6 +557,7 @@ No window has a drop shadow. Depth comes from the game's window chrome: a faint 
 - **Bar top highlight** (`box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9)`): the top edge of setup's window bar. The doubt chip uses the same at 0.6, setup's primary button at 0.3, and the light-steel buttons a solid `#fff`.
 - **Game button bevel** (`box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 -1px 0 rgba(0, 60, 110, 0.25)`): the game's blue buttons, whose white icon carries a `drop-shadow(0 1px 0 rgba(0, 50, 90, 0.45))`.
 - **Pressed** (`box-shadow: inset 0 1px 2px rgba(0, 40, 80, 0.5)`): a held game-blue button. A held deep-steel button uses `inset 0 1px 3px rgba(10, 20, 50, 0.45)`, light steel the same at 0.25.
+- **Site tabs and buttons:** the site reuses this vocabulary as it stands: the window inner ring on its window, the bar top highlight on its bar and open tab, the light steel's solid white top highlight on its tabs and secondary buttons, the deep-steel Pressed shadow (0.45) on a held steel button, and the light-steel one (0.25) on a held tab or secondary button. On phones the open tab draws its frame inside its edge (`inset 0 0 0 1px` Window Edge, `inset 0 2px 0 #fff`), the bright one among dimmer tabs, with no lift.
 - **Field inset** (`box-shadow: inset 0 1px 2px rgba(20, 30, 60, 0.15)`): the search field only.
 - **Glyph ring** (`box-shadow: 0 0 0 1px <edge>`): the dark edge on mob dots, the you dot and the orange dots. The alert dot adds a second white ring (`0 0 0 2px #fff`).
 - **Title lettering** (`--title-lettering`: eight 1px `text-shadow` offsets in title-outline, plus `0 2px 1px rgba(30, 60, 100, 0.3)`): a map's title only. The doubt chip's white label is outlined the same way in orange-deep, in four directions; setup's primary button label carries a 1px button-edge drop (`0 1px 0`).
@@ -493,7 +570,7 @@ No window has a drop shadow. Depth comes from the game's window chrome: a faint 
 
 ## Shapes
 
-Small, game-window corners: 4px on the panel, notices, setup's buttons, the search field, inset boxes and the recognised test read; 3px on chips, tags, the badge and selectable rows; 2px on the game's small blue buttons and the light icon buttons; 6px on the title-marking hint; a full 8px pill on the collapsed icon's count chip. Borders are 1px solid in a darker tone of the fill. Dashed lines mark three things: the drag box while marking, a place not yet fixed; the ring of a Hidden or Quest Portal, a way the game doesn't show plainly; and the Map Preview's arrow from a teleport to where it lands, as OSMS draws it. Circles are reserved for minimap glyphs and the Map Preview's rings. The panel's bottom corners carry a dotted grip in their triangle, the way the game's windows mark a resizable corner.
+Small, game-window corners: 4px on the panel, notices, setup's buttons, the search field, inset boxes and the recognised test read; 3px on chips, tags, the badge and selectable rows; 2px on the game's small blue buttons and the light icon buttons; 6px on the title-marking hint; a full 8px pill on the collapsed icon's count chip. The site's raised tabs round only their top corners (4px 4px 0 0), sitting on the band's rule; on phones, where they stand in a grid, all four. Borders are 1px solid in a darker tone of the fill. Dashed lines mark three things: the drag box while marking, a place not yet fixed (and, the same way, the site's 2px Edit Blue box where a screenshot not yet taken belongs); the ring of a Hidden or Quest Portal, a way the game doesn't show plainly; and the Map Preview's arrow from a teleport to where it lands, as OSMS draws it. Circles are reserved for minimap glyphs and the Map Preview's rings. The panel's bottom corners carry a dotted grip in their triangle, the way the game's windows mark a resizable corner.
 
 ## Components
 
@@ -575,6 +652,26 @@ Every map's Personal Best, in the player's browser rather than over the game: re
 - **Sorting:** the sticky header on Tag Periwinkle (12px Ink Steel) is a row of buttons. Highest Best EXP/h first; a header sorts by its column the way it reads best first (lowest levels, highest share, newest, A to Z), and again the other way. The sorted header is bold Ink with a small triangle for the way (`aria-sort`), on the figures' side; every header keeps the room of its bold label and its triangle, so sorting never moves a figure. Ties keep highest EXP/h first; missing figures go last either way. Each sort is announced ("Sorted by mob levels, lowest first.").
 - **Links and hover:** rows take Edit Blue at 8% under the pointer, a reading aid; only the name is a link, ink at rest, Portal Blue and underlined under the pointer, Frame Navy pressed, as a mob's name in the panel. Sort buttons and links take the Edit Blue focus ring.
 - **Narrower:** the window is a size container. Under 700px Region joins the street line ("Victoria Road · Victoria Island"), the date may wrap, and the share's header says "% of solo". Under 540px each map becomes a card, as the panel's mob rows do: its name and street over its four figures side by side, each under its 12px Ink Steel label; the headers stay as a wrapping row of sort buttons. The table never leaves its box.
+
+### Site
+The player manual at itechify.github.io/maplecompass (`site/`): one of the game's windows opened wide in the browser, in setup's opaque language and a reading size of its own (see Typography), standing on Quest Helper Glass over white as the Personal Bests page does. It shares the app's tokens (`src/theme.css`, without its TTF faces).
+- **Window:** up to 1200px wide, 28px down, framed in a 1px Window Edge with a 4px radius and the window inner ring (0.35), no shadow, Window Lavender, Opaque, with Ink text. Under 640px it meets the page's edges, unframed.
+- **Window head:** sticky at the top. Setup's window bar with the 32px compass (drawn smoothly), "MapleCompass", the version and platform, and the steel Download (the primary button at 13px/18px, padding 5px 14px 6px) at the right; then the tab strip on the band, the lavender mixed 12% toward Frame Navy, edged beneath in Window Edge.
+- **Tabs (signature):** the game's raised window tabs, one per part (Get started, Where you are, Hunting, Grinding, Items, Keys). At rest each is Light Steel under a 1px Selection Edge border (Window Edge along its foot), 4px top corners, Ink Steel 14px/20px bold, padding 5px 16px; hover lightens it to Ink, pressed sinks it with the light-steel Pressed shadow. The open tab stands 4px taller (padding-top 9px) in a Window Edge frame, its foot opened in the lavender so it joins the body, in Ink. On phones the tabs are a three-column grid, two rows, each whole and centred in 13px: the others dimmer (the lavender mixed 30% toward Selection Edge, Selection Edge border), the open one bright Window Lavender, framed inside in Window Edge with a white top line. The tab of the part being read is the raised one (`aria-current="location"`), following the scroll; a tab jumps to its part. Nothing moves: the raised tab changes, it doesn't slide. Keyboard focus draws the Edit Blue ring inside the tab (offset -4px). Without the script the page still reads whole and the tabs still jump.
+- **Buttons:** setup's, at the site's size: 15px/20px bold, padding 9px 20px 10px, 4px radius; steel for Download for Windows, light steel edged in Frame Navy for the rest. Each part ends on a light-steel "Next: <tab>" button at the right. On phones the hero's buttons run the full width.
+- **Problem note:** used once, for the account risk under Get started's lede: Problem Cream, Problem Amber edge, Problem Brown 14px/21px, padding 9px 14px 10px 32px, its 8px orange dot ringed in orange-deep. Nowhere else.
+- **Openers and in-tab rows:** each part opens with its Site Opener heading and a 17px Ink Steel line, then one 14px/22px row of links to its topics, parted by " · " (Get started's sits under the hero). In-tab links keep Ink.
+- **Topic headings with legend marks:** the Map, Navigation and Mobs topics lead with the panel's marks, at the site's size, 10px before the words: a 14px portal ring (3px Portal Ring Blue on Portal Ring Fill), the same ring in Route Magenta on white, an 11px Mob Dot Red dot with its mob-edge ring. Personal Bests leads with the You Yellow star (18px SVG, you-edge stroke).
+- **Asides:** reference beside the words (what's kept where, the files, the panel's buttons, placement) in an inset box: Inset tint, 1px Inset Edge, 4px radius, padding 14px 18px 16px, Site Aside type, its heading 15px bold.
+- **Toolbar legend:** inside an aside, one row per toolbar button: the app's own game-blue icon button at 21px (Game Button Blue, game-button-edge, the bevel, a 14px white line icon with its drop) beside what it does, 12px apart, rows 8px apart.
+- **Ring keys:** the Map Preview's colours as a list key, each a 13px ring (2px stroke over a 22% fill on a 1.5px white halo) in Portal Ring Blue, Teleport Green or Unknown Grey; the route ring key is 15px in Route Magenta on white, 2.5px.
+- **Tags and the doubt chip:** as the panel draws them, inline in the prose: Tag Periwinkle, Quest Violet for "Quest", at 12px/18px bold, padding 0 6px, scaled to the site's text; the "Not sure" chip exactly as the panel's.
+- **Keys and paths:** a key is a bold kbd chip, a file's place a code chip, both on the Inset tint with a 1px Inset Edge and a 3px radius at 0.9em in Maplestory (no monospace). A long path breaks only after a \\ or a dot, where the page marks it (`<wbr>`).
+- **Hotkey table:** an inset box (Inset tint, Inset Edge, 4px radius) up to 32em wide, as the settings view sets its rows: what each does in Ink Steel at the left, its keys in bold Ink right-aligned, rows 7px 14px parted by Window Rules, a 13px Ink Steel caption above.
+- **Figures:** screenshots of the game as it is, at their natural size where they fit (the hero shot alone fills its column), framed in a 1px Window Edge with a 4px radius, a 13px/18px Ink Steel caption 8px under. Screenshots are figures, not icons. A screenshot not taken yet leaves a 2px dashed Edit Blue box saying what belongs there (220px tall at least; the hero's at 16:10).
+- **Links:** Ink at rest with a 1px Selection Edge underline 3px below, Portal Blue with its underline under the pointer, as a mob's name in the panel, Frame Navy pressed; the Edit Blue focus ring.
+- **Credits foot:** on the tab band under a Window Edge rule: "Credits" at 19px bold, then a two-column list of 14px bold labels over Ink Steel lines, then the fine print.
+
 ### Summary and Mob Table
 The summary is a five-column grid at 12px: label, value, unit, value, unit. Values are 13px bold Panel Ink, right-aligned with a 52px minimum width. The mob table runs full width with fixed column shares at 13px/17px, right-aligned numeric columns, 6px between columns and 12px Panel Ink Steel headers. Each mob name is bold, carries a 6px red mob dot, and truncates. Plain at rest, the name turns Portal Blue and underlined (1px, 2px offset) under the pointer, with a pointer cursor, and Frame Navy while pressed; keyboard focus takes the Edit Blue ring: it opens the mob's MeowDB page, and resting on it shows its Mob Card. "+N more" follows in 12px Panel Ink Steel.
 
@@ -641,6 +738,7 @@ A transparent window over the game client, its whole surface the Navy Veil with 
 - **Do** draw the EXP bar's reading as the game's own EXP gauge, in EXP Lime, and nothing else in that lime.
 - **Do** give every button, in every window, hover, pressed and a 2px Edit Blue `:focus-visible` ring offset 2px: game blue on the overlay's window bars, light steel in its body, deep steel for setup's step forward and light steel beside it.
 - **Do** mark a selected row with Selection Periwinkle and its inset edge, and set a list into the body as an inset box.
+- **Do** set a window read at rest in the browser (the Personal Bests page, the site) in setup's opaque language, framed in Window Edge on Quest Helper Glass over white, with no shadow.
 
 ### Don't:
 - **Don't** return to the dark dev-tools card with a stats table on top.
