@@ -28,6 +28,14 @@
 //! OSMS mode: fetch OSMS Data Explorer's live file set (whatever is saved) and read it in
 //! full with the core's reader, reporting what it holds, or what didn't read. Run it by
 //! hand when OSMS changes and before a release. No game window is needed.
+//!
+//! `cargo run -p maplecompass --example probe replay <report.zip> [--all] [--osms <osms-set.json>]`
+//! Replay mode, for a Bug Report (ADR 0009): print what it holds and its timeline (from 10
+//! minutes before it was saved, every line the core made something of before that; with
+//! `--all`, every line), then feed its inputs to a new core and say whether it goes
+//! through the same states. The report has no OSMS set, only its fingerprint: the replay
+//! fetches OSMS's live one, or reads the one given (an `osms-set.json` from the cache of
+//! the PC the report came from). No game window is needed.
 
 use compass_core::{Compass, GAME_WINDOW_TITLE, PortalKind, Rect, TitleReader};
 use maplecompass_lib::{capture, capture_title_frame, gamewin, source::WebSource};
@@ -50,6 +58,14 @@ fn main() {
         if let Err(e) = osms() {
             eprintln!("{e}");
             std::process::exit(1);
+        }
+        return;
+    }
+    if args.first().map(String::as_str) == Some("replay") {
+        if let Err(e) = replay(&args[1..]) {
+            eprintln!("{e}");
+            eprintln!("usage: probe replay <report.zip> [--all] [--osms <osms-set.json>]");
+            std::process::exit(2);
         }
         return;
     }
@@ -155,6 +171,67 @@ fn osms() -> Result<(), String> {
     );
     println!("Hidden Portal rows: {} (to a Hidden Street: {})", hidden.len(), hidden.iter().filter(|p| p.to_hidden_street).count());
     println!("Mobs spawning: {}", mobs.len());
+    Ok(())
+}
+
+/// `<report.zip> [--all] [--osms <osms-set.json>]`
+fn replay(args: &[String]) -> Result<(), String> {
+    use compass_core::bug_report;
+    let mut rest = args.iter();
+    let path = rest.next().ok_or("no Bug Report")?;
+    let (mut all, mut set_file) = (false, None);
+    while let Some(arg) = rest.next() {
+        match arg.as_str() {
+            "--all" => all = true,
+            "--osms" => set_file = Some(rest.next().ok_or("--osms needs a file")?),
+            other => return Err(format!("unknown argument {other:?}")),
+        }
+    }
+    let zip = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
+    let recording = bug_report::read(&zip)?;
+    let report = &recording.report;
+    println!("MapleCompass {} on {}, display scale {}", report.version, report.os, report.display_scale);
+    println!("Saved {} ({} ms after launch); {} lines, {} crops", report.saved_at, report.saved_at_ms, recording.lines.len(), recording.crops.len());
+    if report.truncated {
+        println!("The run outlasted a day: the trace starts at {} ms, after the lines that set the run up", report.trace_from_ms);
+    }
+    for map in &report.maps {
+        let ceiling = map.summary.map_or("no Map Summary".to_string(), |s| format!("solo ceiling {} EXP/h", s.exp_per_hour.solo));
+        println!("  map {} · {} ({}): {ceiling}", map.street_name, map.map_name, map.id);
+    }
+    println!();
+    let from = if all { 0 } else { report.saved_at_ms.saturating_sub(10 * 60_000) };
+    for line in recording.timeline(from) {
+        println!("{line}");
+    }
+    println!();
+    let files = match set_file {
+        Some(file) => {
+            let json = std::fs::read(file).map_err(|e| format!("{file}: {e}"))?;
+            Some(serde_json::from_slice::<compass_core::osms::OsmsFiles>(&json).map_err(|e| format!("{file}: {e}"))?)
+        }
+        None => match maplecompass_lib::osms::fetch_live() {
+            Ok(files) => Some(files),
+            Err(e) => {
+                println!("OSMS's set couldn't be fetched ({e}): replaying without it.");
+                None
+            }
+        },
+    };
+    if let Some(files) = &files {
+        let fingerprint = bug_report::fingerprint(files);
+        let same = report.osms_sets.contains(&fingerprint);
+        println!("OSMS's set {fingerprint}: {}", if same { "one the run took" } else { "not one the run took, so maps may replay otherwise" });
+    }
+    let replay = bug_report::replay(&recording, files);
+    match replay.divergence {
+        None => println!("Replayed {} lines: the core went through the same states.", replay.lines),
+        Some(divergence) => {
+            println!("Replayed {} lines: it diverged at line {} (from 0).", replay.lines, divergence.index);
+            println!("  recorded: {}", divergence.recorded.as_deref().unwrap_or("(past the end)"));
+            println!("  replayed: {}", divergence.replayed.as_deref().unwrap_or("(past the end)"));
+        }
+    }
     Ok(())
 }
 

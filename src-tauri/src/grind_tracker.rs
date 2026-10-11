@@ -10,6 +10,7 @@
 //! shows, hides and places the window, sends it what it renders, and relays the
 //! player's drags.
 
+use crate::errors::error;
 use crate::sizemove::{self, Gesture, SizeMove};
 use crate::view::{LastView, ViewSender};
 use crate::{Command, LOOP_START_GRACE, keep_on_top, physical, place};
@@ -74,7 +75,7 @@ impl GrindTrackerWindow {
         app.manage(GrindTrackerView::default());
         // Without it the player's drags don't stick, but the window works.
         if let Err(e) = sizemove::watch(&window, commands.clone(), Command::GrindTrackerSizeMove, None) {
-            eprintln!("{e}");
+            error!("{e}");
         }
         let shows_on_top = keep_on_top(&window, "on-top-grind-tracker", commands, &[]);
         // Clicks pass through until it shows.
@@ -153,7 +154,7 @@ impl GrindTrackerWindow {
         if self.shown != placement.is_some() {
             self.shown = placement.is_some();
             if let Err(e) = self.window.set_ignore_cursor_events(!self.shown) {
-                eprintln!("grind tracker click-through toggle failed: {e}");
+                error!("grind tracker click-through toggle failed: {e}");
             }
         }
     }

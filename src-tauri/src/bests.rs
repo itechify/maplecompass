@@ -3,6 +3,7 @@
 //! Windows), read at startup and written whenever the core's bests revision changes, but
 //! never over a file that was there and didn't read.
 
+use crate::errors::error;
 use compass_core::{BESTS_VERSION, SavedBests};
 use std::fs;
 use std::io::ErrorKind;
@@ -39,11 +40,11 @@ impl BestsFile {
         };
         let left = match fs::rename(&path, path.with_extension("json.bad")) {
             Ok(()) => {
-                eprintln!("personal bests {why}; set aside, starting with none");
+                error!("personal bests {why}; set aside, starting with none");
                 false
             }
             Err(e) => {
-                eprintln!("personal bests {why}, and not set aside ({e}); starting with none, saving none");
+                error!("personal bests {why}, and not set aside ({e}); starting with none, saving none");
                 true
             }
         };

@@ -5,6 +5,7 @@
 //! from, before OSMS's set (ADR 0008). Nothing writes them now, so only the first launch
 //! of this version finds any to delete.
 
+use crate::errors::error;
 use std::path::Path;
 
 /// Delete the old caches under `cache_dir`. Settings, Personal Bests and Item Lookup's
@@ -14,7 +15,7 @@ pub fn delete(cache_dir: &Path) {
     for entry in entries.flatten() {
         let old = entry.file_name().to_str().is_some_and(is_old_cache);
         if old && let Err(e) = std::fs::remove_file(entry.path()) {
-            eprintln!("old cache: couldn't delete {}: {e}", entry.path().display());
+            error!("old cache: couldn't delete {}: {e}", entry.path().display());
         }
     }
 }

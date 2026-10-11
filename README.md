@@ -32,6 +32,7 @@ pnpm tauri dev                                  # run the overlay beside the gam
 pnpm tauri build --debug --no-bundle            # build target/debug/maplecompass.exe
 cargo run -p maplecompass --example probe       # no UI: capture the title and print what the core reads
 cargo run -p maplecompass --example probe osms  # no game: fetch OSMS's live data and read it in full
+cargo run -p maplecompass --example probe replay <report.zip>  # no game: a Bug Report's timeline, replayed through the core
 pnpm site:dev                                   # the site, at http://localhost:5173/maplecompass/
 pnpm site:build                                 # the site, into site/dist (fails while a screenshot is missing)
 ```

@@ -8,6 +8,7 @@
 //! from. Every decision is the core's; this only places the window, sends its page what
 //! it renders, and lets clicks through or not.
 
+use crate::errors::error;
 use crate::view::{LastView, ViewSender};
 use crate::{Command, keep_on_top, physical, place};
 use compass_core::{ItemLookup, ItemLookupLine, PanelState, Size};
@@ -98,7 +99,7 @@ impl ItemLookupWindow {
         if self.clickable != clickable {
             self.clickable = clickable;
             if let Err(e) = self.window.set_ignore_cursor_events(!clickable) {
-                eprintln!("item lookup click-through toggle failed: {e}");
+                error!("item lookup click-through toggle failed: {e}");
             }
         }
     }

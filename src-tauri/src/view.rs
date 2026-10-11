@@ -2,6 +2,7 @@
 //! since the loop wakes up 20 times a second, and kept for a page that loads after it
 //! was sent.
 
+use crate::errors::error;
 use serde::Serialize;
 use serde_json::Value;
 use std::sync::Mutex;
@@ -37,7 +38,7 @@ impl ViewSender {
             return false;
         }
         if let Err(e) = app.emit_to(self.label, self.event, &view) {
-            eprintln!("emit failed: {e}");
+            error!("emit failed: {e}");
         }
         *last.0.lock().unwrap() = Some(view.clone());
         self.sent = Some(view);

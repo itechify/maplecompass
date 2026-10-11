@@ -34,7 +34,8 @@ impl MapEntry {
 }
 
 /// Why data could not be had.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum SourceError {
     /// The site could not be reached and nothing usable was saved.
     Unreachable(String),

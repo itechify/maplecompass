@@ -7,6 +7,7 @@
 //! nothing and every click goes through. Every decision is the core's; this only places
 //! the window, sends its page what it renders, and relays the player's drags.
 
+use crate::errors::error;
 use crate::grind_tracker::GRIND_TRACKER;
 use crate::sizemove::{self, Gesture, SizeMove};
 use crate::view::{LastView, ViewSender};
@@ -74,7 +75,7 @@ impl BestsWindow {
         app.manage(PersonalBestsView::default());
         // Without it the player's drags don't stick, but the window works.
         if let Err(e) = sizemove::watch(&window, commands.clone(), Command::PersonalBestsSizeMove, None) {
-            eprintln!("{e}");
+            error!("{e}");
         }
         // Over the panel and the Grind Tracker where it covers them: the player opened it
         // to read it.
@@ -157,7 +158,7 @@ impl BestsWindow {
         if self.shown != placement.is_some() {
             self.shown = placement.is_some();
             if let Err(e) = self.window.set_ignore_cursor_events(!self.shown) {
-                eprintln!("personal bests click-through toggle failed: {e}");
+                error!("personal bests click-through toggle failed: {e}");
             }
         }
     }

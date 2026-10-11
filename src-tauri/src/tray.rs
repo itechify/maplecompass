@@ -1,6 +1,7 @@
 //! The tray icon: the gold compass in the notification area. Its menu opens setup (like
-//! the panel's Help & Setup) and quits MapleCompass, whether or not the game is open,
-//! the panel shows or the hotkeys are live. Nothing here touches the game (ADR 0001).
+//! the panel's Help & Setup), saves a Bug Report (ADR 0009) and quits MapleCompass,
+//! whether or not the game is open, the panel shows or the hotkeys are live. Nothing
+//! here touches the game (ADR 0001).
 
 use crate::Command;
 use compass_core::PanelControl;
@@ -13,8 +14,9 @@ use tauri::tray::TrayIconBuilder;
 /// compass loop.
 pub fn install(app: &App, commands: Sender<Command>) -> tauri::Result<()> {
     let setup = MenuItem::with_id(app, "setup", "Help & Setup", true, None::<&str>)?;
+    let bug_report = MenuItem::with_id(app, "bug-report", "Bug Report", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit MapleCompass", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&setup, &PredefinedMenuItem::separator(app)?, &quit])?;
+    let menu = Menu::with_items(app, &[&setup, &bug_report, &PredefinedMenuItem::separator(app)?, &quit])?;
     let mut tray = TrayIconBuilder::with_id("maplecompass")
         .tooltip("MapleCompass")
         .menu(&menu)
@@ -22,6 +24,7 @@ pub fn install(app: &App, commands: Sender<Command>) -> tauri::Result<()> {
         .on_menu_event(move |_app, event| {
             let command = match event.id().as_ref() {
                 "setup" => Command::Press(PanelControl::Setup),
+                "bug-report" => Command::BugReport,
                 "quit" => Command::Quit,
                 _ => return,
             };

@@ -1,0 +1,44 @@
+name: Bug report
+description: Something MapleCompass showed or did wrong.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting it. A **Bug Report** helps most: right after you see the bug, click MapleCompass's compass in the notification area, by the clock, and choose **Bug Report**. It saves a `.zip` of what MapleCompass read and made of it, shows the file, and opens this form. [What's in it](https://itechify.github.io/maplecompass/#bug-reports)
+  - type: textarea
+    id: what
+    attributes:
+      label: What looked wrong?
+      description: What MapleCompass showed or did, and where (the panel, the Grind Tracker, Item Lookup…).
+      placeholder: The Grind Tracker's Last 5 min said 1,200,000 EXP/h on Sunset Sky, where I get about 60,000.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: false
+  - type: input
+    id: when
+    attributes:
+      label: How long before you saved the Bug Report did it happen?
+      placeholder: Just before, or about 10 minutes before
+    validations:
+      required: false
+  - type: textarea
+    id: report
+    attributes:
+      label: Bug Report
+      description: Drag the Bug Report's `.zip` here. MapleCompass keeps them in its app data folder, under Bug Reports.
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: MapleCompass version
+      description: In Help & Setup, under About & Credits.
+      placeholder: "0.7.0"
+    validations:
+      required: false
