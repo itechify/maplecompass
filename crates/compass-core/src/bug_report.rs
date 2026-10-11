@@ -27,7 +27,8 @@
 use crate::exp_bar::{ExpBar, ExpBarReading};
 use crate::hotkey_settings::KeyPress;
 use crate::item_lookup::ItemHit;
-use crate::item_tooltip::ItemTooltipReading;
+use crate::item_lookup::ItemLookup;
+use crate::item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReading};
 use crate::map_data::MapSummary;
 use crate::map_index::{Fetched, MapDataSource, SourceError};
 use crate::market_prices::SavedMarketPrices;
@@ -346,6 +347,33 @@ fn texts_fingerprint<'a>(texts: impl IntoIterator<Item = &'a str>) -> String {
 pub(crate) enum Region {
     Title,
     ExpBar,
+    /// The game's client area around the pointer, at an Item Card or Item Lookup press,
+    /// with the pointer at (x, y) in it.
+    ItemTooltip { pointer: (u32, u32) },
+}
+
+/// How far the crop of an Item Card or Item Lookup capture reaches from the pointer (px,
+/// each way): far enough for the tooltip wherever the game puts it beside the pointer.
+const ITEM_TOOLTIP_REACH: u32 = 400;
+
+/// The part of an Item Card or Item Lookup capture around the pointer, cut to the game's
+/// client area, for a Bug Report: the Item Tooltip the reader read, or should have.
+pub(crate) fn item_tooltip_crop(capture: &ItemCapture) -> Option<(Region, Frame)> {
+    let frame = &capture.frame;
+    if frame.width == 0 || frame.height == 0 || frame.rgba.len() < (frame.width * frame.height * 4) as usize {
+        return None;
+    }
+    let at = |pointer: i32, origin: i32, size: u32| (pointer - origin).clamp(0, size as i32 - 1) as u32;
+    let (px, py) = (at(capture.pointer.x, capture.origin.x, frame.width), at(capture.pointer.y, capture.origin.y, frame.height));
+    let (x0, y0) = (px.saturating_sub(ITEM_TOOLTIP_REACH), py.saturating_sub(ITEM_TOOLTIP_REACH));
+    let (x1, y1) = ((px + ITEM_TOOLTIP_REACH).min(frame.width), (py + ITEM_TOOLTIP_REACH).min(frame.height));
+    let mut rgba = Vec::with_capacity(((x1 - x0) * (y1 - y0) * 4) as usize);
+    for y in y0..y1 {
+        let row = ((y * frame.width + x0) * 4) as usize;
+        rgba.extend_from_slice(&frame.rgba[row..row + ((x1 - x0) * 4) as usize]);
+    }
+    let crop = Frame { width: x1 - x0, height: y1 - y0, rgba, at_ms: frame.at_ms };
+    Some((Region::ItemTooltip { pointer: (px - x0, py - y0) }, crop))
 }
 
 /// A crop of a captured region, as a PNG.
@@ -546,7 +574,7 @@ impl Recorder {
             self.last.state = outcome.state.clone();
         }
         if let Some((region, frame)) = frame {
-            self.keep_crop(&mut line, region, frame);
+            self.keep_crop(&mut line, region, frame, outcome.state);
         }
         self.write(line);
     }
@@ -568,8 +596,8 @@ impl Recorder {
     }
 
     /// Keep the crop of `frame`, read for `line`: one that changed, or that the core made
-    /// something of.
-    fn keep_crop(&mut self, line: &mut Line, region: Region, frame: Frame) {
+    /// something of (`state` after it).
+    fn keep_crop(&mut self, line: &mut Line, region: Region, frame: Frame, state: &PanelState) {
         let (changed, kept) = match region {
             Region::ExpBar => {
                 let changed = frame.rgba != self.last.exp_bar_rgba;
@@ -579,14 +607,27 @@ impl Recorder {
                 let same = matches!(line.event, Event::Title { same: true, .. });
                 (!same, line.map.is_some())
             }
+            // Each press's, as presses are few; for the run, one whose name couldn't be read
+            // or isn't an item's, as it may have been misread.
+            Region::ItemTooltip { .. } => {
+                let unread = matches!(
+                    &line.event,
+                    Event::ItemTooltip { reading: Some(ItemTooltipReading { tooltip: ItemTooltip::Found { name: None, .. }, .. }) }
+                );
+                let no_such = state.item_lookup.as_ref().is_some_and(|alert| {
+                    matches!(alert.outcome, ItemLookup::NoSuchItem { .. } | ItemLookup::NotFound { .. })
+                });
+                (true, unread || no_such)
+            }
         };
         if changed || kept {
-            let kind = match region {
-                Region::Title => "title",
-                Region::ExpBar => "exp-bar",
+            let name = match region {
+                Region::Title => format!("crops/title-{:010}.png", frame.at_ms),
+                Region::ExpBar => format!("crops/exp-bar-{:010}.png", frame.at_ms),
+                // Named as `samples/item-tooltip` names its frames: the pointer's spot in it.
+                Region::ItemTooltip { pointer: (x, y) } => format!("crops/item-tooltip-{:010}@{x},{y}.png", frame.at_ms),
             };
             if let Some(png) = png(&frame) {
-                let name = format!("crops/{kind}-{:010}.png", frame.at_ms);
                 line.crop = Some(name.clone());
                 self.crops.push_back(Crop { name, at_ms: frame.at_ms, kept, png });
             }
@@ -702,11 +743,14 @@ impl Recorder {
                 ("trace.jsonl".to_string(), trace.clone().into_bytes()),
             ]
         };
+        // The crops kept for the run, and the others from the last 10 minutes: one taken
+        // longer ago than that goes even when no crop has come since.
+        let since = self.now.saturating_sub(RECENT_CROPS_MS);
+        let mut crops: Vec<&Crop> = self.crops.iter().filter(|crop| crop.kept || crop.at_ms >= since).collect();
         // The text alone, then as many crops as fit beside it: the oldest ordinary ones
         // go first, then the oldest kept for the run.
-        let text_bytes = zip(&texts(&file(self.crops.len(), 0)), &[]).len();
+        let text_bytes = zip(&texts(&file(crops.len(), 0)), &[]).len();
         let size = |crop: &Crop| crop.png.len() + 2 * crop.name.len() + 100;
-        let mut crops: Vec<&Crop> = self.crops.iter().collect();
         crops.sort_by_key(|crop| crop.at_ms);
         let mut crop_bytes: usize = crops.iter().map(|crop| size(crop)).sum();
         let budget = MAX_REPORT_BYTES - MARGIN_BYTES;

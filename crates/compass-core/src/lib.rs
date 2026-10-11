@@ -1055,7 +1055,16 @@ impl Compass {
     /// [`ItemTooltipReader`] reads in it, here.
     pub fn on_item_capture(&mut self, capture: ItemCapture) -> &PanelState {
         let reading = self.item_reader.get_or_insert_with(ItemTooltipReader::bundled).read(&capture);
-        self.on_item_tooltip_reading(Some(reading))
+        self.on_item_capture_read(capture, reading)
+    }
+
+    /// As [`Compass::on_item_tooltip_reading`], with the capture it was read from (by an
+    /// [`ItemTooltipReader`], possibly on another thread), whose part around the pointer a
+    /// Bug Report keeps (ADR 0009).
+    pub fn on_item_capture_read(&mut self, capture: ItemCapture, reading: ItemTooltipReading) -> &PanelState {
+        let crop = bug_report::item_tooltip_crop(&capture);
+        self.record_input(Event::ItemTooltip { reading: Some(reading.clone()) }, None, crop);
+        self.take_item_tooltip_reading(Some(reading))
     }
 
     /// Take what an Item Lookup or Item Card capture read as (read by an
@@ -1066,6 +1075,10 @@ impl Compass {
     /// that name, at the pointer.
     pub fn on_item_tooltip_reading(&mut self, reading: Option<ItemTooltipReading>) -> &PanelState {
         self.record(Event::ItemTooltip { reading: reading.clone() });
+        self.take_item_tooltip_reading(reading)
+    }
+
+    fn take_item_tooltip_reading(&mut self, reading: Option<ItemTooltipReading>) -> &PanelState {
         // Our windows show in the capture: one over the name would be read instead.
         let panel = self.state.placement.filter(|_| self.state.layer != Layer::Hidden);
         let ours: Vec<(OurWindow, ScreenRect)> = [

@@ -162,8 +162,9 @@ pub(crate) enum Command {
     /// The reader is done with a capture of the EXP Bar Region `region`: the frame and
     /// what it read, or `None` if the capture failed.
     ReadExpBar { region: ScreenRect, reading: Option<(Frame, ExpBarReading)> },
-    /// The reader is done with an Item Lookup's capture: what it read.
-    ReadItemTooltip(ItemTooltipReading),
+    /// The reader is done with an Item Card's or Item Lookup's capture: the capture, and
+    /// what it read.
+    ReadItemTooltip { capture: Box<ItemCapture>, reading: ItemTooltipReading },
 }
 
 /// The overlay's drags and resizes, as the compass loop hears them.
@@ -505,7 +506,10 @@ impl ReaderThread {
                         });
                         Command::ReadExpBar { region, reading }
                     }
-                    Capture::Item(capture) => Command::ReadItemTooltip(item_reader.read(&capture)),
+                    Capture::Item(capture) => {
+                        let reading = item_reader.read(&capture);
+                        Command::ReadItemTooltip { capture, reading }
+                    }
                 };
                 if commands.send(command).is_err() {
                     return;
@@ -731,8 +735,9 @@ fn compass_loop(
                     compass.on_exp_bar_frame_read(frame, reading);
                 }
             }
-            Ok(Command::ReadItemTooltip(reading)) => {
-                compass.on_item_tooltip_reading(Some(reading));
+            Ok(Command::ReadItemTooltip { capture, reading }) => {
+                // With the capture, whose part around the pointer a Bug Report keeps.
+                compass.on_item_capture_read(*capture, reading);
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
