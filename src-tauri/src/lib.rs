@@ -337,6 +337,7 @@ pub fn run() {
             hotkey_settings::hotkeys_reset,
             hotkey_settings::hotkeys_undo_reset,
             setup::open_hotkey_settings,
+            setup::open_site,
             grind_tracker::grind_tracker_height,
             grind_tracker::grind_tracker_view,
             bests_window::personal_bests_height,
@@ -766,8 +767,8 @@ fn set_panel_sizes(compass: &mut Compass, overlay: &WebviewWindow, expanded_heig
     }
 }
 
-/// Do what a hotkey, a panel icon or an Item Lookup asked of the shell. Right after the
-/// player's own key press or click, so Windows lets us take the foreground.
+/// Do what a hotkey, a panel icon, a link or an Item Lookup asked of the shell. Right after
+/// the player's own key press or click, so Windows lets us take the foreground.
 fn carry_out(
     app: &AppHandle,
     overlay: &WebviewWindow,
@@ -788,7 +789,7 @@ fn carry_out(
     }
 }
 
-/// Open a page (the shown map's on MeowDB) in the player's browser.
+/// Open a page (a MeowDB page, or the MapleCompass site) in the player's browser.
 fn open_in_browser(app: &AppHandle, url: &str) {
     if let Err(e) = app.opener().open_url(url, None::<&str>) {
         error!("couldn't open {url}: {e}");

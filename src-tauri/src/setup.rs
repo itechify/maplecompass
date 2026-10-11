@@ -279,6 +279,13 @@ pub async fn open_hotkey_settings(bridge: State<'_, Bridge>) -> Result<(), Strin
     bridge.commands.send(Command::Press(PanelControl::Settings)).map_err(|e| e.to_string())
 }
 
+/// About & Credits' link: open the MapleCompass site in the browser, as the panel opens
+/// MeowDB's pages.
+#[tauri::command]
+pub async fn open_site(bridge: State<'_, Bridge>) -> Result<(), String> {
+    bridge.commands.send(Command::Press(PanelControl::OpenSite)).map_err(|e| e.to_string())
+}
+
 /// Finish setup (the core only does once the test reads of what was marked succeeded).
 #[tauri::command]
 pub async fn finish_setup(bridge: State<'_, Bridge>) -> Result<(), String> {
