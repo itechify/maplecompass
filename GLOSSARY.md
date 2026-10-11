@@ -132,16 +132,20 @@ A rate measured over the last few minutes of active play in a session, as oppose
 _Avoid_: current rate, live rate
 
 **Personal Best**:
-The highest Rolling Rate, in EXP/h, the player has had over a full 5 minutes of active play on one map, shared by all their characters. A map keeps a history of its best Visits, from which the player can remove one that came from a bug. The Grind Tracker shows the best in the history and marks the Rolling Rate while it beats it.
+The highest Rolling Rate, in EXP/h, the player has had over a full 5 minutes of active play on one map, shared by all their characters: the best in the map's Visit History. The Grind Tracker shows it and marks the Rolling Rate while it beats it.
 _Avoid_: record, high score, PB, max
 
 **Personal Bests window**:
-Every map's Personal Best side by side, in a window over the game that the Grind Tracker opens and closes, to compare maps: each with its mob levels and how close the best came to the map's solo EXP/h ceiling, since the bests don't say which character or level set them. It shows the bests as they stand, the Visit under way's included, and keeps up with them while it is open.
+Every map's Personal Best side by side, in a window over the game that the Grind Tracker opens and closes, to compare maps: each with its mob levels and how close the best came to the map's solo EXP/h ceiling, since the bests don't say which character or level set them. Each map opens to its Visit History, the Visit under way's best among them. It shows the bests as they stand, the Visit under way's included, and keeps up with them while it is open.
 _Avoid_: leaderboard, records, best list, Personal Bests page
 
 **Visit**:
-The stretch from the panel confirming a map until it confirms another. Losing the title for a while doesn't end it; closing MapleCompass does. Each map keeps a history of its best Visits, and its Personal Best is the best of them.
+The stretch from the panel confirming a map until it confirms another. Losing the title for a while doesn't end it; closing MapleCompass does.
 _Avoid_: stay, trip
+
+**Visit History**:
+A map's best Visits that have ended, up to 10, highest first: the first is its Personal Best. The Visit under way's best joins it when the Visit ends. The player can remove any Visit in it that came from a bug.
+_Avoid_: runs, attempts, records
 
 **Time to Level**:
 How long the player would take to reach the next level at their net EXP rate.
