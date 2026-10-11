@@ -49,7 +49,7 @@
 
 use crate::ExpBar;
 use crate::bug_report::{Level, Note};
-use crate::personal_best::{Bests, SavedBests};
+use crate::personal_best::{Bests, SavedBests, VisitBest};
 use serde::Serialize;
 
 /// What EXP tracking shows: everything the panel's tracking section and the collapsed
@@ -629,6 +629,14 @@ impl Session {
     pub fn remove_best(&mut self, map: &str) {
         self.bests.remove(map);
         self.shown = None;
+    }
+
+    /// The player removed the Visit whose best was `visit` from `map`'s history: if it was
+    /// there, what is shown is measured afresh, at once, as the Best row may name another.
+    pub fn remove_visit(&mut self, map: &str, visit: VisitBest) {
+        if self.bests.remove_visit(map, visit) {
+            self.shown = None;
+        }
     }
 
     /// The panel confirmed another map: a new Visit starts, as of the latest time seen.

@@ -125,7 +125,8 @@ th:not(.text) .sort {
 }
 
 .sort:focus-visible,
-.row-map:focus-visible {
+.row-map:focus-visible,
+.visits-toggle:focus-visible {
   outline: 2px solid var(--edit);
   outline-offset: 2px;
 }
@@ -148,7 +149,7 @@ tbody tr + tr td {
   border-top: 1px solid var(--rule);
 }
 
-/* A reading aid across the row; only the name opens anything. */
+/* A reading aid across the row; only the name and the count open anything. */
 tbody tr:hover td {
   background: rgba(47, 99, 200, 0.08);
 }
@@ -249,6 +250,95 @@ tbody tr:hover td {
   color: var(--ink-2);
 }
 
+/* The last column: each map's count of Visits, which opens its Visit History under its
+   row, and each Visit's × there. As wide as the widest it holds, so neither the count nor
+   the armed "Remove?" moves a figure. */
+.controls {
+  width: 72px;
+}
+
+/* The count: Panel Ink Steel at rest, Portal Blue and underlined under the pointer, as the
+   Grind Tracker's "Best" is, with a chevron that points down while the map is open. */
+.visits-toggle {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 2px;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--ink-2);
+}
+
+.visits-toggle:hover {
+  color: var(--portal);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.visits-toggle:active {
+  color: var(--frame);
+}
+
+.chevron {
+  width: 8px;
+  height: 8px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.visits-toggle[aria-expanded="true"] .chevron {
+  transform: rotate(90deg);
+}
+
+/* An opened map's Visits, under its row and read as part of it: no rules between them,
+   12px regular figures under the row's bold ones, each line as tall as its ×. */
+tbody tr.visit td {
+  padding-top: 0;
+  padding-bottom: 2px;
+  border-top: 0;
+  font-size: 12px;
+  line-height: 19px;
+  vertical-align: middle;
+}
+
+tbody tr.visit.last td {
+  padding-bottom: 6px;
+}
+
+.visit-share,
+.visit-date {
+  color: var(--ink-2);
+}
+
+/* The Visit under way's best, which can't be removed until it ends: a tag where the ×
+   would be. */
+.this-visit {
+  padding: 0 5px;
+  border: 1px solid var(--tag-edge);
+  border-radius: 3px;
+  background: var(--tag-bg);
+  color: var(--tag-ink);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 15px;
+}
+
+/* The × at the line's end, and "Remove?" in its place once clicked. */
+.controls .remove {
+  display: inline-grid;
+  vertical-align: middle;
+}
+
+.controls .remove.armed {
+  display: inline-block;
+}
+
 /* A figure that isn't known: a dash in Ink Slate, the reason for screen readers and under
    the pointer. */
 .none {
@@ -338,6 +428,10 @@ tbody tr:hover td {
     background: none;
   }
 
+  thead th.controls {
+    display: none;
+  }
+
   th:not(.text) .sort {
     flex-direction: row;
   }
@@ -378,6 +472,48 @@ tbody tr:hover td {
   tbody td:first-child {
     grid-column: 1 / -1;
     position: static;
+  }
+
+  /* The count under the figures. */
+  tbody td.controls {
+    grid-column: 1 / -1;
+    width: auto;
+  }
+
+  /* Each Visit one line under the card: EXP/h · share · date, its × at the end. */
+  tbody tr.visit {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px 2px 24px;
+  }
+
+  tbody tr.visit.last {
+    padding-bottom: 8px;
+  }
+
+  tbody tr + tr.visit {
+    border-top: 0;
+  }
+
+  tbody tr.visit td,
+  tbody tr.visit.last td {
+    padding: 0;
+  }
+
+  tbody tr.visit td.blank {
+    display: contents;
+  }
+
+  .visit-share::before,
+  .visit-date::before {
+    content: "·";
+    margin-right: 6px;
+    color: var(--ink-3);
+  }
+
+  tbody tr.visit td.controls {
+    margin-left: auto;
   }
 
   tbody td[data-label]::before {

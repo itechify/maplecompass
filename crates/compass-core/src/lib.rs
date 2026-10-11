@@ -40,7 +40,7 @@ mod tracker;
 mod travel_links;
 mod world;
 
-pub use bests_window::{PersonalBestsMap, PersonalBestsWindow};
+pub use bests_window::{PersonalBestsMap, PersonalBestsVisit, PersonalBestsWindow};
 pub use bug_report::{BugReport, ReportAbout};
 pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use grind_tracker::{ClientOffset, GrindTrackerWindow};
@@ -1015,6 +1015,20 @@ impl Compass {
         None
     }
 
+    /// The player removed one of `map`'s Visits in the Personal Bests window, one that came
+    /// from a bug, named by its best as the window lists it (any map's, not only the one
+    /// they are on). The Visits under it move up, the Best row follows if it is of `map`,
+    /// and with no best left anywhere the window closes. There is no undo. The Visit under
+    /// way's best isn't in the Visit History yet: naming it, or a Visit no longer there,
+    /// changes nothing.
+    pub fn remove_visit(&mut self, map: &str, visit: VisitBest) -> &PanelState {
+        self.record(Event::RemoveVisit { map: map.to_string(), visit });
+        self.session.remove_visit(map, visit);
+        // With no best left, there is nothing for the Personal Bests window to show.
+        self.bests_window.open &= self.session.bests().any();
+        self.sync_panel()
+    }
+
     /// The player clicked a map's name in the Personal Bests window: open its MeowDB page.
     /// `None` for a map the window doesn't list.
     pub fn open_bests_map_page(&self, id: &str) -> Option<Request> {
@@ -1501,7 +1515,9 @@ impl Compass {
                 let maps = &self.set.as_ref()?.maps;
                 Some((maps.entry(id)?, maps.data(id)?))
             };
-            bests_window::rows(&self.session.bests().saved(), map, certain_map(&self.state))
+            let (saved, this_visit) = self.session.bests().standing();
+            let this_visit = this_visit.as_ref().map(|(map, at)| (map.as_str(), *at));
+            bests_window::rows(&saved, this_visit, map, certain_map(&self.state))
         } else {
             Vec::new()
         };

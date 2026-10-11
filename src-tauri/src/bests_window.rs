@@ -12,7 +12,7 @@ use crate::grind_tracker::GRIND_TRACKER;
 use crate::sizemove::{self, Gesture, SizeMove};
 use crate::view::{LastView, ViewSender};
 use crate::{Command, LOOP_START_GRACE, keep_on_top, physical, place};
-use compass_core::{MapMark, PanelState, PersonalBestsMap, Size};
+use compass_core::{MapMark, PanelState, PersonalBestsMap, Size, VisitBest};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -72,7 +72,6 @@ pub struct BestsWindow {
 impl BestsWindow {
     pub fn new(app: &AppHandle, commands: Sender<Command>) -> Self {
         let window = app.get_webview_window(PERSONAL_BESTS).expect("personal-bests window in tauri.conf.json");
-        app.manage(PersonalBestsView::default());
         // Without it the player's drags don't stick, but the window works.
         if let Err(e) = sizemove::watch(&window, commands.clone(), Command::PersonalBestsSizeMove, None) {
             error!("{e}");
@@ -174,6 +173,18 @@ pub fn personal_bests_height(height: f64, commands: State<'_, Sender<Command>>) 
 #[tauri::command]
 pub fn personal_bests_open_map(id: String, commands: State<'_, Sender<Command>>) {
     let _ = commands.send(Command::OpenBestsMapPage(id));
+}
+
+/// A second click on a Visit's × in the window: remove it from the map's (its ID) Visit
+/// History, by its best as the window lists it.
+#[tauri::command]
+pub fn personal_bests_remove_visit(
+    map: String,
+    exp_per_hour: u64,
+    set_at_unix_ms: Option<u64>,
+    commands: State<'_, Sender<Command>>,
+) {
+    let _ = commands.send(Command::RemoveVisit { map, visit: VisitBest { exp_per_hour, set_at_unix_ms } });
 }
 
 /// What the Personal Bests page renders, as last sent (`None` before the first).

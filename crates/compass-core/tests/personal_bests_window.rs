@@ -5,7 +5,8 @@
 //! hands the shell its rows as plain data, one map a row, highest EXP/h first, live: the
 //! bests as saved, the Visit under way's included, with each map's names, region, mob
 //! levels and share of its solo EXP/h ceiling from OSMS's file set, and the map the player
-//! is on marked.
+//! is on marked. Each row holds its map's Visit History, the Visit under way's best among
+//! them, and the player can remove any Visit in it, on any map.
 //!
 //! Where it goes, worked as in `grind_tracker_window.rs`: the game's client area at
 //! (812,110), 1920x1200 physical px, on one 3440x1440 monitor, and a Personal Bests window
@@ -18,8 +19,8 @@ use common::player::Player;
 use common::{CONSTRUCTION_SITE_ID, FakeSource, SUNSET_SKY_ID, osms, sharing_a_title, tracking, tracking_with};
 use compass_core::{
     Action, BESTS_VERSION, ClientOffset, Compass, ExpBarRegion, Foreground, GameWindow, LevelRange, MapBests,
-    OSMS_AND_MEOWDB_CREDIT, PanelControl, PanelSizes, PanelState, PersonalBestsMap, PersonalBestsWindow, Rect,
-    Request, SavedBests, ScreenRect, Settings, Size, TitleRegion, VisitBest, meowdb,
+    OSMS_AND_MEOWDB_CREDIT, PanelControl, PanelSizes, PanelState, PersonalBestsMap, PersonalBestsVisit,
+    PersonalBestsWindow, Rect, Request, SavedBests, ScreenRect, Settings, Size, TitleRegion, VisitBest, meowdb,
 };
 
 const S: u64 = 1000;
@@ -52,9 +53,33 @@ fn row<'a>(window: &'a PersonalBestsWindow, map: &str) -> &'a PersonalBestsMap {
 
 /// Bests saved at an earlier launch: one Visit's, with no date, on each map.
 fn bests_of(maps: &[(&str, u64)]) -> SavedBests {
-    let visit = |exp_per_hour| vec![VisitBest { exp_per_hour, set_at_unix_ms: None }];
-    let maps = maps.iter().map(|&(id, exp)| MapBests { id: id.into(), visits: visit(exp) }).collect();
+    let histories: Vec<(&str, Vec<u64>)> = maps.iter().map(|&(id, exp)| (id, vec![exp])).collect();
+    histories_of(&histories)
+}
+
+/// Bests saved at an earlier launch: each map's Visits' at these EXP/h, highest first,
+/// with no date.
+fn histories_of(maps: &[(&str, Vec<u64>)]) -> SavedBests {
+    let maps = maps
+        .iter()
+        .map(|(id, rates)| MapBests { id: (*id).into(), visits: rates.iter().map(|&exp| saved_best(exp)).collect() })
+        .collect();
     SavedBests { version: BESTS_VERSION, maps }
+}
+
+/// A Visit's best of `exp_per_hour` saved with no date: what the player removes it by.
+fn saved_best(exp_per_hour: u64) -> VisitBest {
+    VisitBest { exp_per_hour, set_at_unix_ms: None }
+}
+
+/// One of a map's Visits as the window lists it.
+fn visit(exp_per_hour: u64, set_at_unix_ms: Option<u64>, share: Option<u64>, this_visit: bool) -> PersonalBestsVisit {
+    PersonalBestsVisit { exp_per_hour, set_at_unix_ms, ceiling_share_hundredths: share, this_visit }
+}
+
+/// `map`'s Visits in the window as (EXP/h, the Visit under way's), highest first.
+fn visits(window: &PersonalBestsWindow, map: &str) -> Vec<(u64, bool)> {
+    row(window, map).visits.iter().map(|v| (v.exp_per_hour, v.this_visit)).collect()
 }
 
 /// Henesys Hunting Ground I's map ID: its Map Summary is the one the spec works out.
@@ -114,6 +139,7 @@ fn a_first_visits_best_is_in_the_window_with_the_maps_names_levels_and_share_mar
             ceiling_share_hundredths: Some(337),
             set_at_unix_ms: set,
             here: true,
+            visits: vec![visit(7200, set, Some(337), true)],
         }]
     );
 }
@@ -180,6 +206,7 @@ fn a_best_on_a_map_the_player_has_not_been_on_has_its_names_region_levels_and_sh
                 ceiling_share_hundredths: Some(500),
                 set_at_unix_ms: None,
                 here: false,
+                visits: vec![visit(7661, None, Some(500), false)],
             },
             PersonalBestsMap {
                 id: MAPLE_HILL_ID.into(),
@@ -195,6 +222,7 @@ fn a_best_on_a_map_the_player_has_not_been_on_has_its_names_region_levels_and_sh
                 ceiling_share_hundredths: Some(5000),
                 set_at_unix_ms: None,
                 here: false,
+                visits: vec![visit(2857, None, Some(5000), false)],
             },
         ]
     );
@@ -262,6 +290,7 @@ fn a_best_on_a_map_not_in_the_map_list_is_kept_and_goes_by_its_id() {
             ceiling_share_hundredths: None,
             set_at_unix_ms: None,
             here: false,
+            visits: vec![visit(5000, None, None, false)],
         }]
     );
 }
@@ -348,6 +377,144 @@ fn the_shell_gets_the_window_and_the_button_as_they_render_them() {
     assert_eq!(sunset["ceilingShareHundredths"], 337);
     assert!(sunset["setAtUnixMs"].is_u64());
     assert_eq!(sunset["here"], true);
+    let visit = &sunset["visits"][0];
+    assert_eq!(visit["expPerHour"], 7200);
+    assert_eq!(visit["setAtUnixMs"], sunset["setAtUnixMs"]);
+    assert_eq!(visit["ceilingShareHundredths"], 337);
+    assert_eq!(visit["thisVisit"], true);
+}
+
+// Each map's Visit History.
+
+#[test]
+fn each_row_holds_its_maps_visit_history_highest_first_this_visits_best_marked() {
+    // Sunset Sky at 7,200 EXP/h, then at 3,600, each Visit ended by stepping onto the
+    // Construction Site; then a third Visit, under way, at 10,800.
+    let mut player = Player::clocked(tracking());
+    player.arrive(SUNSET);
+    player.hunt(5 * MIN, 20);
+    let first = player.wall_clock();
+    player.hunt(MIN, 20);
+    player.arrive(CONSTRUCTION_SITE);
+    player.arrive(SUNSET);
+    player.hunt(5 * MIN, 10);
+    let second = player.wall_clock();
+    player.hunt(MIN, 10);
+    player.arrive(CONSTRUCTION_SITE);
+    player.arrive(SUNSET);
+    player.hunt(5 * MIN, 30);
+    let third = player.wall_clock();
+
+    // Each with its share of Sunset Sky's solo ceiling, 213,571 EXP/h. The row's figures
+    // are the first's.
+    let window = toggle(&mut player);
+    assert_eq!(
+        row(&window, SUNSET_SKY_ID).visits,
+        [
+            visit(10_800, third, Some(506), true),
+            visit(7200, first, Some(337), false),
+            visit(3600, second, Some(169), false),
+        ]
+    );
+    assert_eq!(rows(&window), [(SUNSET_SKY_ID, 10_800, true)]);
+}
+
+#[test]
+fn this_visits_best_is_listed_only_once_it_makes_its_maps_10() {
+    // Ten earlier Visits to Sunset Sky, at 20,000 down to 11,000 EXP/h.
+    let earlier: Vec<u64> = (11..=20).rev().map(|k| k * 1000).collect();
+    let mut compass = tracking();
+    compass.restore_bests(histories_of(&[(SUNSET_SKY_ID, earlier.clone())]));
+    let mut player = Player::clocked(compass);
+    player.arrive(SUNSET);
+
+    // 7,200 EXP/h doesn't make them: the window lists the ten.
+    player.hunt(6 * MIN, 20);
+    let window = toggle(&mut player);
+    assert_eq!(visits(&window, SUNSET_SKY_ID), earlier.iter().map(|&exp| (exp, false)).collect::<Vec<_>>());
+
+    // 14,400 does: it is listed among them, and the slowest goes.
+    let faster = player.hunt(5 * MIN, 40);
+    let listed = visits(&faster.personal_bests, SUNSET_SKY_ID);
+    assert_eq!(listed.len(), 10);
+    assert_eq!(listed[5..8], [(15_000, false), (14_400, true), (14_000, false)]);
+    assert_eq!(listed.last(), Some(&(12_000, false)));
+}
+
+#[test]
+fn removing_a_visit_takes_exactly_it_on_any_map_and_the_maps_row_follows() {
+    // Sunset Sky's Visits at 10,800, 7,200 and 3,600 EXP/h, and the Construction Site's
+    // at 5,000; the player on the Construction Site, with no best there yet this Visit.
+    let mut compass = tracking();
+    compass
+        .restore_bests(histories_of(&[(SUNSET_SKY_ID, vec![10_800, 7200, 3600]), (CONSTRUCTION_SITE_ID, vec![5000])]));
+    let mut player = Player::clocked(compass);
+    player.arrive(CONSTRUCTION_SITE);
+    toggle(&mut player);
+
+    // Sunset Sky's middle Visit: its row stays at its best.
+    let middle = player.remove_visit(SUNSET_SKY_ID, saved_best(7200));
+    assert_eq!(visits(&middle.personal_bests, SUNSET_SKY_ID), [(10_800, false), (3600, false)]);
+    assert_eq!(rows(&middle.personal_bests), [(SUNSET_SKY_ID, 10_800, false), (CONSTRUCTION_SITE_ID, 5000, true)]);
+
+    // Its best: the next Visit takes over its row, now under the Construction Site's.
+    let best = player.remove_visit(SUNSET_SKY_ID, saved_best(10_800));
+    assert_eq!(rows(&best.personal_bests), [(CONSTRUCTION_SITE_ID, 5000, true), (SUNSET_SKY_ID, 3600, false)]);
+
+    // The Construction Site's only Visit: its row goes, though the player is on it.
+    let only = player.remove_visit(CONSTRUCTION_SITE_ID, saved_best(5000));
+    assert_eq!(rows(&only.personal_bests), [(SUNSET_SKY_ID, 3600, false)]);
+    assert!(only.personal_bests.open);
+}
+
+#[test]
+fn removing_the_best_on_the_map_the_player_is_on_moves_the_best_row_at_once() {
+    let mut compass = tracking();
+    compass.restore_bests(histories_of(&[(SUNSET_SKY_ID, vec![10_800, 7200])]));
+    let mut player = Player::clocked(compass);
+    let arrived = player.arrive(SUNSET);
+    assert_eq!(arrived.exp_tracking.personal_best, Some(10_800));
+    toggle(&mut player);
+
+    let removed = player.remove_visit(SUNSET_SKY_ID, saved_best(10_800));
+
+    assert_eq!(removed.exp_tracking.personal_best, Some(7200));
+    assert_eq!(rows(&removed.personal_bests), [(SUNSET_SKY_ID, 7200, true)]);
+}
+
+#[test]
+fn this_visits_best_and_a_visit_no_longer_listed_cannot_be_removed() {
+    // An earlier Visit to Sunset Sky at 3,600 EXP/h, and this one's at 7,200.
+    let mut compass = tracking();
+    compass.restore_bests(histories_of(&[(SUNSET_SKY_ID, vec![3600])]));
+    let mut player = Player::saved_by_the_shell(compass);
+    player.arrive(SUNSET);
+    player.hunt(6 * MIN, 20);
+    let window = toggle(&mut player);
+    let this_visit = row(&window, SUNSET_SKY_ID).visits[0];
+    assert!(this_visit.this_visit);
+    let saves = player.saves();
+
+    let this_one = VisitBest { exp_per_hour: this_visit.exp_per_hour, set_at_unix_ms: this_visit.set_at_unix_ms };
+    assert_eq!(player.remove_visit(SUNSET_SKY_ID, this_one).personal_bests, window);
+    assert_eq!(player.remove_visit(SUNSET_SKY_ID, saved_best(5000)).personal_bests, window);
+    assert_eq!(player.remove_visit(CONSTRUCTION_SITE_ID, saved_best(3600)).personal_bests, window);
+    assert_eq!(player.saves(), saves);
+}
+
+#[test]
+fn removing_the_last_visit_anywhere_closes_the_window_and_the_button_goes() {
+    let mut compass = tracking();
+    compass.restore_bests(bests_of(&[(SUNSET_SKY_ID, 7200)]));
+    let mut player = Player::clocked(compass);
+    player.arrive(CONSTRUCTION_SITE);
+    assert!(toggle(&mut player).open);
+
+    let removed = player.remove_visit(SUNSET_SKY_ID, saved_best(7200));
+
+    assert!(!button(&removed));
+    assert!(!removed.personal_bests.open);
+    assert_eq!(removed.personal_bests.placement, None);
 }
 
 // Where it goes.

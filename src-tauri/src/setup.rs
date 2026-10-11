@@ -32,9 +32,12 @@ pub struct Bridge {
     pub picks: Sender<String>,
     /// The game's client area as last found, where the region window goes.
     pub game: Mutex<Option<ScreenRect>>,
-    /// The last view sent to the setup window, for when it loads after it was sent.
-    pub view: LastView,
 }
+
+/// The last view sent to the setup window, for when it (or the region window) loads
+/// after it was sent.
+#[derive(Default)]
+pub struct SetupPageView(pub LastView);
 
 /// What the setup window renders.
 #[derive(Serialize)]
@@ -160,7 +163,7 @@ impl SetupWindows {
             invalid_hotkeys: &state.invalid_hotkeys,
             map_marks: &state.map_marks,
         };
-        if self.view.send(&self.app, &view, &self.app.state::<Bridge>().view) {
+        if self.view.send(&self.app, &view, &self.app.state::<SetupPageView>().0) {
             let selection = SelectionView { selection: state.setup.selection, target: state.setup.selection_target };
             let _ = self.app.emit_to(REGION, "selection-state", &selection);
         }
@@ -181,8 +184,8 @@ fn focus_setup(app: &AppHandle) {
 
 /// What the setup window renders, as last sent (`None` before the first).
 #[tauri::command]
-pub async fn setup_view(bridge: State<'_, Bridge>) -> Result<Option<serde_json::Value>, String> {
-    Ok(bridge.view.get())
+pub async fn setup_view(view: State<'_, SetupPageView>) -> Result<Option<serde_json::Value>, String> {
+    Ok(view.0.get())
 }
 
 /// Take the window under the mouse pointer as the game window.

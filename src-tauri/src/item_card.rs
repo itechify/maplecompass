@@ -76,7 +76,6 @@ pub struct ItemCardWindow {
 impl ItemCardWindow {
     pub fn new(app: &AppHandle, commands: Sender<Command>) -> Self {
         let window = app.get_webview_window(ITEM_CARD).expect("item-card window in tauri.conf.json");
-        app.manage(ItemCardView::default());
         // Without it the player's drags don't stick, but the card works.
         if let Err(e) = sizemove::watch(&window, commands.clone(), Command::ItemCardSizeMove, None) {
             error!("{e}");

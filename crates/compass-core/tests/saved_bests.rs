@@ -394,6 +394,31 @@ fn removing_a_best_from_the_history_changes_the_bests_the_shell_saves() {
 }
 
 #[test]
+fn a_visit_removed_in_the_personal_bests_window_is_gone_from_what_the_shell_saves_and_the_next_launch() {
+    // Three Visits to Sunset Sky, at 10,800, 7,200 and 3,600 EXP/h; the player then on the
+    // Construction Site.
+    let mut player = Player::saved_by_the_shell(tracking());
+    let mut set = Vec::new();
+    for gain in [30, 20, 10] {
+        player.arrive(SUNSET);
+        player.hunt(5 * MIN, gain);
+        set.push(player.wall_clock());
+        player.hunt(MIN, gain);
+        player.arrive(CONSTRUCTION_SITE);
+    }
+    assert_eq!(saved_rates(&player.compass.bests(), SUNSET_SKY_ID), [10_800, 7200, 3600]);
+
+    // The middle one, from another map: the shell saves the bests without it.
+    let saves = player.saves();
+    player.remove_visit(SUNSET_SKY_ID, best(7200, set[1]));
+    assert_eq!(player.saves(), saves + 1);
+
+    // The next launch has it gone, the others as they were set.
+    let next = relaunch(handed_out(&player.compass), WALL_AT_START + DAY);
+    assert_eq!(saved(&next.compass, SUNSET_SKY_ID), [best(10_800, set[0]), best(3600, set[2])]);
+}
+
+#[test]
 fn removing_the_best_from_the_history_leaves_every_candidates_best_from_this_visit() {
     let mut player = Player::saved_by_the_shell(tracking_with(sharing_a_title()));
 

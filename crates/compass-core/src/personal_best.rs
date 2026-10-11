@@ -26,11 +26,13 @@
 //!   as [`SavedBests`], with a revision so it saves them only when they change, and takes
 //!   them back at startup. What it hands out includes the Visit under way's best, as if
 //!   it had ended: closing MapleCompass ends it.
-//! - The Personal Bests window shows every map's, as handed out (see [`crate::bests_window`]).
-//! - The player can remove the best the Best row shows from the history, one that came
-//!   from a bug. The map's next-best Visit's takes over the row. There is no undo. This
-//!   Visit's best can't be removed: it joins the history when the Visit ends, and can be
-//!   removed then.
+//! - The Personal Bests window shows every map's, as handed out (see [`crate::bests_window`]),
+//!   with where the Visit under way's best is among its map's.
+//! - The player can remove a Visit that came from a bug from the history: the best the
+//!   Best row shows, or any Visit on any map from the Personal Bests window. Removing the
+//!   best, the map's next-best Visit's takes over the row. There is no undo. This Visit's
+//!   best can't be removed: it joins the history when the Visit ends, and can be removed
+//!   then.
 
 use serde::{Deserialize, Serialize};
 
@@ -155,16 +157,27 @@ impl Bests {
     /// map's next-best Visit's takes over. This Visit's best isn't in the history until
     /// the Visit ends.
     pub fn remove(&mut self, map: &str) {
+        if let Some(best) = self.history_best(map) {
+            self.remove_visit(map, best);
+        }
+    }
+
+    /// Remove the Visit whose best was `visit` from `map`'s history; whether there was one.
+    /// The Visits under it move up. This Visit's best isn't in the history until the Visit
+    /// ends.
+    pub fn remove_visit(&mut self, map: &str, visit: VisitBest) -> bool {
+        let mut removed = false;
         self.changing(|bests| {
             let maps = &mut bests.history.maps;
             let Some(at) = maps.iter().position(|m| m.id == map) else { return };
-            if !maps[at].visits.is_empty() {
-                maps[at].visits.remove(0);
-            }
+            let Some(listed) = maps[at].visits.iter().position(|v| *v == visit) else { return };
+            maps[at].visits.remove(listed);
             if maps[at].visits.is_empty() {
                 maps.remove(at);
             }
+            removed = true;
         });
+        removed
     }
 
     /// Whether some map has a best: in the history, or the Visit under way's. Whether
@@ -176,11 +189,19 @@ impl Bests {
     /// Every map's Visit bests, for the shell to save: the Visit under way's as if it
     /// ended now, since closing MapleCompass ends it.
     pub fn saved(&self) -> SavedBests {
+        self.standing().0
+    }
+
+    /// Every map's Visit bests as [`Bests::saved`] hands them out, and where the Visit
+    /// under way's best is among them: its map, and its place in the map's Visits. `None`
+    /// if it has none, or it doesn't make its map's [`VISITS_KEPT`].
+    pub fn standing(&self) -> (SavedBests, Option<(String, usize)>) {
         let mut saved = self.history.clone();
-        if let Some((map, best)) = self.this_visit() {
-            join(&mut saved, map.clone(), best);
-        }
-        saved
+        let this_visit = self.this_visit().and_then(|(map, best)| {
+            let at = join(&mut saved, map.clone(), best)?;
+            Some((map.clone(), at))
+        });
+        (saved, this_visit)
     }
 
     /// Take back the bests an earlier launch saved, in place of any there are. Bests
@@ -206,13 +227,14 @@ impl Bests {
     }
 }
 
-/// A Visit's `best` on `map` joins the map's, highest first; one that doesn't make the
-/// map's [`VISITS_KEPT`] is dropped.
-fn join(bests: &mut SavedBests, map: String, best: VisitBest) {
+/// A Visit's `best` on `map` joins the map's, highest first: where it goes among them.
+/// One that doesn't make the map's [`VISITS_KEPT`] is dropped (`None`).
+fn join(bests: &mut SavedBests, map: String, best: VisitBest) -> Option<usize> {
     let visits = visits_of(bests, map);
     let below = visits.iter().position(|v| v.exp_per_hour < best.exp_per_hour).unwrap_or(visits.len());
     visits.insert(below, best);
     visits.truncate(VISITS_KEPT);
+    (below < VISITS_KEPT).then_some(below)
 }
 
 /// `map`'s Visit bests, highest first: none yet if it had none.
