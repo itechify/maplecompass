@@ -6,6 +6,7 @@
 - `cargo test -p maplecompass --lib`: runs the app's own unit tests, which `cargo test` leaves out.
 - `cargo clippy --workspace --all-targets -- -D warnings`: lint everything.
 - `pnpm install` then `pnpm tauri build --debug --no-bundle`: build the app. `pnpm tauri dev` runs it.
+- `pnpm site:dev` runs the site (`site/`, the player manual on GitHub Pages); `pnpm site:build` builds it, and fails while a screenshot it shows is missing.
 - `cargo run -p maplecompass --example probe [reads] [out.png]`: read-only smoke test against a running game, with no UI.
 - `cargo run -p maplecompass --example probe record <out-dir> <name>=<x>,<y>,<w>,<h>@<hz> ... [--seconds <n>]`: record timestamped crops of client-area regions from a running game, for samples.
 - `cargo run -p maplecompass --example probe item samples/item-tooltip "<item name>" [--desc <tag>] [--delay <s>]`: after a countdown, save the game's client area named with the item and the pointer's position, for samples.
@@ -22,6 +23,7 @@
 - Every file in `samples/exp-bar` must read as its name (or its recording's `readings.json`) says, or as unreadable, never as a wrong number. A frame that is ever read wrong becomes a sample there.
 - Every file in `samples/item-tooltip` must read as the item its name says (or as no Item Tooltip, for `no-tooltip`), or as unreadable, never as another item. A frame that is ever read wrong becomes a sample there.
 - Tests run on made-up worlds in OSMS's shape (`crates/compass-core/tests/common/osms.rs`); the map names fixture (IDs, streets, map names and regions) is the only data committed from OSMS. `probe osms` must read OSMS's live set in full. A shape OSMS ever serves that reads wrong becomes a made-up fixture with that shape. Item Lookup's tests write their own made-up answers in MeowDB's search shape (`tests/item_lookup.rs`); nothing from MeowDB is committed.
+- The site (`site/`) is the player manual: the README keeps only the developer's side. A change a player notices updates the site in the same PR, the setup warning's wording included, and lists each screenshot it alters under Retake in `site/screenshots/README.md`.
 - `src-tauri` only adapts window lookup, capture and rendering. It must follow ADR 0001: no `PrintWindow`, no messages, input, hooks or process access to the game.
 
 ## Agent skills

@@ -1,0 +1,864 @@
+/* The MapleCompass site: one of the game's windows opened wide, in setup's opaque language
+   and a reading size of its own, standing on the overlay's glass periwinkle as the Personal
+   Bests page does. Its raised tabs file the manual. The tokens are the app's (theme.css,
+   without its TTF faces); see DESIGN.md. No motion: the game's windows don't animate. */
+
+/* NEXON's Maplestory typeface (assets/fonts/NOTICE.md), as WOFF2 copies of the files the
+   app bundles. Over the web it may arrive after the page, so the text draws in Arial first
+   rather than not at all. Arial also stands in for the dashes and minus it lacks. */
+@font-face {
+  font-family: "Maplestory";
+  src: url("./fonts/Maplestory-Light.woff2") format("woff2");
+  font-weight: 100 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Maplestory";
+  src: url("./fonts/Maplestory-Bold.woff2") format("woff2");
+  font-weight: 600 900;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light;
+  scrollbar-color: var(--select-edge) transparent;
+  /* The doubt chip's gradient, the game's small orange button (DESIGN.md: Doubt Gold to
+     Doubt Amber). */
+  --doubt: linear-gradient(180deg, #ffd25a 0%, #f0a715 100%);
+  /* The tab strip's band: the lavender a step into the frame's navy. */
+  --tab-band: color-mix(in srgb, var(--body-solid) 88%, var(--frame));
+  /* How tall the window's head is while it sticks, kept by site.ts, so a jump to a heading
+     lands below it. */
+  --head: 100px;
+}
+
+::selection {
+  background: var(--select);
+  color: var(--ink);
+}
+
+html {
+  min-height: 100%;
+  background: linear-gradient(var(--glass), var(--glass)), #fff;
+  scroll-padding-top: calc(var(--head) + 16px);
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  font: 16px/26px var(--font);
+  -webkit-text-size-adjust: 100%;
+}
+
+/* For screen readers only. */
+.vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.skip {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 20;
+  padding: 6px 12px;
+  border: 1px solid var(--frame);
+  border-radius: 4px;
+  background: var(--body-solid);
+  color: var(--ink);
+  font-weight: 700;
+}
+.skip:focus {
+  top: 12px;
+}
+
+/* Links: ink at rest with a quiet underline, Portal Blue under the pointer as a mob's name
+   in the panel, Frame Navy pressed. */
+a {
+  color: inherit;
+  text-decoration: underline 1px var(--select-edge);
+  text-underline-offset: 3px;
+}
+a:hover {
+  color: var(--portal);
+  text-decoration-color: currentColor;
+}
+a:active {
+  color: var(--frame);
+}
+:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ---- The window ---- */
+
+/* One of the game's windows: framed in Window Edge with its faint inner ring, no shadow. */
+.window {
+  max-width: 1200px;
+  margin: 28px auto 40px;
+  border: 1px solid var(--window-edge);
+  border-radius: 4px;
+  background: var(--body-solid);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+/* The window bar and the tabs stay at the top as the page scrolls, the window's head. */
+.window-head {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* Setup's window bar: the compass, the window's name, and the Download at its right. */
+.window-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px 9px;
+  border-radius: 3px 3px 0 0;
+  background: var(--window-bar);
+  border-bottom: 1px solid var(--window-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+/* Drawn smoothly: the art's pixels don't divide evenly into 32px. */
+.mark-icon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+}
+.window-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--window-bar-ink);
+}
+.window-version {
+  margin: 0 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+  color: var(--window-bar-ink);
+  white-space: nowrap;
+}
+
+/* The game's window tabs, raised: the open one stands taller, joined to the body, while
+   the others sit lower behind the window's edge. */
+.tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  padding: 8px 18px 0;
+  border-bottom: 1px solid var(--window-edge);
+  background: var(--tab-band);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tab {
+  flex: none;
+  position: relative;
+  margin-bottom: -1px;
+  padding: 5px 16px 5px;
+  border: 1px solid var(--select-edge);
+  border-bottom-color: var(--window-edge);
+  border-radius: 4px 4px 0 0;
+  background: var(--button-light);
+  box-shadow: inset 0 1px 0 #fff;
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.tab:hover {
+  background: var(--button-light-hover);
+  color: var(--ink);
+}
+.tab:active {
+  background: var(--button-light);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
+}
+.tab[aria-current="location"] {
+  padding-top: 9px;
+  border-color: var(--window-edge);
+  border-bottom-color: var(--body-solid);
+  background: var(--body-solid);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+}
+.tab:focus-visible {
+  outline-offset: -4px;
+}
+
+.window-body {
+  padding: 0 40px 8px;
+}
+
+/* ---- Buttons: the game's window buttons, as setup draws them ---- */
+
+.button {
+  display: inline-block;
+  padding: 9px 20px 10px;
+  border: 1px solid var(--button-edge);
+  border-radius: 4px;
+  background: var(--button);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 20px;
+  text-decoration: none;
+  text-shadow: 0 1px 0 var(--button-edge);
+  white-space: nowrap;
+}
+.button:hover {
+  background: var(--button-hover);
+  color: #fff;
+}
+.button:active {
+  background: var(--button-hover);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.45);
+  color: #fff;
+}
+.button.secondary {
+  border-color: var(--frame);
+  background: var(--button-light);
+  box-shadow: inset 0 1px 0 #fff;
+  color: var(--ink);
+  text-shadow: none;
+}
+.button.secondary:hover {
+  background: var(--button-light-hover);
+}
+.button.secondary:active {
+  background: var(--button-light);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
+}
+.button.small {
+  padding: 5px 14px 6px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+/* ---- Get started: the window's opening ---- */
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 30em) minmax(0, 1fr);
+  gap: 48px;
+  align-items: start;
+  padding: 40px 0 8px;
+}
+h1 {
+  margin: 0 0 18px;
+  font-size: 42px;
+  line-height: 48px;
+  font-weight: 700;
+  text-wrap: balance;
+}
+.lede {
+  margin: 0 0 14px;
+  font-size: 17px;
+  line-height: 28px;
+  text-wrap: pretty;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 22px 0 12px;
+}
+.fine {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ink-2);
+}
+
+/* The problem note, for the account risk alone: Problem Cream with an orange dot. */
+.note.problem {
+  position: relative;
+  margin: 18px 0 0;
+  padding: 9px 14px 10px 32px;
+  border: 1px solid var(--problem-edge);
+  border-radius: 4px;
+  background: var(--problem-bg);
+  color: var(--problem-ink);
+  font-size: 14px;
+  line-height: 21px;
+}
+.note.problem::before {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: 16px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--orange);
+  box-shadow: 0 0 0 1px var(--orange-deep);
+}
+
+/* ---- Screenshots: the game as it is, at full size where they fit ---- */
+
+.shot {
+  margin: 0;
+  min-width: 0;
+}
+.shot img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--window-edge);
+  border-radius: 4px;
+  background: var(--select);
+}
+.hero-shot img {
+  width: 100%;
+}
+figcaption {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+/* A picture that didn't load: its place drawn as a dashed box, a place not yet fixed, with
+   what it should show. */
+.shot.missing img {
+  display: none;
+}
+.shot.missing::before {
+  content: attr(data-missing);
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  padding: 20px;
+  border: 2px dashed var(--edit);
+  border-radius: 4px;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 19px;
+  text-align: center;
+  white-space: pre-line;
+}
+.hero-shot.missing::before {
+  aspect-ratio: 16 / 10;
+}
+
+/* ---- The tabs' pages ---- */
+
+.tab-page {
+  padding-bottom: 32px;
+}
+.tab-page + .tab-page {
+  border-top: 1px solid var(--rule);
+  padding-top: 40px;
+}
+.tab-opener h2 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: 700;
+}
+.tab-opener p {
+  margin: 6px 0 0;
+  font-size: 17px;
+  line-height: 26px;
+  color: var(--ink-2);
+}
+/* The tab's topics, one line under its opener. */
+.tab-opener .in-tab {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 22px;
+}
+.in-tab a {
+  color: var(--ink);
+}
+.start-index {
+  margin: 28px 0 0;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+/* A topic: its words at a reading measure, and its screenshot beside them. */
+.topic {
+  display: grid;
+  grid-template-columns: minmax(0, 38em);
+  gap: 48px;
+  padding-top: 40px;
+}
+.topic.with-shot,
+.topic.with-aside {
+  grid-template-columns: minmax(0, 38em) minmax(0, 1fr);
+}
+/* Reference beside the words (the files, the buttons, what's kept where), set into the
+   body as an inset box, as the panel sets a list into its own. */
+.aside {
+  align-self: start;
+  margin-top: 42px;
+  padding: 14px 18px 16px;
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--inset-bg);
+  font-size: 15px;
+  line-height: 23px;
+}
+.aside h4 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  line-height: 22px;
+}
+.aside > :last-child {
+  margin-bottom: 0;
+}
+/* Two short topics side by side, each at its own measure. */
+.topic-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 48px;
+}
+.topic-text > :last-child {
+  margin-bottom: 0;
+}
+h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  font-size: 23px;
+  line-height: 30px;
+  font-weight: 700;
+}
+h4 {
+  margin: 26px 0 8px;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+}
+p,
+ul,
+ol,
+dl {
+  margin: 0 0 14px;
+}
+ul,
+ol {
+  padding-left: 1.4em;
+}
+li + li {
+  margin-top: 5px;
+}
+li::marker {
+  color: var(--ink-3);
+}
+strong {
+  font-weight: 700;
+}
+
+/* A key as the game's settings view sets it: bold ink, here on an inset chip so it stands
+   out of a sentence. */
+kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--inset-edge);
+  border-radius: 3px;
+  background: var(--inset-bg);
+  font: inherit;
+  font-size: 0.9em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* A file's place on the PC, in the same chip; long paths break anywhere. */
+code {
+  padding: 1px 5px;
+  border: 1px solid var(--inset-edge);
+  border-radius: 3px;
+  background: var(--inset-bg);
+  font: inherit;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+/* A long path breaks only after a \ or a dot, where the page marks it (<wbr>). */
+code.path {
+  white-space: normal;
+}
+
+/* The section marks from the panel's legend: a portal ring for the Map, the route ring for
+   Navigation, a mob dot for the Mobs, and the you yellow star for a best. */
+.mark {
+  flex: none;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+.mark.ring {
+  width: 14px;
+  height: 14px;
+  border: 3px solid var(--portal);
+  background: var(--portal-fill);
+}
+.mark.route {
+  width: 14px;
+  height: 14px;
+  border: 3px solid var(--route);
+  background: #fff;
+}
+.mark.mob {
+  width: 11px;
+  height: 11px;
+  margin: 0 1px;
+  background: var(--mob);
+  box-shadow: 0 0 0 1px var(--mob-edge);
+}
+.star {
+  flex: none;
+  display: grid;
+}
+.star svg {
+  width: 18px;
+  height: 18px;
+  fill: var(--you);
+  stroke: var(--you-edge);
+  stroke-width: 1.1;
+  stroke-linejoin: round;
+}
+
+/* The Map Preview's rings, as a key: each colour with its meaning, over a 22% fill of it on
+   a white halo, as the picture draws them. */
+.key-list {
+  list-style: none;
+  padding: 0;
+}
+.ring-key {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 13px;
+  height: 13px;
+  margin-right: 9px;
+  border: 2px solid var(--ring);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ring) 22%, #fff);
+  box-shadow: 0 0 0 1.5px #fff;
+  vertical-align: -1px;
+}
+.ring-key.portal {
+  --ring: var(--portal);
+}
+.ring-key.teleport {
+  --ring: var(--teleport);
+}
+.ring-key.unknown {
+  --ring: var(--unknown);
+}
+/* The route's ring, wide and solid around the portal it takes next. */
+.ring-key.route {
+  --ring: var(--route);
+  width: 15px;
+  height: 15px;
+  margin: 0 7px 0 2px;
+  border-width: 2.5px;
+  background: #fff;
+  vertical-align: -2px;
+}
+
+/* Tags as the panel draws them: Tag Periwinkle, and Quest Violet for Quest. */
+.tag {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid var(--tag-edge);
+  border-radius: 3px;
+  background: var(--tag-bg);
+  color: var(--tag-ink);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+.tag.quest {
+  border-color: var(--quest-edge);
+  background: var(--quest-bg);
+  color: var(--quest-ink);
+}
+/* The "Not sure" chip: the game's small orange button, for doubt alone. */
+.chip-doubt {
+  display: inline-block;
+  padding: 2px 7px 3px;
+  border: 1px solid var(--orange-deep);
+  border-radius: 3px;
+  background: var(--doubt);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  vertical-align: 1px;
+  text-shadow:
+    0 1px 0 var(--orange-deep),
+    0 -1px 0 var(--orange-deep),
+    1px 0 0 var(--orange-deep),
+    -1px 0 0 var(--orange-deep);
+}
+
+/* The panel's toolbar, button by button: the game's small blue window buttons with their
+   line icons, here as a legend. */
+.toolbar-legend {
+  list-style: none;
+  padding: 0;
+}
+.toolbar-legend li {
+  display: grid;
+  grid-template-columns: 21px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.toolbar-legend li + li {
+  margin-top: 8px;
+}
+.icon-button {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 21px;
+  height: 21px;
+  margin-top: 2px;
+  border: 1px solid var(--game-button-edge);
+  border-radius: 2px;
+  background: var(--game-button);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(0, 60, 110, 0.25);
+  color: #fff;
+}
+.icon-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1px 0 rgba(0, 50, 90, 0.45));
+}
+.icon-button svg .dot {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* Facts in a list: the label in bold over its line. */
+.facts dt,
+.files dt {
+  font-weight: 700;
+}
+.facts dd,
+.files dd {
+  margin: 2px 0 12px;
+}
+.files dt {
+  overflow-wrap: anywhere;
+}
+
+/* The hotkeys, set into the body as an inset box, as the settings view sets its rows:
+   what each does in Ink Steel, its keys bold and right-aligned. */
+.hotkeys {
+  width: min(100%, 32em);
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  border-spacing: 0;
+  background: var(--inset-bg);
+}
+.hotkeys caption {
+  padding-bottom: 8px;
+  caption-side: top;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink-2);
+  text-align: left;
+}
+.hotkeys th,
+.hotkeys td {
+  padding: 7px 14px;
+  vertical-align: top;
+}
+.hotkeys tr + tr > * {
+  border-top: 1px solid var(--rule);
+}
+.hotkeys th {
+  font-weight: 400;
+  color: var(--ink-2);
+  text-align: left;
+}
+.hotkeys td {
+  text-align: right;
+}
+.hotkeys kbd {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: inherit;
+  color: var(--ink);
+}
+
+/* The step forward, at the right as setup puts it. */
+.next {
+  margin: 36px 0 0;
+  text-align: right;
+}
+
+/* ---- The window's foot: the credits ---- */
+
+.window-foot {
+  padding: 28px 40px 32px;
+  border-top: 1px solid var(--window-edge);
+  border-radius: 0 0 3px 3px;
+  background: var(--tab-band);
+}
+.window-foot h2 {
+  margin: 0 0 14px;
+  font-size: 19px;
+  line-height: 26px;
+}
+.credits {
+  columns: 2;
+  column-gap: 48px;
+  margin: 0 0 18px;
+  font-size: 14px;
+  line-height: 21px;
+}
+.credits dt {
+  font-weight: 700;
+  break-after: avoid;
+}
+.credits dd {
+  margin: 2px 0 12px;
+  color: var(--ink-2);
+  break-inside: avoid;
+}
+
+/* ---- Narrower ---- */
+
+@media (max-width: 960px) {
+  .hero,
+  .topic.with-shot,
+  .topic.with-aside,
+  .topic-pair {
+    grid-template-columns: minmax(0, 38em);
+    gap: 24px;
+  }
+  .topic-pair {
+    gap: 0;
+  }
+  .aside {
+    margin-top: 0;
+  }
+  .hero {
+    padding-top: 32px;
+  }
+}
+
+/* Under 640px the window meets the page's edges, unframed but for its bar. */
+@media (max-width: 640px) {
+  body {
+    font-size: 15px;
+    line-height: 24px;
+  }
+  .window {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+  .window-bar {
+    padding: 7px 12px 8px;
+    border-radius: 0;
+  }
+  .mark-icon {
+    width: 28px;
+    height: 28px;
+  }
+  .window-version {
+    display: none;
+  }
+  .window-name {
+    margin-right: auto;
+  }
+  /* Every tab in sight: two rows of three, each tab whole. As in the game, the others sit
+     dimmer and the open one is the bright, framed one. */
+  .tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    padding: 6px 10px 8px;
+  }
+  .tab {
+    margin-bottom: 0;
+    padding: 5px 4px;
+    border-color: var(--select-edge);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--body-solid) 70%, var(--select-edge));
+    box-shadow: none;
+    font-size: 13px;
+    text-align: center;
+  }
+  .tab:hover {
+    background: var(--button-light-hover);
+  }
+  .tab[aria-current="location"] {
+    padding-top: 5px;
+    border-color: var(--window-edge);
+    background: var(--body-solid);
+    box-shadow:
+      inset 0 0 0 1px var(--window-edge),
+      inset 0 2px 0 #fff;
+  }
+  .actions .button {
+    flex: 1 1 100%;
+    text-align: center;
+  }
+  .window-body {
+    padding: 0 18px 8px;
+  }
+  h1 {
+    font-size: 32px;
+    line-height: 38px;
+  }
+  .lede {
+    font-size: 16px;
+    line-height: 26px;
+  }
+  .tab-opener h2 {
+    font-size: 26px;
+    line-height: 32px;
+  }
+  h3 {
+    font-size: 20px;
+    line-height: 26px;
+  }
+  .topic {
+    padding-top: 32px;
+  }
+  .credits {
+    columns: 1;
+  }
+  .window-foot {
+    padding: 24px 18px 28px;
+    border-radius: 0;
+  }
+}
+
+/* The narrowest phones: "Where you are" still whole in its third of the strip. */
+@media (max-width: 340px) {
+  .tab {
+    font-size: 12px;
+  }
+}

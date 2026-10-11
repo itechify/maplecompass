@@ -1,0 +1,34 @@
+# Builds the MapleCompass site on a pull request that could change it, so a broken build
+# shows before a release would publish it. The build fails while a screenshot the page shows
+# hasn't been taken (site/screenshots/README.md).
+name: Site check
+
+on:
+  pull_request:
+    paths:
+      - site/**
+      - src/theme.css
+      - src/hotkeys.ts
+      - assets/**
+      - package.json
+      - pnpm-lock.yaml
+      - tsconfig.json
+      - .github/workflows/site*.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm site:build

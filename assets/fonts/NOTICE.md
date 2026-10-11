@@ -10,3 +10,6 @@ unmodified (version 1.0.0).
 - Bundled in MapleCompass's public releases (from 0.7.0) and credited in Help & Setup's
   About & Credits and in `THIRD-PARTY-NOTICES.md`. Bundling it does not mean NEXON made
   or approved MapleCompass.
+- The MapleCompass site (`site/`) serves WOFF2 copies of these two files, in `site/fonts`:
+  the same fonts re-encoded as WOFF2 with `woff2_compress`, at a fifth of the size. The
+  site credits the typeface in its Credits.

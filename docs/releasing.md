@@ -26,6 +26,7 @@ How a MapleCompass version is numbered, made and published as a GitHub Release. 
   - `pnpm build`
 - **The live data still reads:** `cargo run -p maplecompass --example probe osms` reads OSMS Data Explorer's live set in full.
 - **A smoke test against the game** (`pnpm tauri dev`): the map is recognised; the Map section shows its picture; a mob search sets a Hunting Target and Navigation shows the route; a Mob Card opens; Item Lookup opens a page.
+- **The site describes this release** (`site/`, published from the tag in step 6): every change a player notices is on it, and nothing that's gone. While the game is open for the smoke test, retake each shot under Retake in `site/screenshots/README.md` as it says, set the version they were taken on, empty the list, and merge them into `main`. `pnpm site:build` passes, and `pnpm site:dev` reads right.
 - **The credits are current:**
   - If dependencies were added, removed or upgraded, regenerate the crate table in `THIRD-PARTY-NOTICES.md` (how is described there).
   - If a bundled asset or data source changed, update About & Credits in `setup.html` to match.
@@ -97,7 +98,7 @@ Write them for players, not developers, in the shape of the previous releases. P
 
 ## Changes
 
-- **<Feature in bold.>** <What the player sees and does, in the panel's own words.>
+- **<Feature in bold.>** <What the player sees and does, in the panel's own words.> [More on the site](https://itechify.github.io/maplecompass/#<section>)
 - <Smaller changes, one line each.>
 
 Your settings, hotkeys and Personal Bests carry over from <previous version>.
@@ -128,17 +129,18 @@ gh release create vX.Y.Z --verify-tag --title "MapleCompass X.Y.Z" --notes-file 
   THIRD-PARTY-NOTICES.md
 ```
 
-The newest release becomes Latest, which the README's download link points to.
+The newest release becomes Latest, which the README's download link points to. Publishing it runs the Site workflow (`.github/workflows/site.yml`), which builds the site from the tag and publishes it to <https://itechify.github.io/maplecompass/>.
 
 Then check the release:
 - `gh release view vX.Y.Z` lists the four files.
 - The release page reads correctly.
 - Downloading the setup `.exe` from it and installing works.
+- The Site workflow passed (`gh run list --workflow site.yml --limit 1`), and the site says it describes X.Y.Z, its Download button fetching that version's setup `.exe`.
 
 ## If a release goes wrong
 
 - **Before anyone could download it** (minutes after publishing):
-  1. `gh release delete vX.Y.Z --cleanup-tag --yes` removes the release and its tag.
+  1. `gh release delete vX.Y.Z --cleanup-tag --yes` removes the release and its tag. If the site was already published from it, publish it again from the previous release: `gh workflow run site.yml` builds from the latest release's tag.
   2. Fix the problem on `main`.
   3. Tag and publish again from step 3.
 - **After that:** leave the release, and publish `X.Y.(Z+1)` with the fix.
