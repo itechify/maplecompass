@@ -1,10 +1,12 @@
 /// <reference types="vite/client" />
 // The site's behaviours: the tab of the part being read is raised, as the game raises the
 // open tab, and on a wide screen the manual's minimap shows where you are in it
-// (minimap.ts), both following the scroll. Without the script the page still reads whole,
-// and the tabs still jump to their parts.
+// (minimap.ts), both following the scroll; the hero films how MapleCompass reads the map
+// you're on as the page scrolls past it (reel.ts). Without the script the page still reads
+// whole, the hero is its still shot, and the tabs still jump to their parts.
 
 import { minimap } from "./minimap.ts";
+import { reel } from "./reel.ts";
 
 const head = document.querySelector<HTMLElement>(".window-head")!;
 const strip = document.querySelector<HTMLElement>(".tabs")!;
@@ -20,12 +22,15 @@ const heads = new ResizeObserver(() => {
 heads.observe(head);
 heads.observe(strip);
 
+// The hero's film, run by the scroll while the hero stays put under what sticks.
+const film = reel(() => stuck().offsetHeight);
 // A heading is reached 48px below what sticks.
 const map = minimap(tabs, () => stuck().offsetHeight + 48);
 let raised = -1;
 
-/** Raise the tab of the part being read, and put the reader on the minimap. */
+/** Run the hero's film, raise the tab of the part being read, and put the reader on the minimap. */
 function follow() {
+  film.draw(scrollY);
   const where = map.at(scrollY);
   map.draw(where);
   // The credits are read under the last tab.
@@ -44,8 +49,12 @@ function follow() {
   }
 }
 
-/** Read where every heading lies again, after the page's layout changes. */
+/**
+ * Fit the film to the screen, and read where every heading lies again, after the page's
+ * layout changes: the film's stretch of scroll moves every heading after it.
+ */
 function remeasure() {
+  film.measure();
   map.measure();
   follow();
 }
