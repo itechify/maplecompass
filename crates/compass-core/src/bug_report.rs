@@ -22,9 +22,8 @@
 //!   oldest ordinary ones first, then the oldest kept for the run. The text never is.
 //! - OSMS's file set isn't in a report (ADR 0008), only its fingerprint: a replay is given
 //!   the set to replay with, and a set that has changed since replays differently. The
-//!   same goes for the Item Card's OSMS item files and BasilMarket price list (ADR 0010).
+//!   same goes for the Item Card's OSMS item files (ADR 0010).
 
-use crate::basilmarket::SavedPrices;
 use crate::exp_bar::{ExpBar, ExpBarReading};
 use crate::hotkey_settings::KeyPress;
 use crate::item_lookup::ItemHit;
@@ -166,15 +165,10 @@ pub enum Answer {
     /// OSMS's item files fetched afresh: their [`item_fingerprint`], or why they couldn't
     /// be had.
     Items { answer: Result<String, SourceError> },
-    /// The BasilMarket price list an earlier launch saved; `None` if none was.
-    SavedPrices { saved: Option<SavedSet> },
-    /// BasilMarket's price list fetched afresh: its [`text_fingerprint`], or why it
-    /// couldn't be had.
-    Prices { answer: Result<String, SourceError> },
 }
 
-/// An OSMS file set (or item files, or a price list) saved at an earlier launch: its
-/// fingerprint, and when.
+/// An OSMS file set (or its item files) saved at an earlier launch: its fingerprint, and
+/// when.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedSet {
@@ -329,11 +323,6 @@ pub fn fingerprint(files: &OsmsFiles) -> String {
 /// OSMS's item files' fingerprint, as [`fingerprint`] the map set's.
 pub fn item_fingerprint(files: &ItemFiles) -> String {
     texts_fingerprint([&*files.items, &files.quests, &files.crafting, &files.cash_shop])
-}
-
-/// A text's fingerprint (BasilMarket's price list's), as [`fingerprint`] the map set's.
-pub fn text_fingerprint(text: &str) -> String {
-    texts_fingerprint([text])
 }
 
 fn texts_fingerprint<'a>(texts: impl IntoIterator<Item = &'a str>) -> String {
@@ -980,42 +969,6 @@ impl MapDataSource for RecordedSource {
         }
         fetched
     }
-
-    fn saved_prices(&mut self) -> Option<SavedPrices> {
-        let saved = match &mut self.from {
-            From::Live(source) => source.saved_prices(),
-            From::Replay { .. } => match self.due(|a| matches!(a, Answer::SavedPrices { .. })) {
-                Some(Answer::SavedPrices { saved: Some(saved) }) => self
-                    .replayed()
-                    .and_then(|with| with.prices.clone())
-                    .map(|text| SavedPrices { text, saved_at_unix_ms: saved.saved_at_unix_ms }),
-                _ => None,
-            },
-        };
-        let shape =
-            saved.as_ref().map(|s| SavedSet { fingerprint: text_fingerprint(&s.text), saved_at_unix_ms: s.saved_at_unix_ms });
-        self.answers.push(Answer::SavedPrices { saved: shape });
-        saved
-    }
-
-    fn fetch_prices(&mut self) -> Poll<Result<String, SourceError>> {
-        let fetched = match &mut self.from {
-            From::Live(source) => source.fetch_prices(),
-            From::Replay { .. } => match self.due(|a| matches!(a, Answer::Prices { .. })) {
-                Some(Answer::Prices { answer: Ok(_) }) => Poll::Ready(
-                    self.replayed()
-                        .and_then(|with| with.prices.clone())
-                        .ok_or_else(|| SourceError::Unreachable("not in the Bug Report".into())),
-                ),
-                Some(Answer::Prices { answer: Err(e) }) => Poll::Ready(Err(e)),
-                _ => Poll::Pending,
-            },
-        };
-        if let Poll::Ready(answer) = &fetched {
-            self.answers.push(Answer::Prices { answer: answer.as_deref().map(text_fingerprint).map_err(Clone::clone) });
-        }
-        fetched
-    }
 }
 
 /// A Bug Report as read back.
@@ -1068,16 +1021,15 @@ pub struct Divergence {
     pub replayed: Option<String>,
 }
 
-/// What a replay gives the core where the report holds only fingerprints: OSMS's file set,
-/// OSMS's item files and BasilMarket's price list. `None` answers as if it couldn't be had.
+/// What a replay gives the core where the report holds only fingerprints: OSMS's file set
+/// and its item files. `None` answers as if it couldn't be had.
 #[derive(Debug, Clone, Default)]
 pub struct ReplayData {
     pub osms: Option<OsmsFiles>,
     pub items: Option<ItemFiles>,
-    pub prices: Option<String>,
 }
 
-/// [`replay_with`] OSMS's file set `osms`, and no item files or price list.
+/// [`replay_with`] OSMS's file set `osms`, and no item files.
 pub fn replay(recording: &Recording, osms: Option<OsmsFiles>) -> Replay {
     replay_with(recording, ReplayData { osms, ..ReplayData::default() })
 }
@@ -1198,10 +1150,6 @@ pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
                 Answer::SavedItems { saved: Some(SavedSet { fingerprint: String::new(), ..saved }) }
             }
             Answer::Items { answer: Ok(_) } => Answer::Items { answer: Ok(String::new()) },
-            Answer::SavedPrices { saved: Some(saved) } => {
-                Answer::SavedPrices { saved: Some(SavedSet { fingerprint: String::new(), ..saved }) }
-            }
-            Answer::Prices { answer: Ok(_) } => Answer::Prices { answer: Ok(String::new()) },
             other => other,
         });
         let line = Line { crop: None, answers: answers.collect(), ..line.clone() };
@@ -1298,10 +1246,6 @@ impl Answer {
             Answer::SavedItems { saved: None } => "no OSMS item files saved earlier".to_string(),
             Answer::Items { answer: Ok(fingerprint) } => format!("OSMS's item files fetched ({fingerprint})"),
             Answer::Items { answer: Err(e) } => format!("OSMS's item files: {e}"),
-            Answer::SavedPrices { saved: Some(saved) } => format!("BasilMarket's price list saved earlier ({})", saved.fingerprint),
-            Answer::SavedPrices { saved: None } => "no BasilMarket price list saved earlier".to_string(),
-            Answer::Prices { answer: Ok(fingerprint) } => format!("BasilMarket's price list fetched ({fingerprint})"),
-            Answer::Prices { answer: Err(e) } => format!("BasilMarket's price list: {e}"),
         })
     }
 }

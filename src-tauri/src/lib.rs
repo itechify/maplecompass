@@ -7,7 +7,6 @@
 //! window: all four only while the game or one of our windows is in front. All logic
 //! lives in the core.
 
-pub mod basilmarket;
 pub mod capture;
 pub mod gamewin;
 mod bests;
@@ -135,8 +134,10 @@ pub(crate) enum Command {
     PickCardItem(String),
     /// The player clicked the Item Card's name: open the item's MeowDB page.
     OpenCardMeowdbPage,
-    /// The player clicked the Item Card's market line: open the item's BasilMarket page.
-    OpenCardMarketPage,
+    /// The player clicked the Item Card's market line: open MesoWatch.
+    OpenCardMesowatch,
+    /// Windows told of a drag of the Item Card's window.
+    ItemCardSizeMove(SizeMove),
     /// The player chose Quit in the tray icon's menu: save the settings and exit.
     Quit,
     /// The player chose Bug Report in the tray icon's menu: save one, and open the bug
@@ -356,7 +357,7 @@ pub fn run() {
             item_card::item_card_close,
             item_card::item_card_pick,
             item_card::item_card_open_meowdb,
-            item_card::item_card_open_market,
+            item_card::item_card_open_mesowatch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -584,8 +585,8 @@ fn compass_loop(
                 // Its page comes from `take_request`, once MeowDB's search has answered.
                 compass.open_card_meowdb_page(reader.now_ms());
             }
-            Ok(Command::OpenCardMarketPage) => {
-                let request = compass.open_card_market_page();
+            Ok(Command::OpenCardMesowatch) => {
+                let request = compass.open_card_mesowatch();
                 carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
             }
             Ok(Command::PanelHeight(height)) => {
@@ -660,6 +661,11 @@ fn compass_loop(
                 personal_bests.set_height(height);
                 if let Some(size) = personal_bests.size() {
                     compass.set_personal_bests_size(size);
+                }
+            }
+            Ok(Command::ItemCardSizeMove(what)) => {
+                if let Some(at) = item_card.size_move(what) {
+                    compass.act(Action::ItemCardMoved { x: at.x, y: at.y });
                 }
             }
             Ok(Command::PersonalBestsSizeMove(what)) => {

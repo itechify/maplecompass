@@ -7,7 +7,6 @@ pub mod osms;
 pub mod player;
 pub mod world;
 
-use compass_core::basilmarket::SavedPrices;
 use compass_core::osms::{OsmsFiles, SavedFiles};
 use compass_core::osms_items::{ItemFiles, SavedItemFiles};
 use compass_core::{
@@ -138,7 +137,6 @@ type PictureAnswer = Result<String, SourceError>;
 type SearchAnswer = Result<Vec<ItemHit>, SourceError>;
 pub type OsmsAnswer = Poll<Result<OsmsFiles, SourceError>>;
 pub type ItemSetAnswer = Poll<Result<ItemFiles, SourceError>>;
-pub type PricesAnswer = Poll<Result<String, SourceError>>;
 
 /// A data source that answers from memory and counts what it is asked.
 pub struct FakeSource {
@@ -174,12 +172,6 @@ pub struct FakeSource {
     pub item_set_requests: Arc<AtomicU32>,
     /// The item files an earlier launch saved; `None`: none were.
     saved_item_set: Option<SavedItemFiles>,
-    /// Answers for successive fetches of BasilMarket's price list; the last one repeats.
-    price_answers: Vec<PricesAnswer>,
-    /// How many times BasilMarket's price list was fetched.
-    pub price_requests: Arc<AtomicU32>,
-    /// The price list an earlier launch saved; `None`: none was.
-    saved_prices: Option<SavedPrices>,
 }
 
 impl FakeSource {
@@ -201,9 +193,6 @@ impl FakeSource {
             item_set_answers: vec![Poll::Ready(Err(unreachable()))],
             item_set_requests: Arc::default(),
             saved_item_set: None,
-            price_answers: vec![Poll::Ready(Err(unreachable()))],
-            price_requests: Arc::default(),
-            saved_prices: None,
         }
     }
 
@@ -288,21 +277,6 @@ impl FakeSource {
     pub fn with_saved_items(self, items: items::ItemWorld, saved_at_unix_ms: u64) -> Self {
         Self { saved_item_set: Some(SavedItemFiles { files: items.files(), saved_at_unix_ms }), ..self }
     }
-
-    /// BasilMarket serves this price list.
-    pub fn with_prices(self, prices: &[items::Price]) -> Self {
-        self.answering_prices(vec![Poll::Ready(Ok(items::price_list(prices)))])
-    }
-
-    /// BasilMarket's price list answers these, one ask after another; the last one repeats.
-    pub fn answering_prices(self, answers: Vec<PricesAnswer>) -> Self {
-        Self { price_answers: answers, ..self }
-    }
-
-    /// This price list was saved at `saved_at_unix_ms`, at an earlier launch.
-    pub fn with_saved_prices(self, prices: &[items::Price], saved_at_unix_ms: u64) -> Self {
-        Self { saved_prices: Some(SavedPrices { text: items::price_list(prices), saved_at_unix_ms }), ..self }
-    }
 }
 
 fn unreachable() -> SourceError {
@@ -379,14 +353,5 @@ impl MapDataSource for FakeSource {
     fn fetch_item_files(&mut self) -> Poll<Result<ItemFiles, SourceError>> {
         let n = self.item_set_requests.fetch_add(1, Ordering::SeqCst) as usize;
         self.item_set_answers[n.min(self.item_set_answers.len() - 1)].clone()
-    }
-
-    fn saved_prices(&mut self) -> Option<SavedPrices> {
-        self.saved_prices.clone()
-    }
-
-    fn fetch_prices(&mut self) -> Poll<Result<String, SourceError>> {
-        let n = self.price_requests.fetch_add(1, Ordering::SeqCst) as usize;
-        self.price_answers[n.min(self.price_answers.len() - 1)].clone()
     }
 }

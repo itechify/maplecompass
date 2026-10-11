@@ -165,7 +165,7 @@ _Avoid_: drop, loot (when meaning the item itself)
 The box the game draws by the mouse pointer when the player hovers an item: the item's name on the line with the blue bullet (a crafted item's maker sits above it), then its picture and figures. It is the game's, not ours: the Item Card and the Mob Card are MapleCompass's own.
 
 **Item Card**:
-The card the hotkey (Ctrl+Shift+I by default) shows at the pointer for the item whose Item Tooltip the game shows there: what a shop pays for it, what players pay for it on BasilMarket and from how many sales, and the quests and recipes it comes from and is used for. It stays until the player closes it or presses the hotkey again, and its name opens the item's MeowDB page. When items that don't look alike share the name, it first lists them, with their pictures, for the player to pick.
+The card the hotkey (Ctrl+Shift+I by default) shows at the pointer for the item whose Item Tooltip the game shows there: what a shop pays for it, and the quests and recipes it comes from and is used for, with a link to MesoWatch's market prices. It stays until the player closes it or presses the hotkey again, where the player drags it by its bar, and its name opens the item's MeowDB page. When items that don't look alike share the name, it first lists them, with their pictures, for the player to pick.
 _Avoid_: item tooltip (the game's), price check, popup
 
 **Item Lookup**:

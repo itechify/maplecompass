@@ -30,15 +30,15 @@
 //! hold, or what didn't read. Run it by hand when OSMS changes and before a release. No
 //! game window is needed.
 //!
-//! `cargo run -p maplecompass --example probe replay <report.zip> [--all] [--osms <osms-set.json>] [--items <osms-items.json>] [--prices <basilmarket-prices.json>]`
+//! `cargo run -p maplecompass --example probe replay <report.zip> [--all] [--osms <osms-set.json>] [--items <osms-items.json>]`
 //! Replay mode, for a Bug Report (ADR 0009): print what it holds and its timeline (from 10
 //! minutes before it was saved, every line the core made something of before that; with
 //! `--all`, every line), then feed its inputs to a new core and say whether it goes
 //! through the same states. The report has no OSMS set, only its fingerprint: the replay
 //! fetches OSMS's live one, or reads the one given (an `osms-set.json` from the cache of
-//! the PC the report came from). So with the Item Card's OSMS item files and BasilMarket
-//! price list (ADR 0010), fetched live only if the run had them, or read from the
-//! `osms-items.json` and `basilmarket-prices.json` given. No game window is needed.
+//! the PC the report came from). So with the Item Card's OSMS item files (ADR 0010),
+//! fetched live only if the run had them, or read from the `osms-items.json` given. No game
+//! window is needed.
 
 use compass_core::{Compass, GAME_WINDOW_TITLE, PortalKind, Rect, TitleReader};
 use maplecompass_lib::{capture, capture_title_frame, gamewin, source::WebSource};
@@ -196,13 +196,12 @@ fn replay(args: &[String]) -> Result<(), String> {
     use compass_core::bug_report;
     let mut rest = args.iter();
     let path = rest.next().ok_or("no Bug Report")?;
-    let (mut all, mut set_file, mut items_file, mut prices_file) = (false, None, None, None);
+    let (mut all, mut set_file, mut items_file) = (false, None, None);
     while let Some(arg) = rest.next() {
         match arg.as_str() {
             "--all" => all = true,
             "--osms" => set_file = Some(rest.next().ok_or("--osms needs a file")?),
             "--items" => items_file = Some(rest.next().ok_or("--items needs a file")?),
-            "--prices" => prices_file = Some(rest.next().ok_or("--prices needs a file")?),
             other => return Err(format!("unknown argument {other:?}")),
         }
     }
@@ -242,7 +241,7 @@ fn replay(args: &[String]) -> Result<(), String> {
         let same = report.osms_sets.contains(&fingerprint);
         println!("OSMS's set {fingerprint}: {}", if same { "one the run took" } else { "not one the run took, so maps may replay otherwise" });
     }
-    // The Item Card's data, only if the run had it: none is asked for otherwise.
+    // The Item Card's item files, only if the run had them: none are asked for otherwise.
     let answers: Vec<&bug_report::Answer> = recording.lines.iter().flat_map(|line| &line.answers).collect();
     let had = |had: fn(&bug_report::Answer) -> bool| answers.iter().any(|answer| had(answer));
     let items = match items_file {
@@ -261,20 +260,7 @@ fn replay(args: &[String]) -> Result<(), String> {
         }
         None => None,
     };
-    let prices = match prices_file {
-        Some(file) => Some(std::fs::read_to_string(file).map_err(|e| format!("{file}: {e}"))?),
-        None if had(|a| matches!(a, bug_report::Answer::Prices { answer: Ok(_) } | bug_report::Answer::SavedPrices { saved: Some(_) })) => {
-            match maplecompass_lib::basilmarket::fetch_live() {
-                Ok(text) => Some(text),
-                Err(e) => {
-                    println!("BasilMarket's price list couldn't be fetched ({e}): replaying without it.");
-                    None
-                }
-            }
-        }
-        None => None,
-    };
-    let replay = bug_report::replay_with(&recording, bug_report::ReplayData { osms: files, items, prices });
+    let replay = bug_report::replay_with(&recording, bug_report::ReplayData { osms: files, items });
     match replay.divergence {
         None => println!("Replayed {} lines: the core went through the same states.", replay.lines),
         Some(divergence) => {

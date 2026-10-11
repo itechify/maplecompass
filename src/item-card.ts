@@ -1,18 +1,12 @@
 import "./errors";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { dayText } from "./dates";
 import { byId, span } from "./dom";
 
 /** Mirror of `compass_core::ShopPrice`. */
 type ShopPrice = { status: "sells"; mesos: number } | { status: "notSold" } | { status: "cash" } | { status: "unknown" };
-
-/** Mirror of `compass_core::Market`. */
-type Market =
-  | { status: "loading" }
-  | { status: "sold"; mesos: number; sales: number; page: string; fromUnixMs: number | null }
-  | { status: "noSales"; page: string | null; fromUnixMs: number | null }
-  | { status: "unavailable" };
 
 /** Mirror of `compass_core::QuestReward`. */
 type QuestReward = { status: "always" } | { status: "chance"; hundredths: number } | { status: "pick" } | { status: "sometimes" };
@@ -29,7 +23,6 @@ type ItemCard = {
   id: string;
   name: string;
   shop: ShopPrice;
-  market: Market;
   comesFrom: Listed<ItemSource>;
   usedFor: Listed<ItemUse>;
   savedCopyFromUnixMs: number | null;
@@ -53,7 +46,6 @@ const title = byId("title");
 const body = byId("body");
 
 const mesos = (amount: number) => `${amount.toLocaleString("en-US")} mesos`;
-const dated = (unixMs: number) => `Prices from ${dayText(new Date(unixMs), false)}`;
 
 /** One figure: its label at the left, its value right-aligned, as the Mob Card sets them. */
 function figure(label: string, value: Node | string, quiet = false): HTMLDivElement {
@@ -92,27 +84,11 @@ function link(text: string, label: string, onClick: () => void): HTMLButtonEleme
   return button;
 }
 
-/** What players pay for it on BasilMarket, from how many sales; a link to its page there. */
-function marketFigure(market: Market): HTMLDivElement {
-  const openMarket = () => invoke("item_card_open_market");
-  switch (market.status) {
-    case "loading":
-      return figure("Market", "Loading…", true);
-    case "unavailable":
-      return figure("Market", "Unavailable", true);
-    case "sold": {
-      const value = document.createDocumentFragment();
-      value.append(link(mesos(market.mesos), "See its prices on BasilMarket", openMarket));
-      value.append(span("sales", ` · ${market.sales} ${market.sales === 1 ? "sale" : "sales"}`));
-      return figure("Market", value);
-    }
-    case "noSales": {
-      const text = "No sales seen yet";
-      return market.page
-        ? figure("Market", link(text, "See it on BasilMarket", openMarket), true)
-        : figure("Market", text, true);
-    }
-  }
+/** What players pay for it: MesoWatch, which has no page per item, so the player looks
+ * the item up there. */
+function marketFigure(): HTMLDivElement {
+  const open = () => invoke("item_card_open_mesowatch");
+  return figure("Market", link("Look up on MesoWatch ↗", "Open MesoWatch, and look the item up there", open));
 }
 
 /** A quest's chance of giving the item, as OSMS gives it: "7.14%". */
@@ -167,11 +143,11 @@ function renderCard(card: ItemCard) {
   title.replaceChildren(link(card.name, `Open ${card.name} on MeowDB`, () => invoke("item_card_open_meowdb")));
   const prices = document.createElement("dl");
   prices.className = "item-card-prices";
-  prices.append(shopFigure(card.shop), marketFigure(card.market));
-  const parts: Node[] = [prices];
-  const from = card.market.status === "sold" || card.market.status === "noSales" ? card.market.fromUnixMs : null;
-  if (from !== null) parts.push(span("item-card-dated", dated(from)));
-  parts.push(...list("Comes from", card.comesFrom, sourceRow), ...list("Used for", card.usedFor, useRow));
+  prices.append(shopFigure(card.shop), marketFigure());
+  const box = document.createElement("div");
+  box.className = "item-card-box";
+  box.append(prices, ...list("Comes from", card.comesFrom, sourceRow), ...list("Used for", card.usedFor, useRow));
+  const parts: Node[] = [box];
   if (card.savedCopyFromUnixMs !== null) {
     const note = document.createElement("p");
     note.className = "item-card-note";
@@ -214,7 +190,10 @@ function renderChoice(name: string, items: ItemCardChoice[]) {
   const hint = document.createElement("p");
   hint.className = "item-card-hint";
   hint.textContent = "Pick the one whose picture the game's tooltip shows.";
-  body.replaceChildren(hint, choices);
+  const box = document.createElement("div");
+  box.className = "item-card-box";
+  box.append(choices);
+  body.replaceChildren(hint, box);
 }
 
 let shownKey = "";
@@ -233,10 +212,14 @@ function render({ shown, card }: CardView) {
   reportHeight();
 }
 
-// The shell sizes the window to the card, as the overlay does the panel.
+// The shell sizes the window to the card, up to its most; past that the card scrolls under
+// its bar. The card is no taller than the window, so it is measured without that limit, or
+// the window could never grow.
 let reportedHeight = 0;
 function reportHeight() {
+  cardEl.classList.add("measuring");
   const height = Math.ceil(cardEl.getBoundingClientRect().height);
+  cardEl.classList.remove("measuring");
   if (height > 0 && height !== reportedHeight) {
     reportedHeight = height;
     invoke("item_card_height", { height });
@@ -247,8 +230,13 @@ window.addEventListener("resize", reportHeight);
 document.fonts.ready.then(reportHeight);
 new ResizeObserver(reportHeight).observe(cardEl);
 
-// The window takes clicks only while a card shows, and never the keyboard: it can't be
-// activated.
+// Dragged by its bar, never by its button. The window takes clicks only while a card
+// shows, and never the keyboard: it can't be activated.
+document.addEventListener("mousedown", (e) => {
+  const target = e.target instanceof Element ? e.target : null;
+  const onBar = !!target?.closest(".drag-handle") && !target?.closest("button");
+  if (e.button === 0 && onBar) getCurrentWindow().startDragging();
+});
 byId("close").addEventListener("click", () => invoke("item_card_close"));
 
 listen<CardView>("item-card-state", (e) => render(e.payload));

@@ -1,17 +1,18 @@
 //! The Item Card (ADR 0010): the player hovers an item in the game and presses the hotkey
 //! (Ctrl+Shift+I by default). The shell captures the game's client area and the pointer,
 //! the Item Tooltip reader reads the item's name, and the card shows at the pointer what
-//! the game's tooltip doesn't: what a shop pays for the item, what players pay for it, where
-//! it comes from and what it's used for. The name is matched against OSMS's items on the
-//! player's machine: nothing is asked at the press.
+//! the game's tooltip doesn't: what a shop pays for the item, where it comes from and what
+//! it's used for, with links to its MeowDB page and to MesoWatch's market prices. The name
+//! is matched against OSMS's items on the player's machine: nothing is asked at the press.
 //!
 //! One card shows at a time, until the player closes it or presses the hotkey again. What
 //! keeps a card from showing goes in the Item Lookup alert.
 
+use crate::grind_tracker::ClientOffset;
 use crate::item_lookup::{ItemLookup, OurWindow, item_name, overlaps};
 use crate::item_tooltip::{ItemTooltip, ItemTooltipReading};
 use crate::osms_items::{ItemFacts, ItemSet};
-use crate::panel::{GameWindow, ScreenPoint, ScreenRect, Size};
+use crate::panel::{GameWindow, ScreenPoint, ScreenRect, Size, in_view};
 use serde::Serialize;
 
 /// What a shop pays for an item.
@@ -83,37 +84,14 @@ impl<T: Clone> Listed<T> {
     }
 }
 
-/// What players pay one another for an item, by BasilMarket's price list.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "status", rename_all = "camelCase")]
-pub enum Market {
-    /// No price list is held yet: one is being fetched.
-    Loading,
-    /// Players paid `mesos` for one, by BasilMarket's recommended price from `sales` sales.
-    /// `page` is the item's price page, with its range and history.
-    Sold {
-        mesos: u64,
-        sales: u32,
-        page: String,
-        /// When the price list was saved (ms since the Unix epoch), if over a day ago: it
-        /// couldn't be refreshed since. `None` for a fresher list.
-        #[serde(rename = "fromUnixMs")]
-        from_unix_ms: Option<u64>,
-    },
-    /// BasilMarket has seen no sales of it: it shows the NPC shop's price or nothing. Its
-    /// price page, if BasilMarket lists it.
-    NoSales {
-        page: Option<String>,
-        #[serde(rename = "fromUnixMs")]
-        from_unix_ms: Option<u64>,
-    },
-    /// No price list could be had, and none is saved.
-    Unavailable,
-}
+/// The Item Card's credit (ADR 0010): its data is OSMS Data Explorer's, its name opens
+/// NiaMeowDB's page and its market line MesoWatch.
+pub const ITEM_CARD_CREDIT: &str = "Data: OSMS Data Explorer · Pages: NiaMeowDB, MesoWatch";
 
-/// The Item Card's credit (ADR 0010): its data is OSMS Data Explorer's, and its market
-/// prices BasilMarket's.
-pub const ITEM_CARD_CREDIT: &str = "Data: OSMS Data Explorer · Prices: BasilMarket.net";
+/// MesoWatch, the market prices players see in Free Market shops: the market line opens it
+/// in the player's browser. It has no page per item, and its terms forbid collecting its
+/// prices, so the player looks the item up there themselves.
+pub const MESOWATCH_URL: &str = "https://meso.watch/";
 
 /// One item's Item Card.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -123,7 +101,6 @@ pub struct ItemCard {
     pub id: String,
     pub name: String,
     pub shop: ShopPrice,
-    pub market: Market,
     /// The quests that give it, then the recipes that make it.
     pub comes_from: Listed<ItemSource>,
     /// The quests that need it, then the recipes that use it.
@@ -189,10 +166,13 @@ pub(crate) struct ItemCards {
     cards: u32,
 }
 
-/// The card showing: which items, and where the pointer was.
+/// The card showing: which items, where the pointer was, and where the player dragged it.
 struct Shown {
     card: u32,
     pointer: ScreenPoint,
+    /// Where the player dragged the card, relative to the game's client area; `None` while
+    /// it is at the pointer.
+    moved: Option<ClientOffset>,
     showing: Showing,
 }
 
@@ -245,7 +225,7 @@ impl ItemCards {
             _ => Showing::Choose(groups),
         };
         self.cards += 1;
-        self.shown = Some(Shown { card: self.cards, pointer: reading.pointer, showing });
+        self.shown = Some(Shown { card: self.cards, pointer: reading.pointer, moved: None, showing });
         Pressed::Shown
     }
 
@@ -284,9 +264,26 @@ impl ItemCards {
         }
     }
 
-    /// Where the pointer was when the card showing opened.
-    pub fn pointer(&self) -> Option<ScreenPoint> {
-        self.shown.as_ref().map(|shown| shown.pointer)
+    /// The player dragged the card showing so its top-left corner is at (x, y) on screen,
+    /// over `game`: it stays there, with the game window, until it closes.
+    pub fn moved_to(&mut self, x: i32, y: i32, game: &GameWindow) {
+        if let Some(shown) = &mut self.shown {
+            shown.moved = Some(ClientOffset { x: x - game.client.x, y: y - game.client.y });
+        }
+    }
+
+    /// Where the card showing of `size` goes over `game`: where the player dragged it,
+    /// wholly on a monitor and moved off any of `avoid`; or else at the pointer
+    /// ([`card_placement`]). `None` while no card shows.
+    pub fn placement(&self, game: &GameWindow, size: Size, avoid: &[ScreenRect]) -> Option<ScreenRect> {
+        let shown = self.shown.as_ref()?;
+        Some(match shown.moved {
+            Some(at) => {
+                let (x, y) = (game.client.x + at.x, game.client.y + at.y);
+                in_view(game, ScreenRect { x, y, width: size.width, height: size.height.min(game.client.height) }, avoid)
+            }
+            None => card_placement(game, shown.pointer, size, avoid),
+        })
     }
 
     /// The card showing, as `items` has its items (a Saved Copy from `saved_copy_from`, if
@@ -296,14 +293,12 @@ impl ItemCards {
         &self,
         items: Option<&ItemSet>,
         saved_copy_from: Option<u64>,
-        market: impl Fn(&[u32]) -> Market,
         picture: impl Fn(&str) -> Option<String>,
     ) -> Option<ShownItemCard> {
         let shown = self.shown.as_ref()?;
         let items = items?;
         let view = match &shown.showing {
             Showing::Card(ids) => ItemCardView::Card(ItemCard {
-                market: market(ids),
                 saved_copy_from_unix_ms: saved_copy_from,
                 ..card(ids, items)?
             }),
@@ -327,7 +322,7 @@ impl ItemCards {
 }
 
 /// The card of the items `ids`, which look alike: the first's, with the quests and
-/// recipes of all of them. Its market line is left to the price list.
+/// recipes of all of them.
 fn card(ids: &[u32], items: &ItemSet) -> Option<ItemCard> {
     let alike: Vec<&ItemFacts> = ids.iter().filter_map(|&id| items.item(id)).collect();
     let first = alike.first()?;
@@ -337,7 +332,6 @@ fn card(ids: &[u32], items: &ItemSet) -> Option<ItemCard> {
         id: item_id(first.id),
         name: first.name.clone(),
         shop: first.shop,
-        market: Market::Loading,
         comes_from: Listed::of(&comes_from),
         used_for: Listed::of(&used_for),
         saved_copy_from_unix_ms: None,
@@ -377,7 +371,7 @@ const REGION_GAP: i32 = 8;
 /// game's client area and off `avoid` (the captured regions, since our windows show in our
 /// captures). With none of them clear, below and right of the pointer, moved below (or
 /// above) the regions it would cover.
-pub(crate) fn card_placement(game: &GameWindow, pointer: ScreenPoint, size: Size, avoid: &[ScreenRect]) -> ScreenRect {
+fn card_placement(game: &GameWindow, pointer: ScreenPoint, size: Size, avoid: &[ScreenRect]) -> ScreenRect {
     let client = game.client;
     let (width, height) = (size.width.min(client.width), size.height.min(client.height));
     let (right, left) = (pointer.x + POINTER_GAP, pointer.x - POINTER_GAP - width as i32);

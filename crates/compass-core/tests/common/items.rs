@@ -1,8 +1,7 @@
 //! Made-up item data in OSMS Data Explorer's exact JSON shape (ADR 0010): invented items,
 //! scrolls, quests, recipes and Cash Shop items, written out as the four item files the
-//! shell fetches; and made-up market prices in BasilMarket's price list's shape. The
-//! names are the game's, as players see them; every figure, quest and recipe is made up.
-//! Nothing from OSMS or BasilMarket is committed.
+//! shell fetches. The names are the game's, as players see them; every figure, quest and
+//! recipe is made up. Nothing from OSMS is committed.
 
 use compass_core::osms_items::ItemFiles;
 use serde_json::{Map as Object, Value, json};
@@ -372,59 +371,4 @@ impl ItemWorld {
             categories.into_iter().map(|(category, items)| json!({"category": category, "items": items})).collect();
         json!({"categories": categories, "total": self.cash.len()})
     }
-}
-
-/// One item on BasilMarket's price list.
-#[derive(Debug, Clone)]
-pub struct Price {
-    pub id: u64,
-    pub name: String,
-    /// `v`: the price BasilMarket recommends, if any.
-    pub mesos: Option<u64>,
-    /// `b`: where it comes from: "sales", "fm-sales", "npc" or "none".
-    pub basis: &'static str,
-    /// `k`: how many sales it comes from.
-    pub sales: u32,
-}
-
-/// BasilMarket's price for the item from `sales` completed trades on its site.
-pub fn sold(id: u64, name: &str, mesos: u64, sales: u32) -> Price {
-    Price { id, name: name.into(), mesos: Some(mesos), basis: "sales", sales }
-}
-
-/// BasilMarket's price for the item from `sales` sales seen in Free Market shops only.
-pub fn sold_in_shops(id: u64, name: &str, mesos: u64, sales: u32) -> Price {
-    Price { id, name: name.into(), mesos: Some(mesos), basis: "fm-sales", sales }
-}
-
-/// No sales: BasilMarket shows the NPC shop price instead.
-pub fn npc_priced(id: u64, name: &str, mesos: u64) -> Price {
-    Price { id, name: name.into(), mesos: Some(mesos), basis: "npc", sales: 0 }
-}
-
-/// No price at all.
-pub fn unpriced(id: u64, name: &str) -> Price {
-    Price { id, name: name.into(), mesos: None, basis: "none", sales: 0 }
-}
-
-/// The item's page slug as BasilMarket makes it: lower case, words joined by hyphens.
-pub fn slug(name: &str) -> String {
-    let words: Vec<String> = name
-        .split(|c: char| !c.is_ascii_alphanumeric())
-        .filter(|word| !word.is_empty())
-        .map(str::to_ascii_lowercase)
-        .collect();
-    words.join("-")
-}
-
-/// BasilMarket's price list (`/api/price-index`) holding `prices`.
-pub fn price_list(prices: &[Price]) -> String {
-    let items: Vec<Value> = prices
-        .iter()
-        .map(|price| {
-            json!({"n": price.name, "s": slug(&price.name), "i": format!("{:08}.png", price.id), "t": "Etc",
-                   "v": price.mesos, "b": price.basis, "k": price.sales})
-        })
-        .collect();
-    json!({"builtAt": "2026-10-11T15:25:42.156Z", "items": items}).to_string()
 }

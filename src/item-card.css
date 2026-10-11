@@ -1,38 +1,21 @@
 /* The Item Card: what the game's Item Tooltip doesn't say about the hovered item, at the
-   pointer. The Mob Card's window on its own: opaque Body Solid under a 1px Window Edge
-   frame with a 4px radius and the window's inner ring, no drop shadow, so the game it
-   sits over doesn't show through. The shell makes the window 280 CSS px wide (WIDTH in
-   src-tauri/src/item_card.rs) and as tall as the card. Unlike the Mob Card it takes
-   clicks: its ×, its name, its market line, an item to pick. */
-.panel.item-card {
-  /* The panel's inline-size containment would size it as if empty. */
-  container-type: normal;
-  background: var(--body-solid);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
-  padding: 6px 8px 7px 10px;
-  gap: 6px;
-  font-size: 12px;
-  line-height: 15px;
+   pointer. The panel's window, sized to the card: the window bar the player drags it by,
+   with its ×; the item's name on the Quest Helper's see-through glass; and its figures and
+   lists set into the body on the near-opaque lavender, as the Grind Tracker's figures are,
+   so they read over any scene. The shell makes the window 280 CSS px wide (WIDTH in
+   src-tauri/src/item_card.rs) and as tall as the card up to its most; past that the card
+   scrolls under its bar. It has no corner grips, so it keeps only a little room under the
+   last line. */
+.view {
+  padding-bottom: 10px;
 }
 
-/* The name (a link to its MeowDB page) or the question, then the light ×. */
-.item-card-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.item-card-title {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  line-height: 19px;
+/* The item's name, a link to its MeowDB page, or the question when items share it. */
+.panel .item-card-title {
+  margin-block: 0;
+  font-size: 14px;
+  line-height: 18px;
   font-weight: 700;
-}
-
-.item-card-title > * {
-  display: block;
-  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -42,6 +25,8 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  font-size: 12px;
+  line-height: 15px;
 }
 
 /* A link on the card, as a mob's name in the panel: plain at rest, Portal Blue and
@@ -68,16 +53,26 @@
   border-radius: 2px;
 }
 
-/* What a shop pays and what players pay: each label at the left of its value, the
-   values right-aligned as the Mob Card's figures. A value that says why there is none
+/* The figures and lists, set into the body. */
+.item-card-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 5px 8px 7px 9px;
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--body);
+  text-shadow: none;
+}
+
+/* What a shop pays and where players' prices are: each label at the left of its value,
+   the values right-aligned as the Mob Card's figures. A value that says why there is none
    is Panel Ink Steel, not bold. */
 .item-card-prices {
   display: flex;
   flex-direction: column;
   gap: 1px;
   margin: 0;
-  padding-top: 5px;
-  border-top: 1px solid var(--rule);
 }
 
 .item-card-prices > div {
@@ -111,23 +106,9 @@
   color: var(--ink-2);
 }
 
-.item-card-prices .sales {
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--ink-2);
-}
-
-/* Prices that couldn't be refreshed for over a day say when they are from. */
-.item-card-dated {
-  align-self: flex-end;
-  margin-top: -4px;
-  font-size: 11px;
-  line-height: 14px;
-  color: var(--ink-3);
-}
-
-/* Comes from and Used for: a 11px heading over rows, each a tag naming what it is (Quest,
-   Craft), the quest or recipe, and at the right how many, or how likely. */
+/* Comes from and Used for: each under a rule, an 11px heading over rows, each a tag naming
+   what it is (Quest, Craft), the quest or recipe, and at the right how many, or how
+   likely. */
 .item-card-list {
   padding-top: 5px;
   border-top: 1px solid var(--rule);
@@ -157,7 +138,7 @@
   min-width: 0;
 }
 
-.item-card .tag {
+.item-card-body .tag {
   flex: none;
   padding: 0 4px;
   border: 1px solid var(--tag-edge);
@@ -193,7 +174,8 @@
 /* The note and the hint are read in full: the panel cuts its lines short, the card
    doesn't. */
 .panel .item-card-note,
-.panel .item-card-hint {
+.panel .item-card-hint,
+.panel .item-card-credit {
   white-space: normal;
   overflow: visible;
   text-wrap: pretty;
@@ -209,8 +191,6 @@
 
 .item-card-credit {
   margin: 0;
-  padding-top: 4px;
-  border-top: 1px solid var(--rule);
   font-size: 10px;
   line-height: 13px;
   color: var(--ink-3);

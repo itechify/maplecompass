@@ -124,6 +124,9 @@ pub enum Action {
     /// The player dragged the Personal Bests window so its top-left corner is at (x, y),
     /// physical screen px.
     PersonalBestsMoved { x: i32, y: i32 },
+    /// The player dragged the Item Card by its bar so its top-left corner is at (x, y),
+    /// physical screen px.
+    ItemCardMoved { x: i32, y: i32 },
     /// Open the search view on its mobs, with nothing typed yet (the search hotkey, or
     /// the 🔍 at the top of the panel). A collapsed panel expands to show it.
     OpenSearch,

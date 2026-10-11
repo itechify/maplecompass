@@ -1,11 +1,12 @@
 //! The Item Card (ADR 0010): the player hovers an item in the game and presses
 //! Ctrl+Shift+I. The shell captures the game's client area with the pointer, the Item
 //! Tooltip's name is read, and the card shows at the pointer what the game's tooltip
-//! doesn't: what a shop pays for the item, what players pay for it on the market, where it
-//! comes from and what it's used for. Failures go to the Item Lookup alert.
+//! doesn't: what a shop pays for the item, where it comes from and what it's used for, with
+//! links to its MeowDB page and to MesoWatch's market prices. Failures go to the Item
+//! Lookup alert.
 //!
 //! The readings here stand for what the Item Tooltip reader made of a capture. OSMS's item
-//! files and BasilMarket's price list are made up in their shapes ([`common::items`]).
+//! files are made up in their shapes ([`common::items`]).
 //!
 //! Worked example, as in `item_lookup.rs`: the game's client area at (812,110), 1920x1200
 //! physical px, on one 3440x1440 monitor; an expanded panel of 340x72, so at (2376,510); an
@@ -15,13 +16,10 @@
 mod common;
 
 use common::{FakeSource, ItemSetAnswer};
-use common::items::{
-    ItemWorld, Price, cash, equip, etc, item_world, npc_priced, price_list, quest, recipe, scroll, setup, sold,
-    sold_in_shops, unpriced, use_item, weapon,
-};
+use common::items::{ItemWorld, cash, equip, etc, item_world, quest, recipe, scroll, setup, use_item, weapon};
 use compass_core::{
-    Compass, ExpBarRegion, Foreground, GameWindow, Hotkey, ItemCard, ItemHit, ItemCardChoice, ItemCardView, ItemLookup, ItemSource, ItemTooltip,
-    ItemTooltipReading, ItemUse, Listed, Market, OurWindow, PanelSizes, QuestReward, PanelState, Rect, Request, ScreenPoint, ScreenRect, Settings, ShopPrice,
+    Action, Compass, ExpBarRegion, Foreground, GameWindow, Hotkey, ItemCard, ItemHit, ItemCardChoice, ItemCardView, ItemLookup, ItemSource, ItemTooltip,
+    ItemTooltipReading, ItemUse, Listed, OurWindow, PanelSizes, QuestReward, PanelState, Rect, Request, ScreenPoint, ScreenRect, Settings, ShopPrice,
     Recognition, Size, SourceError, TitleRegion, meowdb,
 };
 use compass_core::osms_items::ItemFiles;
@@ -69,7 +67,7 @@ fn started_with(source: FakeSource) -> Compass {
     compass
 }
 
-/// The made-up item data in, and BasilMarket can't be reached.
+/// The made-up item data in.
 fn started() -> Compass {
     started_with(FakeSource::osms_offline().with_items(shop()))
 }
@@ -780,208 +778,6 @@ fn a_card_from_item_files_saved_under_7_days_ago_says_nothing_of_it() {
     assert_eq!(card.saved_copy_from_unix_ms, None);
 }
 
-const HOUR_MS: u64 = 60 * 60 * 1000;
-
-/// BasilMarket's made-up prices for the made-up items.
-fn market() -> Vec<Price> {
-    vec![
-        sold(4_010_000, "Bronze Ore", 520, 12),
-        sold_in_shops(2_000_000, "Red Potion", 40, 3),
-        npc_priced(1_002_067, "Blue Moon", 11_000),
-        unpriced(4_010_001, "Steel Ore"),
-    ]
-}
-
-fn page(name: &str) -> Option<String> {
-    Some(format!("https://basilmarket.net/price/{}", common::items::slug(name)))
-}
-
-fn sold_at(mesos: u64, sales: u32, name: &str) -> Market {
-    Market::Sold { mesos, sales, page: page(name).unwrap(), from_unix_ms: None }
-}
-
-/// The made-up item data and BasilMarket's made-up prices in, with the wall clock at
-/// [`SAVED_AT`].
-fn with_market(source: FakeSource) -> Compass {
-    started_at(source.with_items(namesakes().with(etc(4_010_001, "Steel Ore").sells_for(500))), SAVED_AT)
-}
-
-fn market_of(compass: &mut Compass, name: &str, at_ms: u64) -> Option<Market> {
-    card(&press_over(compass, name, at_ms)).map(|card| card.market)
-}
-
-#[test]
-fn the_card_says_what_players_paid_for_the_item_and_from_how_many_sales() {
-    let mut compass = with_market(FakeSource::osms_offline().with_prices(&market()));
-
-    assert_eq!(market_of(&mut compass, "Bronze Ore", 1_000), Some(sold_at(520, 12, "Bronze Ore")));
-}
-
-#[test]
-fn a_price_from_sales_seen_in_free_market_shops_counts_too() {
-    let mut compass = with_market(FakeSource::osms_offline().with_prices(&market()));
-
-    assert_eq!(market_of(&mut compass, "Red Potion", 1_000), Some(sold_at(40, 3, "Red Potion")));
-}
-
-#[test]
-fn without_sales_the_card_says_none_were_seen_never_the_shop_price_basilmarket_shows_instead() {
-    let mut compass = with_market(FakeSource::osms_offline().with_prices(&market()));
-
-    let unpriced = market_of(&mut compass, "Steel Ore", 1_000);
-    assert_eq!(unpriced, Some(Market::NoSales { page: page("Steel Ore"), from_unix_ms: None }));
-
-    press_over(&mut compass, "Blue Moon", 2_000);
-    let npc_priced = compass.pick_card_item("01002067").clone();
-    assert_eq!(card(&npc_priced).map(|card| card.market), Some(Market::NoSales { page: page("Blue Moon"), from_unix_ms: None }));
-}
-
-#[test]
-fn an_item_basilmarket_doesnt_list_has_no_sales_and_no_page() {
-    let mut compass = with_market(FakeSource::osms_offline().with_prices(&market()));
-
-    assert_eq!(market_of(&mut compass, "Hero's Gladius", 1_000), None, "a choice");
-    let state = compass.pick_card_item("01302010").clone();
-
-    assert_eq!(card(&state).map(|card| card.market), Some(Market::NoSales { page: None, from_unix_ms: None }));
-}
-
-#[test]
-fn prices_are_matched_by_the_games_item_id_so_one_never_lands_on_an_item_sharing_the_name() {
-    // BasilMarket lists one Blue Moon, under the Overall's ID.
-    let prices = vec![sold(1_002_067, "Blue Moon", 30_000, 4)];
-    let mut compass = with_market(FakeSource::osms_offline().with_prices(&prices));
-    press_over(&mut compass, "Blue Moon", 1_000);
-
-    let earring = compass.pick_card_item("01032001").clone();
-    assert_eq!(card(&earring).map(|card| card.market), Some(Market::NoSales { page: None, from_unix_ms: None }));
-
-    press_over(&mut compass, "Blue Moon", 2_000);
-    let overall = compass.pick_card_item("01002067").clone();
-    assert_eq!(card(&overall).map(|card| card.market), Some(sold_at(30_000, 4, "Blue Moon")));
-}
-
-#[test]
-fn items_sharing_a_name_and_a_card_take_the_price_basilmarket_lists_under_either() {
-    let prices = vec![sold(2_000_007, "Red Potion", 45, 2)];
-    let mut compass = with_market(FakeSource::osms_offline().with_prices(&prices));
-
-    assert_eq!(market_of(&mut compass, "Red Potion", 1_000), Some(sold_at(45, 2, "Red Potion")));
-}
-
-#[test]
-fn basilmarket_is_asked_only_once_a_card_opens() {
-    let source = FakeSource::osms_offline().with_prices(&market());
-    let asked = source.price_requests.clone();
-    let mut compass = with_market(source);
-    compass.tick(10 * HOUR_MS);
-    assert_eq!(asked.load(Ordering::SeqCst), 0);
-
-    press_over(&mut compass, "Bronze Ore", 10 * HOUR_MS + 1_000);
-
-    assert_eq!(asked.load(Ordering::SeqCst), 1);
-}
-
-#[test]
-fn the_price_list_is_asked_for_again_only_once_it_is_over_3_hours_old() {
-    let source = FakeSource::osms_offline().with_prices(&market());
-    let asked = source.price_requests.clone();
-    let mut compass = with_market(source);
-    press_over(&mut compass, "Bronze Ore", 1_000);
-
-    compass.on_wall_clock(SAVED_AT + 3 * HOUR_MS - 60_000);
-    press_over(&mut compass, "Red Potion", 2_000);
-    assert_eq!(asked.load(Ordering::SeqCst), 1);
-
-    compass.on_wall_clock(SAVED_AT + 3 * HOUR_MS + 60_000);
-    press_over(&mut compass, "Red Potion", 3_000);
-    assert_eq!(asked.load(Ordering::SeqCst), 2);
-}
-
-#[test]
-fn while_the_price_list_is_fetched_with_none_saved_the_card_says_the_price_is_loading() {
-    let answers = vec![Poll::Pending, Poll::Ready(Ok(price_list(&market())))];
-    let mut compass = with_market(FakeSource::osms_offline().answering_prices(answers));
-
-    assert_eq!(market_of(&mut compass, "Bronze Ore", 1_000), Some(Market::Loading));
-
-    let state = compass.tick(1_100).clone();
-    assert_eq!(card(&state).map(|card| card.market), Some(sold_at(520, 12, "Bronze Ore")));
-}
-
-#[test]
-fn a_price_list_saved_under_3_hours_ago_is_used_without_asking() {
-    let source = FakeSource::osms_offline().with_saved_prices(&market(), SAVED_AT - 2 * HOUR_MS);
-    let asked = source.price_requests.clone();
-    let mut compass = with_market(source);
-
-    assert_eq!(market_of(&mut compass, "Bronze Ore", 1_000), Some(sold_at(520, 12, "Bronze Ore")));
-    assert_eq!(asked.load(Ordering::SeqCst), 0);
-}
-
-#[test]
-fn an_older_saved_price_list_shows_while_a_fresh_one_is_fetched() {
-    let fresh = vec![sold(4_010_000, "Bronze Ore", 600, 13)];
-    let answers = vec![Poll::Pending, Poll::Ready(Ok(price_list(&fresh)))];
-    let source = FakeSource::osms_offline().with_saved_prices(&market(), SAVED_AT - 5 * HOUR_MS).answering_prices(answers);
-    let mut compass = with_market(source);
-
-    assert_eq!(market_of(&mut compass, "Bronze Ore", 1_000), Some(sold_at(520, 12, "Bronze Ore")));
-
-    let state = compass.tick(1_100).clone();
-    assert_eq!(card(&state).map(|card| card.market), Some(sold_at(600, 13, "Bronze Ore")));
-}
-
-#[test]
-fn prices_over_a_day_old_that_cant_be_refreshed_say_when_they_are_from() {
-    let saved_at = SAVED_AT - 2 * DAY_MS;
-    let mut compass = with_market(FakeSource::osms_offline().with_saved_prices(&market(), saved_at));
-
-    let market = market_of(&mut compass, "Bronze Ore", 1_000);
-
-    assert_eq!(
-        market,
-        Some(Market::Sold { mesos: 520, sales: 12, page: page("Bronze Ore").unwrap(), from_unix_ms: Some(saved_at) })
-    );
-}
-
-#[test]
-fn with_basilmarket_unreachable_and_no_price_list_saved_the_market_price_is_unavailable() {
-    let mut compass = with_market(FakeSource::osms_offline());
-
-    assert_eq!(market_of(&mut compass, "Bronze Ore", 1_000), Some(Market::Unavailable));
-}
-
-#[test]
-fn a_price_list_that_doesnt_read_keeps_the_one_held() {
-    let answers = vec![Poll::Ready(Ok(price_list(&market()))), Poll::Ready(Ok("<html>".into()))];
-    let mut compass = with_market(FakeSource::osms_offline().answering_prices(answers));
-    press_over(&mut compass, "Bronze Ore", 1_000);
-    compass.on_wall_clock(SAVED_AT + 4 * HOUR_MS);
-
-    assert_eq!(market_of(&mut compass, "Bronze Ore", 2_000), Some(sold_at(520, 12, "Bronze Ore")));
-}
-
-#[test]
-fn after_basilmarket_couldnt_be_reached_it_is_asked_again_no_sooner_than_a_minute_on() {
-    let source = FakeSource::osms_offline();
-    let asked = source.price_requests.clone();
-    let mut compass = with_market(source);
-    press_over(&mut compass, "Bronze Ore", 1_000);
-
-    press_over(&mut compass, "Bronze Ore", 30_000);
-    assert_eq!(asked.load(Ordering::SeqCst), 1);
-    press_over(&mut compass, "Bronze Ore", 61_000);
-    assert_eq!(asked.load(Ordering::SeqCst), 2);
-}
-
-#[test]
-fn the_card_credits_osms_for_its_data_and_basilmarket_for_its_prices() {
-    let card = card_of(shop(), "Bronze Ore");
-
-    assert_eq!(card.credit, "Data: OSMS Data Explorer · Prices: BasilMarket.net");
-}
-
 /// MeowDB's search, made up in its shape: Bronze Ore, and the two Blue Moons.
 fn made_up_search(query: &str) -> Result<Vec<ItemHit>, SourceError> {
     let answer = match query {
@@ -1039,27 +835,6 @@ fn of_meowdb_items_sharing_the_name_none_of_the_cards_kind_are_listed_in_the_ale
 }
 
 #[test]
-fn clicking_the_market_line_opens_the_items_basilmarket_page() {
-    let mut compass = with_market(FakeSource::osms_offline().with_prices(&market()));
-    press_over(&mut compass, "Bronze Ore", 1_000);
-
-    assert_eq!(
-        compass.open_card_market_page(),
-        Some(Request::OpenInBrowser { url: page("Bronze Ore").unwrap() })
-    );
-}
-
-#[test]
-fn without_a_page_on_basilmarket_or_a_card_the_market_line_opens_nothing() {
-    let mut compass = with_market(FakeSource::osms_offline().with_prices(&market()));
-    assert_eq!(compass.open_card_market_page(), None, "no card");
-
-    press_over(&mut compass, "Hero's Gladius", 1_000);
-    compass.pick_card_item("01302010");
-    assert_eq!(compass.open_card_market_page(), None, "not on BasilMarket");
-}
-
-#[test]
 fn items_sharing_a_name_kind_and_shop_price_look_alike_so_show_one_card_with_the_quests_and_recipes_of_each() {
     let items = namesakes()
         .with_quest(quest(1_001, "Potions for the Road").gives(2_000_000, "Red Potion", 10))
@@ -1069,4 +844,71 @@ fn items_sharing_a_name_kind_and_shop_price_look_alike_so_show_one_card_with_the
 
     assert_eq!(card.comes_from.shown, [ItemSource::Quest { name: "Potions for the Road".into(), reward: QuestReward::Always }]);
     assert_eq!(card.used_for.shown, [ItemUse::Quest { name: "A Potion for Olaf".into(), count: 1 }]);
+}
+
+#[test]
+fn the_cards_market_line_opens_mesowatch_for_the_player_to_look_the_item_up() {
+    let mut compass = started();
+    assert_eq!(compass.open_card_mesowatch(), None, "no card");
+
+    press_over(&mut compass, "Bronze Ore", 1_000);
+
+    assert_eq!(compass.open_card_mesowatch(), Some(Request::OpenInBrowser { url: "https://meso.watch/".into() }));
+}
+
+#[test]
+fn the_card_credits_osms_for_its_data_and_the_sites_it_links_to() {
+    let card = card_of(shop(), "Bronze Ore");
+
+    assert_eq!(card.credit, "Data: OSMS Data Explorer · Pages: NiaMeowDB, MesoWatch");
+}
+
+fn overlaps(a: ScreenRect, b: ScreenRect) -> bool {
+    a.x < b.x + b.width as i32 && b.x < a.x + a.width as i32 && a.y < b.y + b.height as i32 && b.y < a.y + a.height as i32
+}
+
+#[test]
+fn a_card_dragged_by_its_bar_stays_where_the_player_left_it() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+
+    compass.act(Action::ItemCardMoved { x: 1500, y: 300 });
+    let state = compass.tick(60_000).clone();
+
+    assert_eq!(state.item_card_placement, Some(ScreenRect { x: 1500, y: 300, width: 300, height: 160 }));
+}
+
+#[test]
+fn a_card_dragged_over_the_minimap_title_moves_off_it() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+
+    let state = compass.act(Action::ItemCardMoved { x: 1000, y: 140 }).clone();
+
+    let placed = state.item_card_placement.expect("the card shows");
+    assert!(!overlaps(placed, TITLE_REGION), "{placed:?}");
+}
+
+#[test]
+fn a_dragged_card_moves_with_the_game_window() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+    compass.act(Action::ItemCardMoved { x: 1500, y: 300 });
+
+    let moved = ScreenRect { x: GAME.x + 100, ..GAME };
+    let frame = ScreenRect { x: moved.x - 1, y: moved.y - 31, width: moved.width + 2, height: moved.height + 32 };
+    let state = compass.on_game_window(Some(GameWindow { client: moved, frame, screens: vec![SCREEN] })).clone();
+
+    assert_eq!(state.item_card_placement.map(|at| (at.x, at.y)), Some((1600, 300)));
+}
+
+#[test]
+fn the_next_card_opens_at_the_pointer_again() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+    compass.act(Action::ItemCardMoved { x: 1500, y: 300 });
+
+    let state = press_over(&mut compass, "Red Potion", 2_000);
+
+    assert_eq!(state.item_card_placement, Some(ScreenRect { x: 1008, y: 588, width: 300, height: 160 }));
 }

@@ -5,7 +5,6 @@
 //! is a [`PanelState`] holding everything the overlay renders. No OS or UI dependencies
 //! live here.
 
-pub mod basilmarket;
 mod bests_window;
 pub mod bug_report;
 mod exp_bar;
@@ -47,7 +46,7 @@ pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use grind_tracker::{ClientOffset, GrindTrackerWindow};
 pub use hotkey_settings::{KeyPress, RebindProblem, SettingsNotice, SettingsView};
 pub use item_card::{
-    ITEM_CARD_CREDIT, ItemCard, ItemCardChoice, ItemCardView, ItemSource, ItemUse, Listed, Market, QuestReward,
+    ITEM_CARD_CREDIT, ItemCard, ItemCardChoice, ItemCardView, ItemSource, ItemUse, Listed, MESOWATCH_URL, QuestReward,
     ShopPrice, ShownItemCard,
 };
 pub use item_lookup::{ItemChoice, ItemHit, ItemLookup, ItemLookupLine, OurWindow};
@@ -81,7 +80,7 @@ use bug_report::{Event, MapFacts, Outcome, Press, RecordedSource, Recorder, Regi
 use grind_tracker::GrindTracker;
 use hotkey_settings::HotkeySettings;
 use item_card::{ItemCards, Pressed};
-use item_data::{ItemFilesLoader, PriceList};
+use item_data::ItemFilesLoader;
 use item_lookup::ItemLookups;
 use search::{MobSearch, Searched};
 use shown_map::ShownMap;
@@ -425,8 +424,6 @@ pub struct Compass {
     item_lookup_size: Size,
     /// OSMS's item files, for the Item Card.
     item_files: ItemFilesLoader,
-    /// BasilMarket's price list, for the Item Card's market line.
-    prices: PriceList,
     /// The Item Card showing.
     item_cards: ItemCards,
     /// A capture for an Item Card was asked for and its reading hasn't come back.
@@ -480,7 +477,6 @@ impl Compass {
             item_lookups: ItemLookups::default(),
             item_lookup_size: Size { width: 0, height: 0 },
             item_files: ItemFilesLoader::default(),
-            prices: PriceList::default(),
             item_cards: ItemCards::default(),
             card_capturing: false,
             item_card_size: Size { width: 0, height: 0 },
@@ -812,6 +808,11 @@ impl Compass {
                 self.bests_window.open = !self.bests_window.open && self.session.bests().any();
             }
             Action::ClosePersonalBests => self.bests_window.open = false,
+            Action::ItemCardMoved { x, y } => {
+                if let Some(game) = &self.panel.game {
+                    self.item_cards.moved_to(x, y, game);
+                }
+            }
             Action::PersonalBestsMoved { x, y } => {
                 if let Some(game) = &self.panel.game {
                     self.bests_window.moved_to(x, y, game, &self.panel.avoid);
@@ -1058,10 +1059,7 @@ impl Compass {
         if std::mem::take(&mut self.card_capturing) {
             let at_ms = reading.as_ref().map_or(0, |r| r.at_ms);
             match self.item_cards.read(reading, &ours, self.item_files.items()) {
-                Pressed::Shown => {
-                    self.item_lookups.clear();
-                    self.prices.card_opened(&mut self.source, at_ms, self.wall_clock);
-                }
+                Pressed::Shown => self.item_lookups.clear(),
                 Pressed::Closed => {}
                 Pressed::Alert(outcome) => self.item_lookups.alert(outcome, at_ms),
             }
@@ -1095,16 +1093,11 @@ impl Compass {
         self.sync_panel()
     }
 
-    /// The player clicked the Item Card's market line: open the item's BasilMarket page.
-    /// `None` without a card, or for an item BasilMarket doesn't list.
-    pub fn open_card_market_page(&self) -> Option<Request> {
-        let Some(ShownItemCard { view: ItemCardView::Card(card), .. }) = &self.state.item_card else { return None };
-        match &card.market {
-            Market::Sold { page, .. } | Market::NoSales { page: Some(page), .. } => {
-                Some(Request::OpenInBrowser { url: page.clone() })
-            }
-            _ => None,
-        }
+    /// The player clicked the Item Card's market line: open MesoWatch, where they look the
+    /// item up (it has no page per item). `None` while no card shows.
+    pub fn open_card_mesowatch(&self) -> Option<Request> {
+        let Some(ShownItemCard { view: ItemCardView::Card(_), .. }) = &self.state.item_card else { return None };
+        Some(Request::OpenInBrowser { url: MESOWATCH_URL.to_string() })
     }
 
     /// The player clicked the Item Card's ×: close it.
@@ -1243,7 +1236,6 @@ impl Compass {
         }
         self.poll_pictures(at_ms);
         self.item_files.load(&mut self.source, at_ms, self.wall_clock);
-        self.prices.poll(&mut self.source, at_ms, self.wall_clock);
         // An Item Lookup's search, which the player waits on.
         let open = self.item_lookups.poll(&mut self.source, &mut self.meowdb_pace, at_ms);
         self.requests.extend(open.map(|url| Request::OpenInBrowser { url }));
@@ -1443,19 +1435,13 @@ impl Compass {
     /// cover.
     fn sync_item_card(&mut self) {
         let pictures = &self.pictures;
-        let (prices, now) = (&self.prices, self.wall_clock);
-        let saved_copy_from = self.item_files.saved_copy_from(now);
-        self.state.item_card = self.item_cards.view(
-            self.item_files.items().ok(),
-            saved_copy_from,
-            |ids| prices.market(ids, now),
-            |path| pictures.url(path).map(String::from),
-        );
+        let saved_copy_from = self.item_files.saved_copy_from(self.wall_clock);
+        self.state.item_card = self.item_cards.view(self.item_files.items().ok(), saved_copy_from, |path| {
+            pictures.url(path).map(String::from)
+        });
         let shows = self.state.item_card.is_some() && self.panel.layer() != Layer::Hidden && !self.card_capturing;
-        self.state.item_card_placement = match (self.item_cards.pointer(), &self.panel.game) {
-            (Some(pointer), Some(game)) if shows => {
-                Some(item_card::card_placement(game, pointer, self.item_card_size, &self.panel.avoid))
-            }
+        self.state.item_card_placement = match &self.panel.game {
+            Some(game) if shows => self.item_cards.placement(game, self.item_card_size, &self.panel.avoid),
             _ => None,
         };
     }

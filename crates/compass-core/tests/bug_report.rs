@@ -5,7 +5,7 @@
 
 mod common;
 
-use common::items::{ItemWorld, Price, equip, etc, item_world, price_list, sold};
+use common::items::{ItemWorld, equip, etc, item_world};
 use common::osms;
 use common::{FakeSource, frame};
 use compass_core::bug_report::{self, Answer, Event, Note, Recording, ReplayData, MAX_REPORT_BYTES};
@@ -436,10 +436,6 @@ fn items() -> ItemWorld {
     ])
 }
 
-fn prices() -> Vec<Price> {
-    vec![sold(4_010_000, "Bronze Ore", 520, 12)]
-}
-
 /// The Item Tooltip by the pointer read as `name`, after the player pressed Ctrl+Shift+I.
 fn item_card(shell: &mut Shell, name: &str) {
     assert!(shell.compass.on_hotkey("ctrl+shift+i").is_some());
@@ -450,7 +446,7 @@ fn item_card(shell: &mut Shell, name: &str) {
 
 /// A run with Item Cards: a card, a choice and its pick, the card's MeowDB page and its ×.
 fn run_with_item_cards() -> Shell {
-    let mut shell = Shell::new(FakeSource::osms().with_items(items()).with_prices(&prices()));
+    let mut shell = Shell::new(FakeSource::osms().with_items(items()));
     shell.compass.set_item_card_size(Size { width: 280, height: 160 });
     shell.play(10 * S, CONSTRUCTION_SITE, grind);
     item_card(&mut shell, "Bronze Ore");
@@ -465,40 +461,30 @@ fn run_with_item_cards() -> Shell {
 }
 
 #[test]
-fn item_cards_replay_through_the_same_states_with_the_runs_item_files_and_price_list() {
+fn item_cards_replay_through_the_same_states_with_the_runs_item_files() {
     let (_, recording) = run_with_item_cards().report();
 
-    let replay = bug_report::replay_with(
-        &recording,
-        ReplayData {
-            osms: Some(osms::game().files()),
-            items: Some(items().files()),
-            prices: Some(price_list(&prices())),
-        },
-    );
+    let with = ReplayData { osms: Some(osms::game().files()), items: Some(items().files()) };
+    let replay = bug_report::replay_with(&recording, with);
 
     assert_eq!(replay.divergence, None);
     assert_eq!(replay.lines, recording.lines.len());
 }
 
 #[test]
-fn the_report_holds_only_fingerprints_of_the_item_files_and_the_price_list() {
+fn the_report_holds_only_the_item_files_fingerprint() {
     let (report, recording) = run_with_item_cards().report();
 
-    let answers: Vec<&Answer> = recording.lines.iter().flat_map(|line| &line.answers).collect();
-    let fingerprints = |items: bool| -> Vec<&str> {
-        answers
-            .iter()
-            .filter_map(|answer| match (answer, items) {
-                (Answer::Items { answer: Ok(fingerprint) }, true) | (Answer::Prices { answer: Ok(fingerprint) }, false) => {
-                    Some(fingerprint.as_str())
-                }
-                _ => None,
-            })
-            .collect()
-    };
-    assert_eq!(fingerprints(true), [bug_report::item_fingerprint(&items().files())]);
-    assert_eq!(fingerprints(false), [bug_report::text_fingerprint(&price_list(&prices()))]);
+    let fingerprints: Vec<&str> = recording
+        .lines
+        .iter()
+        .flat_map(|line| &line.answers)
+        .filter_map(|answer| match answer {
+            Answer::Items { answer: Ok(fingerprint) } => Some(fingerprint.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(fingerprints, [bug_report::item_fingerprint(&items().files())]);
     let names = zip_names(&report.zip);
-    assert!(names.iter().all(|name| !name.ends_with("items.json") && !name.contains("price")), "{names:?}");
+    assert!(names.iter().all(|name| !name.ends_with("items.json") && !name.ends_with("quests.json")), "{names:?}");
 }
