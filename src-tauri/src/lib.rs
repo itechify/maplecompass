@@ -7,6 +7,7 @@
 //! window: all four only while the game or one of our windows is in front. All logic
 //! lives in the core.
 
+pub mod basilmarket;
 pub mod capture;
 pub mod gamewin;
 mod bests;
@@ -16,10 +17,12 @@ mod grind_tracker;
 mod hotkey_settings;
 mod hotkeys;
 mod http;
+mod item_card;
 mod item_lookup;
 mod meowdb;
 mod old_caches;
 pub mod osms;
+pub mod osms_items;
 mod pictures;
 mod search;
 mod settings;
@@ -37,6 +40,7 @@ use compass_core::{
 use source::WebSource;
 use bests_window::BestsWindow;
 use grind_tracker::GrindTrackerWindow;
+use item_card::ItemCardWindow;
 use item_lookup::ItemLookupWindow;
 use setup::{Bridge, SetupWindows};
 use sizemove::{Gesture, SizeMove};
@@ -120,6 +124,16 @@ pub(crate) enum Command {
     PersonalBestsSizeMove(SizeMove),
     /// The Item Lookup alert is this tall (CSS px).
     ItemLookupHeight(f64),
+    /// The Item Card is this tall (CSS px).
+    ItemCardHeight(f64),
+    /// The player clicked the Item Card's ×.
+    CloseItemCard,
+    /// The player picked the item with this game ID from those the Item Card lists.
+    PickCardItem(String),
+    /// The player clicked the Item Card's name: open the item's MeowDB page.
+    OpenCardMeowdbPage,
+    /// The player clicked the Item Card's market line: open the item's BasilMarket page.
+    OpenCardMarketPage,
     /// The player chose Quit in the tray icon's menu: save the settings and exit.
     Quit,
     /// The player started MapleCompass again; that one exited, and this one shows itself.
@@ -242,6 +256,7 @@ pub fn run() {
             // The page earlier versions wrote for the browser, which this window replaces.
             let _ = std::fs::remove_file(app.path().app_config_dir()?.join("personal-bests.html"));
             let item_lookup = ItemLookupWindow::new(app.handle(), commands.clone());
+            let item_card = ItemCardWindow::new(app.handle(), commands.clone());
             let overlay_window = OverlayWindow::new(overlay.clone(), commands.clone());
             overlay.on_window_event(move |event| match event {
                 // Only moves during a drag the overlay started are the player's.
@@ -274,6 +289,7 @@ pub fn run() {
                 grind_tracker,
                 personal_bests,
                 item_lookup,
+                item_card,
                 hotkeys,
             };
             std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
@@ -323,19 +339,26 @@ pub fn run() {
             bests_window::personal_bests_open_map,
             item_lookup::item_lookup_height,
             item_lookup::item_lookup_view,
+            item_card::item_card_height,
+            item_card::item_card_view,
+            item_card::item_card_close,
+            item_card::item_card_pick,
+            item_card::item_card_open_meowdb,
+            item_card::item_card_open_market,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
 /// Our windows: the overlay (with mob search in it), setup (with its region window), the
-/// Grind Tracker's, the Personal Bests window and the Item Lookup alert's.
+/// Grind Tracker's, the Personal Bests window, the Item Lookup alert's and the Item Card's.
 struct Windows {
     overlay: OverlayWindow,
     setup: SetupWindows,
     grind_tracker: GrindTrackerWindow,
     personal_bests: BestsWindow,
     item_lookup: ItemLookupWindow,
+    item_card: ItemCardWindow,
     /// Not a window, but registered and released as the foreground changes.
     hotkeys: hotkeys::GlobalHotkeys,
 }
@@ -484,6 +507,7 @@ fn compass_loop(
         mut grind_tracker,
         mut personal_bests,
         mut item_lookup,
+        mut item_card,
         mut hotkeys,
     } = windows;
     let mut saved = compass.settings();
@@ -503,11 +527,11 @@ fn compass_loop(
             }
             Ok(Command::Hotkey(pressed)) => {
                 let request = compass.on_hotkey(&pressed);
-                carry_out(&app, &window.overlay, &reader, &mut compass, request);
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
             }
             Ok(Command::Press(control)) => {
                 let request = compass.press(control);
-                carry_out(&app, &window.overlay, &reader, &mut compass, request);
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
             }
             Ok(Command::SearchQuery(query)) => {
                 compass.search_query(&query);
@@ -520,15 +544,29 @@ fn compass_loop(
             }
             Ok(Command::OpenMobPage(id)) => {
                 let request = compass.open_mob_page(&id);
-                carry_out(&app, &window.overlay, &reader, &mut compass, request);
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
             }
             Ok(Command::OpenBestsMapPage(id)) => {
                 let request = compass.open_bests_map_page(&id);
-                carry_out(&app, &window.overlay, &reader, &mut compass, request);
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
             }
             Ok(Command::PickItem(id)) => {
                 let request = compass.pick_item(&id);
-                carry_out(&app, &window.overlay, &reader, &mut compass, request);
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
+            }
+            Ok(Command::CloseItemCard) => {
+                compass.close_item_card();
+            }
+            Ok(Command::PickCardItem(id)) => {
+                compass.pick_card_item(&id);
+            }
+            Ok(Command::OpenCardMeowdbPage) => {
+                // Its page comes from `take_request`, once MeowDB's search has answered.
+                compass.open_card_meowdb_page(reader.now_ms());
+            }
+            Ok(Command::OpenCardMarketPage) => {
+                let request = compass.open_card_market_page();
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
             }
             Ok(Command::PanelHeight(height)) => {
                 expanded_height = height.clamp(MIN_EXPANDED_HEIGHT, MAX_EXPANDED_HEIGHT);
@@ -583,6 +621,12 @@ fn compass_loop(
                 item_lookup.set_height(height);
                 if let Some(size) = item_lookup.size() {
                     compass.set_item_lookup_size(size);
+                }
+            }
+            Ok(Command::ItemCardHeight(height)) => {
+                item_card.set_height(height);
+                if let Some(size) = item_card.size() {
+                    compass.set_item_card_size(size);
                 }
             }
             Ok(Command::GrindTrackerSizeMove(what)) => {
@@ -640,6 +684,9 @@ fn compass_loop(
             if let Some(size) = item_lookup.size() {
                 compass.set_item_lookup_size(size);
             }
+            if let Some(size) = item_card.size() {
+                compass.set_item_card_size(size);
+            }
             // The hotkeys are live, and our windows show, only while the game or one of our
             // windows is in front.
             compass.on_foreground(gamewin::foreground(game.map(|g| g.handle)));
@@ -657,7 +704,7 @@ fn compass_loop(
         compass.tick(reader.now_ms());
         // An Item Lookup's page, once MeowDB has answered.
         while let Some(request) = compass.take_request() {
-            carry_out(&app, &window.overlay, &reader, &mut compass, Some(request));
+            carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, Some(request));
         }
         if Instant::now() >= next_capture {
             next_capture = Instant::now() + TICK;
@@ -691,6 +738,7 @@ fn compass_loop(
         grind_tracker.sync(state);
         personal_bests.sync(state);
         item_lookup.sync(state);
+        item_card.sync(state);
 
         // Save once the settings settle, not on every move of a drag.
         let current = compass.settings();
@@ -736,6 +784,7 @@ fn set_panel_sizes(compass: &mut Compass, overlay: &WebviewWindow, expanded_heig
 fn carry_out(
     app: &AppHandle,
     overlay: &WebviewWindow,
+    item_card: &mut ItemCardWindow,
     reader: &ReaderThread,
     compass: &mut Compass,
     request: Option<Request>,
@@ -744,6 +793,9 @@ fn carry_out(
         Some(Request::OpenInBrowser { url }) => open_in_browser(app, &url),
         Some(Request::RaiseOverlay) => search::take_focus(overlay),
         Some(Request::CaptureItemTooltip) => {
+            // The Item Card shows in our captures: it would be read in place of the Item
+            // Tooltip it covers.
+            item_card.out_of_the_capture();
             if let Err(e) = reader.read_item_tooltip() {
                 eprintln!("Item Lookup: {e}");
                 compass.on_item_tooltip_reading(None);

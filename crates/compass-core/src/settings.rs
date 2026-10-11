@@ -9,9 +9,10 @@ use serde::{Deserialize, Serialize};
 
 /// The settings version this core writes. Version 1 had other Ctrl+Shift letters, and
 /// versions 2 and 3 had Win+Alt hotkeys (3 was written by the EXP tracking branch);
-/// [`crate::Compass::restore`] replaces all of them with the defaults. Files without an
-/// EXP Bar Region (all before version 3) start with EXP tracking off.
-pub(crate) const VERSION: u32 = 4;
+/// [`crate::Compass::restore`] replaces all of them with the defaults. Version 4's Item
+/// Lookup key is the Item Card's from version 5 on ([`Hotkeys::give_item_lookup_to_card`]).
+/// Files without an EXP Bar Region (all before version 3) start with EXP tracking off.
+pub(crate) const VERSION: u32 = 5;
 
 /// The player's settings. Missing fields (an older or empty file) take their defaults.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -106,12 +107,33 @@ pub struct Hotkeys {
     pub search: String,
     /// Open the Grind Tracker's window, or close it.
     pub grind_tracker: String,
+    /// The Item Card: show what the game's Item Tooltip by the pointer doesn't say about
+    /// its item. Files from before it get the default.
+    pub item_card: String,
     /// Item Lookup: open the MeowDB page of the item whose Item Tooltip shows by the
     /// pointer. Files from before it get the default.
     pub item_lookup: String,
 }
 
 impl Hotkeys {
+    /// A version 4 file's hotkeys, from before the Item Card: the key the player pressed
+    /// over an item (Item Lookup's) shows its card now, and Item Lookup, which opens the
+    /// MeowDB page, gets its default, Ctrl+Shift+O, unless another hotkey has it: then it
+    /// is off. A file without Item Lookup's key has the defaults for both.
+    pub(crate) fn give_item_lookup_to_card(&mut self) {
+        let lookup_default = Hotkeys::default().item_lookup;
+        if self.item_lookup != lookup_default {
+            self.item_card = std::mem::replace(&mut self.item_lookup, lookup_default);
+        }
+        let taken = Hotkey::ALL
+            .into_iter()
+            .filter(|&hotkey| hotkey != Hotkey::ItemLookup)
+            .any(|hotkey| crate::same_hotkey(self.get(hotkey), &self.item_lookup));
+        if taken {
+            self.item_lookup.clear();
+        }
+    }
+
     /// Every hotkey that is on, for the shell to register: one list, so none is forgotten.
     pub fn all(&self) -> Vec<&str> {
         Hotkey::ALL.into_iter().map(|hotkey| self.get(hotkey)).filter(|combination| !combination.is_empty()).collect()
@@ -126,6 +148,7 @@ impl Hotkeys {
             Hotkey::Setup => &self.setup,
             Hotkey::ChooseCandidate => &self.choose_candidate,
             Hotkey::GrindTracker => &self.grind_tracker,
+            Hotkey::ItemCard => &self.item_card,
             Hotkey::ItemLookup => &self.item_lookup,
             Hotkey::Search => &self.search,
         }
@@ -140,6 +163,7 @@ impl Hotkeys {
             Hotkey::Setup => &mut self.setup,
             Hotkey::ChooseCandidate => &mut self.choose_candidate,
             Hotkey::GrindTracker => &mut self.grind_tracker,
+            Hotkey::ItemCard => &mut self.item_card,
             Hotkey::ItemLookup => &mut self.item_lookup,
             Hotkey::Search => &mut self.search,
         };
@@ -157,19 +181,21 @@ pub enum Hotkey {
     Setup,
     ChooseCandidate,
     GrindTracker,
+    ItemCard,
     ItemLookup,
     Search,
 }
 
 impl Hotkey {
     /// Every hotkey, in the order [`Hotkeys::all`] lists them.
-    pub const ALL: [Hotkey; 8] = [
+    pub const ALL: [Hotkey; 9] = [
         Hotkey::TogglePanel,
         Hotkey::CyclePlacement,
         Hotkey::OpenMeowdbPage,
         Hotkey::Setup,
         Hotkey::ChooseCandidate,
         Hotkey::GrindTracker,
+        Hotkey::ItemCard,
         Hotkey::ItemLookup,
         Hotkey::Search,
     ];
@@ -185,7 +211,8 @@ impl Default for Hotkeys {
             choose_candidate: "ctrl+shift+n".into(),
             search: "ctrl+shift+f".into(),
             grind_tracker: "ctrl+shift+g".into(),
-            item_lookup: "ctrl+shift+i".into(),
+            item_card: "ctrl+shift+i".into(),
+            item_lookup: "ctrl+shift+o".into(),
         }
     }
 }

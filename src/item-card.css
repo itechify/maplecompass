@@ -1,0 +1,284 @@
+/* The Item Card: what the game's Item Tooltip doesn't say about the hovered item, at the
+   pointer. The Mob Card's window on its own: opaque Body Solid under a 1px Window Edge
+   frame with a 4px radius and the window's inner ring, no drop shadow, so the game it
+   sits over doesn't show through. The shell makes the window 280 CSS px wide (WIDTH in
+   src-tauri/src/item_card.rs) and as tall as the card. Unlike the Mob Card it takes
+   clicks: its ×, its name, its market line, an item to pick. */
+.panel.item-card {
+  /* The panel's inline-size containment would size it as if empty. */
+  container-type: normal;
+  background: var(--body-solid);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+  padding: 6px 8px 7px 10px;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 15px;
+}
+
+/* The name (a link to its MeowDB page) or the question, then the light ×. */
+.item-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.item-card-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 19px;
+  font-weight: 700;
+}
+
+.item-card-title > * {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* A link on the card, as a mob's name in the panel: plain at rest, Portal Blue and
+   underlined under the pointer, Frame Navy while pressed. */
+.item-card-link {
+  all: unset;
+  cursor: pointer;
+}
+
+.item-card-link:hover {
+  color: var(--portal);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.item-card-link:active {
+  color: var(--frame);
+}
+
+.item-card-link:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* What a shop pays and what players pay: each label at the left of its value, the
+   values right-aligned as the Mob Card's figures. A value that says why there is none
+   is Panel Ink Steel, not bold. */
+.item-card-prices {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding-top: 5px;
+  border-top: 1px solid var(--rule);
+}
+
+.item-card-prices > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.item-card-prices dt {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.item-card-prices dd {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.item-card-prices dd.quiet {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+.item-card-prices .sales {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+/* Prices that couldn't be refreshed for over a day say when they are from. */
+.item-card-dated {
+  align-self: flex-end;
+  margin-top: -4px;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--ink-3);
+}
+
+/* Comes from and Used for: a 11px heading over rows, each a tag naming what it is (Quest,
+   Craft), the quest or recipe, and at the right how many, or how likely. */
+.item-card-list {
+  padding-top: 5px;
+  border-top: 1px solid var(--rule);
+}
+
+.item-card-list h2 {
+  margin: 0 0 2px;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.item-card-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.item-card-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.item-card .tag {
+  flex: none;
+  padding: 0 4px;
+  border: 1px solid var(--tag-edge);
+  border-radius: 3px;
+  background: var(--tag-bg);
+  color: var(--tag-ink);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 13px;
+}
+
+.item-card-list .what {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-card-list .aside {
+  flex: none;
+  font-weight: 700;
+}
+
+.item-card-list .more {
+  display: block;
+  margin-top: 1px;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--ink-3);
+}
+
+/* The note and the hint are read in full: the panel cuts its lines short, the card
+   doesn't. */
+.panel .item-card-note,
+.panel .item-card-hint {
+  white-space: normal;
+  overflow: visible;
+  text-wrap: pretty;
+}
+
+/* Item data from a Saved Copy: the panel's own note. */
+.item-card-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--ink-2);
+}
+
+.item-card-credit {
+  margin: 0;
+  padding-top: 4px;
+  border-top: 1px solid var(--rule);
+  font-size: 10px;
+  line-height: 13px;
+  color: var(--ink-3);
+}
+
+/* Several items share the name read: each with its picture as the game draws it and its
+   kind, for the player to pick the one their tooltip shows. */
+.item-card-ask {
+  font-weight: 700;
+}
+
+.item-card-hint {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.item-card-choices {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.item-card-choice {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 6px 2px 2px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.item-card-choice:hover {
+  background: var(--select);
+  box-shadow: inset 0 0 0 1px var(--select-edge);
+  color: var(--portal);
+}
+
+.item-card-choice:active {
+  color: var(--frame);
+}
+
+.item-card-choice:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 2px;
+}
+
+/* The same 32px box with or without its picture, so the list doesn't jump when one
+   arrives; the picture at its own size, drawn pixelated, as the game draws it. */
+.item-card-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 3px;
+  background: var(--inset-bg);
+  box-shadow: inset 0 0 0 1px var(--inset-edge);
+}
+
+.item-card-icon img {
+  max-width: 32px;
+  max-height: 32px;
+  image-rendering: pixelated;
+}

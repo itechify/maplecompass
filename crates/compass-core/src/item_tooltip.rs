@@ -34,6 +34,9 @@ pub struct ItemCapture {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ItemTooltipReading {
     pub tooltip: ItemTooltip,
+    /// Where the mouse pointer was on screen, as in [`ItemCapture::pointer`]: where the
+    /// Item Card goes.
+    pub pointer: ScreenPoint,
     /// When the frame was captured, as in [`Frame::at_ms`].
     pub at_ms: u64,
 }
@@ -62,7 +65,7 @@ impl ItemTooltipReader {
 
     pub fn read(&self, capture: &ItemCapture) -> ItemTooltipReading {
         let tooltip = frame_to_rgb(&capture.frame).map_or(ItemTooltip::None, |img| self.read_rgb(&img, capture));
-        ItemTooltipReading { tooltip, at_ms: capture.frame.at_ms }
+        ItemTooltipReading { tooltip, pointer: capture.pointer, at_ms: capture.frame.at_ms }
     }
 
     fn read_rgb(&self, img: &RgbImage, capture: &ItemCapture) -> ItemTooltip {

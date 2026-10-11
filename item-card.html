@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/item-card.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Item Card</title>
+    <script type="module" src="/src/item-card.ts" defer></script>
+  </head>
+  <body class="hidden">
+    <main class="panel item-card" id="card" aria-live="polite">
+      <header class="item-card-head">
+        <div class="item-card-title" id="title"></div>
+        <button type="button" class="icon-button light" id="close" aria-label="Close the item card" title="Close">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+        </button>
+      </header>
+      <div class="item-card-body" id="body"></div>
+    </main>
+  </body>
+</html>

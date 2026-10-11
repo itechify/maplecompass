@@ -10,7 +10,7 @@
 - `cargo run -p maplecompass --example probe [reads] [out.png]`: read-only smoke test against a running game, with no UI.
 - `cargo run -p maplecompass --example probe record <out-dir> <name>=<x>,<y>,<w>,<h>@<hz> ... [--seconds <n>]`: record timestamped crops of client-area regions from a running game, for samples.
 - `cargo run -p maplecompass --example probe item samples/item-tooltip "<item name>" [--desc <tag>] [--delay <s>]`: after a countdown, save the game's client area named with the item and the pointer's position, for samples.
-- `cargo run -p maplecompass --example probe osms`: fetch OSMS Data Explorer's live file set and read it in full with the core's reader, reporting its counts or what didn't read. No game is needed.
+- `cargo run -p maplecompass --example probe osms`: fetch OSMS Data Explorer's live file set and the Item Card's item files and read them in full with the core's readers, reporting their counts or what didn't read. No game is needed.
 
 ## Releasing
 
@@ -22,7 +22,7 @@
 - Tests drive the core's public inputs and assert on `PanelState` only, never on internals. Every file in `samples/minimap` must be recognised against the map names fixture, `crates/compass-core/tests/fixtures/osms-map-names.json`; there, `--window` samples go through `default_title_region` (the probe's capture). The app captures the Title Region the player marks at setup, which `tests/setup.rs` covers with marks on the `--window` samples.
 - Every file in `samples/exp-bar` must read as its name (or its recording's `readings.json`) says, or as unreadable, never as a wrong number. A frame that is ever read wrong becomes a sample there.
 - Every file in `samples/item-tooltip` must read as the item its name says (or as no Item Tooltip, for `no-tooltip`), or as unreadable, never as another item. A frame that is ever read wrong becomes a sample there.
-- Tests run on made-up worlds in OSMS's shape (`crates/compass-core/tests/common/osms.rs`); the map names fixture (IDs, streets, map names and regions) is the only data committed from OSMS. `probe osms` must read OSMS's live set in full. A shape OSMS ever serves that reads wrong becomes a made-up fixture with that shape. Item Lookup's tests write their own made-up answers in MeowDB's search shape (`tests/item_lookup.rs`); nothing from MeowDB is committed.
+- Tests run on made-up worlds in OSMS's shape (`crates/compass-core/tests/common/osms.rs`); the map names fixture (IDs, streets, map names and regions) is the only data committed from OSMS. `probe osms` must read OSMS's live set and item files in full. A shape OSMS ever serves that reads wrong becomes a made-up fixture with that shape. Item Lookup's tests write their own made-up answers in MeowDB's search shape (`tests/item_lookup.rs`); nothing from MeowDB is committed. The Item Card's tests use made-up item files in OSMS's shape and made-up price lists in BasilMarket's (`tests/common/items.rs`); nothing from BasilMarket is committed.
 - The site (`site/`) is the player manual: the README keeps only the developer's side. A change a player notices updates the site in the same PR, the setup warning's wording included, and lists each screenshot it alters under Retake in `site/screenshots/README.md`.
 - `src-tauri` only adapts window lookup, capture and rendering. It must follow ADR 0001: no `PrintWindow`, no messages, input, hooks or process access to the game.
 

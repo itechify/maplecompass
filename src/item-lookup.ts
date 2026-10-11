@@ -6,20 +6,26 @@ import { keyLabel } from "./hotkeys";
 /** Mirror of `compass_core::ItemChoice`: one of several MeowDB items sharing a name. */
 type ItemChoice = { id: string; name: string; category: string | null; url: string };
 
-/** Mirror of `compass_core::ItemLookupLine`: what the latest Item Lookup came to. */
-type ItemLookupLine = { lookup: number } & (
+/** Mirror of `compass_core::ItemLookupLine`: what the latest Item Lookup came to, or what
+ * kept an Item Card from showing (`hotkey` says which the player pressed). */
+type ItemLookupLine = { lookup: number; hotkey: "itemCard" | "itemLookup" } & (
   | { status: "lookingUp"; read: string }
   | { status: "opened"; name: string; url: string }
   | { status: "choose"; read: string; items: ItemChoice[] }
   | { status: "noTooltip" }
   | { status: "unreadable" }
-  | { status: "covered"; by: "panel" | "grindTracker" | "alert" }
+  | { status: "covered"; by: keyof typeof COVERS }
   | { status: "notFound"; read: string }
   | { status: "unreachable" }
   | { status: "formatChanged" }
+  | { status: "noSuchItem"; read: string }
+  | { status: "itemsLoading" }
+  | { status: "itemsUnavailable" }
+  | { status: "itemsFormatChanged" }
 );
 
-/** What the shell sends: the alert, whether it shows at all, and the hotkey to name. */
+/** What the shell sends: the alert, whether it shows at all, and the hotkey the player
+ * pressed, to name. */
 type AlertView = { shown: boolean; line: ItemLookupLine | null; hotkey: string };
 
 /**
@@ -33,7 +39,13 @@ const alertEl = byId("alert");
 const lineEl = byId("line");
 const choices = byId("choices");
 
-const COVERS = { panel: "The panel", grindTracker: "The Grind Tracker", alert: "The last lookup's alert" };
+/** Mirror of `compass_core::OurWindow`: our windows, which show in our captures. */
+const COVERS = {
+  panel: "The panel",
+  grindTracker: "The Grind Tracker",
+  alert: "The last lookup's alert",
+  personalBests: "The Personal Bests window",
+};
 
 /** What the latest Item Lookup came to, in a sentence; and whether it's a problem. */
 function sentence(line: ItemLookupLine, key: string): [string, boolean] {
@@ -56,6 +68,14 @@ function sentence(line: ItemLookupLine, key: string): [string, boolean] {
       return ["MeowDB can't be reached right now.", true];
     case "formatChanged":
       return ["Item Lookup is unavailable: MeowDB's search has changed.", true];
+    case "noSuchItem":
+      return [`No item is named “${line.read}”.`, true];
+    case "itemsLoading":
+      return ["Loading the item list from OSMS Data Explorer…", false];
+    case "itemsUnavailable":
+      return ["The item list can't be loaded: OSMS Data Explorer can't be reached right now.", true];
+    case "itemsFormatChanged":
+      return ["The Item Card is unavailable: OSMS Data Explorer's item list has changed. MapleCompass needs an update.", true];
   }
 }
 

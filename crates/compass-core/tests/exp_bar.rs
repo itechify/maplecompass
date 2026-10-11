@@ -379,7 +379,7 @@ fn version_2_settings_load_with_tracking_off() {
     assert_eq!(state.setup.needed, None);
     assert_eq!(state.hotkeys.toggle_panel, "ctrl+shift+c");
     assert_eq!(state.exp_bar_region, None);
-    assert_eq!(compass.settings().version, 4);
+    assert_eq!(compass.settings().version, 5, "saved as the current version");
 }
 
 #[test]

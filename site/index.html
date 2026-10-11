@@ -295,11 +295,21 @@
                 </dd>
                 <dt>Map pictures and mob animations</dt>
                 <dd>The shown map's picture and its mobs' animations, fetched from OSMS once and kept until they go 30 days unused.</dd>
+                <dt>Item data</dt>
+                <dd>
+                  For the Item Card, four more files from OSMS, about 1.8 MB together, on the same schedule and kept
+                  apart from the map data. An item's picture is fetched only when a card lists it to pick from.
+                </dd>
+                <dt>Market prices</dt>
+                <dd>
+                  <a href="https://basilmarket.net">BasilMarket</a>'s price list, about 540 KB, fetched only when you open
+                  an Item Card and the copy kept is over 3 hours old. If you never open one, BasilMarket is never asked.
+                </dd>
                 <dt>Item searches</dt>
                 <dd>
-                  Item Lookup asks <a href="https://meowdb.com">NiaMeowDB</a>'s search for the name of the item you
-                  hover, only when you press its hotkey: each name once a week at most, 2 seconds apart. These are
-                  MapleCompass's only requests to MeowDB; its links open MeowDB's pages in your browser.
+                  Item Lookup asks <a href="https://meowdb.com">NiaMeowDB</a>'s search for the name of the item, only when
+                  you press its hotkey or click an Item Card's name: each name once a week at most, 2 seconds apart.
+                  These are MapleCompass's only requests to MeowDB; its links open MeowDB's pages in your browser.
                 </dd>
                 <dt>Nothing else</dt>
                 <dd>There is no account, no analytics and no update check.</dd>
@@ -316,7 +326,7 @@
                   Your Personal Bests, each map's 10 best visits with when each was set, beside them in
                   <code>personal-bests.json</code>, saved as they change.
                 </li>
-                <li>The map data, pictures and animations in <code class="path">%LOCALAPPDATA%\<wbr />com.<wbr />itechify.<wbr />maplecompass\<wbr />cache</code>.</li>
+                <li>The map and item data, the price list, pictures and animations in <code class="path">%LOCALAPPDATA%\<wbr />com.<wbr />itechify.<wbr />maplecompass\<wbr />cache</code>.</li>
               </ul>
               <p class="detail">
                 If your Personal Bests file can't be read, MapleCompass renames it <code>personal-bests.json.bad</code> and
@@ -679,20 +689,62 @@
           <p class="next"><a class="button secondary" href="#items">Next: Items</a></p>
         </section>
 
-        <!-- Items: Item Lookup. -->
+        <!-- Items: the Item Card and Item Lookup. -->
         <section class="tab-page" id="items" aria-labelledby="items-title">
           <header class="tab-opener">
             <h2 id="items-title">Items</h2>
-            <p>An item's MeowDB page, from its tooltip in the game.</p>
+            <p>What an item is worth, where it comes from and what it's for, from its tooltip in the game.</p>
           </header>
+
+          <section class="topic" id="item-card" aria-labelledby="item-card-title">
+            <div class="topic-text">
+              <h3 id="item-card-title">Item Card</h3>
+              <p>
+                Hover an item in the game until its tooltip shows, then press <kbd>Ctrl+Shift+I</kbd>. MapleCompass reads the
+                name in the tooltip nearest the pointer (the inventory's, or any window's drawn the same way) and shows the
+                item's card at the pointer: what the game's tooltip doesn't say, for deciding whether to sell it to a shop,
+                sell it to other players, or keep it.
+              </p>
+              <ul class="brief">
+                <li><b>Shop pays:</b> what an NPC shop pays for one.</li>
+                <li><b>Market:</b> what players paid for one on BasilMarket, and from how many sales.</li>
+                <li><b>Comes from:</b> the quests that give it (with the chance, for a random reward) and the recipes that make it.</li>
+                <li><b>Used for:</b> the quests that need it (with how many) and the recipes that use it.</li>
+              </ul>
+              <p>
+                <b class="run-in">Its links.</b> Click the item's name to open its MeowDB page, as <kbd>Ctrl+Shift+O</kbd>
+                does. Click the market price for the item's BasilMarket page, with its range and history.
+              </p>
+              <p>
+                <b class="run-in">Closing it.</b> The card stays until you click its ×, or press <kbd>Ctrl+Shift+I</kbd>
+                again: over another item for that item's card, anywhere else to close it. One card shows at a time. Clicks
+                on the card never reach the game, and a click in the game leaves the card where it is.
+              </p>
+              <p>
+                <b class="run-in">Items sharing a name.</b> When items that don't look alike share the name (Blue Moon is a
+                top and an earring), the card first lists them with their pictures: click the one your tooltip shows.
+              </p>
+              <p class="detail">
+                When a shop won't buy the item, the card says so, as it does for a Cash item. It says the shop price isn't
+                known for scrolls, starter gear and arrows, which the game's data gives no price for, and for throwing stars
+                and bullets, until a sale in the game confirms what a shop pays for them. "No sales seen yet" means
+                BasilMarket's players haven't recorded a sale of it: few items have sales yet.
+              </p>
+              <p class="detail">
+                When no card can show, the alert at the top centre of the game window says why: no tooltip by the pointer,
+                a name it couldn't read, a MapleCompass window covering the name, no item of that name, or the item data not
+                loaded yet. The Item Card has no button, so it can't be used while its hotkey is turned off.
+              </p>
+            </div>
+          </section>
 
           <section class="topic with-shot full-shot" id="item-lookup" aria-labelledby="item-lookup-title">
             <div class="topic-text">
               <h3 id="item-lookup-title">Item Lookup</h3>
               <p>
-                Hover an item in the game until its tooltip shows, then press <kbd>Ctrl+Shift+I</kbd>. MapleCompass reads the
-                name in the tooltip nearest the pointer (the inventory's, or any window's drawn the same way) and opens the
-                item's MeowDB page in your browser.
+                Hover an item in the game until its tooltip shows, then press <kbd>Ctrl+Shift+O</kbd>. MapleCompass reads the
+                name in the tooltip nearest the pointer and opens the item's MeowDB page in your browser, as clicking an Item
+                Card's name does.
               </p>
               <p>
                 <b class="run-in">Which name.</b> It reads the name on the line with the blue dot, so a crafted item's maker
@@ -710,7 +762,10 @@
                 <li>no MeowDB item of that name;</li>
                 <li>MeowDB out of reach.</li>
               </ul>
-              <p>When several items share the name, the alert lists them with their categories for you to pick.</p>
+              <p>
+                When several items share the name, the alert lists them with their categories for you to pick. From an Item
+                Card's name, the one of the card's kind opens if MeowDB has just one.
+              </p>
               <p class="detail">
                 The alert goes after a few seconds (half a minute with a list), and clicks pass through it to the game unless
                 it lists items. Item Lookup has no button, so it can't be used while its hotkey is turned off.
@@ -799,11 +854,13 @@
       <footer class="window-foot" id="credits">
         <h2>Credits</h2>
         <dl class="credits">
-          <dt>Map and mob data, map pictures and mob animations</dt>
+          <dt>Map, mob and item data, map pictures, mob animations and item pictures</dt>
           <dd>
             <a href="https://osmsdataexplorer.com">OSMS Data Explorer</a>, mined from the game. The pictures and animations
             are NEXON's art.
           </dd>
+          <dt>Market prices</dt>
+          <dd><a href="https://basilmarket.net">BasilMarket</a>, from the sales its players record.</dd>
           <dt>Map, mob and item pages</dt>
           <dd>
             <a href="https://meowdb.com">NiaMeowDB</a>. The Map Summary is worked out as NiaMeowDB works it out.

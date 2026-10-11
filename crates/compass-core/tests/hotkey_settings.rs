@@ -310,7 +310,7 @@ fn backspace_delete_or_turn_off_turns_a_hotkey_off_and_its_old_combination_does_
 
         assert_eq!(state.hotkeys.toggle_panel, "", "{turn_off}");
         assert!(!state.hotkeys.all().contains(&"ctrl+shift+c"), "{turn_off}: not registered");
-        assert_eq!(state.hotkeys.all().len(), 7);
+        assert_eq!(state.hotkeys.all().len(), 8, "the other eight");
         let view = state.settings_view.expect("still open");
         assert_eq!((view.rebinding, view.notice), (None, saved(Hotkey::TogglePanel)));
         assert_eq!(compass.on_hotkey("ctrl+shift+c"), None);

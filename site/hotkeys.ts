@@ -14,7 +14,8 @@ const DEFAULTS: Record<Hotkey, string> = {
   chooseCandidate: "ctrl+shift+n",
   search: "ctrl+shift+f",
   grindTracker: "ctrl+shift+g",
-  itemLookup: "ctrl+shift+i",
+  itemCard: "ctrl+shift+i",
+  itemLookup: "ctrl+shift+o",
 };
 
 const escape = (text: string) =>

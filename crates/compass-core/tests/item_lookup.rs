@@ -1,4 +1,4 @@
-//! Item Lookup (ADR 0007): the player hovers an item in the game and presses Ctrl+Shift+I.
+//! Item Lookup (ADR 0007): the player hovers an item in the game and presses Ctrl+Shift+O.
 //! The shell captures the game's client area with the pointer, the Item Tooltip's name is
 //! read, and MeowDB's search turns the name into the item's page, which opens in the
 //! browser. A name MeowDB doesn't clearly have opens nothing, and the panel says why.
@@ -18,12 +18,14 @@ use common::FakeSource;
 use compass_core::{
     Action, BESTS_VERSION, Compass, ExpBarRegion, Foreground, GameWindow, ItemChoice, ItemHit, ItemLookup, ItemTooltip,
     ItemTooltipReading, MapBests, OurWindow, PanelControl, PanelSizes, PanelState, Rect, Request, SavedBests,
-    ScreenRect, Settings, Size, SourceError, TitleRegion, VisitBest, meowdb,
+    ScreenPoint, ScreenRect, Settings, Size, SourceError, TitleRegion, VisitBest, meowdb,
 };
 
 const GAME: ScreenRect = ScreenRect { x: 812, y: 110, width: 1920, height: 1200 };
 const SCREEN: ScreenRect = ScreenRect { x: 0, y: 0, width: 3440, height: 1440 };
 const CLIENT: Size = Size { width: 1920, height: 1200 };
+/// Where the pointer is when the player presses the hotkey.
+const POINTER: ScreenPoint = ScreenPoint { x: 1000, y: 580 };
 /// Where the name line of the Item Tooltip read is on screen.
 const NAME: ScreenRect = ScreenRect { x: 1000, y: 600, width: 200, height: 19 };
 /// The Item Lookup alert's size.
@@ -161,12 +163,12 @@ fn answering_items(items: &[(&str, &str)]) -> FakeSource {
 }
 
 fn found(name: &str, at_ms: u64) -> Option<ItemTooltipReading> {
-    Some(ItemTooltipReading { tooltip: ItemTooltip::Found { area: NAME, name: Some(name.into()) }, at_ms })
+    Some(ItemTooltipReading { pointer: POINTER, tooltip: ItemTooltip::Found { area: NAME, name: Some(name.into()) }, at_ms })
 }
 
 /// The Item Tooltip near the pointer read as `name`, after the player pressed the hotkey.
 fn look_up(compass: &mut Compass, name: &str, at_ms: u64) -> PanelState {
-    assert_eq!(compass.on_hotkey("ctrl+shift+i"), Some(Request::CaptureItemTooltip));
+    assert_eq!(compass.on_hotkey("ctrl+shift+o"), Some(Request::CaptureItemTooltip));
     compass.on_item_tooltip_reading(found(name, at_ms)).clone()
 }
 
@@ -192,40 +194,40 @@ fn open(id: &str) -> Request {
 }
 
 #[test]
-fn ctrl_shift_i_over_the_game_asks_the_shell_to_capture_it_with_the_pointer() {
+fn ctrl_shift_o_over_the_game_asks_the_shell_to_capture_it_with_the_pointer() {
     let mut compass = started();
 
-    assert_eq!(compass.on_hotkey("ctrl+shift+i"), Some(Request::CaptureItemTooltip));
+    assert_eq!(compass.on_hotkey("ctrl+shift+o"), Some(Request::CaptureItemTooltip));
 }
 
 #[test]
-fn without_a_game_window_ctrl_shift_i_does_nothing() {
+fn without_a_game_window_ctrl_shift_o_does_nothing() {
     let mut compass = Compass::new(FakeSource::osms_offline());
 
-    assert_eq!(compass.on_hotkey("ctrl+shift+i"), None);
+    assert_eq!(compass.on_hotkey("ctrl+shift+o"), None);
     assert_eq!(compass.panel_state().item_lookup, None);
 }
 
 #[test]
 fn a_press_while_the_last_capture_is_still_being_read_is_ignored() {
     let mut compass = started();
-    compass.on_hotkey("ctrl+shift+i");
+    compass.on_hotkey("ctrl+shift+o");
 
-    assert_eq!(compass.on_hotkey("ctrl+shift+i"), None, "the first capture is still being read");
+    assert_eq!(compass.on_hotkey("ctrl+shift+o"), None, "the first capture is still being read");
 
     compass.on_item_tooltip_reading(found("Orihalcon Ore", 1_000));
-    assert_eq!(compass.on_hotkey("ctrl+shift+i"), Some(Request::CaptureItemTooltip));
+    assert_eq!(compass.on_hotkey("ctrl+shift+o"), Some(Request::CaptureItemTooltip));
 }
 
 #[test]
 fn a_capture_that_failed_lets_the_next_press_capture_again() {
     let mut compass = started();
-    compass.on_hotkey("ctrl+shift+i");
+    compass.on_hotkey("ctrl+shift+o");
 
     let state = compass.on_item_tooltip_reading(None).clone();
 
     assert_eq!(line(&state), Some(ItemLookup::Unreadable));
-    assert_eq!(compass.on_hotkey("ctrl+shift+i"), Some(Request::CaptureItemTooltip));
+    assert_eq!(compass.on_hotkey("ctrl+shift+o"), Some(Request::CaptureItemTooltip));
 }
 
 #[test]
@@ -471,9 +473,9 @@ fn no_item_tooltip_near_the_pointer_says_so_and_nothing_is_looked_up() {
     let source = FakeSource::osms_offline();
     let asked = source.item_requests.clone();
     let mut compass = started_with(source, settings());
-    compass.on_hotkey("ctrl+shift+i");
+    compass.on_hotkey("ctrl+shift+o");
 
-    let state = compass.on_item_tooltip_reading(Some(ItemTooltipReading { tooltip: ItemTooltip::None, at_ms: 1_000 }));
+    let state = compass.on_item_tooltip_reading(Some(ItemTooltipReading { pointer: POINTER, tooltip: ItemTooltip::None, at_ms: 1_000 }));
 
     assert_eq!(line(state), Some(ItemLookup::NoTooltip));
     assert!(asked.lock().unwrap().is_empty());
@@ -482,10 +484,10 @@ fn no_item_tooltip_near_the_pointer_says_so_and_nothing_is_looked_up() {
 #[test]
 fn an_item_tooltip_whose_name_cant_be_read_says_so() {
     let mut compass = started();
-    compass.on_hotkey("ctrl+shift+i");
+    compass.on_hotkey("ctrl+shift+o");
 
     let unreadable = ItemTooltip::Found { area: NAME, name: None };
-    let state = compass.on_item_tooltip_reading(Some(ItemTooltipReading { tooltip: unreadable, at_ms: 1_000 }));
+    let state = compass.on_item_tooltip_reading(Some(ItemTooltipReading { pointer: POINTER, tooltip: unreadable, at_ms: 1_000 }));
 
     assert_eq!(line(state), Some(ItemLookup::Unreadable));
 }
@@ -505,12 +507,12 @@ fn our_panel_over_the_name_says_so_and_nothing_is_looked_up() {
     let asked = source.item_requests.clone();
     let mut compass = started_with(source, settings());
     assert_eq!(compass.panel_state().placement, Some(PANEL));
-    compass.on_hotkey("ctrl+shift+i");
+    compass.on_hotkey("ctrl+shift+o");
 
     // The name runs on under the panel's left edge.
     let under_panel = ScreenRect { x: PANEL.x - 150, y: PANEL.y + 20, width: 170, height: 19 };
     let tooltip = ItemTooltip::Found { area: under_panel, name: Some("Orihalcon".into()) };
-    let state = compass.on_item_tooltip_reading(Some(ItemTooltipReading { tooltip, at_ms: 1_000 }));
+    let state = compass.on_item_tooltip_reading(Some(ItemTooltipReading { pointer: POINTER, tooltip, at_ms: 1_000 }));
 
     assert_eq!(line(state), Some(ItemLookup::Covered { by: OurWindow::Panel }));
     assert!(asked.lock().unwrap().is_empty(), "a name cut short isn't looked up");
@@ -524,11 +526,11 @@ fn the_grind_tracker_over_the_name_says_so() {
     };
     let mut compass = started_with(FakeSource::osms_offline(), tracking);
     let tracker = compass.panel_state().grind_tracker.placement.expect("the Grind Tracker shows");
-    compass.on_hotkey("ctrl+shift+i");
+    compass.on_hotkey("ctrl+shift+o");
 
     let under_tracker = ScreenRect { x: tracker.x + 10, y: tracker.y + 10, width: 170, height: 19 };
     let tooltip = ItemTooltip::Found { area: under_tracker, name: Some("Orihalcon Ore".into()) };
-    let state = compass.on_item_tooltip_reading(Some(ItemTooltipReading { tooltip, at_ms: 1_000 }));
+    let state = compass.on_item_tooltip_reading(Some(ItemTooltipReading { pointer: POINTER, tooltip, at_ms: 1_000 }));
 
     assert_eq!(line(state), Some(ItemLookup::Covered { by: OurWindow::GrindTracker }));
 }
@@ -541,11 +543,11 @@ fn the_personal_bests_window_over_the_name_says_so() {
     compass.set_personal_bests_size(Size { width: 920, height: 400 });
     compass.press(PanelControl::TogglePersonalBests);
     let window = compass.panel_state().personal_bests.placement.expect("the Personal Bests window shows");
-    compass.on_hotkey("ctrl+shift+i");
+    compass.on_hotkey("ctrl+shift+o");
 
     let under_window = ScreenRect { x: window.x + 10, y: window.y + 10, width: 170, height: 19 };
     let tooltip = ItemTooltip::Found { area: under_window, name: Some("Orihalcon Ore".into()) };
-    let state = compass.on_item_tooltip_reading(Some(ItemTooltipReading { tooltip, at_ms: 1_000 }));
+    let state = compass.on_item_tooltip_reading(Some(ItemTooltipReading { pointer: POINTER, tooltip, at_ms: 1_000 }));
 
     assert_eq!(line(state), Some(ItemLookup::Covered { by: OurWindow::PersonalBests }));
 }
@@ -656,11 +658,11 @@ fn a_collapsed_panel_stays_collapsed_whatever_a_lookup_comes_to() {
 fn the_last_lookups_alert_over_the_name_says_so() {
     let mut compass = started();
     let alert = look_up(&mut compass, "Zqxv Nothing", 1_000).item_lookup_placement.expect("an alert");
-    compass.on_hotkey("ctrl+shift+i");
+    compass.on_hotkey("ctrl+shift+o");
 
     let under_alert = ScreenRect { x: alert.x + 20, y: alert.y + 10, width: 170, height: 19 };
     let tooltip = ItemTooltip::Found { area: under_alert, name: Some("Orihalcon Ore".into()) };
-    let state = compass.on_item_tooltip_reading(Some(ItemTooltipReading { tooltip, at_ms: 2_000 }));
+    let state = compass.on_item_tooltip_reading(Some(ItemTooltipReading { pointer: POINTER, tooltip, at_ms: 2_000 }));
 
     assert_eq!(line(state), Some(ItemLookup::Covered { by: OurWindow::Alert }));
 }

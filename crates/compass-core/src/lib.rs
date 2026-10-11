@@ -5,10 +5,13 @@
 //! is a [`PanelState`] holding everything the overlay renders. No OS or UI dependencies
 //! live here.
 
+pub mod basilmarket;
 mod bests_window;
 mod exp_bar;
 mod grind_tracker;
 mod hotkey_settings;
+mod item_card;
+mod item_data;
 mod item_lookup;
 mod item_tooltip;
 mod map_data;
@@ -19,6 +22,7 @@ mod matcher;
 pub mod meowdb;
 mod mob_card;
 pub mod osms;
+pub mod osms_items;
 mod pace;
 mod panel;
 mod personal_best;
@@ -40,6 +44,10 @@ pub use bests_window::{PersonalBestsMap, PersonalBestsWindow};
 pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use grind_tracker::{ClientOffset, GrindTrackerWindow};
 pub use hotkey_settings::{KeyPress, RebindProblem, SettingsNotice, SettingsView};
+pub use item_card::{
+    ITEM_CARD_CREDIT, ItemCard, ItemCardChoice, ItemCardView, ItemSource, ItemUse, Listed, Market, QuestReward,
+    ShopPrice, ShownItemCard,
+};
 pub use item_lookup::{ItemChoice, ItemHit, ItemLookup, ItemLookupLine, OurWindow};
 pub use item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReader, ItemTooltipReading};
 pub use map_data::{
@@ -69,6 +77,8 @@ pub use world::{Distance, Step, Travel};
 use bests_window::BestsWindow;
 use grind_tracker::GrindTracker;
 use hotkey_settings::HotkeySettings;
+use item_card::{ItemCards, Pressed};
+use item_data::{ItemFilesLoader, PriceList};
 use item_lookup::ItemLookups;
 use search::{MobSearch, Searched};
 use shown_map::ShownMap;
@@ -267,6 +277,12 @@ pub struct PanelState {
     /// captured regions; `None` while there is none, no game window, or another app in
     /// front (see [`Layer`]).
     pub item_lookup_placement: Option<ScreenRect>,
+    /// The Item Card showing; `None` while there is none.
+    pub item_card: Option<ShownItemCard>,
+    /// Where the Item Card goes on screen: at the pointer, inside the game window and clear
+    /// of the captured regions; `None` while there is none, no game window, or another app
+    /// in front (see [`Layer`]).
+    pub item_card_placement: Option<ScreenRect>,
 }
 
 /// What a hotkey asks the shell to do at once, beyond rendering the panel state.
@@ -278,10 +294,11 @@ pub enum Request {
     /// Bring the overlay, with the search view already open, back in front (the search
     /// hotkey): the game may have come in front of it. Our own window only (ADR 0001).
     RaiseOverlay,
-    /// Item Lookup (ADR 0007): read the pointer's position and capture the game's whole
-    /// client area now, while the Item Tooltip shows, for [`Compass::on_item_capture`]
-    /// (or [`Compass::on_item_tooltip_reading`] with what an [`ItemTooltipReader`] reads
-    /// in it, or `None` if the capture failed).
+    /// Item Lookup (ADR 0007) or the Item Card (ADR 0010): read the pointer's position and
+    /// capture the game's whole client area now, while the Item Tooltip shows, for
+    /// [`Compass::on_item_capture`] (or [`Compass::on_item_tooltip_reading`] with what an
+    /// [`ItemTooltipReader`] reads in it, or `None` if the capture failed). The Item Card
+    /// isn't placed meanwhile: it must be out of the capture.
     CaptureItemTooltip,
 }
 
@@ -402,6 +419,16 @@ pub struct Compass {
     item_lookups: ItemLookups,
     /// The Item Lookup alert's size, in physical px for the current display.
     item_lookup_size: Size,
+    /// OSMS's item files, for the Item Card.
+    item_files: ItemFilesLoader,
+    /// BasilMarket's price list, for the Item Card's market line.
+    prices: PriceList,
+    /// The Item Card showing.
+    item_cards: ItemCards,
+    /// A capture for an Item Card was asked for and its reading hasn't come back.
+    card_capturing: bool,
+    /// The Item Card's size, in physical px for the current display.
+    item_card_size: Size,
     /// What the shell must do that came of time passing (a page MeowDB's answer settled),
     /// for [`Compass::take_request`].
     requests: VecDeque<Request>,
@@ -441,6 +468,11 @@ impl Compass {
             item_reader: None,
             item_lookups: ItemLookups::default(),
             item_lookup_size: Size { width: 0, height: 0 },
+            item_files: ItemFilesLoader::default(),
+            prices: PriceList::default(),
+            item_cards: ItemCards::default(),
+            card_capturing: false,
+            item_card_size: Size { width: 0, height: 0 },
             requests: VecDeque::new(),
             panel: Panel::default(),
             setup: Setup::default(),
@@ -586,21 +618,27 @@ impl Compass {
         }
     }
 
-    /// Ask for the pictures the panel wants, one at a time: every Map Mark first, few and
-    /// small and shown beside every map's name; then the Map Preview's, then the map's mobs'
-    /// animations, then the Hunting Target mob's.
+    /// Ask for the pictures the panel wants, one at a time: the pictures of the items the
+    /// Item Card lists to pick from first, as the player is looking at it; then every Map
+    /// Mark, few and small and shown beside every map's name; then the Map Preview's, then
+    /// the map's mobs' animations, then the Hunting Target mob's.
     fn poll_pictures(&mut self, at_ms: u64) {
-        let Some(set) = &self.set else { return };
-        let preview = self.state.map_preview.as_ref().map(|preview| map_preview::picture_path(&preview.picture));
-        let mobs = self.state.data.data().map_or(&[][..], |data| &data.mobs);
-        let hunted = self.state.search.hunting.as_ref().and_then(|hunting| set.maps.animation(&hunting.mob.id));
-        let wanted: Vec<String> = map_mark::pictures(&set.maps)
-            .chain(preview)
-            .chain(mob_card::animations(mobs, &set.maps))
-            .chain(hunted.map(String::from))
-            .collect();
+        let mut wanted = self.item_cards.pictures();
+        if let Some(set) = &self.set {
+            let preview = self.state.map_preview.as_ref().map(|preview| map_preview::picture_path(&preview.picture));
+            let mobs = self.state.data.data().map_or(&[][..], |data| &data.mobs);
+            let hunted = self.state.search.hunting.as_ref().and_then(|hunting| set.maps.animation(&hunting.mob.id));
+            wanted.extend(
+                map_mark::pictures(&set.maps)
+                    .chain(preview)
+                    .chain(mob_card::animations(mobs, &set.maps))
+                    .chain(hunted.map(String::from)),
+            );
+        }
         self.pictures.poll(&wanted, &mut *self.source, at_ms);
-        self.sync_pictured();
+        if self.set.is_some() {
+            self.sync_pictured();
+        }
     }
 
     /// The game window moved, resized, appeared or went away (`None`: not found, or
@@ -623,6 +661,12 @@ impl Compass {
     /// The Item Lookup alert's size, in physical px for the current display.
     pub fn set_item_lookup_size(&mut self, size: Size) -> &PanelState {
         self.item_lookup_size = size;
+        self.sync_panel()
+    }
+
+    /// The Item Card's size, in physical px for the current display.
+    pub fn set_item_card_size(&mut self, size: Size) -> &PanelState {
+        self.item_card_size = size;
         self.sync_panel()
     }
 
@@ -850,9 +894,17 @@ impl Compass {
     pub fn on_hotkey(&mut self, pressed: &str) -> Option<Request> {
         let hotkeys = &self.settings.hotkeys;
         let is = |hotkey: &str| same_hotkey(hotkey, pressed);
+        // Only over a game window, and not while the last capture is being read.
+        let reading = self.card_capturing || self.item_lookups.capturing();
+        if is(&hotkeys.item_card) {
+            let capture = self.panel.game.is_some() && !reading;
+            self.card_capturing |= capture;
+            // The card showing hides for the capture, which it would otherwise be in.
+            self.sync_panel();
+            return capture.then_some(Request::CaptureItemTooltip);
+        }
         if is(&hotkeys.item_lookup) {
-            // Only over a game window, and not while the last capture is being read.
-            let capture = self.panel.game.is_some() && self.item_lookups.start();
+            let capture = self.panel.game.is_some() && !reading && self.item_lookups.start();
             return capture.then_some(Request::CaptureItemTooltip);
         }
         let control = if is(&hotkeys.toggle_panel) {
@@ -917,18 +969,20 @@ impl Compass {
         Some(Request::OpenInBrowser { url: card.url.clone() })
     }
 
-    /// Read an Item Lookup capture ([`Request::CaptureItemTooltip`]) and update the panel
-    /// state: the same as [`Compass::on_item_tooltip_reading`] with what an
+    /// Read an Item Lookup or Item Card capture ([`Request::CaptureItemTooltip`]) and update
+    /// the panel state: the same as [`Compass::on_item_tooltip_reading`] with what an
     /// [`ItemTooltipReader`] reads in it, here.
     pub fn on_item_capture(&mut self, capture: ItemCapture) -> &PanelState {
         let reading = self.item_reader.get_or_insert_with(ItemTooltipReader::bundled).read(&capture);
         self.on_item_tooltip_reading(Some(reading))
     }
 
-    /// Take what an Item Lookup capture read as (read by an [`ItemTooltipReader`], possibly
-    /// on another thread; `None` if the capture failed) and look its name up on MeowDB. A
-    /// page to open comes from [`Compass::take_request`], at once if MeowDB's answer was
-    /// at hand, else once it arrives.
+    /// Take what an Item Lookup or Item Card capture read as (read by an
+    /// [`ItemTooltipReader`], possibly on another thread; `None` if the capture failed).
+    /// For Item Lookup, look its name up on MeowDB: a page to open comes from
+    /// [`Compass::take_request`], at once if MeowDB's answer was at hand, else once it
+    /// arrives. For the Item Card, show the card of the item OSMS's item files have by
+    /// that name, at the pointer.
     pub fn on_item_tooltip_reading(&mut self, reading: Option<ItemTooltipReading>) -> &PanelState {
         // Our windows show in the capture: one over the name would be read instead.
         let panel = self.state.placement.filter(|_| self.state.layer != Layer::Hidden);
@@ -941,8 +995,59 @@ impl Compass {
         .into_iter()
         .flatten()
         .collect();
+        if std::mem::take(&mut self.card_capturing) {
+            let at_ms = reading.as_ref().map_or(0, |r| r.at_ms);
+            match self.item_cards.read(reading, &ours, self.item_files.items()) {
+                Pressed::Shown => {
+                    self.item_lookups.clear();
+                    self.prices.card_opened(&mut *self.source, at_ms, self.wall_clock);
+                }
+                Pressed::Closed => {}
+                Pressed::Alert(outcome) => self.item_lookups.alert(outcome, at_ms),
+            }
+            return self.sync_panel();
+        }
         let open = self.item_lookups.read(reading, &ours, &mut *self.source, &mut self.meowdb_pace);
         self.requests.extend(open.map(|url| Request::OpenInBrowser { url }));
+        self.sync_panel()
+    }
+
+    /// The player picked item `id` from those the Item Card lists as sharing the name read:
+    /// its card shows.
+    pub fn pick_card_item(&mut self, id: &str) -> &PanelState {
+        self.item_cards.pick(id);
+        self.sync_panel()
+    }
+
+    /// The player clicked the Item Card's name, at `at_ms` (on the clock of frames and
+    /// ticks): open the item's MeowDB page, through MeowDB's search as Item Lookup does.
+    /// The page comes from [`Compass::take_request`], and the Item Lookup alert says what
+    /// came of it.
+    pub fn open_card_meowdb_page(&mut self, at_ms: u64) -> &PanelState {
+        let Some(item) = self.item_files.items().ok().and_then(|items| self.item_cards.item(items)) else {
+            return self.sync_panel();
+        };
+        let (name, kind) = (item.name.clone(), item.kind.clone());
+        let open = self.item_lookups.look_up(name, kind, &mut *self.source, &mut self.meowdb_pace, at_ms);
+        self.requests.extend(open.map(|url| Request::OpenInBrowser { url }));
+        self.sync_panel()
+    }
+
+    /// The player clicked the Item Card's market line: open the item's BasilMarket page.
+    /// `None` without a card, or for an item BasilMarket doesn't list.
+    pub fn open_card_market_page(&self) -> Option<Request> {
+        let Some(ShownItemCard { view: ItemCardView::Card(card), .. }) = &self.state.item_card else { return None };
+        match &card.market {
+            Market::Sold { page, .. } | Market::NoSales { page: Some(page), .. } => {
+                Some(Request::OpenInBrowser { url: page.clone() })
+            }
+            _ => None,
+        }
+    }
+
+    /// The player clicked the Item Card's ×: close it.
+    pub fn close_item_card(&mut self) -> &PanelState {
+        self.item_cards.close();
         self.sync_panel()
     }
 
@@ -979,12 +1084,15 @@ impl Compass {
 
     /// Pick up settings saved by an earlier session. Hotkeys from before version 4
     /// (version 1's Ctrl+Shift letters, versions 2 and 3's Win+Alt) are replaced by the
-    /// defaults; files without an EXP Bar Region (all before version 3) start with EXP
-    /// tracking off.
+    /// defaults, and version 4's Item Lookup key goes to the Item Card; files without an
+    /// EXP Bar Region (all before version 3) start with EXP tracking off.
     pub fn restore(&mut self, mut settings: Settings) -> &PanelState {
-        // Version 4 brought the Ctrl+Shift defaults; a later version keeps the hotkeys.
-        if settings.version < 4 {
-            settings.hotkeys = Hotkeys::default();
+        // Version 4 brought the Ctrl+Shift defaults, and version 5 the Item Card; a later
+        // version keeps the hotkeys.
+        match settings.version {
+            ..4 => settings.hotkeys = Hotkeys::default(),
+            4 => settings.hotkeys.give_item_lookup_to_card(),
+            _ => {}
         }
         settings.version = settings::VERSION;
         self.panel.expanded = settings.expanded;
@@ -1059,8 +1167,10 @@ impl Compass {
         self.load_osms(at_ms);
         if self.set.is_some() {
             self.sync_shown_map();
-            self.poll_pictures(at_ms);
         }
+        self.poll_pictures(at_ms);
+        self.item_files.load(&mut *self.source, at_ms, self.wall_clock);
+        self.prices.poll(&mut *self.source, at_ms, self.wall_clock);
         // An Item Lookup's search, which the player waits on.
         let open = self.item_lookups.poll(&mut *self.source, &mut self.meowdb_pace, at_ms);
         self.requests.extend(open.map(|url| Request::OpenInBrowser { url }));
@@ -1175,6 +1285,7 @@ impl Compass {
         self.sync_grind_tracker();
         self.sync_personal_bests();
         self.sync_item_lookup();
+        self.sync_item_card();
         self.state.hotkeys = self.settings.hotkeys.clone();
         let in_front = self.panel.foreground.is_some_and(|foreground| foreground != Foreground::OtherApp);
         self.state.hotkeys_live = in_front && !self.hotkey_settings.is_rebinding();
@@ -1196,6 +1307,28 @@ impl Compass {
             _ => None,
         };
         self.state.item_lookup = line;
+    }
+
+    /// The Item Card, at the pointer while there is one; only while the overlay can show
+    /// (see [`Layer`]), and not while the next press's capture is taken, which it would
+    /// cover.
+    fn sync_item_card(&mut self) {
+        let pictures = &self.pictures;
+        let (prices, now) = (&self.prices, self.wall_clock);
+        let saved_copy_from = self.item_files.saved_copy_from(now);
+        self.state.item_card = self.item_cards.view(
+            self.item_files.items().ok(),
+            saved_copy_from,
+            |ids| prices.market(ids, now),
+            |path| pictures.url(path).map(String::from),
+        );
+        let shows = self.state.item_card.is_some() && self.panel.layer() != Layer::Hidden && !self.card_capturing;
+        self.state.item_card_placement = match (self.item_cards.pointer(), &self.panel.game) {
+            (Some(pointer), Some(game)) if shows => {
+                Some(item_card::card_placement(game, pointer, self.item_card_size, &self.panel.avoid))
+            }
+            _ => None,
+        };
     }
 
     fn sync_setup(&mut self) {

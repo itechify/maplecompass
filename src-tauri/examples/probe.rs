@@ -25,9 +25,10 @@
 //! the pointer position and copies screen pixels.
 //!
 //! `cargo run -p maplecompass --example probe osms`
-//! OSMS mode: fetch OSMS Data Explorer's live file set (whatever is saved) and read it in
-//! full with the core's reader, reporting what it holds, or what didn't read. Run it by
-//! hand when OSMS changes and before a release. No game window is needed.
+//! OSMS mode: fetch OSMS Data Explorer's live file set and the Item Card's item files
+//! (whatever is saved) and read them in full with the core's readers, reporting what they
+//! hold, or what didn't read. Run it by hand when OSMS changes and before a release. No
+//! game window is needed.
 
 use compass_core::{Compass, GAME_WINDOW_TITLE, PortalKind, Rect, TitleReader};
 use maplecompass_lib::{capture, capture_title_frame, gamewin, source::WebSource};
@@ -155,6 +156,20 @@ fn osms() -> Result<(), String> {
     );
     println!("Hidden Portal rows: {} (to a Hidden Street: {})", hidden.len(), hidden.iter().filter(|p| p.to_hidden_street).count());
     println!("Mobs spawning: {}", mobs.len());
+
+    let files = maplecompass_lib::osms_items::fetch_live()?;
+    let sizes = [&files.items, &files.quests, &files.crafting, &files.cash_shop];
+    for (name, text) in compass_core::osms_items::ItemFiles::NAMES.iter().zip(sizes) {
+        println!("{name:>18}: {} KB", text.len() / 1024);
+    }
+    let items = compass_core::osms_items::read(&files).map_err(|e| format!("OSMS's item files don't read: {e}"))?;
+    let counts = items.counts();
+    println!("Item files read in full.");
+    println!(
+        "Items: {} ({} with a shop price, {} a shop won't buy, {} Cash items)",
+        counts.items, counts.shop_priced, counts.not_sold, counts.cash
+    );
+    println!("  a quest or recipe gives: {}; a quest or recipe needs: {}", counts.with_sources, counts.with_uses);
     Ok(())
 }
 
