@@ -7,6 +7,8 @@
 node_modules/
 dist/
 *.local
+# The site's screenshots as WebP, made from the PNGs at build (site/vite.config.ts)
+site/screenshots/webp/
 
 # impeccable-ignore-start
 # Ephemeral output, runtime state, and per-dev overrides.

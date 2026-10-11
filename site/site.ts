@@ -1,30 +1,35 @@
 /// <reference types="vite/client" />
-// The site's one behaviour: the tab of the part being read is raised, as the game raises
-// the open tab, following the scroll. Without it the page still reads whole, and the tabs
-// still jump to their parts.
+// The site's behaviours: the tab of the part being read is raised, as the game raises the
+// open tab, and on a wide screen the manual's minimap shows where you are in it
+// (minimap.ts), both following the scroll. Without the script the page still reads whole,
+// and the tabs still jump to their parts.
+
+import { minimap } from "./minimap.ts";
 
 const head = document.querySelector<HTMLElement>(".window-head")!;
 const strip = document.querySelector<HTMLElement>(".tabs")!;
 const tabs = [...strip.querySelectorAll<HTMLAnchorElement>("a.tab")];
-const pages = tabs.map((tab) => document.getElementById(tab.hash.slice(1))!);
 
-// A jump to a heading lands below the window's head, however tall it wraps.
-new ResizeObserver(() => {
-  document.documentElement.style.setProperty("--head", `${head.offsetHeight}px`);
-}).observe(head);
+/** What sticks at the top: the window's head, or on a phone the tabs alone (site.css). */
+const stuck = () => (getComputedStyle(head).display === "contents" ? strip : head);
 
+// A jump to a heading lands below what sticks, however tall it wraps.
+const heads = new ResizeObserver(() => {
+  document.documentElement.style.setProperty("--head", `${stuck().offsetHeight}px`);
+});
+heads.observe(head);
+heads.observe(strip);
+
+// A heading is reached 48px below what sticks.
+const map = minimap(tabs, () => stuck().offsetHeight + 48);
 let raised = -1;
 
-/** Raise the tab of the last part whose top has come up to the head. */
-function raise() {
-  const line = head.getBoundingClientRect().bottom + 48;
-  let current = 0;
-  pages.forEach((page, i) => {
-    if (page.getBoundingClientRect().top <= line) current = i;
-  });
-  // Scrolled to the end, the last part is the one being read, however short it is.
-  const end = document.documentElement.scrollHeight - innerHeight - 2;
-  if (scrollY > 0 && scrollY >= end) current = pages.length - 1;
+/** Raise the tab of the part being read, and put the reader on the minimap. */
+function follow() {
+  const where = map.at(scrollY);
+  map.draw(where);
+  // The credits are read under the last tab.
+  const current = Math.min(where.part, tabs.length - 1);
   if (current === raised) return;
   raised = current;
   tabs.forEach((tab, i) => {
@@ -39,9 +44,17 @@ function raise() {
   }
 }
 
-addEventListener("scroll", raise, { passive: true });
-addEventListener("resize", raise);
-raise();
+/** Read where every heading lies again, after the page's layout changes. */
+function remeasure() {
+  map.measure();
+  follow();
+}
+
+addEventListener("scroll", follow, { passive: true });
+addEventListener("resize", remeasure);
+new ResizeObserver(remeasure).observe(document.querySelector(".window")!);
+document.fonts.ready.then(remeasure);
+remeasure();
 
 // A screenshot that doesn't load leaves a dashed box saying what belongs there. While
 // developing, that is a shot not taken yet; the build refuses to publish without it.
