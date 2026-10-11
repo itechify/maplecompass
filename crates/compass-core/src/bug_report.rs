@@ -957,8 +957,9 @@ pub struct Divergence {
 
 /// Feed a Bug Report's inputs to a new core, with OSMS's file set `osms` where the report
 /// had one (`None`: as if it couldn't be had), and compare what it writes down with the
-/// report's trace. A set other than the run's, a trace that starts partway, or a change
-/// to the core since, makes it diverge.
+/// report's trace. A set's fingerprint isn't compared, but what the core makes of it is:
+/// a set other than the run's makes it diverge where that shows, as do a trace that
+/// starts partway and a change to the core since.
 pub fn replay(recording: &Recording, osms: Option<OsmsFiles>) -> Replay {
     let mut compass = Compass::with_source(RecordedSource::replaying(osms));
     // The wall clock as last written down, and the capture time then: the shell tells the
@@ -1049,7 +1050,17 @@ pub fn replay(recording: &Recording, osms: Option<OsmsFiles>) -> Replay {
     }
     compass.close_input();
     let replayed: Vec<Option<Line>> = compass.recorder.trace().lines().map(|line| serde_json::from_str(line).ok()).collect();
-    let as_compared = |line: &Line| serde_json::to_string(&Line { crop: None, ..line.clone() }).unwrap_or_default();
+    let as_compared = |line: &Line| {
+        let answers = line.answers.iter().cloned().map(|answer| match answer {
+            Answer::SavedSet { saved: Some(saved) } => {
+                Answer::SavedSet { saved: Some(SavedSet { fingerprint: String::new(), ..saved }) }
+            }
+            Answer::Set { answer: Ok(_) } => Answer::Set { answer: Ok(String::new()) },
+            other => other,
+        });
+        let line = Line { crop: None, answers: answers.collect(), ..line.clone() };
+        serde_json::to_string(&line).unwrap_or_default()
+    };
     let length = recording.lines.len().max(replayed.len());
     let divergence = (0..length).find_map(|index| {
         let recorded = recording.lines.get(index).map(as_compared);
@@ -1191,6 +1202,20 @@ impl Event {
             }
             Event::GameWindow { game: None } => "no game window".to_string(),
             Event::Foreground { foreground } => format!("in front: {foreground:?}"),
+            Event::PanelSizes { sizes } => {
+                let (e, c) = (sizes.expanded, sizes.collapsed);
+                format!("panel sizes {}x{}, collapsed {}x{}", e.width, e.height, c.width, c.height)
+            }
+            Event::ItemLookupSize { size } => format!("Item Lookup alert size {}x{}", size.width, size.height),
+            Event::GrindTrackerSize { size } => format!("Grind Tracker size {}x{}", size.width, size.height),
+            Event::PersonalBestsSize { size } => format!("Personal Bests window size {}x{}", size.width, size.height),
+            Event::RebindKey { press } => format!("key pressed in the settings view {}", json(press)),
+            Event::SearchPick { id } => format!("search picked {id}"),
+            Event::PickItem { id } => format!("item picked {id}"),
+            Event::HotkeysUnavailable { taken, invalid } => {
+                format!("hotkeys unavailable: taken {taken:?}, invalid {invalid:?}")
+            }
+            Event::PickGameWindow { title } => format!("game window picked by hand: {title:?}"),
             Event::Act { action } => format!("action {}", json(action)),
             Event::Press { control } => format!("pressed {}", json(control)),
             Event::Hotkey { pressed } => format!("hotkey {pressed}"),
@@ -1201,7 +1226,6 @@ impl Event {
             Event::WallClock { unix_ms } => format!("wall clock {unix_ms} (ms since 1970)"),
             Event::Error { from, message } => format!("{from} error: {message}"),
             Event::BugReport {} => "Bug Report saved".to_string(),
-            other => json(other),
         }
     }
 }

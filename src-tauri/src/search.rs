@@ -23,7 +23,7 @@ pub fn take_focus(overlay: &WebviewWindow) {
         // SAFETY: a plain Win32 call on our own window handle.
         let taken = unsafe { windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow(hwnd) };
         if !taken.as_bool() {
-            eprintln!("Windows refused the overlay the foreground: the game keeps the keyboard");
+            crate::errors::error!("Windows refused the overlay the foreground: the game keeps the keyboard");
         }
     }
     #[cfg(not(windows))]

@@ -128,7 +128,7 @@ fn a_report_replays_through_the_same_states_with_the_runs_osms_set() {
 }
 
 #[test]
-fn a_replay_with_another_osms_set_says_where_it_diverges() {
+fn a_replay_with_another_osms_set_diverges_where_that_shows() {
     let mut shell = Shell::new(FakeSource::osms());
     shell.play(MIN, CONSTRUCTION_SITE, grind);
 
@@ -137,7 +137,20 @@ fn a_replay_with_another_osms_set_says_where_it_diverges() {
 
     let divergence = replay.divergence.expect("another set takes the core elsewhere");
     let recorded = divergence.recorded.expect("a line the report has");
-    assert!(recorded.contains("\"set\""), "it diverges where the set came: {recorded}");
+    assert!(recorded.contains("Construction Site North of Kerning City"), "where the map was recognised: {recorded}");
+}
+
+#[test]
+fn a_replay_with_a_set_that_shows_the_same_goes_through_the_same_states() {
+    let mut shell = Shell::new(FakeSource::osms());
+    shell.play(MIN, CONSTRUCTION_SITE, grind);
+
+    let (_, recording) = shell.report();
+    // A set fetched on another day, the same but for a map no one went to.
+    let newer = osms::game().naming(osms::HENESYS_HUNTING_GROUND_I, "Henesys Hunting Ground One");
+    let replay = bug_report::replay(&recording, Some(newer.files()));
+
+    assert_eq!(replay.divergence, None);
 }
 
 #[test]

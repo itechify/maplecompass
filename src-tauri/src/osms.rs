@@ -9,6 +9,7 @@
 //! file fails, or the set doesn't read, nothing is saved, and the core keeps the set it
 //! has.
 
+use crate::errors::error;
 use crate::http;
 use compass_core::SourceError;
 use compass_core::osms::{self, OsmsFiles, SavedFiles};
@@ -52,7 +53,7 @@ impl OsmsSet {
             let Poll::Ready(answer) = http::collect(arriving) else { return Poll::Pending };
             self.in_flight = None;
             if let Err(e) = &answer {
-                eprintln!("OSMS's file set: {e}");
+                error!("OSMS's file set: {e}");
             }
             return Poll::Ready(answer);
         }
@@ -93,7 +94,7 @@ fn save(file: &Path, files: &OsmsFiles) {
         .map_err(std::io::Error::other)
         .and_then(|json| crate::files::write_atomically(file, &json));
     if let Err(e) = written {
-        eprintln!("OSMS: couldn't save {}: {e}", file.display());
+        error!("OSMS: couldn't save {}: {e}", file.display());
     }
 }
 

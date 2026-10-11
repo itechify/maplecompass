@@ -1,6 +1,7 @@
 //! Settings persistence: the core's `Settings` as pretty JSON in the app config
 //! directory (`%APPDATA%\com.itechify.maplecompass\settings.json` on Windows).
 
+use crate::errors::error;
 use compass_core::Settings;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -15,7 +16,7 @@ pub fn path(app: &AppHandle) -> tauri::Result<PathBuf> {
 pub fn load(path: &Path) -> Settings {
     let Ok(text) = fs::read_to_string(path) else { return Settings::default() };
     serde_json::from_str(&text).unwrap_or_else(|e| {
-        eprintln!("settings unreadable ({e}); using defaults");
+        error!("settings unreadable ({e}); using defaults");
         let _ = fs::rename(path, path.with_extension("json.bad"));
         Settings::default()
     })
