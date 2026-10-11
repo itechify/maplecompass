@@ -59,6 +59,7 @@ fn each_portal_is_marked_where_osms_puts_it_in_the_maps_picture() {
             to_map_id: "010003000".into(),
             to_map_name: "Kerning City".into(),
             to_street_name: "Victoria Road".into(),
+            to_mark: None,
             lands_at: None,
             hidden_portal: None,
             next_on_route: false,

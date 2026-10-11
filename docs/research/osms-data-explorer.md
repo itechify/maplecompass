@@ -12,7 +12,7 @@ OSMS Data Explorer can supply nearly everything MapleCompass reads from MeowDB, 
 
 | File | Size | What MapleCompass would use |
 | --- | --- | --- |
-| `maps.json` | 349 KB | every map: ID, name, street, region, `is_town`, `return_map_id`, `exits`, `mob_rate`, `mob_positions` (one entry per spawn point) |
+| `maps.json` | 349 KB | every map: ID, name, street, region, `is_town`, `return_map_id`, `exits`, `mob_rate`, `mob_positions` (one entry per spawn point), `map_mark` (the Mini Map's emblem for its area, `"None"` for none); and `map_mark_icons`, each mark's 38×38 PNG under `data/current/images/map_marks/` (11 in October 2026) |
 | `portals.json` | 121 KB | every map's portals: `name`, `type`, `dest_map`, `x`, `y` |
 | `monsters.json` | 90 KB | every mob's stats, elements, and its maps with spawn counts and `mob_time` |
 | `lookups.json` | 223 KB | names by ID: 7,431 items, 318 maps, 101 mobs, 226 NPCs |

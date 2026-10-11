@@ -71,6 +71,7 @@ fn recognised(id: &str, street_name: &str, map_name: &str) -> Option<TestRead> {
         street_name: street_name.into(),
         map_name: map_name.into(),
         url: format!("https://meowdb.com/msclassic/maps/{id}"),
+        mark: None,
     };
     Some(TestRead::Recognised { map })
 }

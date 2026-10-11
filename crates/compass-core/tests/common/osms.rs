@@ -24,6 +24,8 @@ pub struct Map {
     pub exits: Option<Vec<u64>>,
     pub spawns: Vec<Spawn>,
     pub portals: Vec<Portal>,
+    /// `map_mark`; written as `"None"` when `None`, as OSMS writes a map without one.
+    pub mark: Option<String>,
 }
 
 /// Some of a mob's spawn points on a map.
@@ -87,6 +89,7 @@ pub fn map(id: u64, street_name: &str, name: &str) -> Map {
         exits: None,
         spawns: Vec::new(),
         portals: Vec::new(),
+        mark: None,
     }
 }
 
@@ -236,6 +239,12 @@ impl Map {
         self
     }
 
+    /// Its Map Mark, by the mark's name (`map_mark`).
+    pub fn marked(mut self, mark: &str) -> Self {
+        self.mark = Some(mark.into());
+        self
+    }
+
     /// `exits` as given, whatever its portals.
     pub fn exits(mut self, exits: &[u64]) -> Self {
         self.exits = Some(exits.to_vec());
@@ -260,16 +269,19 @@ impl Map {
 /// OSMS's destination for a portal that goes nowhere.
 pub const DEAD_END: u64 = 999_999_999;
 
-/// A made-up world: its maps, its mobs, and the names of maps outside it (`lookups.json`).
+/// A made-up world: its maps, its mobs, the names of maps outside it (`lookups.json`), and
+/// its Map Marks' pictures.
 #[derive(Debug, Clone, Default)]
 pub struct World {
     pub maps: Vec<Map>,
     pub mobs: Vec<Mob>,
     pub other_maps: Vec<(u64, String)>,
+    /// `map_mark_icons`, each mark's name and its picture's path; `None` leaves it out.
+    pub mark_icons: Option<Vec<(String, String)>>,
 }
 
 pub fn world(maps: Vec<Map>, mobs: Vec<Mob>) -> World {
-    World { maps, mobs, other_maps: Vec::new() }
+    World { maps, mobs, other_maps: Vec::new(), mark_icons: Some(Vec::new()) }
 }
 
 impl World {
@@ -319,6 +331,24 @@ impl World {
         self
     }
 
+    /// The same world, with a picture of Map Mark `mark` where OSMS keeps them
+    /// (`images/map_marks/<mark>.png`).
+    pub fn with_mark_icon(self, mark: &str) -> Self {
+        self.with_mark_icon_at(mark, &format!("images/map_marks/{mark}.png"))
+    }
+
+    /// The same world, with a picture of Map Mark `mark` at `path`.
+    pub fn with_mark_icon_at(mut self, mark: &str, path: &str) -> Self {
+        self.mark_icons.get_or_insert_with(Vec::new).push((mark.into(), path.into()));
+        self
+    }
+
+    /// The same world, with no `map_mark_icons` at all.
+    pub fn without_mark_icons(mut self) -> Self {
+        self.mark_icons = None;
+        self
+    }
+
     /// The same world, with `lookups.json` naming map `id`, which isn't in it.
     pub fn naming(mut self, id: u64, name: &str) -> Self {
         self.other_maps.push((id, name.into()));
@@ -346,6 +376,7 @@ impl World {
             m.insert("region".into(), json!(map.region));
             m.insert("minimap".into(), json!(format!("images/maps/{:09}.png", map.id)));
             m.insert("bgm".into(), json!("Bgm00/MadeUp"));
+            m.insert("map_mark".into(), json!(map.mark.as_deref().unwrap_or("None")));
             if map.town {
                 m.insert("is_town".into(), json!(true));
             }
@@ -378,7 +409,11 @@ impl World {
             .into_iter()
             .map(|(region, maps)| json!({ "region": region, "count": maps.len(), "maps": maps }))
             .collect();
-        json!({ "regions": regions, "total": self.maps.len(), "map_mark_icons": {}, "npc_lookup": {} })
+        let mut file = json!({ "regions": regions, "total": self.maps.len(), "npc_lookup": {} });
+        if let Some(icons) = &self.mark_icons {
+            file["map_mark_icons"] = Value::Object(icons.iter().map(|(mark, path)| (mark.clone(), json!(path))).collect());
+        }
+        file
     }
 
     fn portals_json(&self) -> Value {

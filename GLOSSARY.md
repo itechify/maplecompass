@@ -25,6 +25,10 @@ _Avoid_: title, map title
 **Minimap Title**:
 The street name and map name as rendered at the top of the in-game minimap; the signal MapleCompass recognises the map from.
 
+**Map Mark**:
+The small emblem the in-game minimap draws beside its title, for the area a map belongs to (Henesys's shield, Kerning City's stone, Sleepywood's skull). Many maps share one; a few have none. MapleCompass shows it beside a map's name, so a glance says where in the world the map is.
+_Avoid_: map icon, region icon
+
 **Candidate**:
 One of several maps that share a Minimap Title, offered to the player when the map they came from doesn't settle which one they are on.
 

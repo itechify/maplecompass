@@ -49,6 +49,7 @@ fn a_slightly_misread_title_snaps_to_the_right_map() {
             street_name: "Victoria Road".into(),
             map_name: "Rocky Road I".into(),
             url: "https://meowdb.com/msclassic/maps/010004060".into(),
+            mark: None,
         })
     );
     assert!(!state.not_sure);

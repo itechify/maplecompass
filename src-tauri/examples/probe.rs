@@ -138,6 +138,13 @@ fn osms() -> Result<(), String> {
     }
     println!("  with mobs and a Map Summary: {}", maps.iter().filter(|(_, data)| data.summary.is_some()).count());
     println!("  with a nearest town: {}", maps.iter().filter(|(_, data)| data.nearest_town.is_some()).count());
+    let marks: Vec<&str> = set.marks().map(|(mark, _)| mark).collect();
+    println!(
+        "  with a Map Mark: {} ({} marks: {})",
+        maps.iter().filter(|(entry, _)| entry.mark.is_some()).count(),
+        marks.len(),
+        marks.join(", ")
+    );
     println!(
         "Portals to other maps: {} ({} visible, {} Doors, {} hidden, {} Quest)",
         portals().count(),

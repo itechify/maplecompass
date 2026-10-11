@@ -39,10 +39,14 @@
           </div>
         </header>
         <div class="titlebar drag-handle" id="titlebar">
-          <p class="street" id="street"></p>
-          <div class="map-line">
-            <p class="map" id="map">Starting…</p>
-            <span class="doubt" id="uncertainty" aria-label="Current Map is uncertain" hidden>Not sure</span>
+          <!-- The map's Map Mark, as the Mini Map draws it beside its title. -->
+          <img class="map-mark title-mark" id="title-mark" alt="" draggable="false" hidden />
+          <div class="title-lines">
+            <p class="street" id="street"></p>
+            <div class="map-line">
+              <p class="map" id="map">Starting…</p>
+              <span class="doubt" id="uncertainty" aria-label="Current Map is uncertain" hidden>Not sure</span>
+            </div>
           </div>
         </div>
         <p class="note" id="recovery" role="status" hidden></p>

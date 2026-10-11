@@ -3,6 +3,7 @@
 //! Mob Card figures and animation. Credit "OSMS Data Explorer (osmsdataexplorer.com)".
 
 use crate::map_data::{MapData, MapSummary, Mob, PerParty};
+use crate::map_mark;
 use crate::map_index::{MapEntry, SourceError};
 use crate::map_preview::PicturePoint;
 use crate::mob_card::{DamageRange, Elements, HpPerExp, MobDetails};
@@ -61,6 +62,8 @@ pub struct MapSet {
     /// The path of each mob's default animation, by its ID; a mob OSMS names none for
     /// isn't here.
     animations: HashMap<String, String>,
+    /// The path of each Map Mark's picture, by OSMS's name for the mark.
+    marks: BTreeMap<String, String>,
 }
 
 impl MapSet {
@@ -94,6 +97,12 @@ impl MapSet {
     pub(crate) fn animation(&self, id: &str) -> Option<&str> {
         self.animations.get(id).map(String::as_str)
     }
+
+    /// Every Map Mark OSMS has a picture of: its name, and its picture's path
+    /// ([`crate::MapDataSource::picture`]), by name.
+    pub fn marks(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.marks.iter().map(|(name, path)| (name.as_str(), path.as_str()))
+    }
 }
 
 /// Read OSMS's file set. All or nothing: a file that isn't JSON, or isn't shaped as the
@@ -125,6 +134,10 @@ fn read_set(files: &OsmsFiles, overrides: &[PortalOverride]) -> Result<MapSet, S
     let pictures: HashMap<String, String> = parse(&files.map_manifest, "map_manifest.json")?;
     let lookups: LookupsFile = parse(&files.lookups, "lookups.json")?;
     let mobs: HashMap<u64, &OsmsMob> = monsters.monsters.iter().map(|mob| (mob.id, mob)).collect();
+    let mut marks = BTreeMap::new();
+    for (name, path) in &maps.map_mark_icons {
+        marks.insert(name.clone(), map_mark::picture_path(path).map_err(|why| format!("map mark {name}: {why}"))?);
+    }
 
     let mut listed = Vec::new();
     for map in maps.regions.iter().flat_map(|region| &region.maps) {
@@ -133,6 +146,8 @@ fn read_set(files: &OsmsFiles, overrides: &[PortalOverride]) -> Result<MapSet, S
             street_name: map.street_name.trim().to_string(),
             map_name: map.name.trim().to_string(),
             region: map.region.clone(),
+            // "None", or a mark without a picture: nothing to show.
+            mark: map.map_mark.clone().filter(|mark| marks.contains_key(mark)),
         };
         listed.push((entry, map));
     }
@@ -144,12 +159,18 @@ fn read_set(files: &OsmsFiles, overrides: &[PortalOverride]) -> Result<MapSet, S
     // else lookups.json, else its ID.
     let looked_up = |id: &str| lookups.map_names.get(id).map(|name| name.trim()).filter(|name| !name.is_empty());
     let name_of = |id: &str| match (names.get(id), looked_up(id)) {
-        (Some(entry), _) => {
-            Destination { map_name: entry.map_name.clone(), street_name: entry.street_name.clone(), known: true }
-        }
-        (None, name) => {
-            Destination { map_name: name.unwrap_or(id).to_string(), street_name: String::new(), known: false }
-        }
+        (Some(entry), _) => Destination {
+            map_name: entry.map_name.clone(),
+            street_name: entry.street_name.clone(),
+            mark: entry.mark.clone(),
+            known: true,
+        },
+        (None, name) => Destination {
+            map_name: name.unwrap_or(id).to_string(),
+            street_name: String::new(),
+            mark: None,
+            known: false,
+        },
     };
 
     let mut set = Vec::new();
@@ -168,7 +189,7 @@ fn read_set(files: &OsmsFiles, overrides: &[PortalOverride]) -> Result<MapSet, S
             animations.insert(mob.id.to_string(), animation_path(hash).map_err(|why| format!("mob {}: {why}", mob.id))?);
         }
     }
-    Ok(MapSet { maps: set, mobs, animations })
+    Ok(MapSet { maps: set, mobs, animations, marks })
 }
 
 /// Where OSMS keeps the mob animation with content hash `hash`, below [`PICTURES_URL`].
@@ -373,6 +394,10 @@ fn map_id(id: u64) -> Result<String, String> {
 #[derive(Deserialize)]
 struct MapsFile {
     regions: Vec<Region>,
+    /// Each Map Mark's picture, by the mark's name, below [`DATA_URL`]
+    /// (`"images/map_marks/Henesys.png"`). Without it, no map has a mark.
+    #[serde(default)]
+    map_mark_icons: BTreeMap<String, String>,
 }
 
 #[derive(Deserialize)]
@@ -397,6 +422,8 @@ struct OsmsMap {
     /// The maps its portals lead to.
     #[serde(default)]
     exits: Vec<u64>,
+    /// Its Map Mark's name, a key of `map_mark_icons`; `"None"` for none.
+    map_mark: Option<String>,
     /// One per spawn point.
     #[serde(default)]
     mob_positions: Vec<SpawnPoint>,

@@ -36,6 +36,8 @@ pub(crate) struct Exit {
 pub(crate) struct Destination {
     pub map_name: String,
     pub street_name: String,
+    /// Its Map Mark, by OSMS's name for it; `None` for a map without one.
+    pub mark: Option<String>,
     /// It is in the map list.
     pub known: bool,
 }
@@ -116,6 +118,7 @@ pub(crate) fn portals(map: &MapFacts, exits: Vec<Exit>, overrides: &[PortalOverr
             to_map_id: e.to_map_id.clone(),
             to_map_name: e.to.map_name.clone(),
             to_street_name: e.to.street_name.clone(),
+            to_mark: e.to.mark.clone(),
             lands_at: None,
             hidden_portal: row,
             // The Hunting Target's route is the panel's: it marks these when it shows them.
@@ -134,6 +137,7 @@ pub(crate) fn portals(map: &MapFacts, exits: Vec<Exit>, overrides: &[PortalOverr
                 to_map_id: e.to_map_id,
                 to_map_name: e.to.map_name,
                 to_street_name: e.to.street_name,
+                to_mark: e.to.mark,
             });
         }
     }
