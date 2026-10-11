@@ -26,4 +26,5 @@ The pictures on the MapleCompass site, taken by hand in the game. The site's bui
 
 When a change alters something a shot shows, the PR that makes it lists the shot here, with what changed. At release, the smoke test retakes every shot listed (`docs/releasing.md`) and empties the list.
 
+- `game-window.png`: the Mobs section lists every mob on the map, so Henesys Hunting Ground I shows all seven, with no "+2 more" line.
 - `setup.png`: the shot is setup opened again ("Step 3 of 6", with Keep the current title), and the Setup topic describes first run. Retake it on first run, at "Step 4 of 7", and set its alt text and caption back to first run.

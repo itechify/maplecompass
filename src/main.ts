@@ -63,11 +63,9 @@ type LevelRange = { lowest: number; highest: number };
 /** Mirror of `compass_core::MapData`. */
 type MapData = {
   summary: { mobsPerHour: PerParty; expPerHour: PerParty } | null;
+  /** Every mob on the map, all listed, by level (then name). */
   mobs: Mob[];
   hiddenPortals: HiddenPortal[];
-  /** The mobs the panel lists: the five with the largest Spawn Share, by level. */
-  listedMobs: Mob[];
-  moreMobs: { count: number; levels: LevelRange } | null;
 };
 
 /**
@@ -172,7 +170,6 @@ const grindTracker = byId("grind-tracker");
 const badge = byId("badge");
 const mapMobs = byId("map-mobs");
 const noMobs = byId("no-mobs");
-const moreMobs = byId("more-mobs");
 const portalsToggle = byId("portals-toggle") as HTMLButtonElement;
 const mobsToggle = byId("mobs-toggle") as HTMLButtonElement;
 const navigationToggle = byId("navigation-toggle") as HTMLButtonElement;
@@ -281,13 +278,7 @@ function candidateRow(id: string, outline: Outline): HTMLLIElement {
   facts.className = "candidate-facts";
   const { mobLevels, firstMobs, hiddenPortals } = outline;
   row.append(span("candidate-mobs", firstMobs.length ? firstMobs.join(", ") : "No mobs"));
-  if (mobLevels) {
-    facts.append(span("candidate-levels",
-      mobLevels.lowest === mobLevels.highest
-        ? `Lv ${mobLevels.lowest}`
-        : `Lv ${mobLevels.lowest}–${mobLevels.highest}`,
-    ));
-  }
+  if (mobLevels) facts.append(span("candidate-levels", levels(mobLevels)));
   facts.append(span("candidate-portals", `${hiddenPortals} hidden portal${hiddenPortals === 1 ? "" : "s"}`));
   facts.append(span("candidate-id", `Map ${id}`));
   row.append(facts);
@@ -361,7 +352,7 @@ function renderData(panel: PanelState) {
   renderPortalRows(hiddenPortals, panel.mapPreview?.marks ?? []);
 
   mapMobs.hidden = !ready;
-  noMobs.hidden = !ready || ready.listedMobs.length > 0;
+  noMobs.hidden = !ready || ready.mobs.length > 0;
   summary.hidden = !ready?.summary;
   if (ready?.summary) {
     const { mobsPerHour, expPerHour } = ready.summary;
@@ -370,9 +361,9 @@ function renderData(panel: PanelState) {
     byId("exp-solo").textContent = number(expPerHour.solo);
     byId("exp-party").textContent = number(expPerHour.fullParty);
   }
-  mobsTable.hidden = !ready || ready.listedMobs.length === 0;
+  mobsTable.hidden = !ready || ready.mobs.length === 0;
   mobRows.replaceChildren(
-    ...(ready?.listedMobs ?? []).map((mob) => {
+    ...(ready?.mobs ?? []).map((mob) => {
       const row = document.createElement("tr");
       // The name opens the mob's MeowDB page, and resting on it shows its Mob Card.
       const name = document.createElement("td");
@@ -398,14 +389,11 @@ function renderData(panel: PanelState) {
       return row;
     }),
   );
-  const more = ready?.moreMobs;
-  moreMobs.hidden = !more;
-  if (more) moreMobs.textContent = `+${more.count} more · ${levels(more.levels)} · all on MeowDB`;
 
   // Each section collapses to its heading; Mobs then says how many it holds. With nothing
   // to list, Mobs has nothing to collapse: its heading and "No mobs on this map" show as
   // ever. The Map shows only with something in it.
-  const mobCount = (ready?.listedMobs.length ?? 0) + (ready?.moreMobs?.count ?? 0);
+  const mobCount = ready?.mobs.length ?? 0;
   foldSection(portals, portalsToggle, panel.collapsedSections.hiddenPortals, true);
   foldSection(mapMobs, mobsToggle, panel.collapsedSections.mobs, mobCount > 0, mobCount);
   // Opened again, the picture is fitted to the section.
@@ -945,7 +933,7 @@ function renderMobCard() {
     ? mobRows.querySelector<HTMLElement>(`.mob-name[data-id="${CSS.escape(hoveredMob)}"]`)
     : null;
   const ready = panel?.data.status === "ready" || panel?.data.status === "savedCopy" ? panel.data : null;
-  const mob = ready?.listedMobs.find((m) => m.id === hoveredMob);
+  const mob = ready?.mobs.find((m) => m.id === hoveredMob);
   const card = panel?.mobCards.find((c) => c.id === hoveredMob);
   if (!mobCardDue || !panel?.expanded || step !== null || !button || !mob || !card) {
     mobCardEl.hidden = true;

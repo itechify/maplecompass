@@ -1,12 +1,12 @@
 //! The recognised map shows with its data from OSMS's file set, which the core holds
-//! whole: no page is asked for, and no map waits for one. The panel lists the most
-//! common mobs, credits both sites, and still opens the map's MeowDB page.
+//! whole: no page is asked for, and no map waits for one. The panel lists every mob,
+//! credits both sites, and still opens the map's MeowDB page.
 
 mod common;
 
 use common::osms::{self, SUNSET_SKY, map, mob};
 use common::{FakeSource, arrive, sample_frame};
-use compass_core::{Compass, LevelRange, MapData, MapDataStatus, MoreMobs, OSMS_AND_MEOWDB_CREDIT, PanelState, Request};
+use compass_core::{Compass, MapData, MapDataStatus, OSMS_AND_MEOWDB_CREDIT, PanelState, Request};
 
 const SUNSET: &str = "victoria-road__sunset-sky--window";
 const KERNING: &str = "victoria-road__kerning-city--window";
@@ -57,9 +57,10 @@ fn mobs_are_sorted_by_level_then_name_whatever_order_osms_gives() {
     assert_eq!(order, ["Snail", "Stump", "Fire Sentinel", "Ice Sentinel"]);
 }
 
-/// Of 100 spawn points, so each mob's Spawn Share is its count.
+/// However many there are and however rare: the section folds to its heading if it's
+/// too long.
 #[test]
-fn the_panel_lists_the_five_most_common_mobs_by_level_and_sums_up_the_rest() {
+fn the_panel_lists_every_mob_on_the_map_by_level() {
     let data = sunset_with(&[
         (101, "Wild Boar", 25, 20),
         (102, "Snail", 1, 2),
@@ -71,38 +72,11 @@ fn the_panel_lists_the_five_most_common_mobs_by_level_and_sums_up_the_rest() {
         (108, "Ligator", 33, 5),
     ]);
 
-    let listed: Vec<_> = data.listed_mobs.iter().map(|m| m.name.as_str()).collect();
-    assert_eq!(listed, ["Stump", "Axe Stump", "Ghost Stump", "Horny Mushroom", "Wild Boar"]);
-    assert_eq!(data.more_mobs, Some(MoreMobs { count: 3, levels: LevelRange { lowest: 1, highest: 33 } }));
-    // Every mob is still there for comparing maps, in level order.
-    assert_eq!(data.mobs.len(), 8);
-}
-
-#[test]
-fn with_five_mobs_or_fewer_the_panel_lists_them_all() {
-    let data = sunset_with(&[(101, "Stump", 5, 1), (102, "Snail", 1, 1)]);
-
-    let listed: Vec<_> = data.listed_mobs.iter().map(|m| m.name.as_str()).collect();
-    assert_eq!(listed, ["Snail", "Stump"]);
-    assert_eq!(data.more_mobs, None);
-}
-
-/// Of 20 spawn points: A and B 6 each (30%), C 4 (20%), D 2 (10%), Late and Early 1
-/// each (5%).
-#[test]
-fn when_mobs_tie_for_the_last_listed_place_the_lower_level_one_is_listed() {
-    let data = sunset_with(&[
-        (101, "A", 10, 6),
-        (102, "B", 11, 6),
-        (103, "C", 12, 4),
-        (104, "D", 13, 2),
-        (105, "Late", 40, 1),
-        (106, "Early", 2, 1),
-    ]);
-
-    let listed: Vec<_> = data.listed_mobs.iter().map(|m| m.name.as_str()).collect();
-    assert_eq!(listed, ["Early", "A", "B", "C", "D"]);
-    assert_eq!(data.more_mobs, Some(MoreMobs { count: 1, levels: LevelRange { lowest: 40, highest: 40 } }));
+    let listed: Vec<_> = data.mobs.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(
+        listed,
+        ["Snail", "Stump", "Axe Stump", "Ghost Stump", "Horny Mushroom", "Wild Boar", "Fire Boar", "Ligator"]
+    );
 }
 
 /// The data is OSMS Data Explorer's; the title and the mobs' names open NiaMeowDB's pages.

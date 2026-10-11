@@ -42,8 +42,7 @@ pub use hotkey_settings::{KeyPress, RebindProblem, SettingsNotice, SettingsView}
 pub use item_lookup::{ItemChoice, ItemHit, ItemLookup, ItemLookupLine, OurWindow};
 pub use item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReader, ItemTooltipReading};
 pub use map_data::{
-    HiddenPortal, LISTED_MOBS, MapData, MapDataStatus, MapSummary, Mob, MoreMobs, PerParty,
-    Portal, PortalKind,
+    HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty, Portal, PortalKind,
 };
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
 pub use map_preview::{Landing, Leads, MapPreview, PicturePoint, PortalMark, PreviewImage};
@@ -372,8 +371,8 @@ pub struct Compass {
     shown_map: ShownMap,
     /// The wall clock (ms since the Unix epoch), as the shell last told it.
     wall_clock: Option<u64>,
-    /// OSMS's pictures the panel asked for: the Map Preview's picture, and the listed
-    /// mobs' animations for their Mob Cards.
+    /// OSMS's pictures the panel asked for: the Map Preview's picture, and the map's mobs'
+    /// animations for their Mob Cards.
     pictures: Pictures,
     /// MeowDB's pace, kept by Item Lookup's searches.
     meowdb_pace: Pace,
@@ -548,7 +547,7 @@ impl Compass {
     }
 
     /// What shows OSMS's pictures, with those in so far: the Map Preview (its portals on the
-    /// Hunting Target's route marked), the listed mobs' Mob Cards and the Hunting Target's mob.
+    /// Hunting Target's route marked), the map's mobs' Mob Cards and the Hunting Target's mob.
     fn sync_pictured(&mut self) {
         let next_map = self.state.search.hunting.as_ref().and_then(HuntingTarget::next_map_by_portal);
         self.state.map_preview = self
@@ -556,9 +555,9 @@ impl Compass {
             .as_ref()
             .and_then(|set| self.shown_map.preview(&set.maps, &self.pictures))
             .map(|preview| preview.on_route_to(next_map));
-        let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
+        let mobs = self.state.data.data().map_or(&[][..], |data| &data.mobs);
         self.state.mob_cards = match &self.set {
-            Some(set) => mob_card::cards(listed, &set.maps, &self.pictures),
+            Some(set) => mob_card::cards(mobs, &set.maps, &self.pictures),
             None => Vec::new(),
         };
         if let (Some(hunting), Some(set)) = (&mut self.state.search.hunting, &self.set) {
@@ -567,15 +566,15 @@ impl Compass {
     }
 
     /// Ask for the pictures the panel wants, one at a time: the Map Preview's first, then
-    /// the listed mobs' animations, then the Hunting Target mob's.
+    /// the map's mobs' animations, then the Hunting Target mob's.
     fn poll_pictures(&mut self, at_ms: u64) {
         let Some(set) = &self.set else { return };
         let preview = self.state.map_preview.as_ref().map(|preview| map_preview::picture_path(&preview.picture));
-        let listed = self.state.data.data().map_or(&[][..], |data| &data.listed_mobs);
+        let mobs = self.state.data.data().map_or(&[][..], |data| &data.mobs);
         let hunted = self.state.search.hunting.as_ref().and_then(|hunting| set.maps.animation(&hunting.mob.id));
         let wanted: Vec<String> = preview
             .into_iter()
-            .chain(mob_card::animations(listed, &set.maps))
+            .chain(mob_card::animations(mobs, &set.maps))
             .chain(hunted.map(String::from))
             .collect();
         self.pictures.poll(&wanted, &mut *self.source, at_ms);
