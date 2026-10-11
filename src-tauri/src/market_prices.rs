@@ -1,5 +1,5 @@
-//! Keeping the market prices the player types into Item Cards between launches: the core's
-//! [`SavedMarketPrices`] as pretty JSON beside the settings
+//! Keeping the market prices the player types into Item Cards, on their Market Lines,
+//! between launches: the core's [`SavedMarketPrices`] as pretty JSON beside the settings
 //! (`%APPDATA%\com.itechify.maplecompass\market-prices.json` on Windows), read at startup
 //! and written whenever the core's market prices revision changes, but never over a file
 //! that was there and didn't read.
@@ -24,9 +24,10 @@ pub struct MarketPricesFile {
 }
 
 impl MarketPricesFile {
-    /// The prices saved at `path`, or none when there is no file yet. A file that is there
-    /// but doesn't read (reading it fails, it isn't JSON as the core saves it, or it was
-    /// saved in another shape, by a later version) is logged and set aside as
+    /// The prices saved at `path`, or none when there is no file yet. One saved before
+    /// there were Market Lines (shape 1, 0.8.0) reads as the first line's prices. A file
+    /// that is there but doesn't read (reading it fails, it isn't JSON as the core saves
+    /// it, or it was saved in a later shape, by a later version) is logged and set aside as
     /// `market-prices.json.bad`, and there are none. If it can't be set aside, it is left as
     /// it was: [`MarketPricesFile::save`] never writes over it.
     pub fn load(path: PathBuf) -> (Self, SavedMarketPrices) {
@@ -67,7 +68,7 @@ impl MarketPricesFile {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use compass_core::MarketPrice;
+    use compass_core::{MarketPrice, SavedMarketLine};
 
     /// `market-prices.json` in a folder of `test`'s own under the temp folder, emptied first.
     fn file(test: &str) -> PathBuf {
@@ -84,10 +85,35 @@ mod tests {
         assert_eq!(none, SavedMarketPrices::default());
 
         let mut prices = SavedMarketPrices::default();
-        prices.items.insert("04010000".into(), MarketPrice { mesos: 450_000, set_at_unix_ms: Some(1_791_720_000_000) });
+        prices.lines[0].prices.insert("04010000".into(), MarketPrice { mesos: 450_000, set_at_unix_ms: Some(1_791_720_000_000) });
+        prices.lines.push(SavedMarketLine { id: "2".into(), name: "Lowest ask".into(), prices: Default::default() });
         first.save(&prices).unwrap();
 
         assert_eq!(MarketPricesFile::load(path).1, prices);
+    }
+
+    #[test]
+    fn prices_saved_before_there_were_lines_are_read_as_the_first_lines() {
+        let path = file("shape-1");
+        fs::write(&path, br#"{"version":1,"items":{"04010000":{"mesos":450000}}}"#).unwrap();
+
+        let (_, prices) = MarketPricesFile::load(path.clone());
+
+        assert_eq!(prices.version, MARKET_PRICES_VERSION);
+        assert_eq!(prices.lines.len(), 1);
+        assert_eq!(prices.lines[0].prices["04010000"].mesos, 450_000);
+        assert!(path.exists(), "not set aside");
+    }
+
+    #[test]
+    fn prices_saved_in_a_later_shape_are_set_aside() {
+        let path = file("later-shape");
+        fs::write(&path, br#"{"version":3,"lines":[]}"#).unwrap();
+
+        let (_, prices) = MarketPricesFile::load(path.clone());
+
+        assert_eq!(prices, SavedMarketPrices::default());
+        assert!(path.with_extension("json.bad").exists());
     }
 
     #[test]

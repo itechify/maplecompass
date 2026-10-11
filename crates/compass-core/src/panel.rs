@@ -127,12 +127,22 @@ pub enum Action {
     /// The player dragged the Item Card by its bar so its top-left corner is at (x, y),
     /// physical screen px.
     ItemCardMoved { x: i32, y: i32 },
-    /// The player clicked the Item Card's market price: its field opens for them to type
-    /// in.
+    /// The first Market Line's price field opens on the Item Card: what a click on its one
+    /// market price did before there were lines (0.8.0), kept so those Bug Reports read.
+    /// The card now asks for a line's field by its ID ([`crate::Compass::edit_card_market_price`]).
     EditCardMarket,
-    /// The player pressed Esc in the Item Card's market price field: it closes, the price
-    /// as it was.
+    /// The player pressed Esc in a field of the Item Card's market section, or Keep at the
+    /// question before a line goes: it closes, everything as it was.
     CancelCardMarket,
+    /// The player clicked the + on the Item Card's market heading: a new line's name
+    /// field opens.
+    AddCardMarketLine,
+    /// The player clicked Remove beside an open line name field on the Item Card: the card
+    /// asks first, saying how many of the line's prices go with it.
+    AskRemoveCardMarketLine,
+    /// The player confirmed removing the line the Item Card asked about: it goes, with its
+    /// prices on every item.
+    RemoveCardMarketLine,
     /// Open the search view on its mobs, with nothing typed yet (the search hotkey, or
     /// the 🔍 at the top of the panel). A collapsed panel expands to show it.
     OpenSearch,

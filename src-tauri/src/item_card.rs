@@ -5,10 +5,10 @@
 //! `tauri.conf.json`, ADR 0001). Like the Personal Bests window it is declared in
 //! `tauri.conf.json` and never hidden: without a card its page draws nothing, and clicks
 //! pass through it. While a card shows it takes the clicks on it (its bar, its ×, its name,
-//! its market price and buttons, an item to pick), and none reach the game. While its
-//! market price's field is open it takes the keyboard too, as the search view does: it
-//! comes to the front right after the player's click, and gives the game the keyboard back
-//! once the field closes. Every decision is the core's; this only places the window, sends
+//! its Market Lines and buttons, an item to pick), and none reach the game. While a price
+//! or line name field is open it takes the keyboard too, as the search view does: it comes
+//! to the front right after the player's click, and gives the game the keyboard back once
+//! the field closes. Every decision is the core's; this only places the window, sends
 //! its page what it renders, relays the player's drags, and moves it out of the way of a
 //! capture.
 
@@ -17,7 +17,7 @@ use crate::search;
 use crate::sizemove::{self, Gesture, SizeMove};
 use crate::view::{LastView, ViewSender};
 use crate::{Command, LOOP_START_GRACE, keep_on_top, physical, place};
-use compass_core::{Action, ItemCard, ItemCardView as CardShows, PanelState, ShownItemCard, Size};
+use compass_core::{Action, ItemCard, ItemCardView as CardShows, MarketEdit, PanelState, ShownItemCard, Size};
 use serde::Serialize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -74,7 +74,7 @@ pub struct ItemCardWindow {
     /// The card's height in CSS px, as the page last reported it.
     height: f64,
     drag: Option<Drag>,
-    /// Its market price's field is open: it takes the keyboard.
+    /// A price or line name field is open: it takes the keyboard.
     takes_keyboard: bool,
     view: ViewSender,
 }
@@ -162,11 +162,15 @@ impl ItemCardWindow {
                 error!("item card click-through toggle failed: {e}");
             }
         }
-        // Only the open market price field takes the typing. Otherwise the card can't be
-        // activated (WS_EX_NOACTIVATE), so a click on it leaves the keyboard with the game.
+        // Only an open price or line name field takes the typing (the question before a
+        // line goes is answered with a click). Otherwise the card can't be activated
+        // (WS_EX_NOACTIVATE), so a click on it leaves the keyboard with the game.
         let takes_keyboard = matches!(
             card.map(|card| &card.view),
-            Some(CardShows::Card(ItemCard { market_edit: Some(_), .. }))
+            Some(CardShows::Card(ItemCard {
+                market_edit: Some(MarketEdit::Price { .. } | MarketEdit::Name { .. }),
+                ..
+            }))
         );
         if self.takes_keyboard != takes_keyboard {
             let _ = self.window.set_focusable(takes_keyboard);
@@ -231,20 +235,52 @@ pub fn item_card_open_mesowatch(commands: State<'_, Sender<Command>>) {
     let _ = commands.send(Command::OpenCardMesowatch);
 }
 
-/// The player clicked the card's market price, to type one.
+/// The player clicked the price on the Market Line with this ID, to type one.
 #[tauri::command]
-pub fn item_card_edit_market(commands: State<'_, Sender<Command>>) {
-    let _ = commands.send(Command::Act(Action::EditCardMarket));
+pub fn item_card_edit_market(line: String, commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::EditCardMarketPrice(line));
 }
 
-/// The player pressed Enter in the market price field, or left it, holding `typed`.
+/// The player pressed Enter in the price field, or left it, holding `typed`.
 #[tauri::command]
 pub fn item_card_enter_market(typed: String, commands: State<'_, Sender<Command>>) {
     let _ = commands.send(Command::EnterCardMarket(typed));
 }
 
-/// The player pressed Esc in the market price field.
+/// The player pressed Esc in a price or line name field, or Keep at the question before a
+/// line goes.
 #[tauri::command]
 pub fn item_card_cancel_market(commands: State<'_, Sender<Command>>) {
     let _ = commands.send(Command::Act(Action::CancelCardMarket));
+}
+
+/// The player clicked the name of the Market Line with this ID, to rename or remove it.
+#[tauri::command]
+pub fn item_card_edit_market_line(line: String, commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::EditCardMarketLine(line));
+}
+
+/// The player pressed Enter in a line name field, or left it with something typed,
+/// holding `typed`.
+#[tauri::command]
+pub fn item_card_enter_market_line(typed: String, commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::EnterCardMarketLine(typed));
+}
+
+/// The player clicked the + on the market heading, to add a line.
+#[tauri::command]
+pub fn item_card_add_market_line(commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::Act(Action::AddCardMarketLine));
+}
+
+/// The player clicked Remove beside a line name field: the card asks first.
+#[tauri::command]
+pub fn item_card_ask_remove_market_line(commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::Act(Action::AskRemoveCardMarketLine));
+}
+
+/// The player clicked Remove at the question: the line goes, with its prices.
+#[tauri::command]
+pub fn item_card_remove_market_line(commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::Act(Action::RemoveCardMarketLine));
 }

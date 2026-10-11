@@ -169,8 +169,12 @@ _Avoid_: drop, loot (when meaning the item itself)
 The box the game draws by the mouse pointer when the player hovers an item: the item's name on the line with the blue bullet (a crafted item's maker sits above it), then its picture and figures. It is the game's, not ours: the Item Card and the Mob Card are MapleCompass's own.
 
 **Item Card**:
-The card the hotkey (Ctrl+Shift+I by default) shows at the pointer for the item whose Item Tooltip the game shows there: what a shop pays for it, and the market price the player keeps for it (typed into the card, with a button that opens MesoWatch to look it up). It stays until the player closes it or presses the hotkey again, where the player drags it by its bar, and its name opens the item's MeowDB page. When items that don't look alike share the name, it first lists them, with their pictures, for the player to pick.
+The card the hotkey (Ctrl+Shift+I by default) shows at the pointer for the item whose Item Tooltip the game shows there: what a shop pays for it, and the market prices the player keeps for it on their Market Lines (typed into the card, with a button that opens MesoWatch to look it up). It stays until the player closes it or presses the hotkey again, where the player drags it by its bar, and its name opens the item's MeowDB page. When items that don't look alike share the name, it first lists them, with their pictures, for the player to pick.
 _Avoid_: item tooltip (the game's), price check, popup
+
+**Market Line**:
+One of the market prices the player keeps for every item, under a name they give it ("Your price", "Typical", "Lowest ask"). Every Item Card lists every line, in the player's order, each with the item's price on it or "Not set"; the player adds, renames and removes lines on the card. A player starts with one, "Your price".
+_Avoid_: column, field, price type
 
 **Item Lookup**:
 The hotkey (Ctrl+Shift+U by default) that reads the Item Tooltip nearest the pointer and opens the item's MeowDB page. An alert at the top centre of the game window says what came of it, and when several items share the name, lists them for the player to pick. The same alert says what kept an Item Card from showing.

@@ -140,8 +140,14 @@ pub(crate) enum Command {
     OpenCardMeowdbPage,
     /// The player clicked the Item Card's MesoWatch button: open MesoWatch.
     OpenCardMesowatch,
-    /// The player pressed Enter in the Item Card's market price field, holding this.
+    /// The player clicked the price on the Item Card's Market Line with this ID.
+    EditCardMarketPrice(String),
+    /// The player pressed Enter in the Item Card's price field, holding this.
     EnterCardMarket(String),
+    /// The player clicked the name of the Item Card's Market Line with this ID.
+    EditCardMarketLine(String),
+    /// The player pressed Enter in the Item Card's line name field, holding this.
+    EnterCardMarketLine(String),
     /// Windows told of a drag of the Item Card's window.
     ItemCardSizeMove(SizeMove),
     /// The player chose Quit in the tray icon's menu: save the settings and exit.
@@ -381,6 +387,11 @@ pub fn run() {
             item_card::item_card_edit_market,
             item_card::item_card_enter_market,
             item_card::item_card_cancel_market,
+            item_card::item_card_edit_market_line,
+            item_card::item_card_enter_market_line,
+            item_card::item_card_add_market_line,
+            item_card::item_card_ask_remove_market_line,
+            item_card::item_card_remove_market_line,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -630,8 +641,17 @@ fn compass_loop(
                 // Its page comes from `take_request`, once MeowDB's search has answered.
                 compass.open_card_meowdb_page(reader.now_ms());
             }
+            Ok(Command::EditCardMarketPrice(line)) => {
+                compass.edit_card_market_price(&line);
+            }
             Ok(Command::EnterCardMarket(typed)) => {
                 compass.enter_card_market(&typed);
+            }
+            Ok(Command::EditCardMarketLine(line)) => {
+                compass.edit_card_market_line(&line);
+            }
+            Ok(Command::EnterCardMarketLine(typed)) => {
+                compass.enter_card_market_line(&typed);
             }
             Ok(Command::OpenCardMesowatch) => {
                 let request = compass.open_card_mesowatch();

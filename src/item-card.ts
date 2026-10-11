@@ -11,15 +11,25 @@ type ShopPrice = { status: "sells"; mesos: number } | { status: "notSold" } | { 
 /** Mirror of `compass_core::MarketPrice`: a price the player keeps, and when they set it. */
 type MarketPrice = { mesos: number; setAtUnixMs?: number };
 
-/** Mirror of `compass_core::MarketEdit`: the market price's field, open. */
-type MarketEdit = { notAPrice: string | null };
+/** Mirror of `compass_core::MarketLine`: one of the player's Market Lines, with the item's
+ * price on it. */
+type MarketLine = { id: string; name: string; price: MarketPrice | null };
+
+/** Mirror of `compass_core::NameProblem`. */
+type NameProblem = { kind: "empty" } | { kind: "taken"; name: string };
+
+/** Mirror of `compass_core::MarketEdit`: what the market section has open. */
+type MarketEdit =
+  | { field: "price"; line: string; notAPrice: string | null }
+  | { field: "name"; line: string | null; problem: NameProblem | null }
+  | { field: "remove"; line: string; prices: number };
 
 /** Mirror of `compass_core::ItemCard`. */
 type ItemCard = {
   id: string;
   name: string;
   shop: ShopPrice;
-  market: MarketPrice | null;
+  market: MarketLine[];
   marketEdit: MarketEdit | null;
   savedCopyFromUnixMs: number | null;
   credit: string;
@@ -104,66 +114,181 @@ const mesoWatchButton = () =>
     invoke("item_card_open_mesowatch"),
   );
 
-/** The market price's field, open: what the player typed (or the price kept), Enter to
- * keep it, Esc to leave it as it was. Leaving the field keeps what is typed. */
+/** A field in the market section, open: what is there selected, Enter to keep what is
+ * typed, Esc to leave everything as it was. Leaving it keeps what is typed, unless `onLeave`
+ * says otherwise. */
 let fieldDone = false;
-function marketField(card: ItemCard): HTMLElement[] {
+function field(
+  className: string,
+  value: string,
+  placeholder: string,
+  label: string,
+  enter: (typed: string) => void,
+  onLeave: (typed: string) => void = enter,
+): HTMLInputElement {
   const input = document.createElement("input");
   input.type = "text";
-  input.className = "item-card-input";
-  input.inputMode = "decimal";
+  input.className = `item-card-input ${className}`;
   input.autocomplete = "off";
   input.spellcheck = false;
-  input.placeholder = "450,000 or 450k";
-  input.setAttribute("aria-label", `Your market price for ${card.name}`);
-  input.value = card.marketEdit?.notAPrice ?? (card.market ? card.market.mesos.toLocaleString("en-US") : "");
+  input.placeholder = placeholder;
+  input.setAttribute("aria-label", label);
+  input.value = value;
   fieldDone = false;
-  const finish = (command: "item_card_enter_market" | "item_card_cancel_market") => {
+  const finish = (done: () => void) => {
     if (fieldDone) return;
     fieldDone = true;
-    invoke(command, command === "item_card_enter_market" ? { typed: input.value } : {});
+    done();
   };
   input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") finish("item_card_enter_market");
-    if (e.key === "Escape") finish("item_card_cancel_market");
+    if (e.key === "Enter") finish(() => enter(input.value));
+    if (e.key === "Escape") finish(() => invoke("item_card_cancel_market"));
   });
   input.addEventListener("blur", () => {
-    if (input.isConnected) finish("item_card_enter_market");
+    if (input.isConnected) finish(() => onLeave(input.value));
   });
-  const row = document.createElement("div");
-  row.className = "item-card-market editing";
-  row.append(span("label", "Market"), input, mesoWatchButton());
-  const note = document.createElement("p");
-  const problem = card.marketEdit?.notAPrice;
-  note.className = problem ? "item-card-hint problem" : "item-card-hint";
-  note.textContent = problem
-    ? `“${problem}” isn't a price. Try 450,000, 450k or 1.2m.`
-    : "Enter keeps it · Esc cancels · empty clears";
   queueMicrotask(() => {
     input.focus();
     input.select();
   });
-  return [row, note];
+  return input;
 }
 
-/** The market price the player keeps (the day they set it under the pointer), and buttons
- * to change it and to look it up on MesoWatch. */
-function marketRow(card: ItemCard): HTMLElement {
+/** What a field does, or why what was entered can't be kept. */
+function hint(problem: string | null, otherwise: string): HTMLParagraphElement {
+  const note = document.createElement("p");
+  note.className = problem ? "item-card-hint problem" : "item-card-hint";
+  note.textContent = problem ?? otherwise;
+  return note;
+}
+
+const quoted = (name: string) => `“${name}”`;
+
+/** A line: its name at the left (a link that opens its name field) and the item's price on
+ * it right-aligned (a link that opens its price field, the day it was set in its tooltip),
+ * or "Not set". */
+function lineRow(line: MarketLine): HTMLElement {
   const row = document.createElement("div");
-  row.className = "item-card-market";
-  const edit = () => invoke("item_card_edit_market");
-  const setOn = card.market?.setAtUnixMs;
-  const value = card.market
-    ? link(mesos(card.market.mesos), `Your price${setOn === undefined ? "" : `, set ${dayText(new Date(setOn), false)}`}. Click to change it`, edit)
-    : link("Not set", "Set your market price", edit);
-  value.classList.toggle("quiet", !card.market);
-  value.classList.add("value");
-  row.append(span("label", "Market"), value);
-  row.append(
-    iconButton("M3 13l.8-3.2L10.6 3l2.4 2.4-6.8 6.8L3 13zM9.3 4.3l2.4 2.4", "Set your market price", edit),
-    mesoWatchButton(),
+  row.className = "item-card-line";
+  const name = link(line.name, `Rename or remove ${quoted(line.name)}`, () =>
+    invoke("item_card_edit_market_line", { line: line.id }),
   );
+  name.classList.add("name");
+  const editPrice = () => invoke("item_card_edit_market", { line: line.id });
+  const setOn = line.price?.setAtUnixMs;
+  const value = line.price
+    ? link(
+        mesos(line.price.mesos),
+        `${line.name}${setOn === undefined ? "" : `, set ${dayText(new Date(setOn), false)}`}. Click to change it`,
+        editPrice,
+      )
+    : link("Not set", `Set your price on ${quoted(line.name)}`, editPrice);
+  value.classList.toggle("quiet", !line.price);
+  value.classList.add("value");
+  row.append(name, value);
   return row;
+}
+
+/** A line's price field, open in its price's place. */
+function priceField(card: ItemCard, line: MarketLine, notAPrice: string | null): HTMLElement[] {
+  const row = document.createElement("div");
+  row.className = "item-card-line editing";
+  const input = field(
+    "price",
+    notAPrice ?? (line.price ? line.price.mesos.toLocaleString("en-US") : ""),
+    "450,000 or 450k",
+    `Your ${line.name} for ${card.name}`,
+    (typed) => invoke("item_card_enter_market", { typed }),
+  );
+  input.inputMode = "decimal";
+  row.append(span("name", line.name), input);
+  const problem = notAPrice === null ? null : `${quoted(notAPrice)} isn't a price. Try 450,000, 450k or 1.2m.`;
+  return [row, hint(problem, "Enter keeps it · Esc cancels · empty clears")];
+}
+
+/** A line's name field, open in its row (`line` null: a line being added at the end), with
+ * the button that asks to remove the line. Left empty, it closes as it was. */
+function nameField(line: MarketLine | null, problem: NameProblem | null): HTMLElement[] {
+  const row = document.createElement("div");
+  row.className = "item-card-line editing";
+  const typed = problem?.kind === "taken" ? problem.name : problem ? "" : (line?.name ?? "");
+  const enter = (typed: string) => invoke("item_card_enter_market_line", { typed });
+  const input = field(
+    "name",
+    typed,
+    "Name it, e.g. Lowest ask",
+    line ? `Rename ${quoted(line.name)}` : "Name the new market line",
+    enter,
+    (typed) => (typed.trim() ? enter(typed) : invoke("item_card_cancel_market")),
+  );
+  row.append(input);
+  if (line) {
+    // Pressed, the field loses the keyboard: what it holds isn't kept, the question asked.
+    const remove = iconButton(
+      "M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5",
+      `Remove ${quoted(line.name)}`,
+      () => invoke("item_card_ask_remove_market_line"),
+    );
+    remove.addEventListener("mousedown", () => (fieldDone = true));
+    row.append(remove);
+  }
+  const says =
+    problem?.kind === "empty"
+      ? "Give the line a name, or Esc to cancel."
+      : problem?.kind === "taken"
+        ? `There's a line named ${quoted(problem.name)} already.`
+        : null;
+  return [row, hint(says, line ? "Enter renames it · Esc cancels" : "Enter adds it to every card · Esc cancels")];
+}
+
+/** The question before a line goes, with its prices on every item, in the line's place. */
+function removeQuestion(line: MarketLine, prices: number): HTMLElement {
+  const box = document.createElement("div");
+  box.className = "item-card-remove";
+  const what =
+    prices === 0
+      ? `Remove ${quoted(line.name)}? It has no prices yet.`
+      : `Remove ${quoted(line.name)} and its prices on ${prices.toLocaleString("en-US")} ${prices === 1 ? "item" : "items"}?`;
+  const question = document.createElement("p");
+  question.textContent = what;
+  const buttons = document.createElement("div");
+  buttons.className = "item-card-remove-buttons";
+  const button = (text: string, command: string) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "text-button";
+    b.textContent = text;
+    b.addEventListener("click", () => invoke(command));
+    return b;
+  };
+  buttons.append(button("Remove", "item_card_remove_market_line"), button("Keep", "item_card_cancel_market"));
+  box.append(question, buttons);
+  return box;
+}
+
+/** The Market Lines under a rule: the heading, with the buttons that add a line and look
+ * the item up on MesoWatch, then each line, or what the market section has open in its
+ * place. */
+function marketSection(card: ItemCard): HTMLElement {
+  const section = document.createElement("div");
+  section.className = "item-card-market";
+  const head = document.createElement("div");
+  head.className = "item-card-market-head";
+  const add = iconButton("M8 3.5v9M3.5 8h9", "Add a market line to every card", () =>
+    invoke("item_card_add_market_line"),
+  );
+  head.append(span("label", "Market"), add, mesoWatchButton());
+  section.append(head);
+  const edit = card.marketEdit;
+  for (const line of card.market) {
+    if (edit?.line !== line.id) section.append(lineRow(line));
+    else if (edit.field === "price") section.append(...priceField(card, line, edit.notAPrice));
+    else if (edit.field === "name") section.append(...nameField(line, edit.problem));
+    else section.append(removeQuestion(line, edit.prices));
+  }
+  if (edit?.field === "name" && edit.line === null) section.append(...nameField(null, edit.problem));
+  else if (card.market.length === 0) section.append(hint(null, "No market lines. + adds one to every card."));
+  return section;
 }
 
 /** One item's card. */
@@ -174,7 +299,7 @@ function renderCard(card: ItemCard) {
   prices.append(shopFigure(card.shop));
   const box = document.createElement("div");
   box.className = "item-card-box";
-  box.append(prices, ...(card.marketEdit ? marketField(card) : [marketRow(card)]));
+  box.append(prices, marketSection(card));
   const parts: Node[] = [box];
   if (card.savedCopyFromUnixMs !== null) {
     const note = document.createElement("p");
@@ -259,7 +384,7 @@ document.fonts.ready.then(reportHeight);
 new ResizeObserver(reportHeight).observe(cardEl);
 
 // Dragged by its bar, never by its button. The window takes clicks only while a card
-// shows, and the keyboard only while its market price's field is open.
+// shows, and the keyboard only while a price or line name field is open.
 document.addEventListener("mousedown", (e) => {
   const target = e.target instanceof Element ? e.target : null;
   const onBar = !!target?.closest(".drag-handle") && !target?.closest("button");

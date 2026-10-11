@@ -1,9 +1,9 @@
 //! The Item Card (ADR 0010): the player hovers an item in the game and presses
 //! Ctrl+Shift+I. The shell captures the game's client area with the pointer, the Item
 //! Tooltip's name is read, and the card shows at the pointer what the game's tooltip
-//! doesn't: what a shop pays for the item, and the market price the player keeps for it,
-//! with links to its MeowDB page and to MesoWatch's market prices. Failures go to the Item
-//! Lookup alert.
+//! doesn't: what a shop pays for the item, and the market prices the player keeps for it on
+//! their Market Lines (ADR 0011), with links to its MeowDB page and to MesoWatch's market
+//! prices. Failures go to the Item Lookup alert.
 //!
 //! The readings here stand for what the Item Tooltip reader made of a capture. OSMS's item
 //! files are made up in their shapes ([`common::items`]).
@@ -19,7 +19,7 @@ use common::{FakeSource, ItemSetAnswer};
 use common::items::{ItemWorld, cash, equip, etc, item_world, scroll, setup, use_item, weapon};
 use compass_core::{
     Action, Compass, ExpBarRegion, Foreground, GameWindow, Hotkey, ItemCard, ItemHit, ItemCardChoice, ItemCardView, ItemLookup, ItemTooltip,
-    ItemTooltipReading, MarketEdit, MarketPrice, OurWindow, PanelSizes, PanelState, Rect, Request, ScreenPoint, ScreenRect, Settings, ShopPrice,
+    ItemTooltipReading, MarketEdit, MarketPrice, NameProblem, OurWindow, PanelSizes, PanelState, Rect, Request, ScreenPoint, ScreenRect, Settings, ShopPrice,
     Recognition, Size, SourceError, TitleRegion, meowdb,
 };
 use compass_core::osms_items::ItemFiles;
@@ -818,45 +818,71 @@ fn the_next_card_opens_at_the_pointer_again() {
     assert_eq!(state.item_card_placement, Some(ScreenRect { x: 1008, y: 588, width: 300, height: 160 }));
 }
 
-/// The market price on the card showing, and whether its field is open.
-fn market(state: &PanelState) -> (Option<MarketPrice>, Option<MarketEdit>) {
+/// The Market Lines on the card showing, each as its name and the mesos on it.
+fn market(state: &PanelState) -> Vec<(String, Option<u64>)> {
     let card = card(state).expect("a card");
-    (card.market, card.market_edit)
+    card.market.into_iter().map(|line| (line.name, line.price.map(|price| price.mesos))).collect()
 }
 
-/// The player clicked the card's market price and typed `typed`, then Enter.
-fn set_market(compass: &mut Compass, typed: &str) -> PanelState {
-    compass.act(Action::EditCardMarket);
+/// What the card's market section has open.
+fn editing(state: &PanelState) -> Option<MarketEdit> {
+    card(state).expect("a card").market_edit
+}
+
+/// The ID of the card's Market Line named `name`.
+fn line(state: &PanelState, name: &str) -> String {
+    let card = card(state).expect("a card");
+    card.market.into_iter().find(|line| line.name == name).map(|line| line.id).unwrap_or_else(|| panic!("no line {name:?}"))
+}
+
+/// The player clicked the price on the card's line named `name` and typed `typed`, then
+/// Enter.
+fn set_price(compass: &mut Compass, state: &PanelState, name: &str, typed: &str) -> PanelState {
+    compass.edit_card_market_price(&line(state, name));
     compass.enter_card_market(typed).clone()
 }
 
+/// The player clicked the + on the card's market heading and named the new line `name`.
+fn add_line(compass: &mut Compass, name: &str) -> PanelState {
+    compass.act(Action::AddCardMarketLine);
+    compass.enter_card_market_line(name).clone()
+}
+
+fn not_set(names: &[&str]) -> Vec<(String, Option<u64>)> {
+    names.iter().map(|name| (name.to_string(), None)).collect()
+}
+
 #[test]
-fn an_item_has_no_market_price_until_the_player_sets_one() {
+fn a_card_starts_with_one_market_line_and_no_price_on_it() {
     let mut compass = started();
 
     let state = press_over(&mut compass, "Bronze Ore", 1_000);
 
-    assert_eq!(market(&state), (None, None));
+    assert_eq!(market(&state), not_set(&["Your price"]));
+    assert_eq!(editing(&state), None);
 }
 
 #[test]
-fn clicking_the_market_price_opens_its_field_for_the_player_to_type_in() {
+fn clicking_a_lines_price_opens_its_field_for_the_player_to_type_in() {
     let mut compass = started();
-    press_over(&mut compass, "Bronze Ore", 1_000);
+    let state = press_over(&mut compass, "Bronze Ore", 1_000);
+    let id = line(&state, "Your price");
 
-    let state = compass.act(Action::EditCardMarket).clone();
+    let state = compass.edit_card_market_price(&id).clone();
 
-    assert_eq!(market(&state), (None, Some(MarketEdit { not_a_price: None })));
+    assert_eq!(editing(&state), Some(MarketEdit::Price { line: id, not_a_price: None }));
 }
 
 #[test]
 fn the_price_the_player_types_is_kept_with_the_day_they_set_it() {
     let mut compass = started_at(FakeSource::osms_offline().with_items(shop()), SAVED_AT);
-    press_over(&mut compass, "Bronze Ore", 1_000);
+    let state = press_over(&mut compass, "Bronze Ore", 1_000);
 
-    let state = set_market(&mut compass, "450,000");
+    let state = set_price(&mut compass, &state, "Your price", "450,000");
 
-    assert_eq!(market(&state), (Some(MarketPrice { mesos: 450_000, set_at_unix_ms: Some(SAVED_AT) }), None));
+    let card = card(&state).expect("a card");
+    assert_eq!(card.market[0].price, Some(MarketPrice { mesos: 450_000, set_at_unix_ms: Some(SAVED_AT) }));
+    assert_eq!(card.market_edit, None);
 }
 
 #[test]
@@ -873,112 +899,365 @@ fn prices_are_typed_as_players_write_them() {
         ("0", 0),
     ] {
         let mut compass = started();
-        press_over(&mut compass, "Bronze Ore", 1_000);
-        let state = set_market(&mut compass, typed);
-        assert_eq!(market(&state).0.map(|price| price.mesos), Some(mesos), "{typed:?}");
+        let state = press_over(&mut compass, "Bronze Ore", 1_000);
+        let state = set_price(&mut compass, &state, "Your price", typed);
+        assert_eq!(market(&state)[0].1, Some(mesos), "{typed:?}");
     }
 }
 
 #[test]
 fn what_isnt_a_price_keeps_the_field_open_saying_so_and_the_price_as_it_was() {
     let mut compass = started();
-    press_over(&mut compass, "Bronze Ore", 1_000);
-    set_market(&mut compass, "450k");
+    let state = press_over(&mut compass, "Bronze Ore", 1_000);
+    let state = set_price(&mut compass, &state, "Your price", "450k");
+    let id = line(&state, "Your price");
 
     for typed in ["lots", "4.5.6k", "12x", "k", "-5"] {
-        let state = set_market(&mut compass, typed);
-        assert_eq!(market(&state).0.map(|price| price.mesos), Some(450_000), "{typed:?}");
-        assert_eq!(market(&state).1, Some(MarketEdit { not_a_price: Some(typed.into()) }), "{typed:?}");
+        let state = set_price(&mut compass, &state, "Your price", typed);
+        assert_eq!(market(&state)[0].1, Some(450_000), "{typed:?}");
+        assert_eq!(editing(&state), Some(MarketEdit::Price { line: id.clone(), not_a_price: Some(typed.into()) }), "{typed:?}");
     }
 }
 
 #[test]
 fn an_empty_field_clears_the_price() {
     let mut compass = started();
-    press_over(&mut compass, "Bronze Ore", 1_000);
-    set_market(&mut compass, "450k");
+    let state = press_over(&mut compass, "Bronze Ore", 1_000);
+    let state = set_price(&mut compass, &state, "Your price", "450k");
 
-    let state = set_market(&mut compass, "  ");
+    let state = set_price(&mut compass, &state, "Your price", "  ");
 
-    assert_eq!(market(&state), (None, None));
+    assert_eq!(market(&state), not_set(&["Your price"]));
+    assert_eq!(editing(&state), None);
 }
 
 #[test]
 fn cancelling_closes_the_field_and_keeps_the_price_as_it_was() {
     let mut compass = started();
-    press_over(&mut compass, "Bronze Ore", 1_000);
-    set_market(&mut compass, "450k");
-    compass.act(Action::EditCardMarket);
+    let state = press_over(&mut compass, "Bronze Ore", 1_000);
+    let state = set_price(&mut compass, &state, "Your price", "450k");
+    compass.edit_card_market_price(&line(&state, "Your price"));
 
     let state = compass.act(Action::CancelCardMarket).clone();
 
-    assert_eq!(market(&state), (Some(MarketPrice { mesos: 450_000, set_at_unix_ms: None }), None));
+    assert_eq!(market(&state), [("Your price".to_string(), Some(450_000))]);
+    assert_eq!(editing(&state), None);
 }
 
 #[test]
 fn each_item_keeps_its_own_price_and_shows_it_on_its_next_card() {
     let mut compass = started();
-    press_over(&mut compass, "Bronze Ore", 1_000);
-    set_market(&mut compass, "450k");
+    let state = press_over(&mut compass, "Bronze Ore", 1_000);
+    set_price(&mut compass, &state, "Your price", "450k");
 
     let other = press_over(&mut compass, "Red Potion", 2_000);
-    assert_eq!(market(&other).0, None);
+    assert_eq!(market(&other), not_set(&["Your price"]));
 
     let again = press_over(&mut compass, "Bronze Ore", 3_000);
-    assert_eq!(market(&again).0.map(|price| price.mesos), Some(450_000));
+    assert_eq!(market(&again), [("Your price".to_string(), Some(450_000))]);
 }
 
 #[test]
 fn items_that_look_alike_keep_one_price() {
     let mut compass = started_with(FakeSource::osms_offline().with_items(namesakes()));
-    press_over(&mut compass, "Red Potion", 1_000);
-    set_market(&mut compass, "40");
+    let state = press_over(&mut compass, "Red Potion", 1_000);
+    set_price(&mut compass, &state, "Your price", "40");
 
     let state = press_over(&mut compass, "Red Potion", 2_000);
 
-    assert_eq!(market(&state).0.map(|price| price.mesos), Some(40));
+    assert_eq!(market(&state), [("Your price".to_string(), Some(40))]);
 }
 
 #[test]
-fn the_prices_are_saved_and_restored_at_the_next_launch() {
+fn the_prices_and_lines_are_saved_and_restored_at_the_next_launch() {
     let mut compass = started_at(FakeSource::osms_offline().with_items(shop()), SAVED_AT);
     let before = compass.market_prices_revision();
     press_over(&mut compass, "Bronze Ore", 1_000);
-    set_market(&mut compass, "450k");
+    let state = add_line(&mut compass, "Lowest ask");
+    let state = set_price(&mut compass, &state, "Lowest ask", "450k");
     assert_ne!(compass.market_prices_revision(), before, "a change to save");
 
     let saved = serde_json::to_string(&compass.market_prices()).expect("saves as JSON");
     let mut next = started_at(FakeSource::osms_offline().with_items(shop()), SAVED_AT + DAY_MS);
     next.restore_market_prices(serde_json::from_str(&saved).expect("reads back"));
-    let state = press_over(&mut next, "Bronze Ore", 1_000);
+    let restored = press_over(&mut next, "Bronze Ore", 1_000);
 
-    assert_eq!(market(&state).0, Some(MarketPrice { mesos: 450_000, set_at_unix_ms: Some(SAVED_AT) }));
+    assert_eq!(card(&restored).expect("a card").market, card(&state).expect("a card").market);
+    assert_eq!(market(&restored), [("Your price".to_string(), None), ("Lowest ask".to_string(), Some(450_000))]);
+}
+
+#[test]
+fn a_price_kept_before_there_were_lines_is_on_the_first_line() {
+    let mut compass = started();
+    // As MapleCompass 0.8.0 saved them: one price per item.
+    let kept = r#"{"version":1,"items":{"04010000":{"mesos":450000,"setAtUnixMs":1790812800000}}}"#;
+    compass.restore_market_prices(serde_json::from_str(kept).expect("reads"));
+
+    let state = press_over(&mut compass, "Bronze Ore", 1_000);
+
+    assert_eq!(market(&state), [("Your price".to_string(), Some(450_000))]);
+    assert_eq!(compass.market_prices().version, 2, "saved in the shape with lines from then on");
+}
+
+#[test]
+fn the_first_lines_field_opens_as_the_one_price_did_in_older_bug_reports() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+
+    let state = compass.act(Action::EditCardMarket).clone();
+
+    assert_eq!(editing(&state), Some(MarketEdit::Price { line: line(&state, "Your price"), not_a_price: None }));
 }
 
 #[test]
 fn a_new_card_or_closing_the_card_closes_its_field() {
     let mut compass = started();
-    press_over(&mut compass, "Bronze Ore", 1_000);
-    compass.act(Action::EditCardMarket);
+    let state = press_over(&mut compass, "Bronze Ore", 1_000);
+    let id = line(&state, "Your price");
+    compass.edit_card_market_price(&id);
 
     let state = press_over(&mut compass, "Bronze Ore", 2_000);
-    assert_eq!(market(&state).1, None, "a new card");
+    assert_eq!(editing(&state), None, "a new card");
 
-    compass.act(Action::EditCardMarket);
+    compass.edit_card_market_price(&id);
     let state = compass.close_item_card().clone();
     assert_eq!(state.item_card, None);
     compass.enter_card_market("450k");
     let state = press_over(&mut compass, "Bronze Ore", 3_000);
-    assert_eq!(market(&state).0, None, "nothing was being typed once it closed");
+    assert_eq!(market(&state), not_set(&["Your price"]), "nothing was being typed once it closed");
 }
 
 #[test]
 fn without_a_card_there_is_no_price_to_type() {
     let mut compass = started();
-    compass.act(Action::EditCardMarket);
+    compass.edit_card_market_price("1");
     compass.enter_card_market("450k");
 
     let state = press_over(&mut compass, "Bronze Ore", 1_000);
 
-    assert_eq!(market(&state), (None, None));
+    assert_eq!(market(&state), not_set(&["Your price"]));
+}
+
+#[test]
+fn a_choice_has_no_market_section_to_open() {
+    let mut compass = started_with(FakeSource::osms_offline().with_items(namesakes()));
+    press_over(&mut compass, "Blue Moon", 1_000);
+
+    compass.edit_card_market_price("1");
+    compass.act(Action::AddCardMarketLine);
+    let state = compass.pick_card_item("01002067").clone();
+
+    assert_eq!(editing(&state), None);
+}
+
+#[test]
+fn the_plus_opens_a_new_lines_name_field() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+
+    let state = compass.act(Action::AddCardMarketLine).clone();
+
+    assert_eq!(editing(&state), Some(MarketEdit::Name { line: None, problem: None }));
+}
+
+#[test]
+fn a_line_added_shows_last_on_every_card_with_no_prices_yet() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+
+    let state = add_line(&mut compass, "  Lowest ask ");
+    assert_eq!(market(&state), not_set(&["Your price", "Lowest ask"]));
+    assert_eq!(editing(&state), None);
+
+    let other = press_over(&mut compass, "Red Potion", 2_000);
+    assert_eq!(market(&other), not_set(&["Your price", "Lowest ask"]));
+}
+
+#[test]
+fn each_line_keeps_its_own_price_for_the_item() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+    add_line(&mut compass, "Typical");
+    let state = add_line(&mut compass, "Lowest ask");
+
+    let state = set_price(&mut compass, &state, "Typical", "500k");
+    let state = set_price(&mut compass, &state, "Lowest ask", "450k");
+
+    assert_eq!(
+        market(&state),
+        [("Your price".to_string(), None), ("Typical".to_string(), Some(500_000)), ("Lowest ask".to_string(), Some(450_000))]
+    );
+}
+
+#[test]
+fn a_line_needs_a_name_no_other_line_has() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+    compass.act(Action::AddCardMarketLine);
+
+    let state = compass.enter_card_market_line("   ").clone();
+    assert_eq!(editing(&state), Some(MarketEdit::Name { line: None, problem: Some(NameProblem::Empty) }));
+
+    let state = compass.enter_card_market_line("YOUR PRICE").clone();
+    let taken = NameProblem::Taken { name: "YOUR PRICE".into() };
+    assert_eq!(editing(&state), Some(MarketEdit::Name { line: None, problem: Some(taken) }));
+    assert_eq!(market(&state), not_set(&["Your price"]), "nothing added");
+}
+
+#[test]
+fn clicking_a_lines_name_opens_its_name_field() {
+    let mut compass = started();
+    let state = press_over(&mut compass, "Bronze Ore", 1_000);
+    let id = line(&state, "Your price");
+
+    let state = compass.edit_card_market_line(&id).clone();
+
+    assert_eq!(editing(&state), Some(MarketEdit::Name { line: Some(id), problem: None }));
+}
+
+#[test]
+fn a_line_renamed_keeps_its_prices_and_may_change_only_its_case() {
+    let mut compass = started();
+    let state = press_over(&mut compass, "Bronze Ore", 1_000);
+    let state = set_price(&mut compass, &state, "Your price", "450k");
+    let id = line(&state, "Your price");
+
+    compass.edit_card_market_line(&id);
+    let state = compass.enter_card_market_line("Typical").clone();
+    assert_eq!(market(&state), [("Typical".to_string(), Some(450_000))]);
+    assert_eq!(line(&state, "Typical"), id, "the same line");
+
+    compass.edit_card_market_line(&id);
+    let state = compass.enter_card_market_line("TYPICAL").clone();
+    assert_eq!(market(&state), [("TYPICAL".to_string(), Some(450_000))]);
+    assert_eq!(editing(&state), None);
+}
+
+#[test]
+fn a_line_cant_take_another_lines_name() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+    let state = add_line(&mut compass, "Typical");
+    let id = line(&state, "Typical");
+
+    compass.edit_card_market_line(&id);
+    let state = compass.enter_card_market_line("your price").clone();
+
+    let taken = NameProblem::Taken { name: "your price".into() };
+    assert_eq!(editing(&state), Some(MarketEdit::Name { line: Some(id), problem: Some(taken) }));
+    assert_eq!(market(&state), not_set(&["Your price", "Typical"]));
+}
+
+#[test]
+fn removing_a_line_asks_first_saying_how_many_prices_go_with_it() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+    let state = add_line(&mut compass, "Typical");
+    set_price(&mut compass, &state, "Typical", "500k");
+    let state = press_over(&mut compass, "Red Potion", 2_000);
+    set_price(&mut compass, &state, "Typical", "30");
+    let id = line(&state, "Typical");
+
+    compass.edit_card_market_line(&id);
+    let state = compass.act(Action::AskRemoveCardMarketLine).clone();
+
+    assert_eq!(editing(&state), Some(MarketEdit::Remove { line: id, prices: 2 }));
+    assert_eq!(market(&state), [("Your price".to_string(), None), ("Typical".to_string(), Some(30))], "nothing gone yet");
+}
+
+#[test]
+fn keep_leaves_the_line_as_it_was() {
+    let mut compass = started();
+    let state = press_over(&mut compass, "Bronze Ore", 1_000);
+    let state = set_price(&mut compass, &state, "Your price", "450k");
+    compass.edit_card_market_line(&line(&state, "Your price"));
+    compass.act(Action::AskRemoveCardMarketLine);
+
+    let state = compass.act(Action::CancelCardMarket).clone();
+
+    assert_eq!(market(&state), [("Your price".to_string(), Some(450_000))]);
+    assert_eq!(editing(&state), None);
+}
+
+#[test]
+fn a_line_removed_goes_from_every_card_with_its_prices() {
+    let mut compass = started();
+    press_over(&mut compass, "Bronze Ore", 1_000);
+    let state = add_line(&mut compass, "Typical");
+    let state = set_price(&mut compass, &state, "Typical", "500k");
+    compass.edit_card_market_line(&line(&state, "Typical"));
+    compass.act(Action::AskRemoveCardMarketLine);
+
+    let state = compass.act(Action::RemoveCardMarketLine).clone();
+    assert_eq!(market(&state), not_set(&["Your price"]));
+    assert_eq!(editing(&state), None);
+
+    let state = add_line(&mut compass, "Typical");
+    assert_eq!(market(&state), not_set(&["Your price", "Typical"]), "a line of that name again starts with no prices");
+}
+
+#[test]
+fn only_a_lines_own_name_field_asks_to_remove_it() {
+    let mut compass = started();
+    let state = press_over(&mut compass, "Bronze Ore", 1_000);
+    let id = line(&state, "Your price");
+
+    let state = compass.act(Action::RemoveCardMarketLine).clone();
+    assert_eq!(market(&state), not_set(&["Your price"]), "never without asking");
+
+    compass.edit_card_market_price(&id);
+    let state = compass.act(Action::AskRemoveCardMarketLine).clone();
+    assert_eq!(editing(&state), Some(MarketEdit::Price { line: id, not_a_price: None }), "not from its price field");
+
+    compass.act(Action::AddCardMarketLine);
+    let state = compass.act(Action::AskRemoveCardMarketLine).clone();
+    assert_eq!(editing(&state), Some(MarketEdit::Name { line: None, problem: None }), "not from a new line's");
+}
+
+#[test]
+fn with_every_line_removed_the_card_has_none_until_the_player_adds_one() {
+    let mut compass = started();
+    let state = press_over(&mut compass, "Bronze Ore", 1_000);
+    compass.edit_card_market_line(&line(&state, "Your price"));
+    compass.act(Action::AskRemoveCardMarketLine);
+
+    let state = compass.act(Action::RemoveCardMarketLine).clone();
+    assert_eq!(market(&state), []);
+    let saved = serde_json::to_string(&compass.market_prices()).expect("saves as JSON");
+    let mut next = started();
+    next.restore_market_prices(serde_json::from_str(&saved).expect("reads back"));
+    assert_eq!(market(&press_over(&mut next, "Bronze Ore", 1_000)), [], "and none at the next launch");
+
+    let state = add_line(&mut compass, "Typical");
+    assert_eq!(market(&state), not_set(&["Typical"]));
+}
+
+#[test]
+fn a_line_keeps_the_id_it_was_saved_with_and_a_new_line_takes_none_of_theirs() {
+    let mut compass = started();
+    // Lines as a tool of the player's own might write them, beside the player's.
+    let kept = r#"{"version":2,"lines":[
+        {"id":"1","name":"Your price","prices":{}},
+        {"id":"mesowatch-typical","name":"Typical","prices":{"04010000":{"mesos":500000}}},
+        {"id":"4","name":"Mine","prices":{}}]}"#;
+    compass.restore_market_prices(serde_json::from_str(kept).expect("reads"));
+    let state = press_over(&mut compass, "Bronze Ore", 1_000);
+    assert_eq!(line(&state, "Typical"), "mesowatch-typical");
+
+    let state = add_line(&mut compass, "Lowest ask");
+
+    let ids: Vec<String> = card(&state).expect("a card").market.into_iter().map(|line| line.id).collect();
+    assert_eq!(ids, ["1", "mesowatch-typical", "4", "5"]);
+    assert_eq!(market(&state)[1], ("Typical".to_string(), Some(500_000)));
+}
+
+#[test]
+fn a_field_left_open_on_a_line_that_goes_closes() {
+    let mut compass = started();
+    let state = press_over(&mut compass, "Bronze Ore", 1_000);
+    compass.edit_card_market_price(&line(&state, "Your price"));
+
+    let state = compass.restore_market_prices(serde_json::from_str(r#"{"version":2,"lines":[]}"#).unwrap()).clone();
+
+    assert_eq!(editing(&state), None);
 }
