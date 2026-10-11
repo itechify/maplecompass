@@ -276,10 +276,51 @@
                 </div>
               </dl>
               <p>
-                Something else? <a href="https://github.com/itechify/maplecompass/issues">Report it on GitHub</a>: what you
-                did, what you expected, and what MapleCompass showed.
+                Something else? <a href="#bug-reports">Save a Bug Report</a> and report it on GitHub: what you did, what you
+                expected, and what MapleCompass showed.
               </p>
             </div>
+          </section>
+
+          <section class="topic with-aside" id="bug-reports" data-mini="Bug Reports" aria-labelledby="bug-reports-title">
+            <div class="topic-text">
+              <h3 id="bug-reports-title">Reporting a bug</h3>
+              <p>
+                When MapleCompass shows something wrong, like a rate far higher than you're getting, click its compass in the
+                notification area, by the clock, and choose <strong>Bug Report</strong> right away. It saves a Bug Report: a
+                <code>.zip</code> of what MapleCompass read and made of it since you started it, up to a day back. It shows the
+                file selected in its folder, and opens the bug form on
+                <a href="https://github.com/itechify/maplecompass/issues">GitHub</a>. Drag the file into the form, and say what
+                looked wrong and about when.
+              </p>
+              <p>
+                With a Bug Report, the bug can be played back as it happened instead of guessed at. Saving one changes
+                nothing in MapleCompass, which keeps the 10 newest.
+              </p>
+            </div>
+            <aside class="aside" aria-labelledby="report-holds-title">
+              <h4 id="report-holds-title">What's in a Bug Report</h4>
+              <ul>
+                <li>
+                  What MapleCompass read: each reading of the minimap title and the EXP bar, with pictures of the two boxes
+                  you marked at setup. Nothing else on your screen.
+                </li>
+                <li>
+                  What it made of them: the map it showed, the Grind Tracker's figures, and why they changed (a level-up, a
+                  death, a misread set aside).
+                </li>
+                <li>What you did in MapleCompass: its buttons, hotkeys and searches.</li>
+                <li>
+                  Your settings and Personal Bests, MapleCompass's version, your Windows version and display scaling, and any
+                  errors it ran into.
+                </li>
+              </ul>
+              <p class="detail">
+                It's never sent anywhere: it stays on your PC, in
+                <code class="path">%APPDATA%\<wbr />com.<wbr />itechify.<wbr />maplecompass\<wbr />Bug Reports</code>, until you
+                attach it to an issue.
+              </p>
+            </aside>
           </section>
 
           <section class="topic with-aside" id="data" data-mini="Fetches and keeps" aria-labelledby="data-title">
@@ -317,6 +358,7 @@
                   <code>personal-bests.json</code>, saved as they change.
                 </li>
                 <li>The map data, pictures and animations in <code class="path">%LOCALAPPDATA%\<wbr />com.<wbr />itechify.<wbr />maplecompass\<wbr />cache</code>.</li>
+                <li>The <a href="#bug-reports">Bug Reports</a> you save, the 10 newest, in <code>Bug Reports</code> beside your settings.</li>
               </ul>
               <p class="detail">
                 If your Personal Bests file can't be read, MapleCompass renames it <code>personal-bests.json.bad</code> and
