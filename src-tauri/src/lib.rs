@@ -91,8 +91,13 @@ pub(crate) enum Command {
     SearchQuery(String),
     /// The player pressed this key on the settings view, for the core.
     RebindKey(KeyPress),
-    /// The player clicked the search view's mob or map with this ID.
+    /// The player clicked the search view's mob (in the matches) or map (in the mob's
+    /// map list) with this ID.
     SearchPick(String),
+    /// The player clicked the map with this ID in the search view's matches.
+    SearchPickDestination(String),
+    /// The player clicked the item with this ID in the search view's matches.
+    SearchPickItem(String),
     /// The player clicked the name of the listed mob with this ID in the panel.
     OpenMobPage(String),
     /// The player clicked the name of the map with this ID in the Personal Bests window.
@@ -354,6 +359,8 @@ pub fn run() {
             search::search_move,
             search::search_enter,
             search::search_pick,
+            search::search_pick_destination,
+            search::search_pick_item,
             search::search_escape,
             search::hunting_reopen,
             search::hunting_clear,
@@ -397,7 +404,7 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-/// Our windows: the overlay (with mob search in it), setup (with its region window), the
+/// Our windows: the overlay (with Search in it), setup (with its region window), the
 /// Grind Tracker's, the Personal Bests window, the Item Lookup alert's and the Item Card's.
 struct Windows {
     overlay: OverlayWindow,
@@ -615,6 +622,12 @@ fn compass_loop(
             }
             Ok(Command::SearchPick(id)) => {
                 compass.search_pick(&id);
+            }
+            Ok(Command::SearchPickDestination(id)) => {
+                compass.search_pick_destination(&id);
+            }
+            Ok(Command::SearchPickItem(id)) => {
+                compass.search_pick_item(&id);
             }
             Ok(Command::OpenMobPage(id)) => {
                 let request = compass.open_mob_page(&id);

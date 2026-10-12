@@ -1258,6 +1258,11 @@ td:first-child {
   margin-block: -2px;
 }
 
+/* A Destination's street under its map's name, past its Map Mark, as a route's street. */
+.target-title .destination-street {
+  padding-left: 24px;
+}
+
 /* The search view's title sits in its window bar, after the back button; so does the
    settings view's. */
 .search-view .window-bar,
@@ -1378,6 +1383,17 @@ td:first-child {
   border: 0;
   background: var(--mob);
   box-shadow: 0 0 0 1px var(--mob-edge);
+}
+
+/* A Destination's map, where its route ends: no mob there, so the ring the Map Preview
+   puts around the next portal on the way, which leads the section's heading. */
+.route-stops .end.destination .glyph {
+  width: 10px;
+  height: 10px;
+  margin-top: 3.5px;
+  border: 2.5px solid var(--route);
+  background: #fff;
+  box-shadow: none;
 }
 
 .route-stops .ship .glyph,
@@ -1508,7 +1524,9 @@ td:first-child {
   color: var(--ink-3);
 }
 
-/* The suggestions, in the panel's flow below the query box. */
+/* What the query matches, in the panel's flow below the query box: a section for each
+   kind (mobs, maps, items), its heading, its matches, and a line counting the rest; a
+   hairline between sections. */
 .suggestions {
   margin: 0;
   padding: 3px;
@@ -1519,22 +1537,55 @@ td:first-child {
   font-size: 13px;
 }
 
-.suggestions li {
+.suggestions ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.suggestions .matches + .matches {
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px solid var(--rule);
+}
+
+.matches-head {
+  display: block;
+  padding: 1px 8px 2px;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+
+/* "+3 more, keep typing", and why there are no items. */
+.matches-more,
+.suggestions .note {
+  display: block;
+  padding: 1px 8px 2px;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--ink-3);
+}
+
+/* A match: a mob's animation or an item's picture (a map's Map Mark), its name, and at the
+   right a mob's level, a map's street or an item's kind. */
+.suggestions [role="option"] {
   display: flex;
-  justify-content: space-between;
-  gap: 8px;
+  align-items: center;
   padding: 2px 8px;
   border-radius: 3px;
   color: var(--ink-2);
+  cursor: pointer;
 }
 
-.suggestions li:hover,
+.suggestions [role="option"]:hover,
 .results tbody:hover td {
   background: rgba(47, 99, 200, 0.08);
 }
 
 /* The one Enter picks. */
-.suggestions li.current {
+.suggestions [role="option"].current {
   background: var(--select);
   box-shadow: inset 0 0 0 1px var(--select-edge);
   color: var(--ink);
@@ -1542,14 +1593,55 @@ td:first-child {
 }
 
 .suggestions .name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.suggestions .level {
-  flex: none;
+/* Cut short before the name is; a level never. */
+.suggestions .match-detail {
+  flex: 0 1 auto;
+  max-width: 45%;
+  margin-left: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
   font-weight: 400;
+  color: var(--ink-2);
+}
+
+.matches-mob .match-detail {
+  flex: none;
+}
+
+/* The same 32px square with or without its picture, so a row doesn't jump when one comes:
+   an item's picture at its own size, drawn pixelated as the game draws it; a mob's
+   animation standing on the square's floor, pixelated at its own size or scaled down
+   smoothly to fit, never up. */
+.match-picture {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: -1px 8px -1px 0;
+}
+
+.matches-mob .match-picture {
+  place-items: end center;
+}
+
+.match-picture img {
+  max-width: 32px;
+  max-height: 32px;
+  image-rendering: pixelated;
+}
+
+.match-picture img.scaled {
+  image-rendering: auto;
 }
 
 .panel .keys {

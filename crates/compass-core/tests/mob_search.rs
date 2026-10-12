@@ -1,7 +1,8 @@
 //! Mob search: the player opens the search view (the search hotkey or the 🔍 button),
-//! types part of a mob's name and picks the mob, then picks one of the maps it spawns
-//! on, ranked by Density Tier and then Density. That mob and map become the Hunting
-//! Target. While the search view is open the overlay takes the keyboard (ADR 0001).
+//! types part of a mob's name and picks the mob from Search's matches, then picks one of
+//! the maps it spawns on, ranked by Density Tier and then Density. That mob and map become
+//! the Hunting Target. While the search view is open the overlay takes the keyboard (ADR
+//! 0001). Maps and items in the matches are `search.rs`'s.
 
 mod common;
 
@@ -31,7 +32,7 @@ fn hunting(state: &PanelState) -> Option<String> {
 fn the_player_picks_a_mob_then_one_of_its_maps_and_that_becomes_the_hunting_target() {
     let mut compass = loaded(mushroom_world());
     compass.on_hotkey(SEARCH);
-    assert_eq!(compass.panel_state().search.view, Some(SearchView::Mobs));
+    assert_eq!(compass.panel_state().search.view, Some(SearchView::Matches));
 
     compass.search_query("orange");
     let state = compass.act(Action::SearchEnter);
@@ -69,7 +70,7 @@ fn a_click_on_something_no_longer_listed_does_nothing() {
     compass.search_query("green");
 
     let state = compass.search_pick("9").clone();
-    assert_eq!(state.search.view, Some(SearchView::Mobs), "the Orange Mushroom isn't suggested");
+    assert_eq!(state.search.view, Some(SearchView::Matches), "the Orange Mushroom isn't suggested");
 
     compass.search_pick("13");
     let state = compass.search_pick("100000001");
@@ -93,14 +94,14 @@ fn the_search_hotkey_with_the_search_view_open_brings_the_overlay_back_in_front_
     assert_eq!(*compass.panel_state(), before);
 }
 
-/// The suggestions as "Name (level)", in order.
+/// The matched mobs as "Name (level)", in order.
 fn suggestions(state: &PanelState) -> Vec<String> {
-    state.search.suggestions.iter().map(|m| format!("{} ({})", m.name, m.level)).collect()
+    state.search.mobs.shown.iter().map(|m| format!("{} ({})", m.mob.name, m.mob.level)).collect()
 }
 
-/// The name of the highlighted suggestion.
+/// The name of the highlighted mob.
 fn highlighted(state: &PanelState) -> Option<&str> {
-    state.search.highlighted.map(|i| state.search.suggestions[i].name.as_str())
+    state.search.highlighted.map(|i| state.search.mobs.shown[i].mob.name.as_str())
 }
 
 #[test]
@@ -134,7 +135,6 @@ fn the_highlight_moves_through_the_suggestions_and_enter_lists_the_highlighted_m
 
     assert_eq!(highlighted(compass.act(Action::SearchNext)), Some("Horny Mushroom"));
     assert_eq!(highlighted(compass.act(Action::SearchNext)), Some("Orange Mushroom"));
-    assert_eq!(highlighted(compass.act(Action::SearchNext)), Some("Orange Mushroom"), "stays on the last");
     assert_eq!(highlighted(compass.act(Action::SearchPrevious)), Some("Horny Mushroom"));
     let state = compass.act(Action::SearchEnter);
 
@@ -163,18 +163,31 @@ fn hunting_orange_on_the_field(compass: &mut Compass) {
 }
 
 #[test]
-fn esc_from_either_step_returns_to_the_normal_view_with_nothing_changed() {
+fn esc_from_the_matches_returns_to_the_normal_view_with_nothing_changed() {
     let mut compass = loaded(mushroom_world());
     hunting_orange_on_the_field(&mut compass);
     let before = compass.panel_state().clone();
 
     compass.on_hotkey(SEARCH);
     compass.search_query("horny");
-    assert_eq!(*compass.act(Action::SearchEscape), before, "from the mobs");
 
-    search_for(&mut compass, "horny");
+    assert_eq!(*compass.act(Action::SearchEscape), before);
+}
+
+#[test]
+fn esc_from_the_map_list_goes_back_to_the_matches_as_they_were_and_again_to_the_normal_view() {
+    let mut compass = loaded(mushroom_world());
+    hunting_orange_on_the_field(&mut compass);
+    let before = compass.panel_state().clone();
+    compass.on_hotkey(SEARCH);
+    compass.search_query("mush");
     compass.act(Action::SearchNext);
-    assert_eq!(*compass.act(Action::SearchEscape), before, "from the map list");
+    let matches = compass.panel_state().clone();
+    compass.act(Action::SearchEnter);
+    compass.act(Action::SearchNext);
+
+    assert_eq!(*compass.act(Action::SearchEscape), matches, "Horny Mushroom still highlighted");
+    assert_eq!(*compass.act(Action::SearchEscape), before);
 }
 
 #[test]
@@ -182,11 +195,12 @@ fn reopened_the_search_view_starts_afresh() {
     let mut compass = loaded(mushroom_world());
     search_for(&mut compass, "orange");
     compass.act(Action::SearchEscape);
+    compass.act(Action::SearchEscape);
 
     compass.on_hotkey(SEARCH);
 
     let search = &compass.panel_state().search;
-    assert_eq!(search.view, Some(SearchView::Mobs));
+    assert_eq!(search.view, Some(SearchView::Matches));
     assert_eq!(search.query, "");
     assert_eq!(search.picked, None);
 }
@@ -211,7 +225,7 @@ fn enter_on_a_query_that_matches_no_mob_or_with_nothing_typed_does_nothing() {
     for query in ["dragon", "  "] {
         let state = search_for(&mut compass, query);
 
-        assert_eq!(state.search.view, Some(SearchView::Mobs), "the player can fix the typing");
+        assert_eq!(state.search.view, Some(SearchView::Matches), "the player can fix the typing");
         assert_eq!(picked(&state), None);
     }
 }
@@ -413,9 +427,9 @@ fn the_search_hotkey_opens_the_search_view_with_nothing_typed() {
     compass.on_hotkey(SEARCH);
 
     let search = &compass.panel_state().search;
-    assert_eq!(search.view, Some(SearchView::Mobs));
+    assert_eq!(search.view, Some(SearchView::Matches));
     assert_eq!(search.query, "");
-    assert!(search.suggestions.is_empty());
+    assert!(search.mobs.shown.is_empty());
 }
 
 #[test]
@@ -426,6 +440,6 @@ fn the_search_hotkey_expands_a_collapsed_panel_to_show_the_search_view() {
     compass.on_hotkey(SEARCH);
 
     let state = compass.panel_state();
-    assert_eq!(state.search.view, Some(SearchView::Mobs));
+    assert_eq!(state.search.view, Some(SearchView::Matches));
     assert!(state.expanded);
 }

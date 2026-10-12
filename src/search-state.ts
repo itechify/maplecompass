@@ -3,6 +3,22 @@ import { mapMark, type MapMarks } from "./map-marks";
 /** Mirror of `compass_core::MobChoice`. */
 export type MobChoice = { id: string; name: string; level: number };
 
+/** Mirror of `compass_core::Matches`: the best five of one kind, and how many more match. */
+export type Matches<T> = { shown: T[]; more: number };
+
+/** Mirror of `compass_core::MobMatch`: `image` is where its OSMS animation loads from, once it's in. */
+export type MobMatch = MobChoice & { image: string | null };
+
+/** Mirror of `compass_core::MapMatch`: picked, it becomes the Destination. */
+export type MapMatch = { mapId: string; streetName: string; mapName: string; mark: string | null };
+
+/** Mirror of `compass_core::ItemMatch`: items that look alike, under the first's ID; picked,
+ *  their Item Card shows. `icon` is where its picture loads from, once it's in. */
+export type ItemMatch = { id: string; name: string; kind: string; icon: string | null };
+
+/** Mirror of `compass_core::ItemsMissing`: why no items are matched. */
+export type ItemsMissing = "loading" | "unavailable" | "formatChanged";
+
 /** Mirror of `compass_core::DensityTier`. */
 export type DensityTier = "high" | "medium" | "low";
 
@@ -35,9 +51,10 @@ export type SearchResult = {
 export type Travel = { taxis: boolean; teleportScrolls: boolean };
 
 /** Mirror of `compass_core::SearchView`: the search view's open step. */
-export type SearchView = "mobs" | "maps";
+export type SearchView = "matches" | "maps";
 
-/** Mirror of `compass_core::Trip`: the way to a Hunting Target as it stood when picked. */
+/** Mirror of `compass_core::Trip`: the way to a Hunting Target or a Destination as it stood
+ *  when picked. */
 export type Trip = { from: string; mapChanges: number; travel: Step[] };
 
 /**
@@ -53,6 +70,22 @@ export type HuntingTarget = {
   image: string | null;
 };
 
+/**
+ * Mirror of `compass_core::Destination`: the map picked to go to, with the way there; once
+ * the player is there (or picked it there), that they've arrived.
+ */
+export type Destination = {
+  mapId: string;
+  streetName: string;
+  mapName: string;
+  mark: string | null;
+  distance: Distance;
+  route: RouteStop[];
+  travel: Step[];
+  arrived: boolean;
+  trip: Trip | null;
+};
+
 /** An arrival's trip: "2 map changes from Sunset Sky, by teleport scroll". */
 export function tripLine({ from, mapChanges, travel }: Trip): string {
   const by = travel.map((step) => STEP_TITLES[step].toLowerCase());
@@ -65,7 +98,12 @@ export type SearchState = {
   /** The search view's open step, which takes over the panel; null for the normal view. */
   view: SearchView | null;
   query: string;
-  suggestions: MobChoice[];
+  mobs: Matches<MobMatch>;
+  maps: Matches<MapMatch>;
+  items: Matches<ItemMatch>;
+  /** Why no items are matched while something is typed: OSMS's item files aren't in. */
+  itemsMissing: ItemsMissing | null;
+  /** The match Enter picks, counting through the mobs shown, then the maps, then the items. */
   highlighted: number | null;
   /** The mob whose map list the search view shows. */
   picked: MobChoice | null;
@@ -82,6 +120,8 @@ export type SearchState = {
   travel: Travel;
   /** The panel's Navigation section, until the player leaves its map having arrived, or clears it. */
   hunting: HuntingTarget | null;
+  /** The Navigation section's map, in the Hunting Target's place: one or the other. */
+  destination: Destination | null;
 };
 
 export const TIER_NAMES: Record<DensityTier, string> = { high: "High", medium: "Medium", low: "Low" };
@@ -124,8 +164,11 @@ export const STEP_TITLES: Record<Step, string> = {
   teleportScroll: "Teleport Scroll",
 };
 
-/** A result's travel marker: "ship", "taxi, ship", or "" for portals alone. */
-export const travelMarker = (result: SearchResult) => result.travel.map((step) => STEP_NAMES[step]).join(", ");
+/** The way to a map, as a result, the Hunting Target and the Destination give it. */
+type Way = { distance: Distance; route: RouteStop[]; travel: Step[] };
+
+/** A way's travel marker: "ship", "taxi, ship", or "" for portals alone. */
+export const travelMarker = (way: Way) => way.travel.map((step) => STEP_NAMES[step]).join(", ");
 
 /** The headline: "Nearest: Mushroom Field, 2 map changes away", or "" with none. */
 export function nearestLine(search: SearchState): string {
@@ -158,11 +201,11 @@ export function resultsHead(): HTMLTableSectionElement {
   return head;
 }
 
-/** A result's Distance as the map list and the Navigation section read it ("5 · ship"), with why. */
-export function distanceWithTravel(result: SearchResult): { text: string; title: string } {
-  const distance = distanceText(result.distance);
-  const travel = travelMarker(result);
-  const travelTitle = result.travel.map((step) => STEP_TITLES[step]).join(", ");
+/** A way's Distance as the map list and the Navigation section read it ("5 · ship"), with why. */
+export function distanceWithTravel(way: Way): { text: string; title: string } {
+  const distance = distanceText(way.distance);
+  const travel = travelMarker(way);
+  const travelTitle = way.travel.map((step) => STEP_TITLES[step]).join(", ");
   return travel
     ? { text: `${distance.text} · ${travel}`, title: `${distance.title}, by ${travelTitle}` }
     : distance;
@@ -203,17 +246,18 @@ export function resultGroup(result: SearchResult, marks: MapMarks): HTMLTableSec
 }
 
 /** A route's maps in order, each with how it's reached: "you're here", "portal", "taxi", "scroll"… */
-export function routeStops(result: SearchResult, marks: MapMarks): HTMLLIElement[] {
+export function routeStops({ route }: Way, marks: MapMarks): HTMLLIElement[] {
   const span = (className: string, text: string) => {
     const el = document.createElement("span");
     el.className = className;
     el.textContent = text;
     return el;
   };
-  const last = result.route.length - 1;
-  return result.route.map((stop, i) => {
+  const last = route.length - 1;
+  return route.map((stop, i) => {
     // Drawn as the minimap draws it: your yellow dot where you start, a portal ring for
-    // each portal, a plain ring for a ride, the red mob dot where the mob is.
+    // each portal, a plain ring for a ride, and where it ends the red mob dot where the
+    // mob is (the Navigation section rings a Destination instead).
     const kind = i === 0 ? "start" : i === last ? "end" : (stop.by ?? "portal");
     const item = document.createElement("li");
     item.className = kind;
@@ -229,7 +273,7 @@ export function routeStops(result: SearchResult, marks: MapMarks): HTMLLIElement
     // Anything but a portal is worth noticing on the way.
     if (stop.by && stop.by !== "portal") map.append(span("tag", STEP_TITLES[stop.by]));
     // The street only where it changes: most routes stay on one.
-    if (stop.streetName && stop.streetName !== result.route[i - 1]?.streetName) {
+    if (stop.streetName && stop.streetName !== route[i - 1]?.streetName) {
       item.append(span("route-street", stop.streetName));
     }
     return item;

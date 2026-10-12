@@ -96,9 +96,10 @@ pub fn loaded(maps: Vec<WorldMap>) -> Compass {
     compass
 }
 
-/// Open the search view afresh (closing it first if it is open), type `query` and press
-/// Enter: the mob's map list.
+/// Open the search view afresh (closing it first if it is open: Esc goes back a step at a
+/// time), type `query` and press Enter: the mob's map list.
 pub fn search_for(compass: &mut Compass, query: &str) -> PanelState {
+    compass.act(Action::SearchEscape);
     compass.act(Action::SearchEscape);
     compass.on_hotkey(SEARCH);
     compass.search_query(query);

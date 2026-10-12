@@ -39,24 +39,25 @@ impl ItemFilesLoader {
     /// under a day ago; otherwise, and every day after, ones the source fetches afresh, and
     /// with none at all, a minute after OSMS couldn't be reached. Fetched files that read
     /// replace the ones held whole. Ones that can't be had or don't read leave the ones held
-    /// as they are, and at startup fall back on the saved ones, however old.
-    pub fn load(&mut self, source: &mut dyn MapDataSource, at_ms: u64, wall_clock: Option<u64>) {
+    /// as they are, and at startup fall back on the saved ones, however old. Whether the
+    /// items held, or why there are none, may have changed.
+    pub fn load(&mut self, source: &mut dyn MapDataSource, at_ms: u64, wall_clock: Option<u64>) -> bool {
         if !self.in_flight {
             if at_ms < self.ask_at {
-                return;
+                return false;
             }
             if !self.saved_seen {
                 self.saved_seen = true;
                 if self.take_saved(source, wall_clock) {
                     self.ask_at = at_ms + SET_RECHECK_MS;
-                    return;
+                    return true;
                 }
             }
         }
         let fetched = match source.fetch_item_files() {
             Poll::Pending => {
                 self.in_flight = true;
-                return;
+                return false;
             }
             Poll::Ready(fetched) => fetched,
         };
@@ -65,7 +66,7 @@ impl ItemFilesLoader {
         match (fetched.and_then(|files| osms_items::read(&files)), self.fallback.take()) {
             // The source saved them as it fetched them: now.
             (Ok(items), _) => self.held = Some(Held { items, saved_at_unix_ms: wall_clock }),
-            (Err(_), _) if self.held.is_some() => {}
+            (Err(_), _) if self.held.is_some() => return false,
             (Err(_), Some(saved)) => self.held = Some(saved),
             (Err(failed), None) => {
                 if matches!(failed, SourceError::Unreachable(_)) {
@@ -74,6 +75,7 @@ impl ItemFilesLoader {
                 self.failed = Some(failed);
             }
         }
+        true
     }
 
     /// Take the files an earlier launch saved if they were saved under a day ago by the

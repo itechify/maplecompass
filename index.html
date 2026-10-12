@@ -15,7 +15,7 @@
           <img class="window-icon" src="/assets/icon.png" alt="" draggable="false" />
           <p class="window-name">MapleCompass</p>
           <div class="toolbar" id="toolbar" role="toolbar" aria-label="MapleCompass">
-            <button type="button" class="icon-button" id="open-search" data-control="search" aria-label="Search a mob">
+            <button type="button" class="icon-button" id="open-search" data-control="search" aria-label="Search">
               <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.25" /><path d="M10.2 10.2 13.5 13.5" /></svg>
             </button>
             <button type="button" class="icon-button" id="next-candidate" data-control="chooseCandidate" aria-label="Next map with this title" hidden>
@@ -91,14 +91,14 @@
             <button type="button" class="icon-button light" id="hunting-reopen" aria-label="Pick another map for this mob" title="Pick another map for this mob">
               <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.25" /><path d="M10.2 10.2 13.5 13.5" /></svg>
             </button>
-            <button type="button" class="icon-button light" id="hunting-clear" aria-label="Clear the Hunting Target" title="Clear the Hunting Target">
+            <button type="button" class="icon-button light" id="hunting-clear">
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>
             </button>
           </div>
           <dl class="figures">
-            <div><dt>Tier</dt><dd id="hunting-tier"></dd></div>
-            <div><dt title="Spawn Count × Mob Rate">Density</dt><dd id="hunting-density"></dd></div>
-            <div><dt title="Share of all mob spawns on the Map">Share</dt><dd id="hunting-share"></dd></div>
+            <div data-hunting><dt>Tier</dt><dd id="hunting-tier"></dd></div>
+            <div data-hunting><dt title="Spawn Count × Mob Rate">Density</dt><dd id="hunting-density"></dd></div>
+            <div data-hunting><dt title="Share of all mob spawns on the Map">Share</dt><dd id="hunting-share"></dd></div>
             <div><dt title="Map changes from the map you're on">Distance</dt><dd id="hunting-distance"></dd></div>
           </dl>
           <h3 class="route-title" id="hunting-route-title"></h3>
@@ -148,13 +148,13 @@
           </button>
           <h2 id="search-title"></h2>
         </header>
-        <div class="step" id="mobs-step">
+        <div class="step" id="matches-step">
           <label class="field">
-            <span class="label">Mob name</span>
+            <span class="label">Name</span>
             <input
               id="query"
               type="text"
-              placeholder="Type part of a mob's name"
+              placeholder="Mobs, maps or items"
               autocomplete="off"
               spellcheck="false"
               role="combobox"
@@ -163,9 +163,9 @@
               aria-autocomplete="list"
             />
           </label>
-          <ul class="suggestions scroll" id="suggestions" role="listbox" aria-label="Mobs" hidden></ul>
+          <ul class="suggestions scroll" id="suggestions" role="listbox" aria-label="Matches" hidden></ul>
           <p class="note" id="no-match" hidden></p>
-          <p class="keys">↑ ↓ choose a mob · Enter or a click lists its maps · Esc goes back</p>
+          <p class="keys">↑ ↓ choose · Enter or a click: a mob lists its maps, a map shows the way, an item its card · Esc goes back</p>
         </div>
         <div class="step" id="maps-step" hidden>
           <p class="nearest" id="search-nearest" hidden></p>

@@ -103,7 +103,7 @@ pub struct Hotkeys {
     /// Show the next of the maps sharing the shown map's title, when the core couldn't
     /// tell which one the player is on.
     pub choose_candidate: String,
-    /// Open the mob search view.
+    /// Open the search view.
     pub search: String,
     /// Open the Grind Tracker's window, or close it.
     pub grind_tracker: String,

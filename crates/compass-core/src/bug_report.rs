@@ -129,6 +129,8 @@ pub enum Event {
     RebindKey { press: KeyPress },
     SearchQuery { query: String },
     SearchPick { id: String },
+    SearchPickDestination { id: String },
+    SearchPickItem { id: String },
     Hotkey { pressed: String },
     Press { control: PanelControl },
     ItemTooltip { reading: Option<ItemTooltipReading> },
@@ -1150,6 +1152,12 @@ pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
             Event::SearchPick { id } => {
                 compass.search_pick(&id);
             }
+            Event::SearchPickDestination { id } => {
+                compass.search_pick_destination(&id);
+            }
+            Event::SearchPickItem { id } => {
+                compass.search_pick_item(&id);
+            }
             Event::Hotkey { pressed } => {
                 compass.on_hotkey(&pressed);
             }
@@ -1392,6 +1400,8 @@ impl Event {
             Event::PersonalBestsSize { size } => format!("Personal Bests window size {}x{}", size.width, size.height),
             Event::RebindKey { press } => format!("key pressed in the settings view {}", json(press)),
             Event::SearchPick { id } => format!("search picked {id}"),
+            Event::SearchPickDestination { id } => format!("search picked map {id} as the Destination"),
+            Event::SearchPickItem { id } => format!("search picked item {id}"),
             Event::PickItem { id } => format!("item picked {id}"),
             Event::PickCardItem { id } => format!("Item Card's item picked {id}"),
             Event::OpenCardMeowdbPage { .. } => "Item Card's name clicked".to_string(),

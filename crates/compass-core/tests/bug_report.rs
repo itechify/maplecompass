@@ -514,6 +514,35 @@ fn item_cards_replay_through_the_same_states_with_the_runs_item_files() {
 }
 
 #[test]
+fn searches_replay_through_the_same_states_with_the_runs_files() {
+    let mut shell = Shell::new(FakeSource::osms().with_items(items()));
+    shell.compass.set_item_card_size(Size { width: 280, height: 160 });
+    shell.play(10 * S, CONSTRUCTION_SITE, grind);
+    shell.compass.on_hotkey("ctrl+shift+f");
+    shell.compass.search_query("sunset");
+    shell.compass.search_pick_destination(SUNSET_SKY_ID);
+    shell.play(20 * S, SUNSET_SKY, grind);
+    shell.compass.act(Action::OpenSearch);
+    shell.compass.search_query("blue moon");
+    shell.compass.act(Action::SearchNext);
+    shell.compass.act(Action::SearchEnter);
+    shell.play(25 * S, SUNSET_SKY, grind);
+    shell.compass.act(Action::OpenSearch);
+    shell.compass.search_query("ore");
+    shell.compass.search_pick_item("04010000");
+    shell.play(30 * S, CONSTRUCTION_SITE, grind);
+
+    let (_, recording) = shell.report();
+    let with = ReplayData { osms: Some(osms::game().files()), items: Some(items().files()) };
+    let replay = bug_report::replay_with(&recording, with);
+
+    assert_eq!(replay.divergence, None);
+    assert_eq!(replay.lines, recording.lines.len());
+    let said: Vec<String> = recording.timeline(0).into_iter().filter(|line| line.contains("search picked")).collect();
+    assert_eq!(said.len(), 2, "{said:?}");
+}
+
+#[test]
 fn the_report_holds_only_the_item_files_fingerprint() {
     let (report, recording) = run_with_item_cards().report();
 

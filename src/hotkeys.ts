@@ -23,7 +23,7 @@ export const HOTKEY_NAMES: [Hotkey, string][] = [
   ["cyclePlacement", "Change placement"],
   ["chooseCandidate", "Next map with this title"],
   ["openMeowdbPage", "Open the map's MeowDB page"],
-  ["search", "Search a mob"],
+  ["search", "Search"],
   ["itemCard", "Show the hovered item's card"],
   ["itemLookup", "Open the hovered item's MeowDB page"],
   ["grindTracker", "Show / hide the Grind Tracker"],

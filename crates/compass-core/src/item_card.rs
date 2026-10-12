@@ -6,6 +6,8 @@
 //! to MesoWatch's market prices. The name is matched against OSMS's items on the player's
 //! machine: nothing is asked at the press.
 //!
+//! The player can also find an item in Search: its card then shows beside the panel.
+//!
 //! One card shows at a time, until the player closes it or presses the hotkey again. What
 //! keeps a card from showing goes in the Item Lookup alert.
 
@@ -18,7 +20,7 @@ use crate::panel::{GameWindow, ScreenPoint, ScreenRect, Size, in_view};
 use serde::Serialize;
 
 /// What a shop pays for an item.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum ShopPrice {
     /// A shop pays this for one.
@@ -160,10 +162,10 @@ pub(crate) struct ItemCards {
     cards: u32,
 }
 
-/// The card showing: which items, where the pointer was, and where the player dragged it.
+/// The card showing: which items, where it opened, and where the player dragged it.
 struct Shown {
     card: u32,
-    pointer: ScreenPoint,
+    opened: Opened,
     /// Where the player dragged the card, relative to the game's client area; `None` while
     /// it is at the pointer.
     moved: Option<ClientOffset>,
@@ -179,6 +181,14 @@ pub(crate) enum Editing {
     Price { line: String, not_a_price: Option<String> },
     Name { line: Option<String>, problem: Option<NameProblem> },
     Remove { line: String },
+}
+
+/// Where a card opened: at the pointer, where the hotkey was pressed over the item's
+/// tooltip; or beside the panel, picked from Search.
+#[derive(Clone, Copy)]
+enum Opened {
+    AtPointer(ScreenPoint),
+    BesidePanel,
 }
 
 /// What the card showing shows.
@@ -229,9 +239,19 @@ impl ItemCards {
             1 => Showing::Card(groups.remove(0)),
             _ => Showing::Choose(groups),
         };
-        self.cards += 1;
-        self.shown = Some(Shown { card: self.cards, pointer: reading.pointer, moved: None, showing, editing: None });
+        self.open(Opened::AtPointer(reading.pointer), showing);
         Pressed::Shown
+    }
+
+    /// The player picked the items `ids`, which look alike, from Search: their card shows
+    /// beside the panel, in place of any card showing.
+    pub fn show(&mut self, ids: Vec<u32>) {
+        self.open(Opened::BesidePanel, Showing::Card(ids));
+    }
+
+    fn open(&mut self, opened: Opened, showing: Showing) {
+        self.cards += 1;
+        self.shown = Some(Shown { card: self.cards, opened, moved: None, showing, editing: None });
     }
 
     /// The player picked item `id` from the items listed: its card shows in the list's
@@ -248,9 +268,9 @@ impl ItemCards {
     /// or those of the items it lists to pick from.
     pub fn pictures(&self) -> Vec<String> {
         match &self.shown {
-            Some(Shown { showing: Showing::Card(ids), .. }) => ids.first().map(|&id| icon_path(id)).into_iter().collect(),
+            Some(Shown { showing: Showing::Card(ids), .. }) => ids.first().map(|&id| icon_path(&item_id(id))).into_iter().collect(),
             Some(Shown { showing: Showing::Choose(groups), .. }) => {
-                groups.iter().filter_map(|ids| ids.first()).map(|&id| icon_path(id)).collect()
+                groups.iter().filter_map(|ids| ids.first()).map(|&id| icon_path(&item_id(id))).collect()
             }
             None => Vec::new(),
         }
@@ -308,16 +328,30 @@ impl ItemCards {
     }
 
     /// Where the card showing of `size` goes over `game`: where the player dragged it,
-    /// wholly on a monitor and moved off any of `avoid`; or else at the pointer
-    /// ([`card_placement`]). `None` while no card shows.
-    pub fn placement(&self, game: &GameWindow, size: Size, avoid: &[ScreenRect]) -> Option<ScreenRect> {
+    /// wholly on a monitor and moved off any of `avoid` (the captured regions); or else at
+    /// the pointer ([`card_placement`]), or beside the `panel` and off our `others` windows
+    /// as well ([`beside_panel`]). `None` while no card shows, or while one opened beside
+    /// the panel has no panel to go beside.
+    pub fn placement(
+        &self,
+        game: &GameWindow,
+        size: Size,
+        avoid: &[ScreenRect],
+        panel: Option<ScreenRect>,
+        others: &[ScreenRect],
+    ) -> Option<ScreenRect> {
         let shown = self.shown.as_ref()?;
-        Some(match shown.moved {
-            Some(at) => {
+        Some(match (shown.moved, shown.opened) {
+            (Some(at), _) => {
                 let (x, y) = (game.client.x + at.x, game.client.y + at.y);
                 in_view(game, ScreenRect { x, y, width: size.width, height: size.height.min(game.client.height) }, avoid)
             }
-            None => card_placement(game, shown.pointer, size, avoid),
+            (None, Opened::AtPointer(pointer)) => card_placement(game, pointer, size, avoid),
+            (None, Opened::BesidePanel) => {
+                let panel = panel?;
+                let avoid: Vec<ScreenRect> = avoid.iter().chain(others).chain([&panel]).copied().collect();
+                beside_panel(game, panel, size, &avoid)
+            }
         })
     }
 
@@ -358,7 +392,7 @@ impl ItemCards {
                         .map(|item| ItemCardChoice {
                             id: item_id(item.id),
                             kind: item.kind.clone(),
-                            icon: picture(&icon_path(item.id)),
+                            icon: picture(&icon_path(&item_id(item.id))),
                         })
                         .collect(),
                 }
@@ -390,7 +424,7 @@ fn card(ids: &[u32], items: &ItemSet, picture: impl Fn(&str) -> Option<String>) 
     Some(ItemCard {
         id: item_id(first.id),
         name: first.name.clone(),
-        icon: picture(&icon_path(first.id)),
+        icon: picture(&icon_path(&item_id(first.id))),
         shop: first.shop,
         market: Vec::new(),
         market_edit: None,
@@ -400,13 +434,14 @@ fn card(ids: &[u32], items: &ItemSet, picture: impl Fn(&str) -> Option<String>) 
 }
 
 /// The game's item ID as the game writes it: 8 digits.
-fn item_id(id: u32) -> String {
+pub(crate) fn item_id(id: u32) -> String {
     format!("{id:08}")
 }
 
-/// Where OSMS keeps item `id`'s picture, below [`crate::osms::PICTURES_URL`].
-fn icon_path(id: u32) -> String {
-    format!("current/images/items/{}.png", item_id(id))
+/// Where OSMS keeps the picture of item `id` (8 digits), below
+/// [`crate::osms::PICTURES_URL`].
+pub(crate) fn icon_path(id: &str) -> String {
+    format!("current/images/items/{id}.png")
 }
 
 /// The card's corner sits this far right of and below the pointer's tip (physical px), like
@@ -426,18 +461,42 @@ fn card_placement(game: &GameWindow, pointer: ScreenPoint, size: Size, avoid: &[
     let (right, left) = (pointer.x + POINTER_GAP, pointer.x - POINTER_GAP - width as i32);
     let (below, above) = (pointer.y + POINTER_GAP, pointer.y - POINTER_GAP - height as i32);
     let at = |x, y| ScreenRect { x, y, width, height };
-    let spots = [at(right, below), at(left, below), at(right, above), at(left, above)];
+    first_clear(&[at(right, below), at(left, below), at(right, above), at(left, above)], client, avoid)
+}
+
+/// The card's side sits this far from the panel's (physical px), as the Grind Tracker's.
+const PANEL_GAP: i32 = 8;
+
+/// Where a card of `size` picked from Search goes: beside the `panel`, the tops level, on
+/// the side towards the middle of the game, or else the other side; whichever first stays
+/// inside the game's client area and off `avoid` (the captured regions and our other
+/// windows). With neither clear, towards the middle, moved inside the client area and below
+/// (or above) what it would cover.
+fn beside_panel(game: &GameWindow, panel: ScreenRect, size: Size, avoid: &[ScreenRect]) -> ScreenRect {
+    let client = game.client;
+    let (width, height) = (size.width.min(client.width), size.height.min(client.height));
+    let left = ScreenRect { x: panel.x - PANEL_GAP - width as i32, y: panel.y, width, height };
+    let right = ScreenRect { x: panel.x + panel.width as i32 + PANEL_GAP, ..left };
+    let middle = |r: ScreenRect| 2 * i64::from(r.x) + i64::from(r.width);
+    let spots = if middle(panel) >= middle(client) { [left, right] } else { [right, left] };
+    first_clear(&spots, client, avoid)
+}
+
+/// The first of `spots` (all the same size) wholly inside `client` and off `avoid`. With
+/// none of them clear, the first, moved inside `client` and below (or above) any of `avoid`
+/// it would cover.
+fn first_clear(spots: &[ScreenRect], client: ScreenRect, avoid: &[ScreenRect]) -> ScreenRect {
     let clear = |card: &ScreenRect| !avoid.iter().any(|region| overlaps(*card, *region));
     if let Some(card) = spots.iter().find(|card| inside(**card, client) && clear(card)) {
         return *card;
     }
-    let mut card = clamp(at(right, below), client);
+    let mut card = clamp(spots[0], client);
     // Each region is gone over twice, as a move off one may cover another.
     for _ in 0..2 {
         for region in avoid {
             if overlaps(card, *region) {
                 let under = region.y + region.height as i32 + REGION_GAP;
-                card.y = if inside(at(card.x, under), client) { under } else { region.y - REGION_GAP - height as i32 };
+                card.y = if inside(ScreenRect { y: under, ..card }, client) { under } else { region.y - REGION_GAP - card.height as i32 };
             }
         }
     }

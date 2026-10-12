@@ -82,6 +82,11 @@ impl ItemSet {
         }
     }
 
+    /// Every item, in the files' order.
+    pub(crate) fn all(&self) -> impl Iterator<Item = &ItemFacts> {
+        self.items.iter()
+    }
+
     /// Item `id`, if the set has it.
     pub(crate) fn item(&self, id: u32) -> Option<&ItemFacts> {
         self.by_id.get(&id).map(|&at| &self.items[at])
