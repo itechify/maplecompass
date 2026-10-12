@@ -87,6 +87,16 @@ impl From<SavedShape> for SavedMarketPrices {
     }
 }
 
+/// Prices a tool of the player's own leaves for their Market Lines (ADR 0013): a file in
+/// `market-prices.json`'s shape in the `market-imports` folder beside it, which Minerva
+/// takes in as it comes, onto the lines of the same IDs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketImport {
+    pub version: u32,
+    pub lines: Vec<SavedMarketLine>,
+}
+
 /// The market prices held, and a count of their changes, so the shell saves them only then.
 #[derive(Default)]
 pub(crate) struct MarketPrices {
@@ -153,6 +163,43 @@ impl MarketPrices {
         let before = self.saved.lines.len();
         self.saved.lines.retain(|known| known.id != line);
         self.changed(self.saved.lines.len() != before);
+    }
+
+    /// Take in `import`'s prices, each onto the line of its ID, the newest winning: a price
+    /// held stays if it was set after the one imported (the player typed it since). A line
+    /// not held is added at the end, named as the import names it, with a number after
+    /// the name if another line has it. Nothing is removed, and a line held keeps its name.
+    pub fn import(&mut self, import: MarketImport) {
+        let mut changed = false;
+        for imported in import.lines {
+            let at = match self.saved.lines.iter().position(|line| line.id == imported.id) {
+                Some(at) => at,
+                None => {
+                    let name = self.free_name(&imported.name, &imported.id);
+                    self.saved.lines.push(SavedMarketLine { id: imported.id, name, prices: BTreeMap::new() });
+                    changed = true;
+                    self.saved.lines.len() - 1
+                }
+            };
+            let prices = &mut self.saved.lines[at].prices;
+            for (id, price) in imported.prices {
+                let newer = prices.get(&id).is_none_or(|held| held.set_at_unix_ms.unwrap_or(0) <= price.set_at_unix_ms.unwrap_or(0));
+                if newer && prices.insert(id, price) != Some(price) {
+                    changed = true;
+                }
+            }
+        }
+        self.changed(changed);
+    }
+
+    /// `name` (the line's ID `id` if it is only spaces), or, if another line has it in any
+    /// case, the name with the first number from 2 after it that no line has.
+    fn free_name(&self, name: &str, id: &str) -> String {
+        let name = if name.trim().is_empty() { id.trim() } else { name.trim() };
+        if !self.name_taken(name, None) {
+            return name.to_string();
+        }
+        (2..).map(|n| format!("{name} {n}")).find(|numbered| !self.name_taken(numbered, None)).expect("a number no line has")
     }
 
     fn changed(&mut self, changed: bool) {

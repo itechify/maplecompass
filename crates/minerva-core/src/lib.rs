@@ -50,7 +50,7 @@ pub use item_card::{
     ITEM_CARD_CREDIT, ItemCard, ItemCardChoice, ItemCardView, MESOWATCH_URL, MarketEdit, MarketLine, NameProblem, ShopPrice,
     ShownItemCard,
 };
-pub use market_prices::{MARKET_PRICES_VERSION, MarketPrice, SavedMarketLine, SavedMarketPrices};
+pub use market_prices::{MARKET_PRICES_VERSION, MarketImport, MarketPrice, SavedMarketLine, SavedMarketPrices};
 pub use item_lookup::{ItemChoice, ItemHit, ItemLookup, ItemLookupLine, OurWindow};
 pub use item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReader, ItemTooltipReading};
 pub use map_data::{
@@ -1274,6 +1274,15 @@ impl Minerva {
     pub fn restore_market_prices(&mut self, prices: SavedMarketPrices) -> &PanelState {
         self.record(Event::RestoreMarketPrices { prices: prices.clone() });
         self.market_prices.restore(prices);
+        self.sync_panel()
+    }
+
+    /// Take in the prices a tool of the player's own left for their Market Lines (ADR 0013),
+    /// the newest winning over the prices held. The shell hands each over as it finds it,
+    /// whether a card shows or not.
+    pub fn import_market_prices(&mut self, import: MarketImport) -> &PanelState {
+        self.record(Event::ImportMarketPrices { import: import.clone() });
+        self.market_prices.import(import);
         self.sync_panel()
     }
 

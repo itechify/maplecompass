@@ -31,7 +31,7 @@ use crate::item_lookup::ItemLookup;
 use crate::item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReading};
 use crate::map_data::MapSummary;
 use crate::map_index::{Fetched, MapDataSource, SourceError};
-use crate::market_prices::SavedMarketPrices;
+use crate::market_prices::{MarketImport, SavedMarketPrices};
 use crate::osms::{OsmsFiles, SavedFiles};
 use crate::osms_items::{ItemFiles, SavedItemFiles};
 use crate::panel::{Action, Foreground, GameWindow, PanelSizes, ScreenRect, Size};
@@ -154,6 +154,8 @@ pub enum Event {
     WallClock { unix_ms: u64 },
     RestoreBests { bests: SavedBests },
     RestoreMarketPrices { prices: SavedMarketPrices },
+    /// A tool of the player's own left `import` for their Market Lines (ADR 0013).
+    ImportMarketPrices { import: MarketImport },
     /// The player removed the Visit whose best was `visit` from `map`'s Visit History.
     RemoveVisit { map: String, visit: VisitBest },
     /// Not an input: an error the shell or one of our windows ran into (`from`), which
@@ -1194,6 +1196,9 @@ pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
             Event::RestoreMarketPrices { prices } => {
                 minerva.restore_market_prices(prices);
             }
+            Event::ImportMarketPrices { import } => {
+                minerva.import_market_prices(import);
+            }
             Event::Foreground { foreground } => {
                 minerva.on_foreground(foreground);
             }
@@ -1414,6 +1419,11 @@ impl Event {
                 let names: Vec<String> =
                     prices.lines.iter().map(|line| format!("{:?} ({} prices)", line.name, line.prices.len())).collect();
                 format!("market prices restored: {}", if names.is_empty() { "no lines".into() } else { names.join(", ") })
+            }
+            Event::ImportMarketPrices { import } => {
+                let names: Vec<String> =
+                    import.lines.iter().map(|line| format!("{:?} ({} prices)", line.id, line.prices.len())).collect();
+                format!("market prices imported: {}", if names.is_empty() { "no lines".into() } else { names.join(", ") })
             }
             Event::HotkeysUnavailable { taken, invalid } => {
                 format!("hotkeys unavailable: taken {taken:?}, invalid {invalid:?}")
