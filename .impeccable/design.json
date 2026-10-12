@@ -1129,35 +1129,35 @@
       },
       "site-title": {
         "displayName": "Site Title",
-        "purpose": "The site's one h1, at the top of Get started, balanced; 32px/38px on phones."
+        "purpose": "Each site page's one h1: the hero's title on the home page, the FAQ's at its top; balanced; 32px/38px on phones."
       },
       "site-opener": {
         "displayName": "Site Opener",
-        "purpose": "Heading each tab's part on the site; 26px/32px on phones."
+        "purpose": "Heading each feature and section of the home page, led by a legend mark where it has one; 26px/32px on phones."
       },
       "site-topic": {
         "displayName": "Site Topic",
-        "purpose": "Heading each topic on the site, led by a legend mark where it has one; 20px/26px on phones."
+        "purpose": "Heading each FAQ group, held beside its questions as they go by, led by a legend mark where it has one; 20px/26px on phones."
       },
       "site-subhead": {
         "displayName": "Site Subhead",
-        "purpose": "The h4s within a site topic."
+        "purpose": "The subheads within a large FAQ group (The panel, Mobs, Bug Reports)."
       },
       "site-lede": {
         "displayName": "Site Lede",
-        "purpose": "Get started's opening paragraphs, and (at a 26px line, Ink Steel) the line under each opener; 16px/26px on phones."
+        "purpose": "The hero's sentence, a feature's words and the owl's; 16px/26px on phones."
       },
       "site-body": {
         "displayName": "Site Body",
         "purpose": "The site's prose; 15px/24px under 640px. The site's own reading scale, outside the overlay's ramp on purpose: read at rest in a window up to 1200px wide."
       },
-      "site-aside": {
-        "displayName": "Site Aside",
-        "purpose": "The site's topic asides, inset boxes beside the words."
+      "site-answer": {
+        "displayName": "Site Answer",
+        "purpose": "A question's answer, and the line under a FAQ group's heading (in Ink Steel)."
       },
-      "site-run-in": {
-        "displayName": "Site Run-in",
-        "purpose": "The bold words a site paragraph opens on, naming what it turns to, at its paragraph's size, so a topic reads down its left edge. A topic's first paragraph has none."
+      "site-question": {
+        "displayName": "Site Question",
+        "purpose": "A question, folded to its one line beside the panel's fold button, as the panel folds a section to its heading."
       }
     },
     "shadows": [

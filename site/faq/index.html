@@ -1,0 +1,1002 @@
+<!doctype html>
+<!-- The Minerva site's FAQ: every detail a player needs, as the questions they ask, in eight
+     groups. Each question is written once, here, as <details class="qa" id="…">; the build
+     draws it (site/questions.ts), and copies it into the home page where a feature names it.
+     The text describes the release whose tag the site is built from (docs/releasing.md); a
+     change a player notices updates it in the same PR. -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Questions and answers · Minerva</title>
+    <meta
+      name="description"
+      content="Everything about Minerva, the free MapleStory Classic World overlay: whether it's safe, installing and setting it up, the panel and its map, hunting, grinding, items, and what to do when something goes wrong."
+    />
+    <link rel="canonical" href="@SITE_URL@faq/" />
+    <link rel="icon" type="image/png" sizes="32x32" href="../../assets/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="../../assets/icon-16.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Minerva" />
+    <meta property="og:title" content="Questions and answers · Minerva" />
+    <meta
+      property="og:description"
+      content="Everything about Minerva, the free MapleStory Classic World overlay: whether it's safe, setting it up, and every part of the panel."
+    />
+    <meta property="og:url" content="@SITE_URL@faq/" />
+    <meta property="og:image" content="@CARD_IMAGE@" />
+    <meta
+      property="og:image:alt"
+      content="MapleStory's minimap and, under it, the Minerva panel showing the same map: its picture with every portal ringed, and the way to a mob to hunt."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="@CARD_IMAGE@" />
+    <link rel="preload" href="../fonts/Maplestory-Light.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="../fonts/Maplestory-Bold.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="../../src/theme.css" />
+    <link rel="stylesheet" href="../site.css" />
+    <script type="module" src="../site.ts"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to the questions</a>
+    <div class="window">
+      <div class="window-head">
+        <header class="window-bar">
+          <img class="mark-icon" src="../../assets/icon-32.png" alt="" width="32" height="32" />
+          <p class="window-name">Minerva</p>
+          <p class="window-version">@VERSION@ · Windows 10 and 11</p>
+          <a class="button small" href="@SETUP_URL@">Download</a>
+        </header>
+        <nav class="tabs" aria-label="Pages">
+          <a class="tab" href="/">Home</a>
+          <a class="tab" href="/faq/" aria-current="page">FAQ</a>
+        </nav>
+      </div>
+
+      <main class="window-body" id="main">
+        <!-- The owl asks what you'd like to know, as an NPC offers its choices. -->
+        <header class="faq-head">
+          <h1>Questions and answers</h1>
+          <div class="npc">
+            <div class="npc-portrait">
+              <img src="../../assets/icon.png" alt="" width="111" height="126" />
+              <p class="npc-name">Minerva</p>
+            </div>
+            <div class="npc-words">
+              <p>What would you like to know? Pick a topic, then click a question to see its answer.</p>
+              <nav aria-label="Topics">
+                <ul class="npc-choices">
+                  <li><a href="#safety">Safety &amp; your account</a></li>
+                  <li><a href="#install">Install &amp; updates</a></li>
+                  <li><a href="#setup">Setup &amp; hotkeys</a></li>
+                  <li><a href="#panel">The panel &amp; the map</a></li>
+                  <li><a href="#hunting">Hunting</a></li>
+                  <li><a href="#grinding">Grinding</a></li>
+                  <li><a href="#items">Items</a></li>
+                  <li><a href="#trouble">Troubleshooting &amp; Bug Reports</a></li>
+                </ul>
+              </nav>
+            </div>
+          </div>
+        </header>
+
+        <div class="part" data-street="Before you play">
+          <section class="faq-group stop" id="safety" data-about="safety and your account" aria-labelledby="safety-title">
+            <div class="faq-group-head">
+              <h2 id="safety-title">Safety &amp; your account</h2>
+              <p>The risk to your account, what Minerva looks at, and what it downloads and keeps.</p>
+            </div>
+            <div class="faq-group-body">
+              <div class="qa-list">
+                <details class="qa" id="banned">
+                  <summary>Can I get banned for using Minerva?</summary>
+                  <p>
+                    It's possible. Minerva is a third-party tool, not made or approved by Nexon. Nexon's terms forbid some
+                    third-party programs, and a penalty in Classic World applies to your whole account, MapleStory
+                    included. Minerva keeps the risk low by <a href="#reads-game">only looking at the screen</a>, but
+                    <strong>using it is at your own risk</strong>.
+                  </p>
+                </details>
+                <details class="qa" id="reads-game">
+                  <summary>Does Minerva read or change the game?</summary>
+                  <p>
+                    No. It captures only what it needs, the way a screenshot does: the minimap title, the EXP bar if you
+                    mark it, and the tooltip by the pointer when you press an item hotkey. It never reads or changes the
+                    game's memory or files, never injects anything into it, and never presses keys or clicks for you.
+                  </p>
+                </details>
+                <details class="qa" id="hotkeys-hook">
+                  <summary>Are Minerva's hotkeys a keyboard hook?</summary>
+                  <p>
+                    No. They're ordinary hotkeys registered with Windows, and they act only while the game or one of
+                    Minerva's windows is in front. The game never sees them, and in any other app the same keys do what
+                    that app makes them do.
+                  </p>
+                </details>
+                <details class="qa" id="source">
+                  <summary>Can I check what Minerva does for myself?</summary>
+                  <p>
+                    Yes. You don't have to take any of this on trust: its source code is public on
+                    <a href="https://github.com/itechify/minerva">GitHub</a>, for anyone to read.
+                  </p>
+                </details>
+                <details class="qa" id="free">
+                  <summary>Is Minerva free? Does it need an account?</summary>
+                  <p>It's free, and needs no account. There's no analytics and no update check.</p>
+                </details>
+                <details class="qa" id="data">
+                  <summary>What does Minerva download?</summary>
+                  <dl class="facts">
+                    <dt>Map and mob data</dt>
+                    <dd>
+                      Five files from <a href="https://osmsdataexplorer.com">OSMS Data Explorer</a>, under 1 MB together,
+                      when you start Minerva if its copy is a day old, and every 24 hours while it runs.
+                    </dd>
+                    <dt>Item data</dt>
+                    <dd>Two more OSMS files, about 1.2 MB together, on the same schedule.</dd>
+                    <dt>Pictures</dt>
+                    <dd>
+                      The shown map's picture and its mobs' animations, once, kept until they go 30 days unused. An item's
+                      picture only when a card lists it to pick from.
+                    </dd>
+                  </dl>
+                  <p>Item Lookup also asks MeowDB's search for an item's name: <a href="#meowdb">see below</a>.</p>
+                </details>
+                <details class="qa" id="offline">
+                  <summary>Does Minerva work offline?</summary>
+                  <p>
+                    Yes, once it has the data: its first launch needs a connection. If OSMS Data Explorer can't be reached
+                    for over a week, the panel says it's showing a saved copy, with its date.
+                  </p>
+                </details>
+                <details class="qa" id="meowdb">
+                  <summary>Does Minerva contact MeowDB?</summary>
+                  <p>
+                    Only for Item Lookup. When you press its hotkey or click an Item Card's name, it asks
+                    <a href="https://meowdb.com">NiaMeowDB</a>'s search for the item's name: each name once a week at most,
+                    2 seconds apart. Every other MeowDB link just opens its page in your browser.
+                  </p>
+                </details>
+                <details class="qa" id="kept">
+                  <summary>What does Minerva keep on my PC?</summary>
+                  <ul>
+                    <li>
+                      Your settings (placement, folded sections, the marked title, a hand-picked game window and the
+                      hotkeys) in <code class="path">%APPDATA%\<wbr />com.<wbr />itechify.<wbr />minerva\<wbr />settings.json</code>.
+                    </li>
+                    <li>
+                      Beside them: your Personal Bests, each map's 10 best visits, in <code>personal-bests.json</code>; the
+                      market prices you keep, in <code>market-prices.json</code>; and the 10 newest
+                      <a href="#bug-reports">Bug Reports</a> you save, in <code>Bug Reports</code>.
+                    </li>
+                    <li>
+                      The map and item data, pictures and animations in
+                      <code class="path">%LOCALAPPDATA%\<wbr />com.<wbr />itechify.<wbr />minerva\<wbr />cache</code>.
+                    </li>
+                  </ul>
+                </details>
+                <details class="qa" id="why-owl">
+                  <summary>Why an owl?</summary>
+                  <p>
+                    Minerva is the Roman goddess of wisdom, and the owl was her companion: the owl of Minerva, which gives
+                    this site its address. A wise owl that knows every map seemed the right guide.
+                  </p>
+                </details>
+              </div>
+            </div>
+          </section>
+
+          <section class="faq-group stop" id="install" data-about="installing and updating" aria-labelledby="install-title">
+            <div class="faq-group-head">
+              <h2 id="install-title">Install &amp; updates</h2>
+              <p>What you need, which file to download, and how to update.</p>
+            </div>
+            <div class="faq-group-body">
+              <div class="qa-list">
+                <details class="qa" id="requirements">
+                  <summary>What do I need to run Minerva?</summary>
+                  <p>
+                    Windows 10 or 11, 64-bit, and MapleStory Classic World played windowed or borderless, with the minimap
+                    open and both lines of its title showing.
+                  </p>
+                </details>
+                <details class="qa" id="fullscreen">
+                  <summary>Does Minerva work with the game fullscreen?</summary>
+                  <p>No. Screen capture can't see exclusive fullscreen, so play the game windowed or borderless.</p>
+                </details>
+                <details class="qa" id="which-file">
+                  <summary>Which file should I download?</summary>
+                  <dl class="files">
+                    <dt><a href="@SETUP_URL@">Minerva_@VERSION@_x64-setup.exe</a> <span class="tag">Recommended</span></dt>
+                    <dd>Installs for your user, over earlier versions, with a Start menu entry and an uninstaller.</dd>
+                    <dt>Minerva_@VERSION@_x64_en-US.msi</dt>
+                    <dd>The same, as an MSI package. It installs for all users, so it asks for admin rights.</dd>
+                    <dt>minerva-@VERSION@-portable.exe</dt>
+                    <dd>
+                      No install: run it from any folder. It needs the Microsoft Edge WebView2 runtime, which Windows 11
+                      already has.
+                    </dd>
+                  </dl>
+                  <p>The MSI and portable files are on <a href="@RELEASE_URL@">the release's page</a>.</p>
+                </details>
+                <details class="qa" id="smartscreen">
+                  <summary>Why does Windows say it "protected your PC"?</summary>
+                  <p>
+                    Minerva's files aren't code-signed, so Windows SmartScreen doesn't know them yet. Choose
+                    <strong>More info</strong>, then <strong>Run anyway</strong>.
+                  </p>
+                </details>
+                <details class="qa" id="update">
+                  <summary>How do I update Minerva?</summary>
+                  <p>
+                    Quit the running Minerva first: click its owl in the notification area, by the clock, and choose
+                    <strong>Quit Minerva</strong>. Then run the new version's setup. Your settings, hotkeys and Personal
+                    Bests carry over. Minerva doesn't check for updates itself:
+                    <a href="https://github.com/itechify/minerva/releases">each release</a> says what's new.
+                  </p>
+                </details>
+              </div>
+            </div>
+          </section>
+
+          <section class="faq-group stop" id="setup" data-about="setup and hotkeys" aria-labelledby="setup-title">
+            <div class="faq-group-head">
+              <h2 id="setup-title">Setup &amp; hotkeys</h2>
+              <p>The first run, marking the minimap title and the EXP bar, and changing the hotkeys.</p>
+            </div>
+            <div class="faq-group-body">
+              <h3>Setup</h3>
+              <div class="qa-list">
+                <details class="qa" id="first-run">
+                  <summary>What happens the first time I start Minerva?</summary>
+                  <p>A setup window walks you through:</p>
+                  <ol>
+                    <li>The <a href="/#safe">account warning</a>.</li>
+                    <li>Finding the game window, or picking it by hand.</li>
+                    <li>Setting up the game: windowed or borderless, with the minimap open and its title showing.</li>
+                    <li><a href="#mark-title">Marking the minimap title</a>, then a test read of it.</li>
+                    <li>If you like, <a href="#exp-bar">marking the EXP bar</a>, then a test read of it.</li>
+                  </ol>
+                  <p>Finish starts the overlay. Closing setup on its first run quits.</p>
+                </details>
+                <details class="qa" id="mark-title">
+                  <summary>How do I mark the minimap title?</summary>
+                  <p>
+                    Drag a box around both lines of the title, with a little of the blue panel around them. Or move the box
+                    with the arrow keys and resize it with <kbd>Alt+Arrow</kbd>, holding <kbd>Shift</kbd> for ten-pixel
+                    steps. <kbd>Enter</kbd> tests the box; <kbd>Esc</kbd> goes back without changing the previous mark.
+                  </p>
+                  <figure class="shot">
+                    <img
+                      src="../screenshots/setup.png"
+                      alt="Setup reopened from Help & Setup, at its step for marking the minimap title again: draw or adjust a box around its two lines, with Back, Keep the current title and Mark the title."
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </figure>
+                </details>
+                <details class="qa" id="exp-bar">
+                  <summary>Do I have to mark the EXP bar?</summary>
+                  <p>
+                    No: only for the <a href="/#grind-tracker">Grind Tracker</a>. To mark it later, open setup with
+                    <kbd>Ctrl+Shift+S</kbd>, keep the current title, and choose <strong>Mark the EXP bar</strong>.
+                  </p>
+                </details>
+                <details class="qa" id="setup-again">
+                  <summary>How do I open setup again?</summary>
+                  <p>
+                    <kbd>Ctrl+Shift+S</kbd>, or Help &amp; Setup on the panel or on the owl in the notification area. There
+                    you can mark the title anew, or read the Overlay Guide, which lists your hotkeys and explains placement
+                    and the hunting figures. About &amp; Credits, beside it, links back to this site.
+                  </p>
+                </details>
+                <details class="qa" id="tray">
+                  <summary>Where is Minerva while it runs, and how do I quit it?</summary>
+                  <p>
+                    Its owl sits in the notification area, the system tray by the clock. Click it for
+                    <strong>Help &amp; Setup</strong>, <a href="#bug-reports">Bug Report</a> or <strong>Quit Minerva</strong>,
+                    the one way to quit, whether or not the game is open. Only one Minerva runs at a time: starting it again
+                    shows the one that's running.
+                  </p>
+                </details>
+              </div>
+
+              <h3>Hotkeys</h3>
+              <div class="qa-list">
+                <details class="qa" id="settings">
+                  <summary>How do I change a hotkey?</summary>
+                  <ol>
+                    <li>Click the gear at the top of the panel, or Change hotkeys in setup's Overlay Guide.</li>
+                    <li>Click the hotkey's <strong>Change</strong>.</li>
+                    <li>
+                      Press the new combination, or <kbd>Esc</kbd> to cancel. While Settings waits, the hotkeys are released,
+                      so your keys reach it rather than acting.
+                    </li>
+                  </ol>
+                  <p>
+                    A combination must hold <kbd>Ctrl</kbd>, <kbd>Alt</kbd> or <kbd>Win</kbd>. <kbd>Ctrl+Shift</kbd> with a
+                    key is safest: MapleStory attacks with <kbd>Ctrl</kbd> and jumps with <kbd>Alt</kbd> by default.
+                  </p>
+                </details>
+                <details class="qa" id="hotkey-taken">
+                  <summary>What if the keys I want are already taken?</summary>
+                  <p>
+                    If another Minerva hotkey has them, <strong>Swap</strong> trades the two. If Windows or another app has
+                    them, the panel and setup say which, and Settings marks the row.
+                  </p>
+                </details>
+                <details class="qa" id="hotkey-off">
+                  <summary>Can I turn a hotkey off?</summary>
+                  <p>
+                    Yes, so it stops taking its keys from the game: choose <strong>Turn off</strong>, or press
+                    <kbd>Backspace</kbd> or <kbd>Delete</kbd> while it waits for keys. Its button at the top of the panel
+                    still works. The Item Card and Item Lookup have no button, so they can't be used while theirs is off.
+                  </p>
+                </details>
+                <details class="qa" id="hotkey-undo">
+                  <summary>Can I undo a change to the hotkeys?</summary>
+                  <p>
+                    Every change works at once and is saved. <strong>Restore defaults</strong> puts every hotkey back, and
+                    on, and Undo brings yours back until you change another or close Settings.
+                  </p>
+                </details>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="part" data-street="While you play">
+          <section class="faq-group stop" id="panel" data-about="the panel and the map" aria-labelledby="panel-title">
+            <div class="faq-group-head">
+              <h2 id="panel-title"><span class="mark ring" aria-hidden="true"></span>The panel &amp; the map</h2>
+              <p>Moving and placing the panel, the Map Preview and its Hidden Portals, the mobs, and maps that share a title.</p>
+            </div>
+            <div class="faq-group-body">
+              <h3>The panel</h3>
+              <div class="qa-list">
+                <details class="qa" id="panel-shows">
+                  <summary>What does the panel show?</summary>
+                  <p>
+                    The map you're on, by its name and its Map Mark, then three sections: the <a href="/#map">Map</a>,
+                    <a href="/#navigation">Navigation</a> while you have a Hunting Target or a Destination, and the
+                    <a href="/#mobs">Mobs</a>. Click a section's heading to fold it, and again to open it. A folded section
+                    stays folded from map to map, and the next time you start Minerva.
+                  </p>
+                </details>
+                <details class="qa" id="map-marks">
+                  <summary>What's the emblem beside the map's name?</summary>
+                  <p>
+                    Its <strong>Map Mark</strong>: the emblem the minimap shows beside its title for the area the map is
+                    in, like Henesys's shield, Kerning City's stone or Sleepywood's skull. A smaller one stands before every
+                    other map the panel names, such as a portal's destination or a stop on your route, so you can tell at
+                    a glance where each map is.
+                  </p>
+                </details>
+                <details class="qa" id="buttons">
+                  <summary>What do the panel's buttons do?</summary>
+                  <ul class="toolbar-legend">
+                    <li>
+                      <span class="icon-button" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.25" /><path d="M10.2 10.2 13.5 13.5" /></svg></span>
+                      <span>Search for a mob to hunt, a map to go to, or an item.</span>
+                    </li>
+                    <li>
+                      <span class="icon-button" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M2.5 5.5h10M10 3l2.5 2.5L10 8M13.5 10.5h-10M6 8l-2.5 2.5L6 13" /></svg></span>
+                      <span>The next map with the same title, only when <a href="#shared-titles">maps share it</a>.</span>
+                    </li>
+                    <li>
+                      <span class="icon-button" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M2.5 12.5 6.5 8.5 9 11l4.5-4.5M10.5 6.5h3v3" /></svg></span>
+                      <span>Show or hide the <a href="/#grind-tracker">Grind Tracker</a>, when you track your EXP.</span>
+                    </li>
+                    <li>
+                      <span class="icon-button" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M2.5 5.5h8v8h-8zM5.5 2.5h8v8" /></svg></span>
+                      <span>Change the <a href="#placement">placement</a>.</span>
+                    </li>
+                    <li>
+                      <span class="icon-button" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M6.67 3.91L6.8 1.82L9.2 1.82L9.33 3.91A4.3 4.3 0 0 1 10.88 4.8L12.75 3.87L13.96 5.95L12.21 7.11A4.3 4.3 0 0 1 12.21 8.89L13.96 10.05L12.75 12.13L10.88 11.2A4.3 4.3 0 0 1 9.33 12.09L9.2 14.18L6.8 14.18L6.67 12.09A4.3 4.3 0 0 1 5.12 11.2L3.25 12.13L2.04 10.05L3.79 8.89A4.3 4.3 0 0 1 3.79 7.11L2.04 5.95L3.25 3.87L5.12 4.8A4.3 4.3 0 0 1 6.67 3.91Z" /><circle cx="8" cy="8" r="1.6" /></svg></span>
+                      <span>Settings, to change the hotkeys.</span>
+                    </li>
+                    <li>
+                      <span class="icon-button" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M5.8 6a2.2 2.2 0 1 1 3.3 1.9c-.7.4-1.1.9-1.1 1.7v.6" /><circle class="dot" cx="8" cy="12.6" r=".9" /></svg></span>
+                      <span>Help &amp; Setup.</span>
+                    </li>
+                    <li>
+                      <span class="icon-button" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M3.5 8.5h9" /></svg></span>
+                      <span>Fold the panel to an icon: see <a href="#fold-panel">below</a>.</span>
+                    </li>
+                  </ul>
+                  <p>Rest the pointer on a button to see its hotkey. Click the map's name to open its MeowDB page.</p>
+                </details>
+                <details class="qa" id="keyboard">
+                  <summary>Does clicking the panel take the keyboard from the game?</summary>
+                  <p>
+                    No. Click it whenever you like: the game keeps the keyboard. Only the search view and Settings take it
+                    while they're open, and they close when you click back into the game.
+                  </p>
+                </details>
+                <details class="qa" id="move-panel">
+                  <summary>How do I move or resize the panel?</summary>
+                  <p>
+                    Drag it by its header to move it, or by a side or a bottom corner to make it wider or narrower. Its
+                    height follows what it shows, and a long list scrolls instead. Dragged onto the minimap title, which
+                    Minerva reads, it moves just clear of it when you let go.
+                  </p>
+                </details>
+                <details class="qa" id="placement">
+                  <summary>Can I put the panel outside the game, or on another monitor?</summary>
+                  <p>Yes. <kbd>Ctrl+Shift+P</kbd> switches between four placements:</p>
+                  <ul>
+                    <li>
+                      <b>Inside:</b> it keeps the spot you dragged it to in the game window. It starts on the window's right
+                      edge, a third of the way down.
+                    </li>
+                    <li>
+                      <b>Docked right or left:</b> it follows the game window's outside edge, and goes inside when there's
+                      no room on screen.
+                    </li>
+                    <li><b>Detached:</b> it stays wherever you drag it, on any monitor, with a taskbar entry of its own.</li>
+                  </ul>
+                </details>
+                <details class="qa" id="panel-hides">
+                  <summary>Why does the panel disappear?</summary>
+                  <p>
+                    It shows on top of everything, but only while the game or one of Minerva's windows is in front. While
+                    another app is, or the game is minimised, it hides: opening a MeowDB page in your browser hides it
+                    until you go back to the game.
+                  </p>
+                </details>
+                <details class="qa" id="streams">
+                  <summary>Does the panel show up in screenshots and streams?</summary>
+                  <p>Yes. It's a window of its own over the game, so whatever captures your screen captures it too.</p>
+                </details>
+                <details class="qa" id="fold-panel">
+                  <summary>Can I fold the panel out of the way?</summary>
+                  <p>
+                    Yes. <kbd>Ctrl+Shift+C</kbd>, or its minus button, folds it to an icon that shows the map's Hidden
+                    Portal count, with an orange dot when something needs a look. Click the icon to open the panel again.
+                  </p>
+                </details>
+              </div>
+
+              <h3>The Map and its Hidden Portals</h3>
+              <div class="qa-list">
+                <details class="qa" id="hidden-portals">
+                  <summary>What's a Hidden Portal?</summary>
+                  <p>
+                    A way to another map that the game doesn't show. The Map Preview rings it dashed, and lists it under
+                    the picture with where it leads, tagged <span class="tag">Hidden Street</span> when it leads to one, or
+                    <span class="tag quest">Quest</span> when it only works during a quest.
+                  </p>
+                </details>
+                <details class="qa" id="ring-colours">
+                  <summary>What do the rings' colours mean?</summary>
+                  <ul class="key-list">
+                    <li><span class="ring-key portal" aria-hidden="true"></span><b>Blue:</b> to another map.</li>
+                    <li>
+                      <span class="ring-key teleport" aria-hidden="true"></span><b>Green:</b> within the map, with a dashed
+                      arrow to where it lands.
+                    </li>
+                    <li><span class="ring-key unknown" aria-hidden="true"></span><b>Grey:</b> to a map Minerva doesn't know.</li>
+                    <li>
+                      <span class="ring-key route" aria-hidden="true"></span><b>Wide magenta:</b> the next portal on your way
+                      to a <a href="/#navigation">Hunting Target</a>.
+                    </li>
+                  </ul>
+                  <p>A dashed ring is a portal the game doesn't show.</p>
+                </details>
+                <details class="qa" id="zoom">
+                  <summary>Can I zoom in on the map?</summary>
+                  <p>
+                    Yes. Turn the mouse wheel over the picture to zoom in on the part you point at, as far as the map's own
+                    size. The rings keep their size, so portals that crowd together come apart. Drag the picture to move
+                    around it, and double-click it to see the whole map again. A new map always shows whole.
+                  </p>
+                </details>
+                <details class="qa" id="portal-card">
+                  <summary>How do I see where a portal leads?</summary>
+                  <p>
+                    Rest the pointer on its ring: a card says where it leads, its street and its kind, and lights its row
+                    under the picture. Rest it on a row to light its ring.
+                  </p>
+                </details>
+                <details class="qa" id="doors">
+                  <summary>Why aren't a town's doors listed as Hidden Portals?</summary>
+                  <p>
+                    You can see them in the game, so they're ringed like any visible portal rather than listed. A teleport
+                    within the map is never listed either, though an invisible one is dashed.
+                  </p>
+                </details>
+                <details class="qa" id="no-picture">
+                  <summary>Why is the map's picture missing?</summary>
+                  <p>
+                    It may still be loading ("Loading map…"), or it couldn't be fetched ("Couldn't load the map picture"),
+                    and the Hidden Portals list without it. When <a href="#shared-titles">maps share a title</a>, it waits
+                    until it's settled which one you're on. A map with no picture and no Hidden Portals has no Map section.
+                  </p>
+                </details>
+              </div>
+
+              <h3>Mobs</h3>
+              <div class="qa-list">
+                <details class="qa" id="map-summary">
+                  <summary>What are the EXP/h and Mobs/h figures?</summary>
+                  <p>
+                    The map's <strong>Map Summary</strong>: the EXP and mobs an hour you can expect there, solo and in a
+                    party of 6 or more, worked out as MeowDB works them out. Each mob's <strong>Share</strong> is its share
+                    of all the map's spawns: the higher it is, the fewer other mobs in your way.
+                  </p>
+                </details>
+                <details class="qa" id="mob-card">
+                  <summary>How do I see more about a mob?</summary>
+                  <p>
+                    Rest the pointer on its name for its <strong>Mob Card</strong>: the mob as OSMS animates it, and what
+                    its row doesn't show, such as its element, touch damage, accuracy, avoid and defences. Click the name
+                    to open the mob's MeowDB page.
+                  </p>
+                </details>
+                <details class="qa" id="long-list">
+                  <summary>Can I shorten a long mob list?</summary>
+                  <p>Click the Mobs heading to fold the section to its heading and the count, on every map, until you open it again.</p>
+                </details>
+              </div>
+
+              <h3>Maps that share a title</h3>
+              <div class="qa-list">
+                <details class="qa" id="shared-titles">
+                  <summary>What happens when two maps share a title?</summary>
+                  <p>
+                    A few do, like the two Maple Road / Mushroom Town maps. If they'd show the same summary, mobs and Hidden
+                    Portals anyway, the panel just shows them, without a picture. Otherwise it picks the one connected to
+                    the map you came from. Failing that, it shows the first, marked <span class="chip-doubt">Not sure</span>.
+                  </p>
+                </details>
+                <details class="qa" id="not-sure">
+                  <summary>The panel says "Not sure". How do I pick the right map?</summary>
+                  <p>
+                    It lists the maps it could be, each with its first mobs, mob levels and Hidden Portal count.
+                    <kbd>Ctrl+Shift+N</kbd>, or the arrows button, steps through them, and your pick holds until you change
+                    maps.
+                  </p>
+                </details>
+                <details class="qa" id="numerals">
+                  <summary>What about maps whose names differ only by a numeral?</summary>
+                  <p>
+                    Like Rocky Road I, II and III: when Minerva can't make the numeral out, it picks the one the map you
+                    came from leads to, if that leads to just one of them. Otherwise it says it isn't sure rather than guess.
+                  </p>
+                </details>
+              </div>
+            </div>
+          </section>
+
+          <section class="faq-group stop" id="hunting" data-about="hunting" aria-labelledby="hunting-title">
+            <div class="faq-group-head">
+              <h2 id="hunting-title"><span class="mark route" aria-hidden="true"></span>Hunting</h2>
+              <p>Searching, choosing a map to hunt on, and following the way there.</p>
+            </div>
+            <div class="faq-group-body">
+              <div class="qa-list">
+                <details class="qa" id="search">
+                  <summary>How do I search?</summary>
+                  <p>
+                    <kbd>Ctrl+Shift+F</kbd>, or the magnifier at the top of the panel. Type part of a name: the mobs, maps
+                    and items that have it show in a section each, mobs first, names that start with what you typed first.
+                    Each section shows its best five and counts the rest. Pick one with the arrow keys and
+                    <kbd>Enter</kbd>, or a click.
+                  </p>
+                </details>
+                <details class="qa" id="search-picks">
+                  <summary>What happens when I pick a mob, a map or an item?</summary>
+                  <ul>
+                    <li><b>A mob:</b> it lists the maps the mob spawns on, to pick one to hunt it on.</li>
+                    <li><b>A map:</b> it becomes your Destination, and the panel shows the way there.</li>
+                    <li><b>An item:</b> its <a href="#item-card">Item Card</a> opens beside the panel.</li>
+                  </ul>
+                </details>
+                <details class="qa" id="mob-maps">
+                  <summary>How are a mob's maps ranked?</summary>
+                  <p>
+                    By <strong>Density Tier</strong>, then the nearest within a tier, each with its figures. Tick
+                    <strong>Taxis</strong> or <strong>Teleport Scrolls</strong> to count them as ways to travel. Event maps
+                    and the developers' room aren't listed, nor found as maps.
+                  </p>
+                </details>
+                <details class="qa" id="figures">
+                  <summary>What do Density, Share, Tier and Distance mean?</summary>
+                  <dl class="facts">
+                    <dt>Density</dt>
+                    <dd>How many of the mob you can kill there: its spawns, times how fast the map refills.</dd>
+                    <dt>Share</dt>
+                    <dd>The mob's share of all the map's spawns: the higher, the fewer other mobs in your way.</dd>
+                    <dt>Tier</dt>
+                    <dd>The map's Density Tier: High, Medium or Low against the mob's densest map.</dd>
+                    <dt>Distance</dt>
+                    <dd>The fewest map changes to get there.</dd>
+                  </dl>
+                </details>
+                <details class="qa" id="target-or-destination">
+                  <summary>What's the difference between a Hunting Target and a Destination?</summary>
+                  <p>
+                    Pick one of a mob's maps and it's your <strong>Hunting Target</strong>: Navigation shows the mob as OSMS
+                    animates it, the map, its figures and the way there. Pick a map itself and it's your
+                    <strong>Destination</strong>: the map, its street, how far it is and the way, without a mob. You have
+                    one or the other: the last you picked.
+                  </p>
+                </details>
+                <details class="qa" id="route">
+                  <summary>How does Navigation show the way?</summary>
+                  <p>
+                    Between the Map and the Mobs, it lists the route from the map you're on, worked out again as you move,
+                    and the portal it takes next wears a wide magenta ring on the Map Preview. When you arrive, it says
+                    <strong>You're here</strong>, with how far you came, until you leave the map.
+                  </p>
+                </details>
+                <details class="qa" id="change-target">
+                  <summary>How do I change or clear my Hunting Target?</summary>
+                  <p>
+                    Its magnifier opens the mob's map list again, to pick another map, and the × clears a Hunting Target or
+                    a Destination. Otherwise it lasts until you close Minerva.
+                  </p>
+                </details>
+                <details class="qa" id="search-keyboard">
+                  <summary>Why can't I move my character while searching?</summary>
+                  <p>
+                    The search view has the keyboard, for your typing, until it closes. <kbd>Esc</kbd> or the back arrow
+                    goes back a step without changing anything: from a mob's maps to what you typed, and from there to the
+                    panel, where the game has the keyboard again.
+                  </p>
+                </details>
+              </div>
+            </div>
+          </section>
+
+          <section class="faq-group stop" id="grinding" data-about="grinding" aria-labelledby="grinding-title">
+            <div class="faq-group-head">
+              <h2 id="grinding-title">
+                <span class="star" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M8 1.6l1.9 4.1 4.5.5-3.3 3.1.9 4.4L8 11.5l-3.9 2.2.9-4.4-3.3-3.1 4.5-.5z" /></svg></span>Grinding
+              </h2>
+              <p>The Grind Tracker, its Session, and your Personal Bests.</p>
+            </div>
+            <div class="faq-group-body">
+              <h3>The Grind Tracker</h3>
+              <div class="qa-list">
+                <details class="qa" id="grind-tracker">
+                  <summary>What does the Grind Tracker show?</summary>
+                  <ul>
+                    <li><strong>Time to Level</strong>, at your current pace.</li>
+                    <li>Your EXP per hour over the last 5 minutes and, once you've played longer, over the whole Session.</li>
+                    <li>After a minute on a map, how your pace compares with its solo EXP/h ceiling.</li>
+                    <li>Your deaths, and what they cost.</li>
+                    <li>At its foot, the EXP bar as it last read it, so you can see it's being read.</li>
+                  </ul>
+                </details>
+                <details class="qa" id="tracker-on">
+                  <summary>How do I turn the Grind Tracker on?</summary>
+                  <p>
+                    <a href="#exp-bar">Mark your EXP bar</a>, and it opens in a window of its own beside the panel.
+                    <kbd>Ctrl+Shift+G</kbd> or the panel's button shows or hides it. Its × closes the window while the
+                    Session carries on.
+                  </p>
+                </details>
+                <details class="qa" id="reset-session">
+                  <summary>How do I reset the Session?</summary>
+                  <p>
+                    The circular arrow beside Time to Level resets it, and a new one starts at your next EXP gain; until
+                    then, Undo brings the old one back. It has no hotkey, so a stray key press while you fight can't clear
+                    it. Switch character and the Session starts afresh by itself.
+                  </p>
+                </details>
+                <details class="qa" id="move-tracker">
+                  <summary>Can I move the Grind Tracker?</summary>
+                  <p>
+                    Yes. It sits beside the panel with their tops level. Drag it by its bar anywhere, even outside the game
+                    window, and it keeps that spot; drag it back beside the panel and it follows the panel again. Like the
+                    panel, it hides while another app is in front or the game is minimised.
+                  </p>
+                </details>
+              </div>
+
+              <h3>Personal Bests</h3>
+              <div class="qa-list">
+                <details class="qa" id="personal-bests">
+                  <summary>What's a Personal Best?</summary>
+                  <p>
+                    On a map with mobs, the best EXP per hour you've had over 5 minutes of play there. Come back to the map
+                    and a Best row shows it from the moment you arrive. Once you've played 5 minutes, a yellow star marks
+                    your last 5 minutes while they beat it.
+                  </p>
+                </details>
+                <details class="qa" id="best-characters">
+                  <summary>Are bests kept for each character?</summary>
+                  <p>
+                    No: all your characters share them, so the mob levels say what each best was worth. A best on a map
+                    that has left the map list stays, marked "Not in the map list".
+                  </p>
+                </details>
+                <details class="qa" id="every-best">
+                  <summary>Where can I see my best on every map?</summary>
+                  <p>
+                    The star on the Grind Tracker's bar opens your Personal Bests over the game: every map's best, highest
+                    first, with its region and mob levels, how close it came to the map's solo EXP/h ceiling, and when you
+                    set it. Click a column to sort by it, or a map to open it on MeowDB.
+                  </p>
+                </details>
+                <details class="qa" id="visits">
+                  <summary>Can I see each of my visits to a map?</summary>
+                  <p>
+                    A map keeps your 10 best visits. In your Personal Bests, click its count ("3 visits") to list them, best
+                    first, each with its EXP per hour, its share of the ceiling and its date. The visit you're on is marked
+                    "This visit", and joins your history when you leave the map.
+                  </p>
+                </details>
+                <details class="qa" id="remove-best">
+                  <summary>A best came from a misreading. How do I remove it?</summary>
+                  <p>
+                    On the Grind Tracker, the × beside the Best row removes it at once, with no undo, and your next-best
+                    visit takes over. In your Personal Bests, click a visit's ×, then "Remove?" to confirm. The visit you're
+                    on can't be removed until you leave the map.
+                  </p>
+                </details>
+                <details class="qa" id="bests-window">
+                  <summary>Can I move the Personal Bests window?</summary>
+                  <p>
+                    Yes. It opens in the middle of the game; drag it by its bar and it opens where you left it next time.
+                    It keeps up as you play, shows and hides with the panel, and closes with the star or its ×.
+                  </p>
+                </details>
+              </div>
+            </div>
+          </section>
+
+          <section class="faq-group stop" id="items" data-about="items" aria-labelledby="items-title">
+            <div class="faq-group-head">
+              <h2 id="items-title">Items</h2>
+              <p>The Item Card, the market prices you keep, and Item Lookup.</p>
+            </div>
+            <div class="faq-group-body">
+              <h3>The Item Card</h3>
+              <div class="qa-list">
+                <details class="qa" id="item-card">
+                  <summary>How do I open an Item Card?</summary>
+                  <p>
+                    Hover an item in the game until its tooltip shows, then press <kbd>Ctrl+Shift+I</kbd>. Minerva reads
+                    the name in the tooltip nearest the pointer, the inventory's or any window's drawn the same way, and
+                    shows the card at the pointer. Or find the item in <a href="#search">search</a> and pick it: its card
+                    opens beside the panel.
+                  </p>
+                </details>
+                <details class="qa" id="shop-price">
+                  <summary>What does "Shop pays" mean?</summary>
+                  <p>
+                    What an NPC shop pays for one. When a shop won't buy the item, the card says so, as it does for a Cash
+                    item. It's not known for scrolls, starter gear and arrows, which the game's data gives no price for, nor
+                    for throwing stars and bullets until a sale in the game confirms what a shop pays.
+                  </p>
+                </details>
+                <details class="qa" id="market-prices">
+                  <summary>Where do the market prices come from?</summary>
+                  <p>
+                    From you. Minerva reads no market prices of its own, so you keep them for the items you care about. The
+                    button by Market opens <a href="https://meso.watch">MesoWatch</a>, where you search the item to see what
+                    players pay: MesoWatch has no page for each item to open.
+                  </p>
+                </details>
+                <details class="qa" id="set-price">
+                  <summary>How do I set a market price?</summary>
+                  <p>
+                    Click a price, or "Not set", and type it as players write it: 450,000, 450k or 1.2m. <kbd>Enter</kbd>
+                    keeps it, <kbd>Esc</kbd> leaves it as it was, and an empty field clears it. It's saved with the day you
+                    set it, which its tooltip shows, and the next card for that item shows it.
+                  </p>
+                </details>
+                <details class="qa" id="market-lines">
+                  <summary>Can I keep more than one price for each item?</summary>
+                  <p>
+                    Yes. Click the <b>+</b> by Market and name a new line, such as the cheapest one listed beside what it
+                    typically sells for: every card lists it from then on, with its own price for each item. Click a line's
+                    name to rename it, or to remove it with the bin beside it; the card asks first, saying how many items'
+                    prices go with it.
+                  </p>
+                </details>
+                <details class="qa" id="shared-name">
+                  <summary>Why does the card ask me to pick an item?</summary>
+                  <p>
+                    Some items that don't look alike share a name: Blue Moon is a top and an earring. The card lists them
+                    with their pictures and kinds: click the one your tooltip shows.
+                  </p>
+                </details>
+                <details class="qa" id="move-card">
+                  <summary>How do I move or close an Item Card?</summary>
+                  <p>
+                    Drag it by its bar: it stays there until it closes, and the next card opens at the pointer again. Close
+                    it with its ×, or press <kbd>Ctrl+Shift+I</kbd> again: over another item for that item's card, anywhere
+                    else to close it. One card shows at a time, and clicks on it never reach the game.
+                  </p>
+                </details>
+                <details class="qa" id="card-keyboard">
+                  <summary>Does typing a price take the keyboard from the game?</summary>
+                  <p>
+                    While you type a price or a line's name, the card has the keyboard. Clicking back into the game gives it
+                    back, keeping what you typed.
+                  </p>
+                </details>
+                <details class="qa" id="no-card">
+                  <summary>Why didn't a card show?</summary>
+                  <p>
+                    The alert at the top centre of the game window says why: no tooltip by the pointer, a name it couldn't
+                    read, a Minerva window covering the name, no item of that name, or the item data not loaded yet.
+                  </p>
+                </details>
+              </div>
+
+              <h3>Item Lookup</h3>
+              <div class="qa-list">
+                <details class="qa" id="item-lookup">
+                  <summary>Which name does Item Lookup read?</summary>
+                  <p>
+                    The one on the tooltip's line with the blue dot, so a crafted item's maker isn't taken for it. It opens
+                    a page only when MeowDB has an item of that name, allowing for letters the reading confuses, such as I
+                    and l. Clicking an Item Card's name opens the same page.
+                  </p>
+                </details>
+                <details class="qa" id="lookup-alert">
+                  <summary>What does Item Lookup's alert say?</summary>
+                  <p>
+                    What came of it: the page it opened, or why nothing opened: no tooltip by the pointer, a name it
+                    couldn't read, a Minerva window covering the name, no MeowDB item of that name, or MeowDB out of reach.
+                    It goes after a few seconds, and clicks pass through it to the game.
+                  </p>
+                </details>
+                <details class="qa" id="lookup-pick">
+                  <summary>What if several MeowDB items share the name?</summary>
+                  <p>
+                    The alert lists them with their categories for you to pick, and stays half a minute. From an Item
+                    Card's name, the one of the card's kind opens if MeowDB has just one.
+                  </p>
+                </details>
+                <details class="qa" id="item-keys-off">
+                  <summary>Can I use the Item Card or Item Lookup without its hotkey?</summary>
+                  <p>
+                    No: they have no button, so turning off their hotkey turns them off. <a href="#search">Search</a> still
+                    opens any item's card, and its name still opens its MeowDB page.
+                  </p>
+                </details>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="part" data-street="When something's wrong">
+          <section class="faq-group stop" id="trouble" data-about="troubleshooting and Bug Reports" aria-labelledby="trouble-title">
+            <div class="faq-group-head">
+              <h2 id="trouble-title">Troubleshooting &amp; Bug Reports</h2>
+              <p>What to do when it doesn't work, and how to report what's wrong.</p>
+            </div>
+            <div class="faq-group-body">
+              <h3>When it doesn't work</h3>
+              <div class="qa-list">
+                <details class="qa" id="no-window">
+                  <summary>Setup can't find the game window. What do I do?</summary>
+                  <p>
+                    Start MapleStory first, or pick its window by hand: choose <strong>Select game window</strong>, then hold
+                    the pointer over the game while setup counts down.
+                  </p>
+                </details>
+                <details class="qa" id="no-map-recognised">
+                  <summary>The test read says "No map recognised in the marked box". What now?</summary>
+                  <p>
+                    Open the minimap with both lines of its title showing, then mark the box again around both lines, with a
+                    little of the blue panel around them. Setup waits on this step until a map is recognised.
+                  </p>
+                </details>
+                <details class="qa" id="no-panel">
+                  <summary>Why doesn't the panel show?</summary>
+                  <p>
+                    It shows only while the game is open and not minimised, and the game or one of Minerva's windows is in
+                    front: click into the game. Screen capture can't see exclusive fullscreen, so play windowed or
+                    borderless.
+                  </p>
+                </details>
+                <details class="qa" id="reading-title">
+                  <summary>Why can't the panel tell which map I'm on?</summary>
+                  <p>
+                    It says "Reading the minimap title…", or shows the last map it read marked
+                    <span class="chip-doubt">Not sure</span>. Keep the minimap open with both lines of its title showing. If
+                    it goes on, mark the title again with <kbd>Ctrl+Shift+S</kbd>.
+                  </p>
+                </details>
+                <details class="qa" id="changed-size">
+                  <summary>Why does the panel say "The game window changed size"?</summary>
+                  <p>The minimap title and the EXP bar have moved with it, so setup opens by itself: mark them again.</p>
+                </details>
+                <details class="qa" id="recognition-unavailable">
+                  <summary>What does "Map recognition unavailable" mean?</summary>
+                  <p>
+                    Minerva couldn't load the map list from OSMS Data Explorer, which its first launch needs. Check your
+                    connection: it tries again every minute. If it says OSMS's data has changed format, Minerva needs an
+                    update.
+                  </p>
+                </details>
+                <details class="qa" id="hotkey-nothing">
+                  <summary>Why does a hotkey do nothing?</summary>
+                  <p>
+                    Hotkeys act only while the game or one of Minerva's windows is in front. If another app has the keys,
+                    the panel says so: close that app, or <a href="#settings">change the hotkey</a>.
+                  </p>
+                </details>
+                <details class="qa" id="cant-read-bar">
+                  <summary>Why does the Grind Tracker say "Can't read the EXP bar"?</summary>
+                  <p>
+                    Something has covered the bar for ten seconds, or the mark no longer frames it; it says so rather than
+                    count the time as a break. Move whatever covers the bar. If nothing does, open setup with
+                    <kbd>Ctrl+Shift+S</kbd>, keep the current title, and choose <strong>Mark the EXP bar</strong>.
+                  </p>
+                </details>
+                <details class="qa" id="bests-gone">
+                  <summary>Why are my Personal Bests gone?</summary>
+                  <p>
+                    If their file can't be read, Minerva renames it <code>personal-bests.json.bad</code> and starts with no
+                    bests. If it can't rename it, it leaves it as it is and saves no bests until the next launch. The file
+                    is <a href="#kept">beside your settings</a>.
+                  </p>
+                </details>
+              </div>
+
+              <h3>Bug Reports</h3>
+              <div class="qa-list">
+                <details class="qa" id="bug-reports">
+                  <summary>How do I report a bug?</summary>
+                  <p>
+                    When Minerva shows something wrong, like a rate far higher than you're getting, click its owl in the
+                    notification area and choose <strong>Bug Report</strong> right away. It saves a <code>.zip</code>, shows
+                    it in its folder, and opens the bug form on <a href="https://github.com/itechify/minerva/issues">GitHub</a>.
+                    Drag the file into the form, and say what looked wrong and about when.
+                  </p>
+                </details>
+                <details class="qa" id="bug-report-contents">
+                  <summary>What's in a Bug Report?</summary>
+                  <p>What Minerva read and made of it since you started it, up to a day back:</p>
+                  <ul>
+                    <li>
+                      Each reading of the minimap title and the EXP bar, with pictures of the two boxes you marked, and the
+                      name of each item you looked up or opened a card for, with a picture of the game around the pointer
+                      (your inventory, say, and whatever is beside it). Nothing else on your screen.
+                    </li>
+                    <li>
+                      The map it showed, the Grind Tracker's figures, and why they changed: a level-up, a death, a misread
+                      set aside.
+                    </li>
+                    <li>What you did in Minerva: its buttons, hotkeys and searches.</li>
+                    <li>
+                      Your settings and Personal Bests, Minerva's version, your Windows version and display scaling, and any
+                      errors it ran into.
+                    </li>
+                  </ul>
+                </details>
+                <details class="qa" id="bug-report-private">
+                  <summary>Is a Bug Report sent anywhere?</summary>
+                  <p>
+                    No. It stays on your PC, in
+                    <code class="path">%APPDATA%\<wbr />com.<wbr />itechify.<wbr />minerva\<wbr />Bug Reports</code>, until
+                    you attach it to an issue. Saving one changes nothing in Minerva, which keeps the 10 newest. With it,
+                    the bug can be played back as it happened instead of guessed at.
+                  </p>
+                </details>
+                <details class="qa" id="something-else">
+                  <summary>Something else is wrong. What do I do?</summary>
+                  <p>
+                    <a href="#bug-reports">Save a Bug Report</a> and report it on GitHub: what you did, what you expected,
+                    and what Minerva showed.
+                  </p>
+                </details>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <footer class="window-foot" id="credits" data-mini="Credits">
+@CREDITS@
+      </footer>
+    </div>
+  </body>
+</html>

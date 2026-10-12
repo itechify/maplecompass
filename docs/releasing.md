@@ -89,7 +89,7 @@ git push origin vX.Y.Z
 
 ## 5. Write the release notes
 
-Write them for players, not developers, in the shape of the previous releases. Put them in a file outside the repo, say `notes.md`:
+Write them for players, not developers, in the shape of the previous releases. A feature's "More on the site" links to its row on the home page (`#map`, `#item-card`), or to the FAQ question that answers it (`/faq/#zoom`). Put them in a file outside the repo, say `notes.md`:
 
 ```markdown
 <One sentence: what this version gives the player.>
@@ -98,7 +98,7 @@ Write them for players, not developers, in the shape of the previous releases. P
 
 ## Changes
 
-- **<Feature in bold.>** <What the player sees and does, in the panel's own words.> [More on the site](https://owlofminerva.app/#<section>)
+- **<Feature in bold.>** <What the player sees and does, in the panel's own words.> [More on the site](https://owlofminerva.app/#<feature>)
 - <Smaller changes, one line each.>
 
 Your settings, hotkeys and Personal Bests carry over from <previous version>.

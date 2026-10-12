@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting it. A **Bug Report** helps most: right after you see the bug, click Minerva's owl in the notification area, by the clock, and choose **Bug Report**. It saves a `.zip` of what Minerva read and made of it, shows the file, and opens this form. [What's in it](https://owlofminerva.app/#bug-reports)
+        Thanks for reporting it. A **Bug Report** helps most: right after you see the bug, click Minerva's owl in the notification area, by the clock, and choose **Bug Report**. It saves a `.zip` of what Minerva read and made of it, shows the file, and opens this form. [What's in it](https://owlofminerva.app/faq/#bug-report-contents)
   - type: textarea
     id: what
     attributes:
