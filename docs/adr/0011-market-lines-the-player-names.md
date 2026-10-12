@@ -32,7 +32,7 @@ Shape 2 holds the lines, in order, each with its ID, its name and its prices by 
 ```
 
 - A file in shape 1 (0.8.0's, one price per item) is read as one line, "Your price", holding its prices, and saved in shape 2 from then on. An older Minerva sets a shape 2 file aside, as it does any later shape.
-- A line's ID tells it from the others whatever it is named, so renaming keeps its prices. The core numbers the lines the player adds one past the highest number among the lines' IDs, and keeps any other ID as it was written. So a tool of the player's own may fill a line of its own (an ID such as `"tool-typical"`) while Minerva is closed: Minerva reads the file at launch, and writes it whenever a price or line changes.
+- A line's ID tells it from the others whatever it is named, so renaming keeps its prices. The core numbers the lines the player adds one past the highest number among the lines' IDs, and keeps any other ID as it was written. So a tool of the player's own may fill a line of its own (an ID such as `"tool-typical"`) while Minerva is closed: Minerva reads the file at launch, and writes it whenever a price or line changes. (ADR 0013 has the tool leave its prices in a folder Minerva takes them in from, whether it runs or not.)
 
 ## Considered options
 

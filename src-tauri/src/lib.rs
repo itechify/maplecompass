@@ -63,6 +63,9 @@ const EXP_BAR_TICK: Duration = Duration::from_millis(1000);
 /// and our windows show within ~50 ms of the game coming to the front, and are out of
 /// sight within ~50 ms of another app doing so (their watchers check at this rate too).
 const WINDOW_TICK: Duration = Duration::from_millis(50);
+/// How often the `market-imports` folder is looked in (ADR 0013): a tool's prices show
+/// within a couple of seconds.
+const IMPORT_TICK: Duration = Duration::from_secs(2);
 /// Settings are saved once they have stopped changing for this long (after a drag).
 const SAVE_DELAY: Duration = Duration::from_millis(500);
 /// The overlay's size in CSS px (logical); `src/styles.css` lays out to fit. The
@@ -269,6 +272,8 @@ pub fn run() {
             let (prices_file, saved_prices) =
                 market_prices::MarketPricesFile::load(market_prices::path(app.handle())?);
             minerva.restore_market_prices(saved_prices);
+            // Where a tool of the player's own leaves prices, taken in as the core loop runs.
+            let market_imports = market_prices::imports_path(app.handle())?;
             let (commands, commands_rx) = mpsc::channel();
             // From now on errors go to the core too, for the Bug Report; those from before
             // (the settings or bests not reading) are held for it till now.
@@ -334,7 +339,8 @@ pub fn run() {
                 hotkeys,
             };
             std::thread::Builder::new().name("core-loop".into()).spawn(move || {
-                let files = Files { settings: settings_path, bests: bests_file, market_prices: prices_file };
+                let files =
+                    Files { settings: settings_path, bests: bests_file, market_prices: prices_file, market_imports };
                 core_loop(handle, windows, minerva, reader, channels, files)
             })?;
             Ok(())
@@ -417,11 +423,13 @@ struct Windows {
     hotkeys: hotkeys::GlobalHotkeys,
 }
 
-/// Where the core loop saves the settings, the Personal Bests and the market prices.
+/// Where the core loop saves the settings, the Personal Bests and the market prices, and
+/// the folder it takes Market Imports from.
 struct Files {
     settings: PathBuf,
     bests: bests::BestsFile,
     market_prices: market_prices::MarketPricesFile,
+    market_imports: PathBuf,
 }
 
 /// Save the Personal Bests if the core's bests revision moved on from `saved` (the one
@@ -599,6 +607,7 @@ fn core_loop(
     let mut next_capture = Instant::now();
     let mut next_exp_bar_capture = Instant::now();
     let mut next_window_check = Instant::now();
+    let mut next_import_check = Instant::now();
     loop {
         // Wait for the player until the next check is due, so hotkeys act at once.
         let due = next_capture.min(next_exp_bar_capture).min(next_window_check);
@@ -816,6 +825,14 @@ fn core_loop(
         // An Item Lookup's page, once MeowDB has answered.
         while let Some(request) = minerva.take_request() {
             carry_out(&app, &window.overlay, &mut item_card, &reader, &mut minerva, Some(request));
+        }
+        // Prices a tool of the player's own left (ADR 0013), saved below like those typed.
+        // Left waiting while the prices can't be saved, rather than taken in and lost.
+        if Instant::now() >= next_import_check && files.market_prices.saves() {
+            next_import_check = Instant::now() + IMPORT_TICK;
+            for import in market_prices::take_imports(&files.market_imports) {
+                minerva.import_market_prices(import);
+            }
         }
         if Instant::now() >= next_capture {
             next_capture = Instant::now() + TICK;

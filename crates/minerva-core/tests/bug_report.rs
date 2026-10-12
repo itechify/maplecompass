@@ -467,8 +467,8 @@ fn item_card(shell: &mut Shell, name: &str) {
 
 /// A run with Item Cards: the market prices kept restored (as 0.8.0 saved them), a card and
 /// its market price typed (first not a price, then one), Market Lines added (first with a
-/// name taken), renamed and removed, a choice and its pick, the card's MeowDB page and its
-/// ×.
+/// name taken), renamed and removed, prices a tool of the player's own left (ADR 0013), a
+/// choice and its pick, the card's MeowDB page and its ×.
 fn run_with_item_cards() -> Shell {
     let mut shell = Shell::new(FakeSource::osms().with_items(items()));
     let kept = r#"{"version":1,"items":{"01041078":{"mesos":30000,"setAtUnixMs":1791700000000}}}"#;
@@ -492,6 +492,8 @@ fn run_with_item_cards() -> Shell {
     shell.minerva.edit_card_market_line("2");
     shell.minerva.act(Action::AskRemoveCardMarketLine);
     shell.minerva.act(Action::RemoveCardMarketLine);
+    let import = r#"{"version":2,"lines":[{"id":"tool-typical","name":"Your price","prices":{"04010000":{"mesos":500000,"setAtUnixMs":1791700000000}}}]}"#;
+    shell.minerva.import_market_prices(serde_json::from_str(import).unwrap());
     shell.play(20 * S, CONSTRUCTION_SITE, grind);
     item_card(&mut shell, "Blue Moon");
     shell.minerva.pick_card_item("01032011");

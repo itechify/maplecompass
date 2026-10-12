@@ -19,7 +19,7 @@ use common::{FakeSource, ItemSetAnswer};
 use common::items::{ItemWorld, cash, equip, etc, item_world, scroll, setup, use_item, weapon};
 use minerva_core::{
     Action, Minerva, ExpBarRegion, Foreground, GameWindow, Hotkey, ItemCard, ItemHit, ItemCardChoice, ItemCardView, ItemLookup, ItemTooltip,
-    ItemTooltipReading, MarketEdit, MarketPrice, NameProblem, OurWindow, PanelSizes, PanelState, Rect, Request, ScreenPoint, ScreenRect, Settings, ShopPrice,
+    ItemTooltipReading, MarketEdit, MarketImport, MarketPrice, NameProblem, OurWindow, PanelSizes, PanelState, Rect, Request, ScreenPoint, ScreenRect, Settings, ShopPrice,
     Recognition, Size, SourceError, TitleRegion, meowdb,
 };
 use minerva_core::osms_items::ItemFiles;
@@ -1285,4 +1285,154 @@ fn a_field_left_open_on_a_line_that_goes_closes() {
     let state = minerva.restore_market_prices(serde_json::from_str(r#"{"version":2,"lines":[]}"#).unwrap()).clone();
 
     assert_eq!(editing(&state), None);
+}
+
+/// What a tool of the player's own leaves in `market-imports` (ADR 0013), as it writes it.
+fn import(json: &str) -> MarketImport {
+    serde_json::from_str(json).expect("reads")
+}
+
+/// A tool's "Typical" line, pricing Bronze Ore at `mesos` as of `at`.
+fn typical(mesos: u64, at: u64) -> MarketImport {
+    import(&format!(
+        r#"{{"version":2,"lines":[{{"id":"tool-typical","name":"Typical","prices":{{"04010000":{{"mesos":{mesos},"setAtUnixMs":{at}}}}}}}]}}"#
+    ))
+}
+
+#[test]
+fn prices_a_tool_leaves_show_on_its_own_line_at_the_end_while_minerva_runs() {
+    let mut minerva = started();
+    let state = press_over(&mut minerva, "Bronze Ore", 1_000);
+    set_price(&mut minerva, &state, "Your price", "450k");
+    let before = minerva.market_prices_revision();
+
+    let state = minerva.import_market_prices(typical(500_000, SAVED_AT)).clone();
+
+    assert_eq!(market(&state), [("Your price".to_string(), Some(450_000)), ("Typical".to_string(), Some(500_000))]);
+    assert_eq!(line(&state, "Typical"), "tool-typical");
+    assert_eq!(card(&state).expect("a card").market[1].price, Some(MarketPrice { mesos: 500_000, set_at_unix_ms: Some(SAVED_AT) }));
+    assert_ne!(minerva.market_prices_revision(), before, "a change to save");
+}
+
+#[test]
+fn an_imported_price_takes_the_place_of_an_older_one_on_its_line() {
+    let mut minerva = started();
+    minerva.import_market_prices(typical(500_000, SAVED_AT));
+
+    minerva.import_market_prices(typical(520_000, SAVED_AT + DAY_MS));
+    let state = press_over(&mut minerva, "Bronze Ore", 1_000);
+
+    assert_eq!(market(&state), [("Your price".to_string(), None), ("Typical".to_string(), Some(520_000))]);
+}
+
+#[test]
+fn a_price_the_player_typed_after_the_imported_one_was_set_stays() {
+    let mut minerva = started_at(FakeSource::osms_offline().with_items(shop()), SAVED_AT);
+    minerva.import_market_prices(typical(500_000, SAVED_AT - DAY_MS));
+    let state = press_over(&mut minerva, "Bronze Ore", 1_000);
+    set_price(&mut minerva, &state, "Typical", "480k");
+    let before = minerva.market_prices_revision();
+
+    let state = minerva.import_market_prices(typical(500_000, SAVED_AT - DAY_MS)).clone();
+    assert_eq!(market(&state)[1], ("Typical".to_string(), Some(480_000)));
+    assert_eq!(minerva.market_prices_revision(), before, "nothing to save");
+
+    let state = minerva.import_market_prices(typical(510_000, SAVED_AT + DAY_MS)).clone();
+    assert_eq!(market(&state)[1], ("Typical".to_string(), Some(510_000)), "set since the player typed theirs");
+}
+
+#[test]
+fn an_import_leaves_the_prices_it_doesnt_name_and_removes_nothing() {
+    let mut minerva = started();
+    let state = press_over(&mut minerva, "Red Potion", 1_000);
+    set_price(&mut minerva, &state, "Your price", "30");
+    minerva.import_market_prices(import(
+        r#"{"version":2,"lines":[{"id":"tool-typical","name":"Typical","prices":{"02000000":{"mesos":40,"setAtUnixMs":1}}}]}"#,
+    ));
+
+    minerva.import_market_prices(typical(500_000, SAVED_AT));
+    minerva.import_market_prices(import(r#"{"version":2,"lines":[]}"#));
+
+    let potion = press_over(&mut minerva, "Red Potion", 2_000);
+    assert_eq!(market(&potion), [("Your price".to_string(), Some(30)), ("Typical".to_string(), Some(40))]);
+    let ore = press_over(&mut minerva, "Bronze Ore", 3_000);
+    assert_eq!(market(&ore), [("Your price".to_string(), None), ("Typical".to_string(), Some(500_000))]);
+}
+
+#[test]
+fn an_imported_line_keeps_the_name_and_place_the_player_gave_it() {
+    let mut minerva = started();
+    minerva.import_market_prices(typical(500_000, SAVED_AT));
+    press_over(&mut minerva, "Bronze Ore", 1_000);
+    minerva.edit_card_market_line("tool-typical");
+    minerva.enter_card_market_line("MesoWatch");
+    let state = add_line(&mut minerva, "Mine");
+    assert_eq!(market(&state), [("Your price".to_string(), None), ("MesoWatch".to_string(), Some(500_000)), ("Mine".to_string(), None)]);
+
+    let state = minerva.import_market_prices(typical(520_000, SAVED_AT + DAY_MS)).clone();
+
+    assert_eq!(market(&state), [("Your price".to_string(), None), ("MesoWatch".to_string(), Some(520_000)), ("Mine".to_string(), None)]);
+}
+
+#[test]
+fn an_imported_line_named_as_another_line_is_numbered() {
+    let mut minerva = started();
+    press_over(&mut minerva, "Bronze Ore", 1_000);
+    add_line(&mut minerva, "Typical");
+    add_line(&mut minerva, "typical 2");
+
+    let state = minerva.import_market_prices(typical(500_000, SAVED_AT)).clone();
+
+    assert_eq!(market(&state)[3], ("Typical 3".to_string(), Some(500_000)));
+    assert_eq!(line(&state, "Typical 3"), "tool-typical");
+}
+
+#[test]
+fn an_imported_line_named_only_with_spaces_is_named_by_its_id() {
+    let mut minerva = started();
+
+    minerva.import_market_prices(import(r#"{"version":2,"lines":[{"id":"tool-ask","name":"  ","prices":{}}]}"#));
+
+    let state = press_over(&mut minerva, "Bronze Ore", 1_000);
+    assert_eq!(market(&state), not_set(&["Your price", "tool-ask"]));
+}
+
+#[test]
+fn a_line_the_player_removed_comes_back_with_the_next_import_that_names_it() {
+    let mut minerva = started();
+    minerva.import_market_prices(typical(500_000, SAVED_AT));
+    press_over(&mut minerva, "Bronze Ore", 1_000);
+    minerva.edit_card_market_line("tool-typical");
+    minerva.act(Action::AskRemoveCardMarketLine);
+    let state = minerva.act(Action::RemoveCardMarketLine).clone();
+    assert_eq!(market(&state), not_set(&["Your price"]));
+
+    let state = minerva.import_market_prices(typical(500_000, SAVED_AT)).clone();
+
+    assert_eq!(market(&state), [("Your price".to_string(), None), ("Typical".to_string(), Some(500_000))]);
+}
+
+#[test]
+fn a_field_left_open_stays_open_through_an_import() {
+    let mut minerva = started();
+    let state = press_over(&mut minerva, "Bronze Ore", 1_000);
+    let id = line(&state, "Your price");
+    minerva.edit_card_market_price(&id);
+
+    let state = minerva.import_market_prices(typical(500_000, SAVED_AT)).clone();
+
+    assert_eq!(editing(&state), Some(MarketEdit::Price { line: id, not_a_price: None }));
+}
+
+#[test]
+fn imported_prices_are_saved_with_the_rest_and_restored_at_the_next_launch() {
+    let mut minerva = started();
+    minerva.import_market_prices(typical(500_000, SAVED_AT));
+
+    let saved = serde_json::to_string(&minerva.market_prices()).expect("saves as JSON");
+    let mut next = started();
+    next.restore_market_prices(serde_json::from_str(&saved).expect("reads back"));
+
+    let state = press_over(&mut next, "Bronze Ore", 1_000);
+    assert_eq!(market(&state), [("Your price".to_string(), None), ("Typical".to_string(), Some(500_000))]);
 }
