@@ -81,6 +81,18 @@ function openAsked() {
 addEventListener("hashchange", openAsked);
 openAsked();
 
+// A printed page shows every answer: the questions folded on screen open for the print, and
+// fold again after it.
+let printing: HTMLDetailsElement[] = [];
+addEventListener("beforeprint", () => {
+  printing = [...document.querySelectorAll<HTMLDetailsElement>("details.qa:not([open])")];
+  for (const question of printing) question.open = true;
+});
+addEventListener("afterprint", () => {
+  for (const question of printing) question.open = false;
+  printing = [];
+});
+
 // A screenshot that doesn't load leaves a dashed box saying what belongs there. While
 // developing, that is a shot not taken yet; the build refuses to publish without it.
 for (const img of document.querySelectorAll<HTMLImageElement>(".shot img")) {

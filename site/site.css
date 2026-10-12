@@ -52,17 +52,6 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
-/* For screen readers only. */
-.vh {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
 .skip {
   position: absolute;
   left: 12px;
@@ -300,8 +289,7 @@ h1 {
 .actions + .fine {
   text-wrap: balance;
 }
-/* A fact or a button's name the fine print never breaks: the platform, "Run anyway". */
-.fine .whole,
+/* A button's name the fine print never breaks: "Run anyway". */
 .fine strong {
   white-space: nowrap;
 }
@@ -623,9 +611,11 @@ strong {
 /* ---- A feature: its shot on a stage, beside its title, a sentence or two and its
    most-asked questions ---- */
 
+/* The shot keeps its own size while the words keep 24em; a scene from the game gives way
+   first, on a window too narrow for both. */
 .feature {
   display: grid;
-  grid-template-columns: max-content minmax(0, 30em);
+  grid-template-columns: minmax(0, max-content) minmax(24em, 30em);
   justify-content: center;
   align-items: start;
   gap: 64px;
@@ -634,7 +624,7 @@ strong {
 /* Every other feature turns, its shot on the right, so the page zigzags down as the
    minimap's way does. */
 .feature:nth-of-type(even) {
-  grid-template-columns: minmax(0, 30em) max-content;
+  grid-template-columns: minmax(24em, 30em) minmax(0, max-content);
 }
 .feature:nth-of-type(even) > .stage {
   order: 2;
@@ -656,6 +646,7 @@ strong {
   display: grid;
   place-items: center;
   width: 440px;
+  max-width: 100%;
   min-height: 320px;
   padding: 40px;
   border-radius: 4px;
@@ -1524,6 +1515,18 @@ button.icon-button:active {
 
 /* ---- Narrower ---- */
 
+/* Too narrow for the owl and the whole game window side by side: the window goes under the
+   steps. */
+@media (max-width: 1180px) {
+  .start {
+    grid-template-columns: minmax(0, 38em);
+    gap: 32px;
+  }
+  .start .shot {
+    margin-top: 0;
+  }
+}
+
 @media (max-width: 960px) {
   .hero,
   .safety,
@@ -1566,9 +1569,6 @@ button.icon-button:active {
   }
   .stage {
     width: auto;
-  }
-  .start .shot {
-    margin-top: 0;
   }
   .faq-group {
     gap: 16px;
