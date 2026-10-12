@@ -55,11 +55,11 @@ type PortalMark = {
 };
 
 /**
- * How the picture is laid out: its box's size, the most it may be zoomed (to the picture's
- * own size), how far it is moved in from its top left, and its screen pixels to a picture
- * pixel.
+ * How the picture is laid out: the room for it in its box, inside the paper, the most it
+ * may be zoomed (to the picture's own size), where its top left is in that room, and its
+ * screen pixels to a picture pixel.
  */
-type Frame = { width: number; height: number; most: number; left: number; top: number; sx: number; sy: number };
+type Frame = { width: number; height: number; most: number; left: number; top: number; scale: number };
 
 /** Mirror of `minerva_core::MapPreview`. */
 export type MapPreview = {
@@ -95,11 +95,7 @@ const image = document.createElement("img");
 image.alt = "";
 image.draggable = false;
 image.hidden = true;
-/** The picture's fitted box, which cuts it while zoomed in. */
-const crop = document.createElement("div");
-crop.className = "map-crop";
-crop.append(image);
-picture.prepend(crop);
+picture.prepend(image);
 const loading = byId("map-loading");
 const failed = byId("map-failed");
 const rows = byId("portal-rows");
@@ -127,7 +123,7 @@ let zoom = 1;
 let centre: { x: number; y: number } | null = null;
 /** How the picture was last laid out, while it shows. */
 let frame: Frame | null = null;
-/** A drag moving the zoomed picture: where it started, and the picture's offset then. */
+/** A drag moving the zoomed picture: where it started, and where the picture was then. */
 let panning: { x: number; y: number; left: number; top: number } | null = null;
 /** Whether the mark card may show now: the panel expanded, on its normal view. */
 let cardAllowed: () => boolean = () => true;
@@ -257,21 +253,26 @@ export function layOutMapPreview() {
   const scale = Math.min(room / image.naturalWidth, MAX_PICTURE_HEIGHT / image.naturalHeight);
   const width = Math.round(image.naturalWidth * scale);
   const height = Math.round(image.naturalHeight * scale);
-  picture.style.width = `${width}px`;
+  // The box is the fitted picture's height, the column's width, whatever the zoom.
   picture.style.height = `${height}px`;
-  // Zoomed in no further than the picture's own size, and moved no further than its edges.
-  const most = Math.max(1, image.naturalWidth / width);
+  const boxWidth = preview.clientWidth - 2 * PAPER;
+  // Zoomed in no further than the picture's own size. It grows over the whole box, centred
+  // along a side while it fits there, and moved along it no further than its paper.
+  const most = Math.max(1, 1 / scale);
   zoom = Math.min(Math.max(zoom, 1), most);
-  const sx = (width * zoom) / image.naturalWidth;
-  const sy = (height * zoom) / image.naturalHeight;
+  const drawnScale = scale * zoom;
+  // The whole map fills its fitted box, as ever; zoomed in, the picture keeps its own shape.
+  const pictureWidth = zoom > 1 ? image.naturalWidth * drawnScale : width;
+  const pictureHeight = zoom > 1 ? image.naturalHeight * drawnScale : height;
   const middle = centre ?? { x: image.naturalWidth / 2, y: image.naturalHeight / 2 };
-  const left = Math.min(Math.max(middle.x * sx - width / 2, 0), width * zoom - width);
-  const top = Math.min(Math.max(middle.y * sy - height / 2, 0), height * zoom - height);
-  centre = zoom > 1 ? { x: (left + width / 2) / sx, y: (top + height / 2) / sy } : null;
-  frame = { width, height, most, left, top, sx, sy };
-  image.style.width = `${width * zoom}px`;
-  image.style.height = `${height * zoom}px`;
-  image.style.transform = `translate(${-left}px, ${-top}px)`;
+  const left = place(middle.x * drawnScale, pictureWidth, boxWidth);
+  const top = place(middle.y * drawnScale, pictureHeight, height);
+  centre = zoom > 1 ? { x: (boxWidth / 2 - left) / drawnScale, y: (height / 2 - top) / drawnScale } : null;
+  frame = { width: boxWidth, height, most, left, top, scale: drawnScale };
+  image.style.left = `${Math.round(left)}px`;
+  image.style.top = `${Math.round(top)}px`;
+  image.style.width = `${pictureWidth}px`;
+  image.style.height = `${pictureHeight}px`;
   preview.classList.toggle("zoomed", zoom > 1);
   const hidden = shown.marks.filter((m) => m.hiddenPortal !== null).length;
   const next = shown.marks.filter((m) => m.nextOnRoute).length;
@@ -289,8 +290,23 @@ export function layOutMapPreview() {
   }
 }
 
-/** Where a ring or a landing is drawn, in screen pixels over the box. */
-const at = (x: number, y: number, f: Frame) => ({ x: x * f.sx - f.left, y: y * f.sy - f.top });
+/**
+ * Where the picture's edge goes along a side of the box `room` long, the picture `size`
+ * long: centred while it fits, else with the point `spot` in from its edge at the middle,
+ * but never leaving more than its paper beside it.
+ */
+const place = (spot: number, size: number, room: number) =>
+  size <= room ? (room - size) / 2 : Math.min(Math.max(room / 2 - spot, room - size), 0);
+
+/**
+ * Where a ring or a landing is drawn, in screen pixels over the box. The picture is drawn
+ * from a whole pixel, so it and its rings snap together; zooming works from where it
+ * really is, so a spot held under the pointer doesn't creep away notch by notch.
+ */
+const at = (x: number, y: number, f: Frame) => ({
+  x: Math.round(f.left) + x * f.scale,
+  y: Math.round(f.top) + y * f.scale,
+});
 
 /** The arrows of the teleports within the map, under every ring, then the rings. */
 function drawMarks(marks: PortalMark[], f: Frame) {
@@ -453,13 +469,13 @@ function zoomAt(next: number, e: MouseEvent) {
   const box = picture.getBoundingClientRect();
   const x = e.clientX - box.left;
   const y = e.clientY - box.top;
-  const spot = { x: (frame.left + x) / frame.sx, y: (frame.top + y) / frame.sy };
+  const spot = { x: (x - frame.left) / frame.scale, y: (y - frame.top) / frame.scale };
+  const was = zoom;
   zoom = Math.min(Math.max(next, 1), frame.most);
   // Back out to the whole map, never a hair's breadth from it.
   if (zoom < 1.001) zoom = 1;
-  const sx = (frame.width * zoom) / image.naturalWidth;
-  const sy = (frame.height * zoom) / image.naturalHeight;
-  centre = { x: spot.x + (frame.width / 2 - x) / sx, y: spot.y + (frame.height / 2 - y) / sy };
+  const scale = (frame.scale * zoom) / was;
+  centre = { x: spot.x + (frame.width / 2 - x) / scale, y: spot.y + (frame.height / 2 - y) / scale };
   layOutMapPreview();
   hoverAt(e.clientX, e.clientY);
 }
@@ -473,7 +489,7 @@ preview.addEventListener("wheel", (e) => {
   zoomAt(zoom * ZOOM_PER_NOTCH ** (-e.deltaY / NOTCH), e);
 });
 
-// Zoomed in, a drag moves the picture, no further than its edges.
+// Zoomed in, a drag moves the picture, no further than its paper.
 preview.addEventListener("pointerdown", (e) => {
   if (e.button !== 0 || !frame || zoom === 1) return;
   panning = { x: e.clientX, y: e.clientY, left: frame.left, top: frame.top };
@@ -485,9 +501,9 @@ preview.addEventListener("pointermove", (e) => {
     preview.classList.add("panning");
     hoverMark(null);
   }
-  const left = panning.left - (e.clientX - panning.x);
-  const top = panning.top - (e.clientY - panning.y);
-  centre = { x: (left + frame.width / 2) / frame.sx, y: (top + frame.height / 2) / frame.sy };
+  const left = panning.left + (e.clientX - panning.x);
+  const top = panning.top + (e.clientY - panning.y);
+  centre = { x: (frame.width / 2 - left) / frame.scale, y: (frame.height / 2 - top) / frame.scale };
   layOutMapPreview();
 });
 function endPan() {

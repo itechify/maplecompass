@@ -724,21 +724,16 @@ td:first-child {
   height: 140px;
 }
 
+/* The room for the picture, the column's width inside the paper: zoomed in, the picture
+   grows over all of it and into the paper, cut at the box's edge. */
 .map-picture {
   position: relative;
-  flex: none;
+  flex: 1;
 }
 
-/* Zoomed in, the picture is cut to its fitted box; the rings still reach into the paper
-   around it, as when it shows whole. */
-.map-crop {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-}
-
-/* Sized and moved by the overlay as the player zooms and drags. */
+/* Placed and sized by the overlay: fitted and centred, or as the player zooms and drags. */
 .map-picture img {
+  position: absolute;
   display: block;
   -webkit-user-drag: none;
 }
