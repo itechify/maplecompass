@@ -729,11 +729,27 @@ td:first-child {
   flex: none;
 }
 
+/* Zoomed in, the picture is cut to its fitted box; the rings still reach into the paper
+   around it, as when it shows whole. */
+.map-crop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* Sized and moved by the overlay as the player zooms and drags. */
 .map-picture img {
   display: block;
-  width: 100%;
-  height: 100%;
   -webkit-user-drag: none;
+}
+
+/* Zoomed in, the picture is there to be dragged. */
+.map-preview.zoomed {
+  cursor: grab;
+}
+
+.map-preview.panning {
+  cursor: grabbing;
 }
 
 .panel .map-loading {

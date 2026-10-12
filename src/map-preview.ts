@@ -5,7 +5,10 @@
  * within the map with a dashed arrow to where it lands, grey to a map not in the data;
  * dashed when hidden or a Quest Portal. A portal the Hunting Target's route takes next
  * wears a wide magenta ring around its own, always. Hovering a ring says where it leads
- * and lights its row; hovering a row lights its ring. A click does nothing.
+ * and lights its row; hovering a row lights its ring. The wheel zooms the picture inside
+ * its box towards the pointer, from the whole map to the picture's own size, the rings
+ * keeping theirs; zoomed in, a drag moves it, and a double-click shows the whole map
+ * again. A new map shows whole. A click does nothing.
  */
 
 import { byId, cardTop, span } from "./dom";
@@ -51,6 +54,13 @@ type PortalMark = {
   nextOnRoute: boolean;
 };
 
+/**
+ * How the picture is laid out: its box's size, the most it may be zoomed (to the picture's
+ * own size), how far it is moved in from its top left, and its screen pixels to a picture
+ * pixel.
+ */
+type Frame = { width: number; height: number; most: number; left: number; top: number; sx: number; sy: number };
+
 /** Mirror of `minerva_core::MapPreview`. */
 export type MapPreview = {
   picture: string;
@@ -70,6 +80,10 @@ const LIT_RING = 7.5;
 const ROUTE_RING = 10;
 /** The space kept between the card and the ring, and the panel's edges. */
 const CARD_GAP = 6;
+/** How much a notch of the mouse wheel zooms in, or out. */
+const ZOOM_PER_NOTCH = 1.25;
+/** The wheel's delta for a notch, in CSS px; a touchpad sends smaller ones. */
+const NOTCH = 100;
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -81,7 +95,11 @@ const image = document.createElement("img");
 image.alt = "";
 image.draggable = false;
 image.hidden = true;
-picture.prepend(image);
+/** The picture's fitted box, which cuts it while zoomed in. */
+const crop = document.createElement("div");
+crop.className = "map-crop";
+crop.append(image);
+picture.prepend(crop);
 const loading = byId("map-loading");
 const failed = byId("map-failed");
 const rows = byId("portal-rows");
@@ -99,6 +117,18 @@ let brokenUrl: string | null = null;
 let drawnFor = "";
 /** The mark the pointer is on (or on whose row), if any. */
 let lit: { mark: number; onRing: boolean } | null = null;
+/**
+ * How far the player has zoomed in, over the fit: 1 shows the whole map. Kept while the
+ * same map shows, as is the spot in the picture's pixels at the middle of the box (null:
+ * the picture's middle), so the section opening again or the panel's width changing
+ * shows the same part of it.
+ */
+let zoom = 1;
+let centre: { x: number; y: number } | null = null;
+/** How the picture was last laid out, while it shows. */
+let frame: Frame | null = null;
+/** A drag moving the zoomed picture: where it started, and the picture's offset then. */
+let panning: { x: number; y: number; left: number; top: number } | null = null;
 /** Whether the mark card may show now: the panel expanded, on its normal view. */
 let cardAllowed: () => boolean = () => true;
 /** The panel's height may have changed: the overlay measures it again. */
@@ -193,9 +223,11 @@ export function renderMapPreview(next: MapPreview | null, name: string): boolean
     return !!next;
   }
   if (url && image.getAttribute("src") !== url) {
-    // Another map: nothing on it is lit until the pointer moves onto it.
+    // Another map: nothing on it is lit until the pointer moves onto it, and it shows whole.
     lit = null;
     drawnFor = "";
+    zoom = 1;
+    centre = null;
     image.hidden = true;
     image.src = url;
   }
@@ -205,8 +237,9 @@ export function renderMapPreview(next: MapPreview | null, name: string): boolean
 }
 
 /**
- * The picture fitted and centred, its rings drawn over it; or the placeholder while it
- * loads. Again whenever the section opens or the panel changes width.
+ * The picture fitted and centred, zoomed and moved inside its box as the player has, its
+ * rings drawn over it; or the placeholder while it loads. Again whenever the section
+ * opens, the panel changes width, or the player zooms or drags.
  */
 export function layOutMapPreview() {
   const ready = !!shown && image.hasAttribute("src") && image.complete && image.naturalWidth > 0;
@@ -214,6 +247,7 @@ export function layOutMapPreview() {
   loading.hidden = ready;
   picture.hidden = !ready;
   image.hidden = !ready;
+  frame = null;
   // Collapsed, the box has no width to fit the picture to.
   if (!ready || !shown || preview.clientWidth === 0) return;
   // Fitted as if the panel's scrollbar showed, whether it does or not. Fitted to the room
@@ -225,6 +259,20 @@ export function layOutMapPreview() {
   const height = Math.round(image.naturalHeight * scale);
   picture.style.width = `${width}px`;
   picture.style.height = `${height}px`;
+  // Zoomed in no further than the picture's own size, and moved no further than its edges.
+  const most = Math.max(1, image.naturalWidth / width);
+  zoom = Math.min(Math.max(zoom, 1), most);
+  const sx = (width * zoom) / image.naturalWidth;
+  const sy = (height * zoom) / image.naturalHeight;
+  const middle = centre ?? { x: image.naturalWidth / 2, y: image.naturalHeight / 2 };
+  const left = Math.min(Math.max(middle.x * sx - width / 2, 0), width * zoom - width);
+  const top = Math.min(Math.max(middle.y * sy - height / 2, 0), height * zoom - height);
+  centre = zoom > 1 ? { x: (left + width / 2) / sx, y: (top + height / 2) / sy } : null;
+  frame = { width, height, most, left, top, sx, sy };
+  image.style.width = `${width * zoom}px`;
+  image.style.height = `${height * zoom}px`;
+  image.style.transform = `translate(${-left}px, ${-top}px)`;
+  preview.classList.toggle("zoomed", zoom > 1);
   const hidden = shown.marks.filter((m) => m.hiddenPortal !== null).length;
   const next = shown.marks.filter((m) => m.nextOnRoute).length;
   const portals = shown.marks.length;
@@ -233,21 +281,21 @@ export function layOutMapPreview() {
     "aria-label",
     `Map of ${mapName}: ${portals} portal${portals === 1 ? "" : "s"} marked, ${hidden} of them hidden${onRoute}`,
   );
-  const key = JSON.stringify([shown.marks, width, height]);
+  const key = JSON.stringify([shown.marks, frame]);
   if (key !== drawnFor) {
     drawnFor = key;
-    drawMarks(shown.marks, scale, width, height);
+    drawMarks(shown.marks, frame);
     relight();
   }
 }
 
-/** Where a ring or a landing is drawn, in screen pixels over the picture. */
-const at = (x: number, y: number, scale: number) => ({ x: x * scale, y: y * scale });
+/** Where a ring or a landing is drawn, in screen pixels over the box. */
+const at = (x: number, y: number, f: Frame) => ({ x: x * f.sx - f.left, y: y * f.sy - f.top });
 
 /** The arrows of the teleports within the map, under every ring, then the rings. */
-function drawMarks(marks: PortalMark[], scale: number, width: number, height: number) {
-  marksSvg.setAttribute("width", String(width));
-  marksSvg.setAttribute("height", String(height));
+function drawMarks(marks: PortalMark[], f: Frame) {
+  marksSvg.setAttribute("width", String(f.width));
+  marksSvg.setAttribute("height", String(f.height));
   const defs = svg("defs", {});
   const head = svg("marker", {
     id: "landing-head",
@@ -267,8 +315,8 @@ function drawMarks(marks: PortalMark[], scale: number, width: number, height: nu
     if (mark.leads !== "withinTheMap" || !landing) return;
     // A pair is one line with a head at each end, drawn once.
     if (landing.bothWays && landing.mark !== null && landing.mark < i) return;
-    const from = at(mark.x, mark.y, scale);
-    const to = at(landing.x, landing.y, scale);
+    const from = at(mark.x, mark.y, f);
+    const to = at(landing.x, landing.y, f);
     const length = Math.hypot(to.x - from.x, to.y - from.y);
     // From ring edge to ring edge, or to the landing point when it has no ring.
     const start = RING + 2;
@@ -293,7 +341,7 @@ function drawMarks(marks: PortalMark[], scale: number, width: number, height: nu
   const routeRings = svg("g", { class: "route-rings" });
   const rings = svg("g", { class: "rings" });
   marks.forEach((mark, i) => {
-    const { x, y } = at(mark.x, mark.y, scale);
+    const { x, y } = at(mark.x, mark.y, f);
     if (mark.nextOnRoute) {
       routeRings.append(
         svg("circle", { class: "route-halo", cx: x, cy: y, r: ROUTE_RING }),
@@ -380,7 +428,9 @@ function renderCard() {
 }
 
 // Resting on a ring lights it and its row and shows its card; on a row, lights its ring.
+// Nothing lights while a drag moves the picture.
 marksSvg.addEventListener("mouseover", (e) => {
+  if (panning) return;
   const g = e.target instanceof Element ? e.target.closest<SVGGElement>(".rings > g") : null;
   hoverMark(g ? Number(g.dataset.mark) : null, true);
 });
@@ -390,6 +440,73 @@ rows.addEventListener("mouseover", (e) => {
   hoverMark(row ? Number(row.dataset.mark) : null);
 });
 rows.addEventListener("mouseleave", () => hoverMark(null));
+
+/** Light the ring at a point the pointer rests on, if any: the picture moved under it. */
+function hoverAt(x: number, y: number) {
+  const g = document.elementFromPoint(x, y)?.closest<SVGGElement>(".rings > g");
+  hoverMark(g ? Number(g.dataset.mark) : null, true);
+}
+
+/** Show the picture at `next` times the fit, the spot under the pointer staying under it. */
+function zoomAt(next: number, e: MouseEvent) {
+  if (!frame) return;
+  const box = picture.getBoundingClientRect();
+  const x = e.clientX - box.left;
+  const y = e.clientY - box.top;
+  const spot = { x: (frame.left + x) / frame.sx, y: (frame.top + y) / frame.sy };
+  zoom = Math.min(Math.max(next, 1), frame.most);
+  // Back out to the whole map, never a hair's breadth from it.
+  if (zoom < 1.001) zoom = 1;
+  const sx = (frame.width * zoom) / image.naturalWidth;
+  const sy = (frame.height * zoom) / image.naturalHeight;
+  centre = { x: spot.x + (frame.width / 2 - x) / sx, y: spot.y + (frame.height / 2 - y) / sy };
+  layOutMapPreview();
+  hoverAt(e.clientX, e.clientY);
+}
+
+// Over the shown picture's box, its paper included, the wheel zooms and never scrolls the
+// panel: in as far as the picture's own size, out as far as the whole map. While it loads,
+// the wheel scrolls the panel as anywhere else.
+preview.addEventListener("wheel", (e) => {
+  if (!frame) return;
+  e.preventDefault();
+  zoomAt(zoom * ZOOM_PER_NOTCH ** (-e.deltaY / NOTCH), e);
+});
+
+// Zoomed in, a drag moves the picture, no further than its edges.
+preview.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || !frame || zoom === 1) return;
+  panning = { x: e.clientX, y: e.clientY, left: frame.left, top: frame.top };
+  preview.setPointerCapture(e.pointerId);
+});
+preview.addEventListener("pointermove", (e) => {
+  if (!panning || !frame || (e.clientX === panning.x && e.clientY === panning.y)) return;
+  if (!preview.classList.contains("panning")) {
+    preview.classList.add("panning");
+    hoverMark(null);
+  }
+  const left = panning.left - (e.clientX - panning.x);
+  const top = panning.top - (e.clientY - panning.y);
+  centre = { x: (left + frame.width / 2) / frame.sx, y: (top + frame.height / 2) / frame.sy };
+  layOutMapPreview();
+});
+function endPan() {
+  panning = null;
+  preview.classList.remove("panning");
+}
+// Let go, the ring it rests on lights.
+preview.addEventListener("pointerup", (e) => {
+  if (!panning) return;
+  const moved = preview.classList.contains("panning");
+  endPan();
+  if (moved) hoverAt(e.clientX, e.clientY);
+});
+preview.addEventListener("pointercancel", endPan);
+
+// A double-click shows the whole map again.
+preview.addEventListener("dblclick", (e) => {
+  if (frame && zoom > 1) zoomAt(1, e);
+});
 
 image.addEventListener("load", () => {
   layOutMapPreview();
