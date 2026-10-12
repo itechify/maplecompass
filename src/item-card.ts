@@ -306,6 +306,34 @@ function itemIcon(url: string | null): HTMLSpanElement {
   return icon;
 }
 
+const SVG = "http://www.w3.org/2000/svg";
+
+function svgShape(tag: string, attributes: Record<string, string>) {
+  const shape = document.createElementNS(SVG, tag);
+  for (const [name, value] of Object.entries(attributes)) shape.setAttribute(name, value);
+  return shape;
+}
+
+/** The credit as the main window's info icon at the card's foot, its words in its tooltip. */
+function creditFooter(text: string) {
+  const footer = document.createElement("footer");
+  const credit = document.createElement("span");
+  credit.className = "credit";
+  credit.setAttribute("role", "img");
+  credit.title = text;
+  credit.setAttribute("aria-label", text);
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("aria-hidden", "true");
+  const ring = svgShape("circle", { cx: "8", cy: "8", r: "6.25" });
+  const stem = svgShape("path", { d: "M8 7.4v3.9" });
+  const dot = svgShape("circle", { class: "dot", cx: "8", cy: "4.9", r: ".95" });
+  svg.append(ring, stem, dot);
+  credit.append(svg);
+  footer.append(credit);
+  return footer;
+}
+
 /** One item's card: its picture beside its name. */
 function renderCard(card: ItemCard) {
   title.replaceChildren(
@@ -325,10 +353,7 @@ function renderCard(card: ItemCard) {
     note.textContent = `OSMS Data Explorer unreachable — item data from ${dayText(new Date(card.savedCopyFromUnixMs), true)}`;
     parts.push(note);
   }
-  const credit = document.createElement("p");
-  credit.className = "item-card-credit";
-  credit.textContent = card.credit;
-  parts.push(credit);
+  parts.push(creditFooter(card.credit));
   body.replaceChildren(...parts);
 }
 

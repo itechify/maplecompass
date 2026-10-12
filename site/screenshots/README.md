@@ -26,3 +26,5 @@ The pictures on the Minerva site, taken by hand in the game. The site's build fa
 ## Retake
 
 When a change alters something a shot shows, the PR that makes it lists the shot here, with what changed. At release, the smoke test retakes every shot listed (`docs/releasing.md`) and empties the list.
+
+- `item-card.png`: the card's credit line at its foot is now an info icon, its words in its tooltip.

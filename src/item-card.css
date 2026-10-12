@@ -252,8 +252,7 @@
 /* The note and the hint are read in full: the panel cuts its lines short, the card
    doesn't. */
 .panel .item-card-note,
-.panel .item-card-hint,
-.panel .item-card-credit {
+.panel .item-card-hint {
   white-space: normal;
   overflow: visible;
   text-wrap: pretty;
@@ -265,13 +264,6 @@
   font-size: 11px;
   line-height: 14px;
   color: var(--ink-2);
-}
-
-.item-card-credit {
-  margin: 0;
-  font-size: 10px;
-  line-height: 13px;
-  color: var(--ink-3);
 }
 
 /* Several items share the name read: each with its picture as the game draws it and its
