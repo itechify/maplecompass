@@ -48,6 +48,7 @@ const panelEl = byId("panel");
 const count = byId("count");
 const rows = byId("rows");
 const noteMissing = byId("note-missing");
+const footer = byId("footer");
 const credit = byId("credit");
 const announce = byId("announce");
 const headers = [...document.querySelectorAll<HTMLTableCellElement>("th[data-column]")];
@@ -345,7 +346,10 @@ function render(view: BestsView) {
     for (const id of opened) if (!maps.some((m) => m.id === id)) opened.delete(id);
   }
   count.textContent = `${maps.length === 1 ? "1 map" : `${maps.length} maps`} · shared by all your characters`;
-  credit.textContent = view.credit;
+  // The credit as the main window's info icon, its words in its tooltip.
+  footer.hidden = !view.credit;
+  credit.title = view.credit;
+  credit.setAttribute("aria-label", view.credit);
   noteMissing.hidden = maps.every((m) => m.mobLevels !== null && m.ceilingShareHundredths !== null);
   renderRows();
   reportHeight();

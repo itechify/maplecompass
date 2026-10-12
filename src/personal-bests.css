@@ -359,15 +359,6 @@ tbody tr.visit.last td {
   margin-top: 4px;
 }
 
-.panel .credit-line {
-  padding-top: 6px;
-  border-top: 1px solid var(--rule);
-  white-space: normal;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--ink-3);
-}
-
 /* Short labels where the long ones don't fit. */
 .sort .short {
   display: none;
