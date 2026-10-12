@@ -2,7 +2,7 @@
 
 Your guide for MapleStory Classic World: a helper overlay that reads the minimap title by ordinary screen capture and shows which map you are on. It never touches the game's memory, files or input ([ADR 0001](docs/adr/0001-observe-game-from-outside-only.md)).
 
-**[The Minerva site](https://itechify.github.io/minerva/)** explains what it does and how to use it: setup, the panel, hunting, the Grind Tracker, the Item Card, Item Lookup and the hotkeys. This README is the developer's side.
+**[The Minerva site](https://owlofminerva.app/)** explains what it does and how to use it: setup, the panel, hunting, the Grind Tracker, the Item Card, Item Lookup and the hotkeys. This README is the developer's side.
 
 Its map and mob data come from the files [OSMS Data Explorer](https://osmsdataexplorer.com) publishes, and its links open [NiaMeowDB](https://meowdb.com)'s pages ([ADR 0008](docs/adr/0008-map-and-mob-data-from-osms-data-explorer.md)).
 

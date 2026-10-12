@@ -1,6 +1,8 @@
 # Publishes the Minerva site (site/) to GitHub Pages. It describes a release, so it is
 # built from that release's tag when the release is published. Run it by hand to publish
 # again: from the latest release's tag by default, or from another tag, branch or commit.
+# GitHub Pages serves it at owlofminerva.app: the domain is set in the repo's Pages settings
+# (a workflow's deploy ignores a CNAME file), and its DNS is on Cloudflare.
 name: Site
 
 on:

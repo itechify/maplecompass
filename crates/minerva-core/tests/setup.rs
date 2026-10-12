@@ -364,7 +364,7 @@ fn about_and_credits_opens_the_minerva_site_in_the_browser_and_changes_nothing_e
 
     assert_eq!(
         minerva.press(PanelControl::OpenSite),
-        Some(Request::OpenInBrowser { url: "https://itechify.github.io/minerva/".into() })
+        Some(Request::OpenInBrowser { url: "https://owlofminerva.app/".into() })
     );
     assert_eq!(minerva.panel_state(), &before);
 }

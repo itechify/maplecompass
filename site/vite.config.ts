@@ -10,7 +10,7 @@ import { hotkeyRows } from "./hotkeys.ts";
 // into site/dist.
 
 /** Where the site is published, for the links that must be absolute (Open Graph). */
-const SITE_URL = "https://itechify.github.io/minerva/";
+const SITE_URL = "https://owlofminerva.app/";
 const RELEASES = "https://github.com/itechify/minerva/releases";
 
 /**
@@ -139,7 +139,7 @@ function serveAppFiles(): Plugin {
       server.middlewares.use((req, _res, next) => {
         if (req.url && /^\/(src|assets)\//.test(req.url)) {
           const file = fileURLToPath(new URL(`..${req.url}`, import.meta.url)).replace(/\\/g, "/");
-          req.url = `/minerva/@fs${file.startsWith("/") ? "" : "/"}${file}`;
+          req.url = `/@fs${file.startsWith("/") ? "" : "/"}${file}`;
         }
         next();
       });
@@ -164,7 +164,7 @@ function themeWithoutFonts(): Plugin {
 
 export default defineConfig({
   root: "site",
-  base: "/minerva/",
+  base: "/",
   publicDir: false,
   plugins: [
     fillPlaceholders(),

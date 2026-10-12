@@ -168,7 +168,7 @@ pub const OSMS_AND_MEOWDB_CREDIT: &str =
 
 /// The Minerva site, the player manual on GitHub Pages, which Help & Setup's About &
 /// Credits opens.
-pub const SITE_URL: &str = "https://itechify.github.io/minerva/";
+pub const SITE_URL: &str = "https://owlofminerva.app/";
 
 /// Whether minimap titles can be recognised as real maps.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
