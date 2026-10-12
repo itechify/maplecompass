@@ -4,7 +4,7 @@ status: accepted, amended by ADR-0010 (crops of the game around the pointer at a
 
 # A Bug Report is a replayable trace of the core's inputs, not a log
 
-When something looks wrong, such as the Grind Tracker's EXP/h far higher than it should be, the player chooses **Bug Report** in the tray menu. MapleCompass saves a `.zip`, shows it in Explorer, and opens the bug issue form for it. The report holds every input the core took in since launch, in order, with what came of each:
+When something looks wrong, such as the Grind Tracker's EXP/h far higher than it should be, the player chooses **Bug Report** in the tray menu. Minerva saves a `.zip`, shows it in Explorer, and opens the bug issue form for it. The report holds every input the core took in since launch, in order, with what came of each:
 
 - the source's answers;
 - what the Session made of a reading (a misread set aside, a level-up and the EXP it counted, a death, a level learned anew, another character);
@@ -14,7 +14,7 @@ The core holds no clock, and all the logic is in it, so feeding the same inputs 
 
 ## What goes in
 
-- **The inputs:** each of `Compass`'s input methods writes its input down as it takes it, so none can be missed. What came of an input is written once the next one comes.
+- **The inputs:** each of `Minerva`'s input methods writes its input down as it takes it, so none can be missed. What came of an input is written once the next one comes.
 - **Kept small:**
   - A tick that changes nothing is left out, but for the last of a run of them, which the next line says came first. The loop ticks 20 times a second.
   - An input that only sets a value (the game window, a window's size, what is in front) is written only when the value changes.
@@ -39,11 +39,11 @@ The core holds no clock, and all the logic is in it, so feeding the same inputs 
 - **Log lines in a rolling file.** They are easy to read, but they can't be replayed, and they answer how the core got somewhere only where someone thought to log it. The core's notes give the reading part, and the trace stays the record.
 - **The last few minutes only.** That would be smaller, but the Session's state comes from the whole run (the level's total learned, the Session's start, the Visits), and a bug's cause can come long before the press.
 - **A snapshot of the core at the start of a window.** Every bit of the core's state would have to be saved and restored, and kept so through every change to it.
-- **OSMS's set in the report.** Map recognition would replay exactly, but MapleCompass may not redistribute the set.
+- **OSMS's set in the report.** Map recognition would replay exactly, but Minerva may not redistribute the set.
 - **A hotkey, or a button on the panel or the Grind Tracker.** The tray is always reachable, even when the panel doesn't show (which can itself be the bug), and it adds nothing to the overlay. The trace covers the minutes before the press, so speed doesn't matter.
 
 ## Consequences
 
-- A new input to `Compass` needs an `Event`, a line in `replay`, and serde on its types.
+- A new input to `Minerva` needs an `Event`, a line in `replay`, and serde on its types.
 - The shell's errors go through `errors::error!`, which prints them and hands them to the core.
 - Whole reports are never committed: they are big, and hold OSMS's Map Summaries and the player's run. A report becomes the smallest test that reproduces its bug, on a made-up world, and a frame read wrong becomes a sample.

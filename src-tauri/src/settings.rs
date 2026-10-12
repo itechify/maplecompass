@@ -1,8 +1,8 @@
 //! Settings persistence: the core's `Settings` as pretty JSON in the app config
-//! directory (`%APPDATA%\com.itechify.maplecompass\settings.json` on Windows).
+//! directory (`%APPDATA%\com.itechify.minerva\settings.json` on Windows).
 
 use crate::errors::error;
-use compass_core::Settings;
+use minerva_core::Settings;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};

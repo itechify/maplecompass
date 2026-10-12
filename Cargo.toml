@@ -1,8 +1,8 @@
 [workspace]
 resolver = "3"
-members = ["crates/compass-core", "src-tauri"]
+members = ["crates/minerva-core", "src-tauri"]
 # Bare `cargo test` / `cargo build` only touch the headless core, never Tauri.
-default-members = ["crates/compass-core"]
+default-members = ["crates/minerva-core"]
 
 [workspace.package]
 edition = "2024"

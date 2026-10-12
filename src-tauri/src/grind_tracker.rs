@@ -14,7 +14,7 @@ use crate::errors::error;
 use crate::sizemove::{self, Gesture, SizeMove};
 use crate::view::{LastView, ViewSender};
 use crate::{Command, LOOP_START_GRACE, keep_on_top, physical, place};
-use compass_core::{ExpTracking, PanelState, Size};
+use minerva_core::{ExpTracking, PanelState, Size};
 use serde::Serialize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

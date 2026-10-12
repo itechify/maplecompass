@@ -8,7 +8,7 @@
 //! relays the player's typing, keys and clicks.
 
 use crate::Command;
-use compass_core::{Action, PanelControl, Section};
+use minerva_core::{Action, PanelControl, Section};
 use std::sync::mpsc::Sender;
 use tauri::{State, WebviewWindow};
 

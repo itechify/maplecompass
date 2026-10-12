@@ -45,10 +45,10 @@ import {
 
 type PlacementMode = "inside" | "dockedRight" | "dockedLeft" | "detached";
 
-/** Mirror of `compass_core::PerParty`. */
+/** Mirror of `minerva_core::PerParty`. */
 type PerParty = { solo: number; fullParty: number };
 
-/** Mirror of `compass_core::Mob`. */
+/** Mirror of `minerva_core::Mob`. */
 type Mob = {
   id: string;
   name: string;
@@ -60,7 +60,7 @@ type Mob = {
 };
 
 
-/** Mirror of `compass_core::MapData`. */
+/** Mirror of `minerva_core::MapData`. */
 type MapData = {
   summary: { mobsPerHour: PerParty; expPerHour: PerParty } | null;
   /** Every mob on the map, all listed, by level (then name). */
@@ -69,18 +69,18 @@ type MapData = {
 };
 
 /**
- * Mirror of `compass_core::Section`: a section the player can collapse to its heading. The
+ * Mirror of `minerva_core::Section`: a section the player can collapse to its heading. The
  * Map section is `hiddenPortals`, as the settings have always named it.
  */
 type Section = "hiddenPortals" | "mobs" | "navigation";
 
-/** Mirror of `compass_core::MapDataStatus`. */
+/** Mirror of `minerva_core::MapDataStatus`. */
 type MapDataStatus =
   | { status: "noMap" }
   | ({ status: "ready" } & MapData)
   | ({ status: "savedCopy"; savedAtUnixMs: number } & MapData);
 
-/** Mirror of `compass_core::MobDetails`: a figure shown as "—" is null. */
+/** Mirror of `minerva_core::MobDetails`: a figure shown as "—" is null. */
 type MobDetails = {
   elements: { weak: string[]; strong: string[]; immune: string[] };
   touchDamage: { min: number; max: number } | null;
@@ -93,27 +93,27 @@ type MobDetails = {
   hpPerExp: { hundredths: number; rank: number; ranked: number } | null;
 };
 
-/** Mirror of `compass_core::MobCard`: one listed mob's Mob Card. */
+/** Mirror of `minerva_core::MobCard`: one listed mob's Mob Card. */
 type MobCard = { id: string; url: string; image: string | null } & MobDetails;
 
-/** Mirror of `compass_core::Outline`. */
+/** Mirror of `minerva_core::Outline`. */
 type Outline = {
   mobLevels: { lowest: number; highest: number } | null;
   firstMobs: string[];
   hiddenPortals: number;
 };
 
-/** Mirror of `compass_core::Candidates`. */
+/** Mirror of `minerva_core::Candidates`. */
 type Candidates = {
   maps: { id: string; outline: Outline }[];
   shown: number;
   chosen: boolean;
 };
 
-/** Mirror of `compass_core::ExpBar`. */
+/** Mirror of `minerva_core::ExpBar`. */
 type ExpBar = { exp: number; percentHundredths: number };
 
-/** Mirror of `compass_core::PanelState`. */
+/** Mirror of `minerva_core::PanelState`. */
 type PanelState = {
   recognition: Recognition;
   /** The shown map; its `mark` names its Map Mark in `mapMarks`. */
@@ -130,7 +130,7 @@ type PanelState = {
   /** Every Map Mark, by OSMS's name for it, which each map shown names its own by. */
   mapMarks: MapMarks;
   expanded: boolean;
-  /** Mirror of `compass_core::CollapsedSections`: the sections collapsed to their heading. */
+  /** Mirror of `minerva_core::CollapsedSections`: the sections collapsed to their heading. */
   collapsedSections: Record<Section, boolean>;
   gameFound: boolean;
   placementMode: PlacementMode;
@@ -150,7 +150,7 @@ type PanelState = {
   expBarRegion: { x: number; y: number; width: number; height: number } | null;
   expBar: ExpBar | null;
   expTracking: ExpTracking;
-  /** Mirror of `compass_core::GrindTrackerWindow`: the player wants it open. */
+  /** Mirror of `minerva_core::GrindTrackerWindow`: the player wants it open. */
   grindTracker: { open: boolean };
   search: SearchState;
 };

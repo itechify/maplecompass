@@ -117,6 +117,11 @@ body {
   height: 16px;
 }
 
+/* The owl, drawn by the pixel: its 16px drawing, or its 32px one on a 2x display. */
+.window-icon.owl {
+  image-rendering: pixelated;
+}
+
 .panel .window-name {
   flex: 1;
   min-width: 0;
@@ -1942,7 +1947,7 @@ footer {
   color: var(--ink-2);
 }
 
-/* Collapsed: the app icon, the gold compass, with the map's Hidden Portal count on a
+/* Collapsed: the app icon, the owl, with the map's Hidden Portal count on a
    small chip and a dot when something needs a look. The window shrinks to fit it. */
 .icon {
   display: none;
@@ -1952,11 +1957,13 @@ footer {
   height: 100vh;
 }
 
+/* The owl at its own 37×42 pixels, at whole pixels in the 44px square: 1 down, 4 in. */
 .icon .art {
   display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+  width: 37px;
+  height: 42px;
+  margin: 1px 0 0 4px;
+  image-rendering: pixelated;
   pointer-events: none;
 }
 

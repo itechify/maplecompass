@@ -6,7 +6,7 @@ status: accepted
 
 ADR 0010 gave the Item Card one market price per item, the player's own. One figure says too little to decide what to do with loot: what an item typically sells for, the cheapest one listed now, and the price the player means to sell theirs at are different numbers, and a player who tracks them keeps all three. So the player keeps prices on **Market Lines** they name ("Your price", "Typical", "Lowest ask"), any number of them, and every card lists every line, in the player's order, with the item's price on each or "Not set".
 
-MapleCompass still reads no market prices of its own: ADR 0010's test for a source stands. The lines hold what the player keeps.
+Minerva still reads no market prices of its own: ADR 0010's test for a source stands. The lines hold what the player keeps.
 
 ## On the card
 
@@ -31,8 +31,8 @@ Shape 2 holds the lines, in order, each with its ID, its name and its prices by 
 }
 ```
 
-- A file in shape 1 (0.8.0's, one price per item) is read as one line, "Your price", holding its prices, and saved in shape 2 from then on. An older MapleCompass sets a shape 2 file aside, as it does any later shape.
-- A line's ID tells it from the others whatever it is named, so renaming keeps its prices. The core numbers the lines the player adds one past the highest number among the lines' IDs, and keeps any other ID as it was written. So a tool of the player's own may fill a line of its own (an ID such as `"tool-typical"`) while MapleCompass is closed: MapleCompass reads the file at launch, and writes it whenever a price or line changes.
+- A file in shape 1 (0.8.0's, one price per item) is read as one line, "Your price", holding its prices, and saved in shape 2 from then on. An older Minerva sets a shape 2 file aside, as it does any later shape.
+- A line's ID tells it from the others whatever it is named, so renaming keeps its prices. The core numbers the lines the player adds one past the highest number among the lines' IDs, and keeps any other ID as it was written. So a tool of the player's own may fill a line of its own (an ID such as `"tool-typical"`) while Minerva is closed: Minerva reads the file at launch, and writes it whenever a price or line changes.
 
 ## Considered options
 

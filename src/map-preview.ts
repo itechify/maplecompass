@@ -11,7 +11,7 @@
 import { byId, cardTop, span } from "./dom";
 import { mapMark, type MapMarks } from "./map-marks";
 
-/** Mirror of `compass_core::HiddenPortal`. */
+/** Mirror of `minerva_core::HiddenPortal`. */
 export type HiddenPortal = {
   name: string;
   toMapId: string;
@@ -23,13 +23,13 @@ export type HiddenPortal = {
   quest: boolean;
 };
 
-/** Mirror of `compass_core::Leads`. */
+/** Mirror of `minerva_core::Leads`. */
 type Leads = "anotherMap" | "withinTheMap" | "mapNotInTheData";
 
-/** Mirror of `compass_core::PortalKind`. */
+/** Mirror of `minerva_core::PortalKind`. */
 type PortalKind = "visible" | "hidden" | "door" | "quest";
 
-/** Mirror of `compass_core::PortalMark`: where it is in the picture's pixels. */
+/** Mirror of `minerva_core::PortalMark`: where it is in the picture's pixels. */
 type PortalMark = {
   x: number;
   y: number;
@@ -51,7 +51,7 @@ type PortalMark = {
   nextOnRoute: boolean;
 };
 
-/** Mirror of `compass_core::MapPreview`. */
+/** Mirror of `minerva_core::MapPreview`. */
 export type MapPreview = {
   picture: string;
   image: { status: "loading" | "unavailable" } | { status: "ready"; url: string };

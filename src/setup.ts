@@ -7,13 +7,13 @@ import { hotkeyAvailable, keyLabel, type Hotkeys } from "./hotkeys";
 import { mapMark, type MapMarks } from "./map-marks";
 import { LOADING_MAP_LIST, recognitionProblem, type Recognition } from "./recognition";
 
-/** Mirror of `compass_core::TestRead`. */
+/** Mirror of `minerva_core::TestRead`. */
 type TestRead =
   | { status: "reading" }
   | { status: "recognised"; map: { id: string; streetName: string; mapName: string; mark: string | null } }
   | { status: "failed" };
 
-/** Mirror of `compass_core::ExpBarTestRead`. */
+/** Mirror of `minerva_core::ExpBarTestRead`. */
 type ExpBarTestRead =
   | { status: "reading" }
   | { status: "read"; bar: { exp: number; percentHundredths: number } }
@@ -92,7 +92,7 @@ const NOTICES: Record<SetupReason, string> = {
   resolutionChanged:
     "The game window changed size since setup, so the minimap title and the EXP bar have probably moved. Mark them again.",
   requested:
-    "Mark the minimap title again, or keep it and change the Grind Tracker. Until you finish, MapleCompass keeps reading the old spots.",
+    "Mark the minimap title again, or keep it and change the Grind Tracker. Until you finish, Minerva keeps reading the old spots.",
 };
 
 function render() {

@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 // The site's behaviours: the tab of the part being read is raised, as the game raises the
 // open tab, and on a wide screen the manual's minimap shows where you are in it
-// (minimap.ts), both following the scroll; the hero films how MapleCompass reads the map
+// (minimap.ts), both following the scroll; the hero films how Minerva reads the map
 // you're on as the page scrolls past it (reel.ts). Without the script the page still reads
 // whole, the hero is its still shot, and the tabs still jump to their parts.
 

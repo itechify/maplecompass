@@ -7,7 +7,7 @@ import { byId, span } from "./dom";
 import { type LevelRange, levels, rate, sharePercent, whole } from "./figures";
 import { mapMark, type MapMarks } from "./map-marks";
 
-/** Mirror of `compass_core::PersonalBestsVisit`: one of a map's Visits. */
+/** Mirror of `minerva_core::PersonalBestsVisit`: one of a map's Visits. */
 type BestsVisit = {
   expPerHour: number;
   setAtUnixMs: number | null;
@@ -17,7 +17,7 @@ type BestsVisit = {
   thisVisit: boolean;
 };
 
-/** Mirror of `compass_core::PersonalBestsMap`. */
+/** Mirror of `minerva_core::PersonalBestsMap`. */
 type BestsMap = {
   id: string;
   streetName: string;
@@ -118,7 +118,7 @@ function missing(td: HTMLTableCellElement, why: string) {
  *  share, no mobs spawn there. */
 const NOT_LISTED = "Not in the map list";
 const NO_MOBS = "No mobs spawn on this map";
-const NO_DATE = "Set before MapleCompass knew the date";
+const NO_DATE = "Set before Minerva knew the date";
 
 /** A map's name as the window writes it. */
 const mapName = (m: BestsMap) => m.mapName || `Map ${m.id}`;
@@ -303,7 +303,7 @@ function removeButton(m: BestsMap, v: BestsVisit, key: string) {
   return button;
 }
 
-/** The rows as last sent, and how the player sorted them: kept until MapleCompass closes,
+/** The rows as last sent, and how the player sorted them: kept until Minerva closes,
  *  so the window opens again as they left it. */
 let maps: BestsMap[] = [];
 let marks: MapMarks = {};

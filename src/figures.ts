@@ -1,7 +1,7 @@
-/** How MapleCompass writes its figures, wherever they show: the panel, the Grind Tracker
+/** How Minerva writes its figures, wherever they show: the panel, the Grind Tracker
  *  and the Personal Bests window. */
 
-/** Mirror of `compass_core::LevelRange`. */
+/** Mirror of `minerva_core::LevelRange`. */
 export type LevelRange = { lowest: number; highest: number };
 
 /** "−" (U+2212) for a negative figure. */

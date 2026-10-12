@@ -5,26 +5,26 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { dayText } from "./dates";
 import { byId, span } from "./dom";
 
-/** Mirror of `compass_core::ShopPrice`. */
+/** Mirror of `minerva_core::ShopPrice`. */
 type ShopPrice = { status: "sells"; mesos: number } | { status: "notSold" } | { status: "cash" } | { status: "unknown" };
 
-/** Mirror of `compass_core::MarketPrice`: a price the player keeps, and when they set it. */
+/** Mirror of `minerva_core::MarketPrice`: a price the player keeps, and when they set it. */
 type MarketPrice = { mesos: number; setAtUnixMs?: number };
 
-/** Mirror of `compass_core::MarketLine`: one of the player's Market Lines, with the item's
+/** Mirror of `minerva_core::MarketLine`: one of the player's Market Lines, with the item's
  * price on it. */
 type MarketLine = { id: string; name: string; price: MarketPrice | null };
 
-/** Mirror of `compass_core::NameProblem`. */
+/** Mirror of `minerva_core::NameProblem`. */
 type NameProblem = { kind: "empty" } | { kind: "taken"; name: string };
 
-/** Mirror of `compass_core::MarketEdit`: what the market section has open. */
+/** Mirror of `minerva_core::MarketEdit`: what the market section has open. */
 type MarketEdit =
   | { field: "price"; line: string; notAPrice: string | null }
   | { field: "name"; line: string | null; problem: NameProblem | null }
   | { field: "remove"; line: string; prices: number };
 
-/** Mirror of `compass_core::ItemCard`. */
+/** Mirror of `minerva_core::ItemCard`. */
 type ItemCard = {
   id: string;
   name: string;
@@ -37,10 +37,10 @@ type ItemCard = {
   credit: string;
 };
 
-/** Mirror of `compass_core::ItemCardChoice`. */
+/** Mirror of `minerva_core::ItemCardChoice`. */
 type ItemCardChoice = { id: string; kind: string; icon: string | null };
 
-/** Mirror of `compass_core::ShownItemCard`. */
+/** Mirror of `minerva_core::ShownItemCard`. */
 type ShownItemCard = { card: number } & (
   | ({ status: "card" } & ItemCard)
   | { status: "choose"; name: string; items: ItemCardChoice[] }

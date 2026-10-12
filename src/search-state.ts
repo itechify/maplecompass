@@ -1,37 +1,37 @@
 import { mapMark, type MapMarks } from "./map-marks";
 
-/** Mirror of `compass_core::MobChoice`. */
+/** Mirror of `minerva_core::MobChoice`. */
 export type MobChoice = { id: string; name: string; level: number };
 
-/** Mirror of `compass_core::Matches`: the best five of one kind, and how many more match. */
+/** Mirror of `minerva_core::Matches`: the best five of one kind, and how many more match. */
 export type Matches<T> = { shown: T[]; more: number };
 
-/** Mirror of `compass_core::MobMatch`: `image` is where its OSMS animation loads from, once it's in. */
+/** Mirror of `minerva_core::MobMatch`: `image` is where its OSMS animation loads from, once it's in. */
 export type MobMatch = MobChoice & { image: string | null };
 
-/** Mirror of `compass_core::MapMatch`: picked, it becomes the Destination. */
+/** Mirror of `minerva_core::MapMatch`: picked, it becomes the Destination. */
 export type MapMatch = { mapId: string; streetName: string; mapName: string; mark: string | null };
 
-/** Mirror of `compass_core::ItemMatch`: items that look alike, under the first's ID; picked,
+/** Mirror of `minerva_core::ItemMatch`: items that look alike, under the first's ID; picked,
  *  their Item Card shows. `icon` is where its picture loads from, once it's in. */
 export type ItemMatch = { id: string; name: string; kind: string; icon: string | null };
 
-/** Mirror of `compass_core::ItemsMissing`: why no items are matched. */
+/** Mirror of `minerva_core::ItemsMissing`: why no items are matched. */
 export type ItemsMissing = "loading" | "unavailable" | "formatChanged";
 
-/** Mirror of `compass_core::DensityTier`. */
+/** Mirror of `minerva_core::DensityTier`. */
 export type DensityTier = "high" | "medium" | "low";
 
-/** Mirror of `compass_core::Distance`: map changes from the map shown, or why there's no number. */
+/** Mirror of `minerva_core::Distance`: map changes from the map shown, or why there's no number. */
 export type Distance = { mapChanges: number } | "noRoute" | "questOnly" | "unknown";
 
-/** Mirror of `compass_core::Step`: how a route goes from one map to the next. */
+/** Mirror of `minerva_core::Step`: how a route goes from one map to the next. */
 export type Step = "portal" | "ship" | "taxi" | "teleportScroll";
 
-/** Mirror of `compass_core::RouteStop`: `by` is null for the first stop, the map you're on. */
+/** Mirror of `minerva_core::RouteStop`: `by` is null for the first stop, the map you're on. */
 export type RouteStop = { mapId: string; streetName: string; mapName: string; mark: string | null; by: Step | null };
 
-/** Mirror of `compass_core::SearchResult`. */
+/** Mirror of `minerva_core::SearchResult`. */
 export type SearchResult = {
   mapId: string;
   streetName: string;
@@ -47,18 +47,18 @@ export type SearchResult = {
   travel: Step[];
 };
 
-/** Mirror of `compass_core::Travel`: taxi rides between towns, and Teleport Scrolls to towns. */
+/** Mirror of `minerva_core::Travel`: taxi rides between towns, and Teleport Scrolls to towns. */
 export type Travel = { taxis: boolean; teleportScrolls: boolean };
 
-/** Mirror of `compass_core::SearchView`: the search view's open step. */
+/** Mirror of `minerva_core::SearchView`: the search view's open step. */
 export type SearchView = "matches" | "maps";
 
-/** Mirror of `compass_core::Trip`: the way to a Hunting Target or a Destination as it stood
+/** Mirror of `minerva_core::Trip`: the way to a Hunting Target or a Destination as it stood
  *  when picked. */
 export type Trip = { from: string; mapChanges: number; travel: Step[] };
 
 /**
- * Mirror of `compass_core::HuntingTarget`: the mob and map picked, with the map's figures
+ * Mirror of `minerva_core::HuntingTarget`: the mob and map picked, with the map's figures
  * and route, and once the player is there, that they've arrived. `image` is where the
  * mob's OSMS animation loads from, once it's in.
  */
@@ -71,7 +71,7 @@ export type HuntingTarget = {
 };
 
 /**
- * Mirror of `compass_core::Destination`: the map picked to go to, with the way there; once
+ * Mirror of `minerva_core::Destination`: the map picked to go to, with the way there; once
  * the player is there (or picked it there), that they've arrived.
  */
 export type Destination = {
@@ -93,7 +93,7 @@ export function tripLine({ from, mapChanges, travel }: Trip): string {
   return `${mapChanges} map change${mapChanges === 1 ? "" : "s"} from ${from}${ways ? `, by ${ways}` : ""}`;
 }
 
-/** Mirror of `compass_core::SearchState`. */
+/** Mirror of `minerva_core::SearchState`. */
 export type SearchState = {
   /** The search view's open step, which takes over the panel; null for the normal view. */
   view: SearchView | null;

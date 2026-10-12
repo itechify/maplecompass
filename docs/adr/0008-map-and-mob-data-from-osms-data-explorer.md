@@ -4,7 +4,7 @@ status: accepted, amended by ADR-0010 (the Item Card reads OSMS's item files, a 
 
 # Map and mob data from OSMS Data Explorer's files, not MeowDB's pages
 
-MapleCompass now takes every map's and mob's data from the JSON files that OSMS Data Explorer (osmsdataexplorer.com) publishes for its own site, not from MeowDB's pages. The files cover the whole game, so one fetch of under 1 MB replaces the crawl of about 420 map pages and the Mob Card page fetches. MeowDB's terms forbid scrapers (ADR 0003). OSMS has no terms, its `robots.txt` sets no rules, and its files are plain data, not pages to pick apart. Where both sites have a figure they agree (`docs/research/osms-data-explorer.md`). This supersedes ADR 0004 and ADR 0006, and ADR 0003 for maps and mobs (Saved Copies stay). It lifts ADR 0003's ban on a public release.
+Minerva now takes every map's and mob's data from the JSON files that OSMS Data Explorer (osmsdataexplorer.com) publishes for its own site, not from MeowDB's pages. The files cover the whole game, so one fetch of under 1 MB replaces the crawl of about 420 map pages and the Mob Card page fetches. MeowDB's terms forbid scrapers (ADR 0003). OSMS has no terms, its `robots.txt` sets no rules, and its files are plain data, not pages to pick apart. Where both sites have a figure they agree (`docs/research/osms-data-explorer.md`). This supersedes ADR 0004 and ADR 0006, and ADR 0003 for maps and mobs (Saved Copies stay). It lifts ADR 0003's ban on a public release.
 
 ## What comes from where
 
@@ -15,11 +15,11 @@ MapleCompass now takes every map's and mob's data from the JSON files that OSMS 
   - `map_manifest.json`: each map's picture.
   - `lookups.json`: names of maps outside `maps.json`.
 
-  They are fetched one at a time with MapleCompass's user agent, and no other pace. At launch the core looks at the set saved before, and uses it as it is while it's under a day old. Otherwise, and every 24 hours while running, the core has the set fetched afresh, so a set used at one daily ask is always fetched afresh at the next. A fetched set is saved only once the core's reader reads it, and is swapped in whole. A file that fails or isn't shaped as expected keeps the previous set. With no set saved, the core asks again every minute.
+  They are fetched one at a time with Minerva's user agent, and no other pace. At launch the core looks at the set saved before, and uses it as it is while it's under a day old. Otherwise, and every 24 hours while running, the core has the set fetched afresh, so a set used at one daily ask is always fetched afresh at the next. A fetched set is saved only once the core's reader reads it, and is swapped in whole. A file that fails or isn't shaped as expected keeps the previous set. With no set saved, the core asks again every minute.
 - **Saved Copies:** the panel says it shows a Saved Copy, with its date, only once the saved set is over 7 days old by the wall clock, because game data changes only on patch days. It says the format changed only when there's no previous set to fall back on, and that the map list couldn't be loaded only when nothing is saved.
-- **Not bundled:** OSMS's repo has no licence, so nothing grants redistribution. MapleCompass fetches the files and ships none of them. The tests use made-up worlds in OSMS's shape and a committed list of the game's map names (IDs, streets, names and regions only). Nothing on the site restricts fetching, so we didn't ask OSMS's author.
+- **Not bundled:** OSMS's repo has no licence, so nothing grants redistribution. Minerva fetches the files and ships none of them. The tests use made-up worlds in OSMS's shape and a committed list of the game's map names (IDs, streets, names and regions only). Nothing on the site restricts fetching, so we didn't ask OSMS's author.
 - **The map list:** IDs are zero-padded to the game's 9 digits, which are MeowDB's too, and names are trimmed. The one map with no name or street is left out, so 304 of the 305 are listed. Regions are OSMS's, and Search and routes leave out its "Event" and "Dev" maps.
-- **Map Summary:** OSMS doesn't give one, so MapleCompass computes it with MeowDB's rule.
+- **Map Summary:** OSMS doesn't give one, so Minerva computes it with MeowDB's rule.
   - A spawn point without a timer gives `3600 / 7.56` mobs an hour to a full party, and 0.75 of that to a player alone.
   - A timed spawn point gives `3600 / its timer`, alone or in a party. For a ranged timer (`"180.00-1800.00 [720.00]"`), the average OSMS gives is used.
   - Each mob's figure is rounded, and the map's is their sum, without the Mob Rate.
@@ -32,7 +32,7 @@ MapleCompass now takes every map's and mob's data from the JSON files that OSMS 
   - A figure the mob doesn't have, or has as 0, shows as "—". An element affinity the reader doesn't know makes the whole set a changed format.
 
   The Touch DMG and Speed rules were fitted to MeowDB's pages, not documented. The card drops its movement line, because OSMS can't tell a mob that jumps between floors from one that stays on its floor. The card's image is OSMS's default animation for the mob, which replaces maplestory.io's still.
-- **Links out stay on MeowDB.** A mob's name, the map's title and the open-page hotkey still open MeowDB's pages; its IDs are the game's. Item Lookup keeps calling MeowDB's search (ADR 0007), MapleCompass's only remaining request to MeowDB. With the crawl gone, its searches keep MeowDB's pace of one every 2 seconds themselves. The letter of MeowDB's terms (§4, "automated scripts, bots, or scrapers") arguably covers that search. Its Content Reuse Policy, aimed at bulk scraping and republishing, doesn't. We take it as a grey area to raise with MeowDB, not a bar to release. MeowDB has no search page a browser could be sent to instead: `/msclassic/search` doesn't exist, and `/msclassic/item-db?q=` ignores the query.
+- **Links out stay on MeowDB.** A mob's name, the map's title and the open-page hotkey still open MeowDB's pages; its IDs are the game's. Item Lookup keeps calling MeowDB's search (ADR 0007), Minerva's only remaining request to MeowDB. With the crawl gone, its searches keep MeowDB's pace of one every 2 seconds themselves. The letter of MeowDB's terms (§4, "automated scripts, bots, or scrapers") arguably covers that search. Its Content Reuse Policy, aimed at bulk scraping and republishing, doesn't. We take it as a grey area to raise with MeowDB, not a bar to release. MeowDB has no search page a browser could be sent to instead: `/msclassic/search` doesn't exist, and `/msclassic/item-db?q=` ignores the query.
 
 ## Portals on the Map Preview
 
@@ -42,12 +42,12 @@ OSMS gives a portal's position in the pixels of its own picture of the map, not 
 - **Marks:** every portal but those to the dead end, as on OSMS's site:
   - blue to another map, Doors included;
   - green, with dashed arrows to where it lands, for a teleport within the map;
-  - grey to a map MapleCompass doesn't know.
+  - grey to a map Minerva doesn't know.
 - **Hidden ones:** Hidden Portals and Quest Portals are dashed. A teleport within the map is never a Door, so an invisible one on a Town is dashed as hidden too, but it is never a Hidden Portal row. The Quest tag turns violet, so green means only "within the map".
 - **Rows and hover:** a row per Hidden Portal stays below the picture, or "No hidden portals". Hovering a mark or a row lights the other, and a mark's card names where it leads, its street and its kind. A click does nothing. Collapsing the section hides both, and its heading and the icon chip still count Hidden Portals.
 - **Shared titles:** maps sharing a title are still shown without asking when they'd show the same Map Summary, mobs and Hidden Portals, now compared by destination and kind. But they show no Map Preview until it's settled which one the player is on, since each has its own layout.
 
-Pictures and mob animations are named by content hash. The core asks for them one at a time, the shown map's picture ahead of its mobs' animations, and keeps each answer for the run. It asks again five minutes on when OSMS couldn't be reached, but not for a picture OSMS doesn't have. The shell keeps them on disk, touched on each use and deleted after 30 days unused, and the overlay loads them through MapleCompass's own `osmsimage` URL scheme, never from OSMS. While the picture loads, the preview says "Loading map…"; if it can't be had, "Couldn't load the map picture" stands above the rows.
+Pictures and mob animations are named by content hash. The core asks for them one at a time, the shown map's picture ahead of its mobs' animations, and keeps each answer for the run. It asks again five minutes on when OSMS couldn't be reached, but not for a picture OSMS doesn't have. The shell keeps them on disk, touched on each use and deleted after 30 days unused, and the overlay loads them through Minerva's own `osmsimage` URL scheme, never from OSMS. While the picture loads, the preview says "Loading map…"; if it can't be had, "Couldn't load the map picture" stands above the rows.
 
 ## Considered options
 

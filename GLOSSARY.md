@@ -1,4 +1,4 @@
-# MapleCompass
+# Minerva
 
 A helper overlay for MapleStory Classic World that recognises which map the player is on and tells them what is there: the mobs they can hunt and the hidden portals they would otherwise miss. While they hunt, it also measures how fast they are levelling.
 
@@ -7,7 +7,7 @@ A helper overlay for MapleStory Classic World that recognises which map the play
 ### Maps
 
 **Map**:
-A single in-game area the player occupies at one time; the unit MapleCompass identifies.
+A single in-game area the player occupies at one time; the unit Minerva identifies.
 _Avoid_: zone, area, level, field
 
 **Street Name**:
@@ -23,10 +23,10 @@ The specific name of a map (e.g. "Henesys Hunting Ground I"). Not guaranteed uni
 _Avoid_: title, map title
 
 **Minimap Title**:
-The street name and map name as rendered at the top of the in-game minimap; the signal MapleCompass recognises the map from.
+The street name and map name as rendered at the top of the in-game minimap; the signal Minerva recognises the map from.
 
 **Map Mark**:
-The small emblem the in-game minimap draws beside its title, for the area a map belongs to (Henesys's shield, Kerning City's stone, Sleepywood's skull). Many maps share one; a few have none. MapleCompass shows it beside a map's name, so a glance says where in the world the map is.
+The small emblem the in-game minimap draws beside its title, for the area a map belongs to (Henesys's shield, Kerning City's stone, Sleepywood's skull). Many maps share one; a few have none. Minerva shows it beside a map's name, so a glance says where in the world the map is.
 _Avoid_: map icon, region icon
 
 **Candidate**:
@@ -92,7 +92,7 @@ _Avoid_: spawn rate, mob density (when meaning spawn share)
 High, Medium or Low: how a map's density for a mob compares with that mob's densest map (High from two-thirds of it, Medium from one-third).
 
 **Distance**:
-The fewest map changes it takes to get from the player's current map to another map. A map change is going through a portal (but not a Quest Portal) or a ship ride, and, if the player has turned them on, a taxi ride or a Teleport Scroll. MapleCompass knows only which map the player is on, never where on it they stand.
+The fewest map changes it takes to get from the player's current map to another map. A map change is going through a portal (but not a Quest Portal) or a ship ride, and, if the player has turned them on, a taxi ride or a Teleport Scroll. Minerva knows only which map the player is on, never where on it they stand.
 _Avoid_: position, proximity
 
 **Search**:
@@ -100,11 +100,11 @@ The search view the 🔍 or the search hotkey (Ctrl+Shift+F by default) opens ov
 _Avoid_: mob search, item search
 
 **Hunting Target**:
-The mob and map the player picked in Search (the mob, then one of its maps) to go and hunt. MapleCompass shows the way there from the player's current map, then that they have arrived, until they leave that map or clear it.
+The mob and map the player picked in Search (the mob, then one of its maps) to go and hunt. Minerva shows the way there from the player's current map, then that they have arrived, until they leave that map or clear it.
 _Avoid_: waypoint, goal
 
 **Destination**:
-A map the player picked in Search to go to, with no mob in mind. MapleCompass shows the way there as for a Hunting Target, in its place: there is one or the other, whichever the player picked last. Picked on the map the player is on, it says they are there at once.
+A map the player picked in Search to go to, with no mob in mind. Minerva shows the way there as for a Hunting Target, in its place: there is one or the other, whichever the player picked last. Picked on the map the player is on, it says they are there at once.
 _Avoid_: waypoint, goal, target (alone)
 
 **Ship**:
@@ -128,7 +128,7 @@ The window beside the panel, turned on at setup by marking the EXP Bar Region, t
 _Avoid_: EXP tracking, EXP tracker
 
 **Session**:
-The stretch of play MapleCompass measures rates over, from the first EXP gain until the player resets it or switches character. A reset can be undone until the next EXP gain. Idle stretches pause it rather than count against it, and so does a stretch when the EXP bar can't be read; what the EXP did over one too long to be a gap in play isn't counted either. A misread that leads MapleCompass to learn the level's total wrong doesn't end it: the total is learned again.
+The stretch of play Minerva measures rates over, from the first EXP gain until the player resets it or switches character. A reset can be undone until the next EXP gain. Idle stretches pause it rather than count against it, and so does a stretch when the EXP bar can't be read; what the EXP did over one too long to be a gap in play isn't counted either. A misread that leads Minerva to learn the level's total wrong doesn't end it: the total is learned again.
 _Avoid_: run, grind (the Grind Tracker measures a Session; "grind" alone names nothing)
 
 **EXP Bar Region**:
@@ -148,7 +148,7 @@ Every map's Personal Best side by side, in a window over the game that the Grind
 _Avoid_: leaderboard, records, best list, Personal Bests page
 
 **Visit**:
-The stretch from the panel confirming a map until it confirms another. Losing the title for a while doesn't end it; closing MapleCompass does.
+The stretch from the panel confirming a map until it confirms another. Losing the title for a while doesn't end it; closing Minerva does.
 _Avoid_: stay, trip
 
 **Visit History**:
@@ -174,7 +174,7 @@ Something the player can hold in the inventory: equipment, potions, scrolls, cha
 _Avoid_: drop, loot (when meaning the item itself)
 
 **Item Tooltip**:
-The box the game draws by the mouse pointer when the player hovers an item: the item's name on the line with the blue bullet (a crafted item's maker sits above it), then its picture and figures. It is the game's, not ours: the Item Card and the Mob Card are MapleCompass's own.
+The box the game draws by the mouse pointer when the player hovers an item: the item's name on the line with the blue bullet (a crafted item's maker sits above it), then its picture and figures. It is the game's, not ours: the Item Card and the Mob Card are Minerva's own.
 
 **Item Card**:
 The card the hotkey (Ctrl+Shift+I by default) shows at the pointer for the item whose Item Tooltip the game shows there, or Search shows beside the panel for an item picked there: what a shop pays for it, and the market prices the player keeps for it on their Market Lines (typed into the card, with a button that opens MesoWatch to look it up). It stays until the player closes it or presses the hotkey again, where the player drags it by its bar, and its name opens the item's MeowDB page. When items that don't look alike share the name, it first lists them, with their pictures, for the player to pick.
@@ -191,5 +191,5 @@ _Avoid_: item search (Search is the search view's)
 ### Reporting bugs
 
 **Bug Report**:
-The `.zip` MapleCompass saves when the player chooses Bug Report in the tray menu, to go with a bug's issue: everything it read and made of it since launch (up to a day), with crops of the regions it captured. Fed back to the core, it goes through the same states again (ADR 0009).
+The `.zip` Minerva saves when the player chooses Bug Report in the tray menu, to go with a bug's issue: everything it read and made of it since launch (up to a day), with crops of the regions it captured. Fed back to the core, it goes through the same states again (ADR 0009).
 _Avoid_: log, diagnostics, dump, trace (to the player; "trace" is its record of inputs, in the code)

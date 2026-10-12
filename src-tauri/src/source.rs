@@ -11,9 +11,9 @@ use crate::meowdb::ItemSearch;
 use crate::osms::OsmsSet;
 use crate::osms_items::OsmsItems;
 use crate::pictures::Pictures;
-use compass_core::osms::{OsmsFiles, SavedFiles};
-use compass_core::osms_items::{ItemFiles, SavedItemFiles};
-use compass_core::{Fetched, ItemHit, MapDataSource, SourceError};
+use minerva_core::osms::{OsmsFiles, SavedFiles};
+use minerva_core::osms_items::{ItemFiles, SavedItemFiles};
+use minerva_core::{Fetched, ItemHit, MapDataSource, SourceError};
 use std::path::PathBuf;
 use std::task::Poll;
 
