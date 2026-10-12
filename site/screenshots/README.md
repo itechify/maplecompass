@@ -14,8 +14,8 @@ The pictures on the Minerva site, taken by hand in the game. The site's build fa
 
 | File | What it shows | Size | Taken on |
 | --- | --- | --- | --- |
-| `hero.png` | The minimap on a hunting map (Henesys Hunting Ground I) and the panel under it naming the same map beside its Map Mark, down through its Map and Mobs sections to the panel's foot, with a strip of the game beside it. Also the picture links to the site show (Discord, Reddit). | 600×960, the game window's top-left corner, its title bar included | 0.8.0 |
-| `game-window.png` | The game on the same map, with the panel inside the game window under the minimap showing its Map and Mobs sections, every mob listed, and the Grind Tracker under it. Also the hero's film, which marks and reads the minimap's title and drops the read into the panel's title: a retake that moves either title, or changes the map, means setting where they are and what the title says at the top of `site/reel.ts`. | 1922×1232, the whole window | 0.8.0 |
+| `hero.png` | The minimap on a hunting map (Henesys Hunting Ground I) and the panel under it naming the same map beside its Map Mark, down through its Map and Mobs sections to the panel's foot, with a strip of the game beside it. Also the picture links to the site show (Discord, Reddit). | 600×960, the game window's top-left corner, its title bar included | 0.9.0 |
+| `game-window.png` | The game on the same map, with the panel inside the game window under the minimap showing its Map and Mobs sections, every mob listed. Also the hero's film, which marks and reads the minimap's title and drops the read into the panel's title: a retake that moves either title, or changes the map, means setting where they are and what the title says at the top of `site/reel.ts`. | 1922×1232, the whole window | 0.9.0 |
 | `map.png` | The Map section on a map with a Hidden Portal: the Map Preview with its rings, the pointer resting on the dashed ring with its card showing, and the Hidden Portal's row, each with its destination's Map Mark. | 332×247, the panel's Map section | 0.8.0 |
 | `navigation.png` | The Map section with the next portal's magenta ring, and Navigation with a Hunting Target: the mob, the figures, and the route from the map you're on, each map with its Map Mark. | 317×475, the panel's Map and Navigation sections | 0.8.0 |
 | `grind-tracker.png` | The Grind Tracker: Time to Level, the rates, a Best row and the EXP gauge at its foot. | 280×159, the Grind Tracker's window | 0.7.0 |
@@ -26,5 +26,3 @@ The pictures on the Minerva site, taken by hand in the game. The site's build fa
 ## Retake
 
 When a change alters something a shot shows, the PR that makes it lists the shot here, with what changed. At release, the smoke test retakes every shot listed (`docs/releasing.md`) and empties the list.
-
-- `game-window.png` and `hero.png`: the app is Minerva now. The panel's window bar shows the owl and "Minerva" where it showed the compass and "MapleCompass". Retake the game window and cut the hero from it again, keeping the same map with the minimap's title and the panel's where they are, so `site/reel.ts` needs no change.
