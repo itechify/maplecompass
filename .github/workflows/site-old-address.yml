@@ -1,0 +1,39 @@
+# Publishes a page at the site's old address, itechify.github.io/minerva/, that sends a
+# visitor on to owlofminerva.app (.github/old-site-address). Minerva 0.9.0's About & Credits
+# and older release notes link there. Run it by hand from main; GitHub Pages keeps serving
+# the page until it is published again.
+name: Old site address
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # A missing page (an old picture's address) sends the visitor on as well.
+      - run: cp .github/old-site-address/index.html .github/old-site-address/404.html
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: .github/old-site-address
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

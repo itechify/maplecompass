@@ -5,9 +5,9 @@ import { defineConfig, type Plugin } from "vite";
 import pkg from "../package.json" with { type: "json" };
 import { hotkeyRows } from "./hotkeys.ts";
 
-// The Minerva site: one page for players, published on GitHub Pages from a release's
-// tag (.github/workflows/site.yml). `pnpm site:dev` serves it, `pnpm site:build` builds it
-// into site/dist.
+// The Minerva site: one page for players, published on Cloudflare from a release's tag
+// (.github/workflows/site.yml, site/wrangler.jsonc). `pnpm site:dev` serves it,
+// `pnpm site:build` builds it into site/dist.
 
 /** Where the site is published, for the links that must be absolute (Open Graph). */
 const SITE_URL = "https://owlofminerva.app/";
@@ -165,7 +165,8 @@ function themeWithoutFonts(): Plugin {
 export default defineConfig({
   root: "site",
   base: "/",
-  publicDir: false,
+  // Copied into the build as they are: Cloudflare's _headers.
+  publicDir: "public",
   plugins: [
     fillPlaceholders(),
     screenshotSizes(),

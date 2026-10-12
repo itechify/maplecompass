@@ -1,8 +1,9 @@
-# Publishes the Minerva site (site/) to GitHub Pages. It describes a release, so it is
-# built from that release's tag when the release is published. Run it by hand to publish
-# again: from the latest release's tag by default, or from another tag, branch or commit.
-# GitHub Pages serves it at owlofminerva.app: the domain is set in the repo's Pages settings
-# (a workflow's deploy ignores a CNAME file), and its DNS is on Cloudflare.
+# Publishes the Minerva site (site/) to Cloudflare, at owlofminerva.app (site/wrangler.jsonc).
+# It describes a release, so it is built from that release's tag when the release is
+# published. Run it by hand to publish again: from the latest release's tag by default, or
+# from another tag, branch or commit. A tag up to v0.9.0 has no site/wrangler.jsonc,
+# so it won't publish. The `site` environment holds the Cloudflare API token
+# (CLOUDFLARE_API_TOKEN) and lets only main and release tags use it.
 name: Site
 
 on:
@@ -17,16 +18,17 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: site
   cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: site
+      url: https://owlofminerva.app/
     steps:
       - name: Choose the ref
         id: ref
@@ -57,17 +59,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm site:build
-      - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: site/dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v5
+      # npx rather than pnpm dlx, which won't run wrangler's install scripts unasked.
+      - name: Deploy to Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx --yes wrangler@4 deploy --config site/wrangler.jsonc
