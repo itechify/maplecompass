@@ -1,7 +1,8 @@
 /* The Minerva site: one of the game's windows opened wide, in setup's opaque language
    and a reading size of its own, standing on the overlay's glass periwinkle as the Personal
-   Bests page does. Its raised tabs file the manual. The tokens are the app's (theme.css,
-   without its TTF faces); see DESIGN.md. No motion: the game's windows don't animate. */
+   Bests page does. Its raised tabs are its pages: Home and the FAQ. The tokens are the
+   app's (theme.css, without its TTF faces); see DESIGN.md. No motion: the game's windows
+   don't animate. */
 
 /* NEXON's Maplestory typeface (assets/fonts/NOTICE.md), as WOFF2 copies of the files the
    app bundles. Over the web it may arrive after the page, so the text draws in Arial first
@@ -49,17 +50,6 @@ body {
   color: var(--ink);
   font: 16px/26px var(--font);
   -webkit-text-size-adjust: 100%;
-}
-
-/* For screen readers only. */
-.vh {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 
 .skip {
@@ -188,7 +178,7 @@ a:active {
   background: var(--button-light);
   box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
 }
-.tab[aria-current="location"] {
+.tab[aria-current="page"] {
   padding-top: 9px;
   border-color: var(--window-edge);
   border-bottom-color: var(--body-solid);
@@ -250,7 +240,7 @@ a:active {
   line-height: 18px;
 }
 
-/* ---- Get started: the window's opening ---- */
+/* ---- The hero: the home page's opening ---- */
 
 .hero {
   display: grid;
@@ -299,8 +289,7 @@ h1 {
 .actions + .fine {
   text-wrap: balance;
 }
-/* A fact or a button's name the fine print never breaks: the platform, "Run anyway". */
-.fine .whole,
+/* A button's name the fine print never breaks: "Run anyway". */
 .fine strong {
   white-space: nowrap;
 }
@@ -318,30 +307,33 @@ h1 {
   }
 }
 
-/* The problem note, for the account risk alone: Problem Cream with an orange dot. */
-.note.problem {
-  position: relative;
+/* What Minerva costs and asks of you, the facts a player checks first, in one line. */
+.trust {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 18px;
   margin: 18px 0 0;
-  padding: 9px 14px 10px 32px;
-  border: 1px solid var(--problem-edge);
-  border-radius: 4px;
-  background: var(--problem-bg);
-  color: var(--problem-ink);
+  padding: 0;
+  list-style: none;
   font-size: 14px;
-  line-height: 21px;
-  /* Two lines of even length, not a third holding "own risk." alone. */
-  text-wrap: balance;
+  font-weight: 700;
+  line-height: 22px;
+  color: var(--ink-2);
 }
-.note.problem::before {
+/* Each fact led by a small dot, so a line that wraps starts on a fact. */
+.trust li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  white-space: nowrap;
+}
+.trust li::before {
   content: "";
-  position: absolute;
-  left: 13px;
-  top: 16px;
-  width: 8px;
-  height: 8px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  background: var(--orange);
-  box-shadow: 0 0 0 1px var(--orange-deep);
+  background: var(--ink-3);
 }
 
 /* ---- Screenshots: the game as it is, at full size where they fit ---- */
@@ -360,10 +352,6 @@ h1 {
   border: 1px solid var(--window-edge);
   border-radius: 4px;
   background: var(--select);
-}
-/* A shot within a topic's words, after the paragraph it shows. */
-.shot.in-text {
-  margin-top: 22px;
 }
 figcaption {
   margin-top: 8px;
@@ -552,130 +540,43 @@ figcaption {
 .reel-captions > span {
   grid-area: 1 / 1;
 }
+/* ---- The page's parts ---- */
 
-/* ---- The tabs' pages ---- */
-
-.tab-page {
-  padding-bottom: 32px;
-}
-.tab-page + .tab-page {
+/* The home page's two parts (what it does, getting started) and the FAQ's three, parted by
+   a Window Rule. */
+.part + .part {
+  margin-top: 72px;
   border-top: 1px solid var(--rule);
-  padding-top: 40px;
 }
-.tab-opener h2 {
-  margin: 0;
+
+h2 {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 14px;
   font-size: 30px;
   line-height: 36px;
   font-weight: 700;
+  text-wrap: balance;
 }
-.tab-opener p {
-  margin: 6px 0 0;
-  font-size: 17px;
-  line-height: 26px;
-  color: var(--ink-2);
+/* A heading's mark stands centred on its first line, however the heading wraps. */
+h2 > .mark.ring,
+h2 > .mark.route {
+  margin-top: calc((1lh - 14px) / 2);
 }
-/* The tab's topics, one line under its opener. */
-.tab-opener .in-tab {
-  margin-top: 10px;
-  font-size: 14px;
-  line-height: 22px;
+h2 > .mark.mob {
+  margin-top: calc((1lh - 11px) / 2);
 }
-.in-tab a {
-  color: var(--ink);
-}
-.start-index {
-  margin: 28px 0 0;
-  font-size: 14px;
-  line-height: 22px;
-}
-
-/* A topic: its words at a reading measure, and its screenshot beside them. */
-.topic {
-  display: grid;
-  grid-template-columns: minmax(0, 38em);
-  gap: 48px;
-  padding-top: 48px;
-}
-.topic.with-shot,
-.topic.with-aside {
-  grid-template-columns: minmax(0, 38em) minmax(0, 1fr);
-}
-/* A shot too wide for the space beside the measure keeps its own size, and the words
-   narrow beside it. */
-.topic.with-shot.full-shot {
-  grid-template-columns: minmax(24em, 1fr) minmax(0, max-content);
-}
-/* Reference beside the words (the files, the buttons, what's kept where), set into the
-   body as an inset box, as the panel sets a list into its own. */
-.aside {
-  align-self: start;
-  margin-top: 42px;
-  padding: 14px 18px 16px;
-  border: 1px solid var(--inset-edge);
-  border-radius: 4px;
-  background: var(--inset-bg);
-  font-size: 15px;
-  line-height: 23px;
-}
-.aside h4 {
-  margin: 0 0 10px;
-  font-size: 15px;
-  line-height: 22px;
-}
-.aside p,
-.aside ul,
-.aside dl {
-  margin-bottom: 16px;
-}
-.aside > :last-child {
-  margin-bottom: 0;
-}
-/* A topic of short entries across the window's width, two to a row, its words still at the
-   measure. */
-.topic.wide {
-  grid-template-columns: minmax(0, 1fr);
-}
-.topic.wide p {
-  max-width: 38em;
-}
-.trouble {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px 48px;
-  margin-bottom: 24px;
-}
-.trouble dt {
-  font-weight: 700;
-}
-.trouble dd {
-  margin: 2px 0 0;
-}
-/* Two short topics side by side, each at its own measure. */
-.topic-pair {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 48px;
-}
-.topic-text > :last-child {
-  margin-bottom: 0;
+h2 > .star {
+  margin-top: calc((1lh - 18px) / 2);
 }
 h3 {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 12px;
-  font-size: 23px;
-  line-height: 30px;
-  font-weight: 700;
-}
-h4 {
-  margin: 32px 0 8px;
+  margin: 32px 0 10px;
   font-size: 17px;
   line-height: 24px;
   font-weight: 700;
 }
-/* Paragraphs parted by most of a line, so each reads as a unit and a topic never sets as
-   one grey block. */
+/* Paragraphs parted by most of a line, so each reads as a unit. */
 p,
 ul,
 ol,
@@ -697,21 +598,6 @@ ol > li::marker {
   font-weight: 700;
   color: var(--ink-2);
 }
-/* A run-in: the bold words a paragraph opens on, naming what it turns to, so a topic can
-   be read down its left edge. A topic's first paragraph says what it is and has none. */
-.run-in {
-  font-weight: 700;
-}
-/* A list of one-line fragments (the ring key, Item Lookup's outcomes), set close. */
-.key-list li + li,
-.brief li + li {
-  margin-top: 3px;
-}
-/* A list of named cases (the placements), each led by its run-in rather than a bullet. */
-.terms {
-  list-style: none;
-  padding: 0;
-}
 p,
 li,
 dd,
@@ -721,17 +607,330 @@ figcaption {
 strong {
   font-weight: 700;
 }
-/* A topic's edge cases, after its main words: the aside's size, in Ink Steel. */
-.detail {
+
+/* ---- A feature: its shot on a stage, beside its title, a sentence or two and its
+   most-asked questions ---- */
+
+/* The shot keeps its own size while the words keep 24em; a scene from the game gives way
+   first, on a window too narrow for both. */
+.feature {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(24em, 30em);
+  justify-content: center;
+  align-items: start;
+  gap: 64px;
+  padding-top: 88px;
+}
+/* Every other feature turns, its shot on the right, so the page zigzags down as the
+   minimap's way does. */
+.feature:nth-of-type(even) {
+  grid-template-columns: minmax(24em, 30em) minmax(0, max-content);
+}
+.feature:nth-of-type(even) > .stage {
+  order: 2;
+}
+.feature-text {
+  padding-top: 8px;
+}
+.feature-lede {
+  margin: 0;
+  font-size: 17px;
+  line-height: 28px;
+}
+
+/* The stage a crop of the panel stands on, the band's lavender, the same size for every
+   crop so the features keep one rhythm. A scene from the game (the Item Card's, Item
+   Lookup's) is its own stage. */
+.stage {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: 440px;
+  max-width: 100%;
+  min-height: 320px;
+  padding: 40px;
+  border-radius: 4px;
+  background: var(--tab-band);
+}
+.stage.scene {
+  width: auto;
+  min-height: 0;
+  padding: 0;
+  background: none;
+}
+
+/* ---- Questions: each folded to its question, as the panel folds a section to its
+   heading, set into the body as the settings view sets its rows ---- */
+
+/* A section's questions on the home page, and the way to the rest of their group. */
+.qa-block {
+  margin-top: 24px;
+}
+.qa-list {
+  overflow: hidden;
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--inset-bg);
+}
+.qa + .qa {
+  border-top: 1px solid var(--rule);
+}
+.qa > summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 10px 12px 10px 16px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 22px;
+  list-style: none;
+  cursor: pointer;
+}
+.qa > summary::-webkit-details-marker {
+  display: none;
+}
+.qa > summary > span:first-child {
+  flex: 1;
+  min-width: 0;
+  text-wrap: pretty;
+}
+.qa > summary:hover {
+  background: color-mix(in srgb, var(--edit) 8%, transparent);
+}
+.qa > summary:focus-visible {
+  outline-offset: -2px;
+}
+
+/* The panel's fold button at the question's right: a plus while it's folded, a dash while
+   it's open. */
+.fold {
+  flex: none;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 19px;
+  height: 19px;
+  margin-top: 1.5px;
+  border: 1px solid var(--window-edge);
+  border-radius: 2px;
+  background: var(--button-light);
+  box-shadow: inset 0 1px 0 #fff;
+  color: var(--ink);
+}
+.fold svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.qa[open] .fold .post {
+  display: none;
+}
+.qa > summary:hover .fold {
+  background: var(--button-light-hover);
+}
+.qa > summary:active .fold {
+  background: var(--button-light);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
+}
+
+.qa-answer {
+  padding: 0 16px 14px;
+  font-size: 15px;
+  line-height: 23px;
+}
+.qa-answer p,
+.qa-answer ul,
+.qa-answer dl {
+  margin-bottom: 12px;
+}
+.qa-answer li + li {
+  margin-top: 4px;
+}
+.qa-link {
+  font-size: 13px;
+  line-height: 18px;
+}
+.qa-answer .qa-link {
+  margin: 0;
+}
+.qa-link a {
+  color: var(--ink-2);
+}
+/* The rest of a feature's group, on the FAQ. */
+.qa-more {
+  margin: 12px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 22px;
+}
+
+/* ---- The owl, speaking as the game's NPCs do: its portrait over its name tag at the left,
+   its words beside them, and under them its choices or its button ---- */
+
+.npc {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+  padding: 16px 22px 18px 16px;
+  border: 1px solid var(--window-edge);
+  border-radius: 4px;
+  background: #fff;
+}
+.npc-portrait {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+/* The owl's 37×42 drawing at three times its size, pixel for pixel, on the Mini Map's sky. */
+.npc-portrait img {
+  box-sizing: content-box;
+  width: 111px;
+  height: 126px;
+  padding: 10px 14px 6px;
+  border: 1px solid var(--title-outline);
+  border-radius: 4px;
+  background: var(--title-panel);
+  image-rendering: pixelated;
+}
+/* The name tag under an NPC, as the game sets it: light on dark. */
+.npc-name {
+  margin: 0;
+  padding: 1px 10px 2px;
+  border-radius: 3px;
+  background: var(--frame);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 18px;
+}
+.npc-words {
+  padding-top: 6px;
+}
+.npc-words p {
+  margin: 0 0 16px;
+  font-size: 17px;
+  line-height: 28px;
+}
+.npc-words > :last-child {
+  margin-bottom: 0;
+}
+/* The NPC's button at the foot of its words, at the right as the game puts it. */
+.npc-words .npc-buttons {
+  margin: 0;
+  text-align: right;
+}
+/* The NPC's choices, in the game's blue, as it lists what you can ask. */
+.npc-choices {
+  columns: 2;
+  column-gap: 32px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.npc-choices li {
+  margin: 0;
+  break-inside: avoid;
+}
+.npc-choices a {
+  display: inline-block;
+  padding: 3px 0;
+  color: var(--portal);
+  font-weight: 700;
+  text-decoration-color: transparent;
+}
+.npc-choices a:hover {
+  text-decoration-color: currentColor;
+}
+
+/* ---- Getting started ---- */
+
+/* The setup warning, word for word, at a reading measure, and its questions beside it. */
+.safety {
+  display: grid;
+  grid-template-columns: minmax(0, 34em) minmax(0, 1fr);
+  gap: 64px;
+  align-items: start;
+  padding-top: 64px;
+}
+.safety ul {
+  margin-bottom: 0;
+}
+/* Level with the warning's first line, under the heading beside it. */
+.safety > .qa-block {
+  margin-top: 50px;
+}
+
+/* Three steps beside the owl, and the whole game window with the panel in it. */
+.start {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 608px);
+  gap: 56px;
+  align-items: start;
+  padding-top: 64px;
+}
+.start .npc {
+  margin-bottom: 28px;
+}
+.start .shot {
+  margin-top: 50px;
+}
+.steps {
+  margin: 0;
+}
+.steps li + li {
+  margin-top: 12px;
+}
+
+.keys {
+  display: grid;
+  grid-template-columns: minmax(0, 26em) minmax(0, 32em);
+  gap: 64px;
+  align-items: start;
+  padding: 64px 0 40px;
+}
+
+/* ---- The FAQ ---- */
+
+.faq-head {
+  padding: 40px 0 8px;
+}
+.faq-head .npc {
+  max-width: 50em;
+}
+/* A group: its heading and what it covers held at the left as its questions go by, the
+   questions at a reading measure beside them. */
+.faq-group {
+  display: grid;
+  grid-template-columns: minmax(0, 16em) minmax(0, 44em);
+  gap: 56px;
+  align-items: start;
+  padding-top: 64px;
+}
+.faq-group-head {
+  position: sticky;
+  top: calc(var(--head) + 24px);
+}
+.faq-group h2 {
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 23px;
+  line-height: 30px;
+}
+.faq-group-head p {
+  margin: 0;
   font-size: 15px;
   line-height: 23px;
   color: var(--ink-2);
 }
-/* A step's finer points, on their own line under it. */
-li > .detail {
-  display: block;
+.faq-group-body > h3:first-child {
   margin-top: 2px;
 }
+
+/* ---- Inline pieces, as the panel draws them ---- */
 
 /* A key as the game's settings view sets it: bold ink, here on an inset chip so it stands
    out of a sentence. */
@@ -804,6 +1003,9 @@ code.path {
 .key-list {
   list-style: none;
   padding: 0;
+}
+.key-list li + li {
+  margin-top: 3px;
 }
 .ring-key {
   display: inline-block;
@@ -985,12 +1187,6 @@ code.path {
   color: var(--ink);
 }
 
-/* The step forward, at the right as setup puts it. */
-.next {
-  margin: 36px 0 0;
-  text-align: right;
-}
-
 /* ---- The window's foot: the credits ---- */
 
 .window-foot {
@@ -1021,10 +1217,10 @@ code.path {
   break-inside: avoid;
 }
 
-/* ---- The manual's minimap ---- */
+/* ---- The page's minimap ---- */
 
-/* The manual drawn as one of the game's maps, in the game's Mini Map window (minimap.ts):
-   docked at the top left beside the manual on a screen wide enough, where the game keeps
+/* The page drawn as one of the game's maps, in the game's Mini Map window (minimap.ts):
+   docked at the top left beside the page on a screen wide enough, where the game keeps
    its own, and staying in sight as the page scrolls. Its map is the game's: the night
    behind the platforms, grass-topped ledges, ropes between them and the ground below,
    with the panel's portal rings and the player's yellow dot. Its colours are its own:
@@ -1319,26 +1515,66 @@ button.icon-button:active {
 
 /* ---- Narrower ---- */
 
+/* Too narrow for the owl and the whole game window side by side: the window goes under the
+   steps. */
+@media (max-width: 1180px) {
+  .start {
+    grid-template-columns: minmax(0, 38em);
+    gap: 32px;
+  }
+  .start .shot {
+    margin-top: 0;
+  }
+}
+
 @media (max-width: 960px) {
   .hero,
-  .topic.with-shot,
-  .topic.with-shot.full-shot,
-  .topic.with-aside,
-  .topic-pair {
+  .safety,
+  .start,
+  .keys,
+  .faq-group {
     grid-template-columns: minmax(0, 38em);
     gap: 24px;
   }
-  .topic-pair {
-    gap: 0;
-  }
-  .trouble {
-    grid-template-columns: minmax(0, 38em);
-  }
-  .aside {
-    margin-top: 0;
-  }
   .hero {
     padding-top: 32px;
+  }
+  /* A feature reads down: its title and words, its shot, then its questions. */
+  .feature,
+  .feature:nth-of-type(even) {
+    grid-template-columns: minmax(0, 38em);
+    justify-content: start;
+    gap: 0;
+    padding-top: 64px;
+  }
+  .feature-text {
+    display: contents;
+  }
+  .feature h2 {
+    order: 1;
+  }
+  .feature-lede {
+    order: 2;
+  }
+  .feature > .stage,
+  .feature:nth-of-type(even) > .stage {
+    order: 3;
+    margin-top: 24px;
+  }
+  .feature .qa-block {
+    order: 4;
+  }
+  .safety > .qa-block {
+    margin-top: 0;
+  }
+  .stage {
+    width: auto;
+  }
+  .faq-group {
+    gap: 16px;
+  }
+  .faq-group-head {
+    position: static;
   }
 }
 
@@ -1378,14 +1614,14 @@ button.icon-button:active {
   .window-head {
     display: contents;
   }
-  /* Every tab in sight: two rows of three, each tab whole and a thumb's height. As in the
-     game, the others sit dimmer and the open one is the bright, framed one. */
+  /* Both pages side by side, each a thumb's height. As in the game, the other sits dimmer
+     and the open one is the bright, framed one. */
   .tabs {
     position: sticky;
     top: 0;
     z-index: 10;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 4px;
     padding: 6px 10px 8px;
   }
@@ -1402,7 +1638,7 @@ button.icon-button:active {
   .tab:hover {
     background: var(--button-light-hover);
   }
-  .tab[aria-current="location"] {
+  .tab[aria-current="page"] {
     padding-top: 11px;
     border-color: var(--window-edge);
     background: var(--body-solid);
@@ -1421,32 +1657,69 @@ button.icon-button:active {
     font-size: 32px;
     line-height: 38px;
   }
-  .lede {
-    font-size: 16px;
+  h2 {
+    font-size: 26px;
+    line-height: 32px;
+  }
+  .faq-group h2 {
+    font-size: 20px;
     line-height: 26px;
   }
-  /* Rows of links, tall enough to tap. */
-  .tab-opener .in-tab,
-  .start-index {
-    line-height: 28px;
+  .lede,
+  .feature-lede,
+  .npc-words p {
+    font-size: 16px;
+    line-height: 26px;
   }
   .fine {
     line-height: 24px;
   }
-  .detail {
-    font-size: 14px;
-    line-height: 22px;
+  .feature,
+  .feature:nth-of-type(even) {
+    padding-top: 56px;
   }
-  .tab-opener h2 {
-    font-size: 26px;
-    line-height: 32px;
+  .stage {
+    min-height: 0;
+    padding: 24px 12px;
   }
-  h3 {
-    font-size: 20px;
-    line-height: 26px;
+  .qa > summary {
+    padding: 11px 10px 11px 12px;
   }
-  .topic {
-    padding-top: 40px;
+  .qa-answer {
+    padding: 0 12px 12px;
+  }
+  /* The owl at twice its size, beside its words. */
+  .npc {
+    gap: 14px;
+    padding: 12px 14px 14px 12px;
+  }
+  .npc-portrait img {
+    width: 74px;
+    height: 84px;
+    padding: 6px 8px 4px;
+  }
+  .npc-words {
+    padding-top: 0;
+  }
+  .npc-choices {
+    columns: 1;
+  }
+  .npc-words .npc-buttons {
+    text-align: left;
+  }
+  .part + .part {
+    margin-top: 56px;
+  }
+  .safety,
+  .start,
+  .faq-group {
+    padding-top: 48px;
+  }
+  .keys {
+    padding-top: 48px;
+  }
+  .faq-head {
+    padding-top: 28px;
   }
   .credits {
     columns: 1;
@@ -1454,12 +1727,5 @@ button.icon-button:active {
   .window-foot {
     padding: 24px 18px 28px;
     border-radius: 0;
-  }
-}
-
-/* The narrowest phones: "Where you are" still whole in its third of the strip. */
-@media (max-width: 340px) {
-  .tab {
-    font-size: 12px;
   }
 }

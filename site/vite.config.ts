@@ -4,18 +4,26 @@ import sharp from "sharp";
 import { defineConfig, type Plugin } from "vite";
 import pkg from "../package.json" with { type: "json" };
 import { hotkeyRows } from "./hotkeys.ts";
+import { fillFaqPage, fillQuestionLists, readFaq } from "./questions.ts";
 
-// The Minerva site: one page for players, published on Cloudflare from a release's tag
+// The Minerva site for players: the home page (site/index.html) and the FAQ
+// (site/faq/index.html), published on Cloudflare from a release's tag
 // (.github/workflows/site.yml, site/wrangler.jsonc). `pnpm site:dev` serves it,
 // `pnpm site:build` builds it into site/dist.
+
+const HOME = fileURLToPath(new URL("./index.html", import.meta.url));
+const FAQ = fileURLToPath(new URL("./faq/index.html", import.meta.url));
+/** Whether a page being built is the home page. */
+const isHome = (file: string) => file.replace(/\\/g, "/") === HOME.replace(/\\/g, "/");
 
 /** Where the site is published, for the links that must be absolute (Open Graph). */
 const SITE_URL = "https://owlofminerva.app/";
 const RELEASES = "https://github.com/itechify/minerva/releases";
 
 /**
- * The page's placeholders, filled at build: the version it describes (package.json's, which
- * at a release's tag is the release's), that version's downloads, and the hotkey table.
+ * The pages' placeholders, filled at build: the version they describe (package.json's, which
+ * at a release's tag is the release's), that version's downloads, the hotkey table and the
+ * credits.
  */
 function fillPlaceholders(): Plugin {
   const version = pkg.version;
@@ -26,11 +34,36 @@ function fillPlaceholders(): Plugin {
     "@SITE_URL@": SITE_URL,
     "@HOTKEY_ROWS@": hotkeyRows(),
   };
+  // The credits close both pages, written once.
+  const credits = fileURLToPath(new URL("./credits.html", import.meta.url));
   return {
     name: "minerva-site:placeholders",
     transformIndexHtml: {
       order: "pre",
-      handler: (html) => html.replace(/@[A-Z_]+@/g, (token) => values[token] ?? token),
+      handler: (html) =>
+        html
+          .replace("@CREDITS@", () => readFileSync(credits, "utf8").trim())
+          .replace(/@[A-Z_]+@/g, (token) => values[token] ?? token),
+    },
+  };
+}
+
+/**
+ * The FAQ's questions, each written once on the FAQ page: drawn there, and copied into the
+ * home page where it names them (site/questions.ts). An edit to the FAQ reloads both.
+ */
+function questions(): Plugin {
+  return {
+    name: "minerva-site:questions",
+    transformIndexHtml: {
+      order: "pre",
+      handler(html, ctx) {
+        const faq = readFaq(readFileSync(FAQ, "utf8"));
+        return isHome(ctx.filename) ? fillQuestionLists(html, faq) : fillFaqPage(html, faq);
+      },
+    },
+    handleHotUpdate({ file, server }) {
+      if (file.replace(/\\/g, "/") === FAQ.replace(/\\/g, "/")) server.ws.send({ type: "full-reload" });
     },
   };
 }
@@ -47,16 +80,21 @@ function screenshots(): Plugin {
     apply: "build",
     transformIndexHtml: {
       order: "post",
-      handler(html) {
-        const missing = [...html.matchAll(/<img[^>]*\bsrc="\.?\/?(screenshots\/[^"]+)"/g)].map((m) => `site/${m[1]}`);
+      handler(html, ctx) {
+        const missing = [...html.matchAll(/<img[^>]*\bsrc="(?:\.\.?\/)*\/?(screenshots\/[^"]+)"/g)].map((m) => `site/${m[1]}`);
         if (missing.length > 0) {
           throw new Error(`site: not taken yet: ${missing.join(", ")} (see site/screenshots/README.md)`);
         }
-        const hero = /<img[^>]*\bid="hero-shot"[^>]*\bsrc="([^"]+)"/.exec(html)?.[1];
-        if (!hero) throw new Error("site: the hero shot (img#hero-shot) is missing from the page");
-        // The address as Vite writes it from the site's root (it fills in the file's name
-        // last), after the site's origin.
-        return html.replace(/@CARD_IMAGE@/g, new URL(SITE_URL).origin + hero);
+        if (isHome(ctx.filename) && !/<img[^>]*\bid="hero-shot"/.test(html)) {
+          throw new Error("site: the hero shot (img#hero-shot) is missing from the home page");
+        }
+        // The hero shot is every page's card. Its address as Vite writes it from the site's
+        // root (it names the file last), after the site's origin.
+        const hero = Object.values(ctx.bundle ?? {}).find(
+          (file) => file.type === "asset" && file.originalFileNames.some((name) => name.endsWith("screenshots/hero.png")),
+        );
+        if (!hero) throw new Error("site: the hero shot (site/screenshots/hero.png) isn't in the build");
+        return html.replace(/@CARD_IMAGE@/g, `${new URL(SITE_URL).origin}/${hero.fileName}`);
       },
     },
   };
@@ -72,14 +110,14 @@ function screenshotSizes(): Plugin {
     transformIndexHtml: {
       order: "pre",
       handler: (html) =>
-        html.replace(/<img\b([^>]*?)\bsrc="\.\/(screenshots\/[^"]+\.png)"/g, (tag, before: string, path: string) => {
+        html.replace(/<img\b([^>]*?)\bsrc="((?:\.\.?\/)+)(screenshots\/[^"]+\.png)"/g, (tag, before: string, up: string, path: string) => {
           const file = fileURLToPath(new URL(`./${path}`, import.meta.url));
           if (!existsSync(file)) return tag;
           // A PNG's width and height are its IHDR chunk's first eight bytes, after the
           // eight-byte signature and the chunk's length and type.
           const header = readFileSync(file).subarray(16, 24);
           const size = `width="${header.readUInt32BE(0)}" height="${header.readUInt32BE(4)}" `;
-          return `<img${before}${size}src="./${path}"`;
+          return `<img${before}${size}src="${up}${path}"`;
         }),
     },
   };
@@ -106,17 +144,17 @@ function webpScreenshots(): Plugin {
     transformIndexHtml: {
       order: "pre",
       async handler(html) {
-        for (const [tag, name] of html.matchAll(/<img\b[^>]*\bsrc="\.\/screenshots\/([\w-]+)\.png"[^>]*>/g)) {
+        for (const [tag, up, name] of html.matchAll(/<img\b[^>]*\bsrc="((?:\.\.?\/)+)screenshots\/([\w-]+)\.png"[^>]*>/g)) {
           const png = fileURLToPath(new URL(`./screenshots/${name}.png`, import.meta.url));
           if (!existsSync(png)) continue;
           await webp(png, `${name}.webp`);
-          let srcset = `./screenshots/webp/${name}.webp`;
+          let srcset = `${up}screenshots/webp/${name}.webp`;
           const sizes = /\bsizes="([^"]+)"/.exec(tag)?.[1];
           if (sizes) {
             const { width } = await sharp(png).metadata();
             const half = Math.round(width / 2);
             await webp(png, `${name}-${half}.webp`, half);
-            srcset = `./screenshots/webp/${name}-${half}.webp ${half}w, ${srcset} ${width}w`;
+            srcset = `${up}screenshots/webp/${name}-${half}.webp ${half}w, ${srcset} ${width}w`;
           }
           const source = `<source type="image/webp" srcset="${srcset}"${sizes ? ` sizes="${sizes}"` : ""} />`;
           html = html.replace(tag, `<picture>${source}${tag}</picture>`);
@@ -168,6 +206,7 @@ export default defineConfig({
   // Copied into the build as they are: Cloudflare's _headers.
   publicDir: "public",
   plugins: [
+    questions(),
     fillPlaceholders(),
     screenshotSizes(),
     webpScreenshots(),
@@ -178,6 +217,7 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    rolldownOptions: { input: { home: HOME, faq: FAQ } },
     // A screenshot keeps a file of its own, however small, so the cards can address it.
     assetsInlineLimit: (file) => (file.includes("/screenshots/") ? false : undefined),
   },

@@ -1,14 +1,14 @@
-// The manual's minimap: the manual drawn as one of the game's maps, in the game's Mini Map
-// window. Each tab's part is a platform with its topics as portals on it, roped down to
-// the next, and the credits lie on the ground below. A yellow dot, the reader, walks the
-// platforms as the page scrolls, as the game's dot moves only as the character walks:
-// never on its own, and with reduced motion it steps from portal to portal. The same walk
-// says which part is being read, for the raised tab.
+// The page's minimap: the page drawn as one of the game's maps, in the game's Mini Map
+// window. Each of its parts (`data-street`) is a platform with its stops (`.stop`) as
+// portals on it, roped down to the next, and the window's foot lies on the ground below. A
+// yellow dot, the reader, walks the platforms as the page scrolls, as the game's dot moves
+// only as the character walks: never on its own, and with reduced motion it steps from
+// portal to portal.
 
 /** How a stop is marked: as its topic's heading is, or else a portal ring. */
 type Mark = "portal" | "route" | "mob" | "star";
 
-/** A stop on the walk: the hero, a topic or the credits, each a portal on the map. */
+/** A stop on the walk: the hero, a feature, a FAQ group or the foot, each a portal on the map. */
 type Stop = { el: HTMLElement; part: number; name: string; street: string; href: string; mark: Mark; x: number; y: number };
 
 /** A point on the walk, the scroll it's reached at, and where the reader is from there. */
@@ -50,13 +50,13 @@ function icon(path: string, className = "") {
 }
 
 /**
- * Draws the minimap for the parts the tabs open, and returns where the reader is at a
- * scroll, once `measure` has read the page. `line` is how far below the viewport's top a
- * heading counts as reached.
+ * Draws the minimap for the page's parts, and returns where the reader is at a scroll, once
+ * `measure` has read the page. `line` is how far below the viewport's top a heading counts
+ * as reached.
  */
-export function minimap(tabs: HTMLAnchorElement[], line: () => number) {
-  const parts = tabs.map((tab) => document.getElementById(tab.hash.slice(1))!);
-  const foot = document.getElementById("credits")!;
+export function minimap(line: () => number) {
+  const parts = [...document.querySelectorAll<HTMLElement>("[data-street]")];
+  const foot = document.querySelector<HTMLElement>(".window-foot")!;
   const n = parts.length;
   const ledge = (i: number) => FIRST + i * ROW;
   const height = ledge(n) + GROUND;
@@ -66,12 +66,12 @@ export function minimap(tabs: HTMLAnchorElement[], line: () => number) {
   const ropes = spans.map(([a, b], i) => (i % 2 === 0 ? b - 6 : a + 6));
   const entries = spans.map(([a], i) => (i === 0 ? a + 6 : ropes[i - 1]));
 
-  // The stops: each part's hero, if it has one, then its topics, spread along its platform.
+  // The stops, spread along their part's platform.
   const stops: Stop[] = [];
   parts.forEach((part, i) => {
-    const els = [...part.querySelectorAll<HTMLElement>(".hero, .topic")];
+    const els = [...part.querySelectorAll<HTMLElement>(".stop")];
     els.forEach((el, k) => {
-      const heading = el.querySelector("h3");
+      const heading = el.querySelector("h1, h2");
       const mark = heading?.querySelector(".mark.route")
         ? "route"
         : heading?.querySelector(".mark.mob")
@@ -83,7 +83,7 @@ export function minimap(tabs: HTMLAnchorElement[], line: () => number) {
         el,
         part: i,
         name: el.dataset.mini ?? heading?.textContent?.trim() ?? "",
-        street: tabs[i].textContent!.trim(),
+        street: part.dataset.street!,
         href: `#${el.id || part.id}`,
         mark,
         x: entries[i] + ((ropes[i] - entries[i]) * (k + 0.5)) / els.length,
@@ -91,11 +91,20 @@ export function minimap(tabs: HTMLAnchorElement[], line: () => number) {
       });
     });
   });
-  stops.push({ el: foot, part: n, name: "Credits", street: "Minerva", href: "#credits", mark: "portal", x: W / 2, y: ledge(n) - STAND });
+  stops.push({
+    el: foot,
+    part: n,
+    name: foot.dataset.mini ?? "Credits",
+    street: "Minerva",
+    href: `#${foot.id}`,
+    mark: "portal",
+    x: W / 2,
+    y: ledge(n) - STAND,
+  });
 
   // The window: the game's Mini Map bar, the sky-blue title saying where you are, the map.
   const nav = make("nav", "minimap");
-  nav.setAttribute("aria-label", "Map of the manual");
+  nav.setAttribute("aria-label", "Map of the page");
   const bar = make("div", "mm-bar");
   const fold = make("button", "icon-button mm-fold");
   fold.type = "button";
