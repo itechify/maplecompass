@@ -30,6 +30,9 @@ function fillPlaceholders(): Plugin {
   const values: Record<string, string> = {
     "@VERSION@": version,
     "@SETUP_URL@": `${RELEASES}/download/v${version}/Minerva_${version}_x64-setup.exe`,
+    "@APPIMAGE_URL@": `${RELEASES}/download/v${version}/Minerva_${version}_amd64.AppImage`,
+    "@DEB_URL@": `${RELEASES}/download/v${version}/Minerva_${version}_amd64.deb`,
+    "@RPM_URL@": `${RELEASES}/download/v${version}/Minerva-${version}-1.x86_64.rpm`,
     "@RELEASE_URL@": `${RELEASES}/tag/v${version}`,
     "@SITE_URL@": SITE_URL,
     "@HOTKEY_ROWS@": hotkeyRows(),

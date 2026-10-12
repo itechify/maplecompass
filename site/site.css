@@ -958,6 +958,26 @@ code {
 code.path {
   white-space: normal;
 }
+/* Lines to copy as they are, such as a window rule: kept whole, and scrolled sideways on a
+   narrow screen. */
+pre.copy {
+  margin: 0.5em 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  border: 1px solid var(--inset-edge);
+  border-radius: 3px;
+  background: var(--inset-bg);
+  font-size: 0.85em;
+  line-height: 1.4;
+}
+pre.copy code {
+  border: 0;
+  padding: 0;
+  background: none;
+  font-family: ui-monospace, monospace;
+  font-size: 1em;
+  white-space: pre;
+}
 
 /* The section marks from the panel's legend: a portal ring for the Map, the route ring for
    Navigation, a mob dot for the Mobs, and the you yellow star for a best. */

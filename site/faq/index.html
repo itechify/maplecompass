@@ -44,7 +44,7 @@
         <header class="window-bar">
           <img class="mark-icon" src="../../assets/icon-32.png" alt="" width="32" height="32" />
           <p class="window-name">Minerva</p>
-          <p class="window-version">@VERSION@ · Windows 10 and 11</p>
+          <p class="window-version">@VERSION@ · Windows and Linux</p>
           <a class="button small" href="@SETUP_URL@">Download</a>
         </header>
         <nav class="tabs" aria-label="Pages">
@@ -108,8 +108,8 @@
                 <details class="qa" id="hotkeys-hook">
                   <summary>Are Minerva's hotkeys a keyboard hook?</summary>
                   <p>
-                    No. They're ordinary hotkeys registered with Windows, and they act only while the game or one of
-                    Minerva's windows is in front. The game never sees them, and in any other app the same keys do what
+                    No. They're ordinary hotkeys registered with Windows (on Linux, with the X server), and they act only
+                    while the game or one of Minerva's windows is in front. The game never sees them, and in any other app the same keys do what
                     that app makes them do.
                   </p>
                 </details>
@@ -162,16 +162,19 @@
                   <ul>
                     <li>
                       Your settings (placement, folded sections, the marked title, a hand-picked game window and the
-                      hotkeys) in <code class="path">%APPDATA%\<wbr />com.<wbr />itechify.<wbr />minerva\<wbr />settings.json</code>.
+                      hotkeys) in <code class="path">%APPDATA%\<wbr />com.<wbr />itechify.<wbr />minerva\<wbr />settings.json</code>,
+                      or on Linux in <code class="path">~/.config/<wbr />com.<wbr />itechify.<wbr />minerva/<wbr />settings.json</code>.
                     </li>
                     <li>
                       Beside them: your Personal Bests, each map's 10 best visits, in <code>personal-bests.json</code>; the
                       market prices you keep, in <code>market-prices.json</code>; and the 10 newest
-                      <a href="#bug-reports">Bug Reports</a> you save, in <code>Bug Reports</code>.
+                      <a href="#bug-reports">Bug Reports</a> you save, in <code>Bug Reports</code>. On Linux the Bug Reports
+                      are in <code class="path">~/.local/<wbr />share/<wbr />com.<wbr />itechify.<wbr />minerva</code> instead.
                     </li>
                     <li>
                       The map and item data, pictures and animations in
-                      <code class="path">%LOCALAPPDATA%\<wbr />com.<wbr />itechify.<wbr />minerva\<wbr />cache</code>.
+                      <code class="path">%LOCALAPPDATA%\<wbr />com.<wbr />itechify.<wbr />minerva\<wbr />cache</code>,
+                      or on Linux in <code class="path">~/.cache/<wbr />com.<wbr />itechify.<wbr />minerva/<wbr />cache</code>.
                     </li>
                   </ul>
                 </details>
@@ -196,8 +199,9 @@
                 <details class="qa" id="requirements">
                   <summary>What do I need to run Minerva?</summary>
                   <p>
-                    Windows 10 or 11, 64-bit, and MapleStory Classic World played windowed or borderless, with the minimap
-                    open and both lines of its title showing.
+                    Windows 10 or 11, 64-bit, or <a href="#linux">Linux, with the game under Wine or Proton</a>. And
+                    MapleStory Classic World played windowed or borderless, with the minimap open and both lines of its
+                    title showing.
                   </p>
                 </details>
                 <details class="qa" id="fullscreen">
@@ -217,7 +221,52 @@
                       already has.
                     </dd>
                   </dl>
-                  <p>The MSI and portable files are on <a href="@RELEASE_URL@">the release's page</a>.</p>
+                  <p>The MSI and portable files are on <a href="@RELEASE_URL@">the release's page</a>. On Linux:</p>
+                  <dl class="files">
+                    <dt><a href="@APPIMAGE_URL@">Minerva_@VERSION@_amd64.AppImage</a></dt>
+                    <dd>
+                      Any distribution, and the Steam Deck's Desktop Mode. No install: allow it to run as a program (in
+                      its properties, or <code>chmod +x</code>), then run it.
+                    </dd>
+                    <dt><a href="@DEB_URL@">Minerva_@VERSION@_amd64.deb</a></dt>
+                    <dd>Debian, Ubuntu, Linux Mint and Pop!_OS. Installs with a menu entry.</dd>
+                    <dt><a href="@RPM_URL@">Minerva-@VERSION@-1.x86_64.rpm</a></dt>
+                    <dd>Fedora and openSUSE. The same.</dd>
+                  </dl>
+                </details>
+                <details class="qa" id="linux">
+                  <summary>Does Minerva run on Linux?</summary>
+                  <p>
+                    Yes, beside the game running under Wine or Proton (through Steam, Heroic or Lutris), on a desktop with
+                    X11 or XWayland: GNOME, KDE Plasma, Xfce, Cinnamon, <a href="#hyprland">Hyprland</a>, or the Steam
+                    Deck's Desktop Mode. Not in the Steam Deck's Game Mode, which shows one app at a time, nor with the game
+                    under Wine's own Wayland driver.
+                  </p>
+                  <p>
+                    It does the same there, and looks at the game the same way: only what's on screen. Its owl sits in the
+                    system tray. GNOME shows one only with an AppIndicator extension, which Ubuntu has.
+                  </p>
+                </details>
+                <details class="qa" id="hyprland">
+                  <summary>How do I keep the panel above the game on Hyprland?</summary>
+                  <p>
+                    Hyprland floats Minerva's windows, but a floating game window you click comes up over them. Pin them
+                    with a window rule in your config, which also drops the border Hyprland draws around them:
+                  </p>
+                  <pre class="copy"><code>hl.window_rule({
+    name  = "minerva",
+    match = { class = "^Minerva$", float = true },
+    pin         = true,
+    border_size = 0,
+    rounding    = 0,
+    no_shadow   = true,
+    no_anim     = true,
+})</code></pre>
+                  <p>
+                    Pinned, they follow you to every workspace, but show only while the game or Minerva is in front.
+                    Search opened by its hotkey takes your typing once you click its box, unless
+                    <code>misc:focus_on_activate</code> is on.
+                  </p>
                 </details>
                 <details class="qa" id="smartscreen">
                   <summary>Why does Windows say it "protected your PC"?</summary>
@@ -231,7 +280,8 @@
                   <p>
                     Quit the running Minerva first: click its owl in the notification area, by the clock, and choose
                     <strong>Quit Minerva</strong>. Then run the new version's setup. Your settings, hotkeys and Personal
-                    Bests carry over. Minerva doesn't check for updates itself:
+                    Bests carry over. On Linux, quit it from its owl in the system tray, then install the new package, or
+                    swap the AppImage for the new one. Minerva doesn't check for updates itself:
                     <a href="https://github.com/itechify/minerva/releases">each release</a> says what's new.
                   </p>
                 </details>
@@ -321,7 +371,7 @@
                 <details class="qa" id="hotkey-taken">
                   <summary>What if the keys I want are already taken?</summary>
                   <p>
-                    If another Minerva hotkey has them, <strong>Swap</strong> trades the two. If Windows or another app has
+                    If another Minerva hotkey has them, <strong>Swap</strong> trades the two. If your system or another app has
                     them, the panel and setup say which, and Settings marks the row.
                   </p>
                 </details>
@@ -967,8 +1017,8 @@
                     </li>
                     <li>What you did in Minerva: its buttons, hotkeys and searches.</li>
                     <li>
-                      Your settings and Personal Bests, Minerva's version, your Windows version and display scaling, and any
-                      errors it ran into.
+                      Your settings and Personal Bests, Minerva's version, your Windows version (or Linux distribution and
+                      desktop) and display scaling, and any errors it ran into.
                     </li>
                   </ul>
                 </details>
@@ -976,7 +1026,8 @@
                   <summary>Is a Bug Report sent anywhere?</summary>
                   <p>
                     No. It stays on your PC, in
-                    <code class="path">%APPDATA%\<wbr />com.<wbr />itechify.<wbr />minerva\<wbr />Bug Reports</code>, until
+                    <code class="path">%APPDATA%\<wbr />com.<wbr />itechify.<wbr />minerva\<wbr />Bug Reports</code> (on Linux,
+                    <code class="path">~/.local/<wbr />share/<wbr />com.<wbr />itechify.<wbr />minerva/<wbr />Bug Reports</code>), until
                     you attach it to an issue. Saving one changes nothing in Minerva, which keeps the 10 newest. With it,
                     the bug can be played back as it happened instead of guessed at.
                   </p>
