@@ -8,7 +8,7 @@ related_targets: ["site/site.css","site/site.ts"]
 # Surface: the Minerva site
 
 ## Scope and mode
-One page for players at itechify.github.io/minerva, built from `site/index.html`, `site/site.css` and `site/site.ts`. Mode: **Read** (a player manual), with a Download in its head. Spec: GitHub issue #64.
+One page for players at owlofminerva.app, built from `site/index.html`, `site/site.css` and `site/site.ts`. Mode: **Read** (a player manual), with a Download in its head. Spec: GitHub issue #64.
 
 ## Audience, job and constraints
 - The average MapleStory Classic player: deciding whether to install Minerva, then learning what each part of the panel does.

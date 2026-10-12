@@ -52,7 +52,7 @@ The companion follows the player's current Map by recognising the displayed Mini
 
 ## Evidence on Hand
 
-- The Minerva site (`site/`, published at itechify.github.io/minerva from each release's tag) is the player manual: current behavior, setup, hotkeys, what Minerva fetches and keeps, and the account-risk warning word for word. A change a player notices updates it in the same PR. [README.md](README.md) holds the layout and the Windows build commands.
+- The Minerva site (`site/`, published at owlofminerva.app from each release's tag) is the player manual: current behavior, setup, hotkeys, what Minerva fetches and keeps, and the account-risk warning word for word. A change a player notices updates it in the same PR. [README.md](README.md) holds the layout and the Windows build commands.
 - [GLOSSARY.md](GLOSSARY.md) and [docs/adr](docs/adr/) hold the domain vocabulary and accepted technical decisions.
 - `samples/minimap/` contains real title and game-window screenshots used for recognition and setup tests. These are evidence for recognition, not screenshots of the overlay design.
 - `crates/minerva-core/tests/` exercises public inputs and resulting panel state, on made-up worlds in OSMS's shape. Its `fixtures/` directory holds only the map names fixture (every Map's ID, Street Name, Map Name and Region), which recognition is tested against.

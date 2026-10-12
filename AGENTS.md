@@ -6,7 +6,7 @@
 - `cargo test -p minerva --lib`: runs the app's own unit tests, which `cargo test` leaves out.
 - `cargo clippy --workspace --all-targets -- -D warnings`: lint everything.
 - `pnpm install` then `pnpm tauri build --debug --no-bundle`: build the app. `pnpm tauri dev` runs it.
-- `pnpm site:dev` runs the site (`site/`, the player manual on GitHub Pages); `pnpm site:build` builds it, and fails while a screenshot it shows is missing.
+- `pnpm site:dev` runs the site (`site/`, the player manual at owlofminerva.app); `pnpm site:build` builds it, and fails while a screenshot it shows is missing.
 - `cargo run -p minerva --example probe [reads] [out.png]`: read-only smoke test against a running game, with no UI.
 - `cargo run -p minerva --example probe record <out-dir> <name>=<x>,<y>,<w>,<h>@<hz> ... [--seconds <n>]`: record timestamped crops of client-area regions from a running game, for samples.
 - `cargo run -p minerva --example probe item samples/item-tooltip "<item name>" [--desc <tag>] [--delay <s>]`: after a countdown, save the game's client area named with the item and the pointer's position, for samples.

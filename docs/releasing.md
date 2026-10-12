@@ -98,7 +98,7 @@ Write them for players, not developers, in the shape of the previous releases. P
 
 ## Changes
 
-- **<Feature in bold.>** <What the player sees and does, in the panel's own words.> [More on the site](https://itechify.github.io/minerva/#<section>)
+- **<Feature in bold.>** <What the player sees and does, in the panel's own words.> [More on the site](https://owlofminerva.app/#<section>)
 - <Smaller changes, one line each.>
 
 Your settings, hotkeys and Personal Bests carry over from <previous version>.
@@ -129,7 +129,7 @@ gh release create vX.Y.Z --verify-tag --title "Minerva X.Y.Z" --notes-file notes
   THIRD-PARTY-NOTICES.md
 ```
 
-The newest release becomes Latest, which the README's download link points to. Publishing it runs the Site workflow (`.github/workflows/site.yml`), which builds the site from the tag and publishes it to <https://itechify.github.io/minerva/>.
+The newest release becomes Latest, which the README's download link points to. Publishing it runs the Site workflow (`.github/workflows/site.yml`), which builds the site from the tag and publishes it to <https://owlofminerva.app/>.
 
 Then check the release:
 - `gh release view vX.Y.Z` lists the four files.

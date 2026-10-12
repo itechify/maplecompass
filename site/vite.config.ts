@@ -5,12 +5,12 @@ import { defineConfig, type Plugin } from "vite";
 import pkg from "../package.json" with { type: "json" };
 import { hotkeyRows } from "./hotkeys.ts";
 
-// The Minerva site: one page for players, published on GitHub Pages from a release's
-// tag (.github/workflows/site.yml). `pnpm site:dev` serves it, `pnpm site:build` builds it
-// into site/dist.
+// The Minerva site: one page for players, published on Cloudflare from a release's tag
+// (.github/workflows/site.yml, site/wrangler.jsonc). `pnpm site:dev` serves it,
+// `pnpm site:build` builds it into site/dist.
 
 /** Where the site is published, for the links that must be absolute (Open Graph). */
-const SITE_URL = "https://itechify.github.io/minerva/";
+const SITE_URL = "https://owlofminerva.app/";
 const RELEASES = "https://github.com/itechify/minerva/releases";
 
 /**
@@ -139,7 +139,7 @@ function serveAppFiles(): Plugin {
       server.middlewares.use((req, _res, next) => {
         if (req.url && /^\/(src|assets)\//.test(req.url)) {
           const file = fileURLToPath(new URL(`..${req.url}`, import.meta.url)).replace(/\\/g, "/");
-          req.url = `/minerva/@fs${file.startsWith("/") ? "" : "/"}${file}`;
+          req.url = `/@fs${file.startsWith("/") ? "" : "/"}${file}`;
         }
         next();
       });
@@ -164,8 +164,9 @@ function themeWithoutFonts(): Plugin {
 
 export default defineConfig({
   root: "site",
-  base: "/minerva/",
-  publicDir: false,
+  base: "/",
+  // Copied into the build as they are: Cloudflare's _headers.
+  publicDir: "public",
   plugins: [
     fillPlaceholders(),
     screenshotSizes(),

@@ -1,0 +1,14 @@
+// The Minerva site on Cloudflare: a Worker that only serves the site's build (site/dist)
+// at owlofminerva.app and www.owlofminerva.app. Cloudflare makes both names' DNS records
+// and certificates when it attaches them. The Site workflow (.github/workflows/site.yml)
+// deploys it.
+{
+  "name": "minerva-site",
+  "account_id": "ff78159c349b59f85a720c24b017de82",
+  "compatibility_date": "2026-10-12",
+  "assets": { "directory": "./dist" },
+  "routes": [
+    { "pattern": "owlofminerva.app", "custom_domain": true },
+    { "pattern": "www.owlofminerva.app", "custom_domain": true }
+  ]
+}

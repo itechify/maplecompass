@@ -1,0 +1,4 @@
+# Cloudflare's headers for the site's files. Vite names each file it builds into /assets/
+# after its content, so a browser may keep it for good.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
