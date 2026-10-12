@@ -95,9 +95,17 @@ High, Medium or Low: how a map's density for a mob compares with that mob's dens
 The fewest map changes it takes to get from the player's current map to another map. A map change is going through a portal (but not a Quest Portal) or a ship ride, and, if the player has turned them on, a taxi ride or a Teleport Scroll. MapleCompass knows only which map the player is on, never where on it they stand.
 _Avoid_: position, proximity
 
+**Search**:
+The search view the 🔍 or the search hotkey (Ctrl+Shift+F by default) opens over the panel: the mobs, maps and items whose name holds what the player types, a section for each, with each kind's best five. A mob leads to the maps it spawns on, to pick a Hunting Target; a map becomes the Destination; an item shows its Item Card.
+_Avoid_: mob search, item search
+
 **Hunting Target**:
-The mob and map the player picked from a mob search to go and hunt. MapleCompass shows the way there from the player's current map, then that they have arrived, until they leave that map or clear it.
-_Avoid_: destination, waypoint, goal
+The mob and map the player picked in Search (the mob, then one of its maps) to go and hunt. MapleCompass shows the way there from the player's current map, then that they have arrived, until they leave that map or clear it.
+_Avoid_: waypoint, goal
+
+**Destination**:
+A map the player picked in Search to go to, with no mob in mind. MapleCompass shows the way there as for a Hunting Target, in its place: there is one or the other, whichever the player picked last. Picked on the map the player is on, it says they are there at once.
+_Avoid_: waypoint, goal, target (alone)
 
 **Ship**:
 An NPC-run crossing between regions (e.g. Ellinia, on Victoria Island, to Orbis, in Ossyria). The only way to reach Ossyria, so it always counts as a map change.
@@ -169,7 +177,7 @@ _Avoid_: drop, loot (when meaning the item itself)
 The box the game draws by the mouse pointer when the player hovers an item: the item's name on the line with the blue bullet (a crafted item's maker sits above it), then its picture and figures. It is the game's, not ours: the Item Card and the Mob Card are MapleCompass's own.
 
 **Item Card**:
-The card the hotkey (Ctrl+Shift+I by default) shows at the pointer for the item whose Item Tooltip the game shows there: what a shop pays for it, and the market prices the player keeps for it on their Market Lines (typed into the card, with a button that opens MesoWatch to look it up). It stays until the player closes it or presses the hotkey again, where the player drags it by its bar, and its name opens the item's MeowDB page. When items that don't look alike share the name, it first lists them, with their pictures, for the player to pick.
+The card the hotkey (Ctrl+Shift+I by default) shows at the pointer for the item whose Item Tooltip the game shows there, or Search shows beside the panel for an item picked there: what a shop pays for it, and the market prices the player keeps for it on their Market Lines (typed into the card, with a button that opens MesoWatch to look it up). It stays until the player closes it or presses the hotkey again, where the player drags it by its bar, and its name opens the item's MeowDB page. When items that don't look alike share the name, it first lists them, with their pictures, for the player to pick.
 _Avoid_: item tooltip (the game's), price check, popup
 
 **Market Line**:
@@ -178,7 +186,7 @@ _Avoid_: column, field, price type
 
 **Item Lookup**:
 The hotkey (Ctrl+Shift+U by default) that reads the Item Tooltip nearest the pointer and opens the item's MeowDB page. An alert at the top centre of the game window says what came of it, and when several items share the name, lists them for the player to pick. The same alert says what kept an Item Card from showing.
-_Avoid_: item search (mob search is the search view's)
+_Avoid_: item search (Search is the search view's)
 
 ### Reporting bugs
 

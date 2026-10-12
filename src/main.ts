@@ -40,7 +40,6 @@ import {
   resultsNote,
   routeStops,
   tripLine,
-  type HuntingTarget,
   type SearchState,
 } from "./search-state";
 
@@ -201,7 +200,7 @@ const huntingTrip = byId("hunting-trip");
 const searchView = byId("search-view");
 const searchBack = byId("search-back");
 const searchTitle = byId("search-title");
-const mobsStep = byId("mobs-step");
+const matchesStep = byId("matches-step");
 const mapsStep = byId("maps-step");
 const query = byId("query") as HTMLInputElement;
 const suggestions = byId("suggestions");
@@ -405,11 +404,12 @@ function renderData(panel: PanelState) {
 
 /**
  * The footer's info icon, whose tooltip is the credit, so it takes one small line: the
- * panel's credit while a map is shown, or else search's while there is a Hunting Target.
- * With nothing to credit, no footer.
+ * panel's credit while a map is shown, or else search's while there is a Hunting Target or
+ * a Destination. With nothing to credit, no footer.
  */
 function renderCredit(panel: PanelState) {
-  const text = (mapShown(panel) ? panel.credit : null) ?? (panel.search.hunting ? panel.search.credit : null);
+  const navigating = panel.search.hunting || panel.search.destination;
+  const text = (mapShown(panel) ? panel.credit : null) ?? (navigating ? panel.search.credit : null);
   footer.hidden = !text;
   credit.title = text ?? "";
   credit.setAttribute("aria-label", text ?? "");
@@ -502,33 +502,56 @@ function fillSprite(square: HTMLElement, url: string | null, scaleAbove: number)
 const TARGET_SPRITE = 40;
 
 /**
- * The Navigation section, between the Map and the Mobs, while there is a Hunting Target:
- * its mob (as OSMS animates it) and map, the map's figures, and the route there from the
- * map you're on, which scrolls when the panel runs out of room; once you're there, that
- * you've arrived. Its 🔍 reopens the mob's map list; its × clears it. It collapses to its
- * heading like the map's sections.
+ * The Navigation section, between the Map and the Mobs, while there is a Hunting Target or
+ * a Destination: the Hunting Target's mob (as OSMS animates it) and map, with the map's
+ * figures, or the Destination's map and street; then the route there from the map you're
+ * on, which scrolls when the panel runs out of room; once you're there, that you've
+ * arrived. A Hunting Target's 🔍 reopens the mob's map list; the × clears either. It
+ * collapses to its heading like the map's sections.
  */
 function renderNavigation(panel: PanelState) {
-  const target: HuntingTarget | null = panel.search.hunting;
+  const { hunting, destination } = panel.search;
+  const target = hunting ?? destination;
+  // The map, with its way there.
+  const map = hunting?.map ?? destination;
   navigation.hidden = !target;
-  if (!target || !changed("navigation", target, panel.collapsedSections.navigation, panel.mapMarks)) return;
+  if (!target || !map || !changed("navigation", target, panel.collapsedSections.navigation, panel.mapMarks)) return;
   foldSection(navigation, navigationToggle, panel.collapsedSections.navigation, true);
-  const { mob, map } = target;
-  fillSprite(huntingSprite, target.image, TARGET_SPRITE);
-  // The mob on the first line, the map on the next.
-  const mobLine = document.createElement("span");
-  mobLine.className = "hunting-mob";
-  mobLine.textContent = mob.name;
-  const mapLine = document.createElement("span");
-  mapLine.className = "hunting-map";
-  mapLine.append(mapMark(panel.mapMarks, map.mark), map.mapName);
-  huntingTitle.replaceChildren(mobLine, mapLine);
-  huntingTitle.title = `${mob.name} (Lv ${mob.level}) on ${map.streetName}: ${map.mapName}`;
-  const tier = byId("hunting-tier");
-  tier.textContent = TIER_NAMES[map.tier];
-  tier.className = `tier ${map.tier}`;
-  byId("hunting-density").textContent = density(map.densityHundredths);
-  byId("hunting-share").textContent = `${map.spawnSharePercent}%`;
+  const line = (className: string, ...parts: (Node | string)[]) => {
+    const el = document.createElement("span");
+    el.className = className;
+    el.append(...parts);
+    return el;
+  };
+  huntingSprite.hidden = !hunting;
+  huntingReopen.hidden = !hunting;
+  for (const figure of navigation.querySelectorAll<HTMLElement>("[data-hunting]")) figure.hidden = !hunting;
+  const clear = hunting ? "Clear the Hunting Target" : "Clear the Destination";
+  huntingClear.title = clear;
+  huntingClear.setAttribute("aria-label", clear);
+  if (hunting) {
+    // The mob on the first line, the map on the next.
+    const { mob } = hunting;
+    fillSprite(huntingSprite, hunting.image, TARGET_SPRITE);
+    huntingTitle.replaceChildren(
+      line("hunting-mob", mob.name),
+      line("hunting-map", mapMark(panel.mapMarks, map.mark), map.mapName),
+    );
+    huntingTitle.title = `${mob.name} (Lv ${mob.level}) on ${map.streetName}: ${map.mapName}`;
+    const tier = byId("hunting-tier");
+    tier.textContent = TIER_NAMES[hunting.map.tier];
+    tier.className = `tier ${hunting.map.tier}`;
+    byId("hunting-density").textContent = density(hunting.map.densityHundredths);
+    byId("hunting-share").textContent = `${hunting.map.spawnSharePercent}%`;
+  } else {
+    // The map on the first line, its street on the next.
+    fillSprite(huntingSprite, null, TARGET_SPRITE);
+    huntingTitle.replaceChildren(
+      line("hunting-mob", mapMark(panel.mapMarks, map.mark), map.mapName),
+      line("hunting-map destination-street", map.streetName),
+    );
+    huntingTitle.title = `${map.streetName}: ${map.mapName}`;
+  }
   const distance = distanceWithTravel(map);
   const distanceEl = byId("hunting-distance");
   distanceEl.textContent = distance.text;
@@ -542,7 +565,10 @@ function renderNavigation(panel: PanelState) {
   const routed = !arrived && map.route.length > 0;
   huntingRouteTitle.textContent = routed ? `Route from ${map.route[0].mapName}` : "";
   huntingRouteTitle.hidden = !routed;
-  huntingRoute.replaceChildren(...(routed ? routeStops(map, panel.mapMarks) : []));
+  const stops = routed ? routeStops(map, panel.mapMarks) : [];
+  // A Destination's map is ringed where its route ends: there's no mob there.
+  if (!hunting) stops[stops.length - 1]?.classList.add("destination");
+  huntingRoute.replaceChildren(...stops);
   huntingRoute.hidden = !routed;
   huntingRouteNone.textContent = routed || arrived ? "" : distanceText(map.distance).title;
   huntingRouteNone.hidden = routed || arrived;
@@ -552,9 +578,10 @@ function renderNavigation(panel: PanelState) {
 }
 
 /**
- * The search view, which takes over the whole panel: first the query box and the mobs
- * it suggests, then the picked mob's ranked map list. Picking a map makes it the Hunting
- * Target; the back arrow or Esc returns to the normal view with nothing changed.
+ * The search view, which takes over the whole panel: first the query box and what it
+ * matches (mobs, maps and items), then a picked mob's ranked map list. Picking a map from
+ * that list makes it the Hunting Target, a matched map the Destination, and matched items
+ * show their Item Card; the back arrow or Esc goes back a step with nothing changed.
  */
 function renderSearchView(panel: PanelState) {
   const { search } = panel;
@@ -564,14 +591,14 @@ function renderSearchView(panel: PanelState) {
   const opened = view !== step;
   step = view;
   if (view === null) return;
-  mobsStep.hidden = view !== "mobs";
+  matchesStep.hidden = view !== "matches";
   mapsStep.hidden = view !== "maps";
   // Before the lists, which scroll their highlight into what room is left.
   searchCredit.textContent = search.credit ?? "";
   searchCredit.hidden = !search.credit;
-  if (view === "mobs") {
-    searchTitle.textContent = "Search a mob";
-    renderMobs(search, panel.recognition);
+  if (view === "matches") {
+    searchTitle.textContent = "Search";
+    renderMatches(search, panel.recognition, panel.mapMarks);
     // A fresh query box, and the typing goes to it.
     if (opened) {
       query.value = search.query;
@@ -611,7 +638,7 @@ function keysElement(binding: string, kind: "set" | "refused" = "set"): HTMLElem
   return keys;
 }
 
-/** "Ctrl+Shift+F is already “Search a mob”. …": why the combination pressed wasn't taken. */
+/** "Ctrl+Shift+F is already “Search”. …": why the combination pressed wasn't taken. */
 function rebindProblemText(problem: RebindProblem): string {
   switch (problem.kind) {
     case "noModifier":
@@ -623,7 +650,7 @@ function rebindProblemText(problem: RebindProblem): string {
   }
 }
 
-/** "Saved: Search a mob is now Ctrl+Alt+F.": what the player's last change came to. */
+/** "Saved: Search is now Ctrl+Alt+F.": what the player's last change came to. */
 function settingsNoticeText(notice: SettingsNotice, hotkeys: Hotkeys): string {
   switch (notice.kind) {
     case "saved": {
@@ -755,35 +782,114 @@ function renderSettingsView(panel: PanelState) {
   if (target) settingsView.querySelector<HTMLElement>(`[data-focus="${target}"]`)?.focus({ preventScroll: true });
 }
 
-/** The first step: the suggestions (the highlighted one is what Enter picks). Search knows no
- *  mob until OSMS's file set is in, which `recognition` says. */
-function renderMobs(search: SearchState, recognition: Recognition) {
+/** Each kind of match: its section's heading, and how a click or Enter on one picks it. */
+const MATCH_KINDS = {
+  mob: { heading: "Mobs", pick: "search_pick" },
+  map: { heading: "Maps", pick: "search_pick_destination" },
+  item: { heading: "Items", pick: "search_pick_item" },
+} as const;
+type MatchKind = keyof typeof MATCH_KINDS;
+
+/** The square a matched mob's animation or item's picture stands in, in CSS px. */
+const MATCH_PICTURE = 32;
+
+/** Why no items are matched, in the Items section's place. */
+const ITEMS_MISSING = {
+  loading: "Items aren't loaded yet",
+  unavailable: "Items couldn't be loaded",
+  formatChanged: "Items couldn't be loaded",
+} as const;
+
+/**
+ * The first step: what the query matches, a section for each kind (mobs, maps, then items)
+ * with its best five, and a line counting the rest. The highlighted match is what Enter
+ * picks. Search knows no mob or map until OSMS's file set is in, which `recognition` says,
+ * and no item until its item files are, which the Items section says in its place.
+ */
+function renderMatches(search: SearchState, recognition: Recognition, marks: MapMarks) {
   const loaded = recognition.status === "ready" || recognition.status === "savedCopy";
-  if (!changed("suggestions", search.suggestions, search.highlighted, search.query, loaded)) return;
-  suggestions.replaceChildren(
-    ...search.suggestions.map((mob, i) => {
-      const row = document.createElement("li");
-      row.id = `mob-${mob.id}`;
-      row.dataset.id = mob.id;
-      row.setAttribute("role", "option");
-      row.append(span("name", mob.name), span("level", `Lv ${mob.level}`));
-      const current = i === search.highlighted;
-      row.classList.toggle("current", current);
-      row.setAttribute("aria-selected", String(current));
-      return row;
-    }),
-  );
-  const listed = search.suggestions.length > 0;
+  const { mobs, maps, items, itemsMissing, highlighted } = search;
+  if (!changed("matches", mobs, maps, items, itemsMissing, highlighted, search.query, loaded, marks)) return;
+  let at = 0;
+  let current: HTMLElement | null = null;
+  const option = (kind: MatchKind, id: string, title: string, ...parts: Node[]) => {
+    const row = document.createElement("li");
+    row.id = `match-${kind}-${id}`;
+    row.dataset.kind = kind;
+    row.dataset.id = id;
+    row.title = title;
+    row.setAttribute("role", "option");
+    row.append(...parts);
+    const isCurrent = at++ === highlighted;
+    row.classList.toggle("current", isCurrent);
+    row.setAttribute("aria-selected", String(isCurrent));
+    if (isCurrent) current = row;
+    return row;
+  };
+  // A mob's animation or an item's picture, in a square of its own.
+  const picture = (url: string | null, pixelArt: boolean) => {
+    const square = span("match-picture", "");
+    if (pixelArt && url) {
+      const img = document.createElement("img");
+      img.alt = "";
+      img.src = url;
+      square.append(img);
+    } else {
+      fillSprite(square, url, MATCH_PICTURE);
+    }
+    return square;
+  };
+  const section = (kind: MatchKind, rows: HTMLLIElement[], more: number, note?: string) => {
+    if (rows.length === 0 && !note) return [];
+    const holder = document.createElement("li");
+    holder.className = `matches matches-${kind}`;
+    holder.setAttribute("role", "none");
+    const heading = span("matches-head", MATCH_KINDS[kind].heading);
+    heading.id = `matches-head-${kind}`;
+    const group = document.createElement("ul");
+    group.setAttribute("role", "group");
+    group.setAttribute("aria-labelledby", heading.id);
+    group.append(...rows);
+    holder.append(heading, group);
+    if (note) holder.append(span("note", note));
+    if (more > 0) holder.append(span("matches-more", `+${more} more, keep typing`));
+    return [holder];
+  };
+  const sections = [
+    ...section(
+      "mob",
+      mobs.shown.map((mob) =>
+        option("mob", mob.id, `${mob.name} (Lv ${mob.level})`, picture(mob.image, false), span("name", mob.name), span("match-detail", `Lv ${mob.level}`)),
+      ),
+      mobs.more,
+    ),
+    ...section(
+      "map",
+      maps.shown.map((map) =>
+        option("map", map.mapId, `${map.streetName}: ${map.mapName}`, mapMark(marks, map.mark), span("name", map.mapName), span("match-detail", map.streetName)),
+      ),
+      maps.more,
+    ),
+    ...section(
+      "item",
+      items.shown.map((item) =>
+        option("item", item.id, `${item.name} (${item.kind})`, picture(item.icon, true), span("name", item.name), span("match-detail", item.kind)),
+      ),
+      items.more,
+      itemsMissing ? ITEMS_MISSING[itemsMissing] : undefined,
+    ),
+  ];
+  suggestions.replaceChildren(...sections);
+  const listed = sections.length > 0;
   suggestions.hidden = !listed;
   query.setAttribute("aria-expanded", String(listed));
-  const highlighted = search.highlighted === null ? null : search.suggestions[search.highlighted];
-  if (highlighted) {
-    query.setAttribute("aria-activedescendant", `mob-${highlighted.id}`);
-    scrollWithin(suggestions, byId(`mob-${highlighted.id}`));
+  if (current) {
+    query.setAttribute("aria-activedescendant", (current as HTMLElement).id);
+    scrollWithin(suggestions, current);
   } else {
     query.removeAttribute("aria-activedescendant");
   }
-  noMatch.textContent = loaded ? "No known mob has that in its name." : "Loading the map list…";
+  noMatch.textContent = loaded ? "Nothing known has that in its name." : "Loading the map list…";
   noMatch.hidden = listed || search.query.trim() === "";
 }
 
@@ -1163,11 +1269,12 @@ for (const toggle of [portalsToggle, navigationToggle, mobsToggle]) {
   toggle.addEventListener("click", () => invoke("panel_toggle_section", { section: toggle.dataset.section }));
 }
 
-// A click on a suggested mob or a listed map picks it, like Enter on it.
+// A click on a match, or on a map in a mob's map list, picks it, like Enter on it.
 function pickOnClick(list: HTMLElement, item: string) {
   list.addEventListener("click", (e) => {
     const picked = e.target instanceof Element ? e.target.closest<HTMLElement>(item) : null;
-    if (picked?.dataset.id) invoke("search_pick", { id: picked.dataset.id });
+    const kind = picked?.dataset.kind as MatchKind | undefined;
+    if (picked?.dataset.id) invoke(kind ? MATCH_KINDS[kind].pick : "search_pick", { id: picked.dataset.id });
   });
 }
 pickOnClick(suggestions, "li[data-id]");
@@ -1215,7 +1322,7 @@ teleportScrolls.addEventListener("change", () => {
 // Whenever the overlay comes in front with the search view or the settings view open, the
 // keys go to it.
 window.addEventListener("focus", () => {
-  if (step === "mobs") query.focus({ preventScroll: true });
+  if (step === "matches") query.focus({ preventScroll: true });
   else if (step === "maps") resultsBox.focus({ preventScroll: true });
   else if (settings && !settingsView.contains(document.activeElement)) {
     const target = settings.rebinding ? `row:${settings.rebinding}` : `change:${HOTKEY_NAMES[0][0]}`;

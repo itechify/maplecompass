@@ -67,7 +67,10 @@ pub use panel::{
     ScreenRect, Section, Size,
 };
 pub use personal_best::{BESTS_VERSION, MapBests, SavedBests, VisitBest};
-pub use search::{DensityTier, HuntingTarget, MobChoice, RouteStop, SearchResult, SearchState, SearchView, Trip};
+pub use search::{
+    DensityTier, Destination, HuntingTarget, ItemMatch, ItemsMissing, MapMatch, Matches, MobChoice, MobMatch, RouteStop,
+    SearchResult, SearchState, SearchView, Trip,
+};
 pub use session::{Deaths, ExpRate, ExpTracking, TrackingState};
 pub use settings::{Hotkey, Hotkeys, Settings};
 pub use setup::{
@@ -85,7 +88,7 @@ use item_card::{Editing, ItemCards, Pressed};
 use item_data::ItemFilesLoader;
 use market_prices::MarketPrices;
 use item_lookup::ItemLookups;
-use search::{MobSearch, Searched};
+use search::{Search, Searched};
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
 use pace::Pace;
@@ -278,7 +281,7 @@ pub struct PanelState {
     /// The player closed first-run setup: with no Title Region there is nothing to
     /// read, so the app quits.
     pub quit: bool,
-    /// Mob search, over every map in OSMS's file set.
+    /// Search, over every map in OSMS's file set and every item in its item files.
     pub search: SearchState,
     /// What the latest Item Lookup came to, for a few seconds; `None` once it has gone.
     pub item_lookup: Option<ItemLookupLine>,
@@ -423,8 +426,8 @@ pub struct Compass {
     pictures: Pictures,
     /// MeowDB's pace, kept by Item Lookup's searches.
     meowdb_pace: Pace,
-    /// What the player typed, highlighted and picked in mob search.
-    search: MobSearch,
+    /// What the player typed, highlighted and picked in Search.
+    search: Search,
     /// The settings view, and the hotkey being rebound in it.
     hotkey_settings: HotkeySettings,
     /// Reads captures fed to [`Compass::on_item_capture`]; loaded on the first one.
@@ -484,7 +487,7 @@ impl Compass {
             wall_clock: None,
             pictures: Pictures::default(),
             meowdb_pace: Pace::default(),
-            search: MobSearch::default(),
+            search: Search::default(),
             hotkey_settings: HotkeySettings::default(),
             item_reader: None,
             item_lookups: ItemLookups::default(),
@@ -646,12 +649,12 @@ impl Compass {
     }
 
     /// What shows OSMS's pictures, with those in so far: the Map Marks, the Map Preview (its
-    /// portals on the Hunting Target's route marked), the map's mobs' Mob Cards and the
-    /// Hunting Target's mob.
+    /// portals on the route to the Hunting Target or Destination marked), the map's mobs'
+    /// Mob Cards, Search's matches and the Hunting Target's mob.
     fn sync_pictured(&mut self) {
         self.state.map_marks =
             self.set.as_ref().map(|set| map_mark::table(&set.maps, &self.pictures)).unwrap_or_default();
-        let next_map = self.state.search.hunting.as_ref().and_then(HuntingTarget::next_map_by_portal);
+        let next_map = self.state.search.next_map_by_portal();
         self.state.map_preview = self
             .set
             .as_ref()
@@ -662,17 +665,20 @@ impl Compass {
             Some(set) => mob_card::cards(mobs, &set.maps, &self.pictures),
             None => Vec::new(),
         };
-        if let (Some(hunting), Some(set)) = (&mut self.state.search.hunting, &self.set) {
-            hunting.image = set.maps.animation(&hunting.mob.id).and_then(|path| self.pictures.url(path)).map(String::from);
+        if let Some(set) = &self.set {
+            let pictures = &self.pictures;
+            self.state.search.fill_pictures(&set.maps, |path| pictures.url(path).map(String::from));
         }
     }
 
-    /// Ask for the pictures the panel wants, one at a time: the Item Card's first (its
-    /// item's, or those of the items it lists to pick from), as the player is looking at it;
-    /// then every Map Mark, few and small and shown beside every map's name; then the Map
-    /// Preview's, then the map's mobs' animations, then the Hunting Target mob's.
+    /// Ask for the pictures the panel wants, one at a time: those of Search's matches
+    /// first, then the Item Card's (its item's, or those of the items it lists to pick
+    /// from), as the player is looking at them; then every Map Mark, few and small and shown
+    /// beside every map's name; then the Map Preview's, then the map's mobs' animations,
+    /// then the Hunting Target mob's.
     fn poll_pictures(&mut self, at_ms: u64) {
-        let mut wanted = self.item_cards.pictures();
+        let mut wanted = self.state.search.pictures(self.set.as_ref().map(|set| &set.maps));
+        wanted.extend(self.item_cards.pictures());
         if let Some(set) = &self.set {
             let preview = self.state.map_preview.as_ref().map(|preview| map_preview::picture_path(&preview.picture));
             let mobs = self.state.data.data().map_or(&[][..], |data| &data.mobs);
@@ -748,9 +754,9 @@ impl Compass {
         match action {
             Action::ToggleExpanded => {
                 self.panel.expanded = !self.panel.expanded;
-                // The query box goes with the panel: like Esc. So does the settings view.
+                // The query box goes with the panel. So does the settings view.
                 if !self.panel.expanded {
-                    self.search.escape();
+                    self.search.close();
                     self.sync_search();
                     self.hotkey_settings.close();
                 }
@@ -865,12 +871,15 @@ impl Compass {
             }
             Action::SearchPrevious | Action::SearchNext => {
                 let by = if action == Action::SearchNext { 1 } else { -1 };
-                self.search.move_highlight(by, &searched(&self.set, &self.state, &self.settings));
+                self.search.move_highlight(by, &searched(&self.set, &self.item_files, &self.state, &self.settings));
                 self.sync_search();
             }
             Action::SearchEnter => {
-                self.search.enter(&searched(&self.set, &self.state, &self.settings));
+                let picked = self.search.enter(&searched(&self.set, &self.item_files, &self.state, &self.settings));
                 self.sync_search();
+                if let Some(ids) = picked {
+                    self.show_card(ids);
+                }
             }
             Action::SearchEscape => {
                 self.search.escape();
@@ -895,7 +904,7 @@ impl Compass {
             Action::OpenSettings => {
                 // On the expanded panel, in the search view's place.
                 self.panel.expanded = true;
-                self.search.escape();
+                self.search.close();
                 self.sync_search();
                 self.hotkey_settings.open();
             }
@@ -955,20 +964,49 @@ impl Compass {
         self.sync_panel()
     }
 
-    /// The player clicked one of the search view's items: the mob (in the suggestions)
-    /// or the map (in the map list) with this ID. Like Enter on it.
+    /// The player clicked the mob with this ID in the search view's matches, or the map
+    /// with this ID in the mob's map list. Like Enter on it.
     pub fn search_pick(&mut self, id: &str) -> &PanelState {
         self.record(Event::SearchPick { id: id.to_string() });
-        self.search.pick(id, &searched(&self.set, &self.state, &self.settings));
+        self.search.pick(id, &searched(&self.set, &self.item_files, &self.state, &self.settings));
         self.sync_search();
         self.sync_panel()
     }
 
-    /// Bring the panel's mob search up to date with the player's inputs, OSMS's file set,
-    /// the map shown and the travel toggles; and with it what follows from the Hunting
-    /// Target: its mob's animation, and the Map Preview's portals on its route.
+    /// The player clicked the map with this ID in the search view's matches: it becomes the
+    /// Destination. Like Enter on it.
+    pub fn search_pick_destination(&mut self, id: &str) -> &PanelState {
+        self.record(Event::SearchPickDestination { id: id.to_string() });
+        self.search.pick_destination(id, &searched(&self.set, &self.item_files, &self.state, &self.settings));
+        self.sync_search();
+        self.sync_panel()
+    }
+
+    /// The player clicked the item with this ID (8 digits) in the search view's matches:
+    /// its card shows, beside the panel. Like Enter on it.
+    pub fn search_pick_item(&mut self, id: &str) -> &PanelState {
+        self.record(Event::SearchPickItem { id: id.to_string() });
+        let picked = self.search.pick_item(id, &searched(&self.set, &self.item_files, &self.state, &self.settings));
+        self.sync_search();
+        if let Some(ids) = picked {
+            self.show_card(ids);
+        }
+        self.sync_panel()
+    }
+
+    /// The card of items `ids`, picked from Search, shows beside the panel; the alert has
+    /// nothing more to say.
+    fn show_card(&mut self, ids: Vec<u32>) {
+        self.item_cards.show(ids);
+        self.item_lookups.clear();
+    }
+
+    /// Bring the panel's Search up to date with the player's inputs, OSMS's file set and
+    /// item files, the map shown and the travel toggles; and with it what follows from the
+    /// Hunting Target or Destination: the pictures, and the Map Preview's portals on the
+    /// route.
     fn sync_search(&mut self) {
-        let search = self.search.state(&searched(&self.set, &self.state, &self.settings));
+        let search = self.search.state(&searched(&self.set, &self.item_files, &self.state, &self.settings));
         self.state.search = search;
         self.sync_pictured();
     }
@@ -1386,7 +1424,10 @@ impl Compass {
             self.sync_shown_map();
         }
         self.poll_pictures(at_ms);
-        self.item_files.load(&mut self.source, at_ms, self.wall_clock);
+        if self.item_files.load(&mut self.source, at_ms, self.wall_clock) {
+            // Search matches items once they are in.
+            self.sync_search();
+        }
         // An Item Lookup's search, which the player waits on.
         let open = self.item_lookups.poll(&mut self.source, &mut self.meowdb_pace, at_ms);
         self.requests.extend(open.map(|url| Request::OpenInBrowser { url }));
@@ -1595,7 +1636,13 @@ impl Compass {
         );
         let shows = self.state.item_card.is_some() && self.panel.layer() != Layer::Hidden && !self.card_capturing;
         self.state.item_card_placement = match &self.panel.game {
-            Some(game) if shows => self.item_cards.placement(game, self.item_card_size, &self.panel.avoid),
+            Some(game) if shows => {
+                // Beside the panel, a card from Search keeps off our other windows there.
+                let others: Vec<ScreenRect> =
+                    [self.state.grind_tracker.placement, self.state.personal_bests.placement].into_iter().flatten().collect();
+                let panel = self.state.placement.filter(|_| self.state.layer != Layer::Hidden);
+                self.item_cards.placement(game, self.item_card_size, &self.panel.avoid, panel, &others)
+            }
             _ => None,
         };
     }
@@ -1674,9 +1721,20 @@ impl Compass {
 
 /// What mob search works over: OSMS's file set, the map the panel shows, and the travel
 /// the player has turned on.
-fn searched<'a>(set: &'a Option<HeldSet>, state: &'a PanelState, settings: &Settings) -> Searched<'a> {
+fn searched<'a>(
+    set: &'a Option<HeldSet>,
+    item_files: &'a ItemFilesLoader,
+    state: &'a PanelState,
+    settings: &Settings,
+) -> Searched<'a> {
+    let items = item_files.items().map_err(|missing| match missing {
+        ItemLookup::ItemsUnavailable => ItemsMissing::Unavailable,
+        ItemLookup::ItemsFormatChanged => ItemsMissing::FormatChanged,
+        _ => ItemsMissing::Loading,
+    });
     Searched {
         set: set.as_ref().map(|held| &held.maps),
+        items,
         here: state.map.as_ref().map(|map| map.id.as_str()),
         travel: settings.travel,
     }

@@ -67,7 +67,7 @@
                 Hidden Portals the game doesn't show, and its mobs with what they're worth.
               </p>
               <p class="lede">
-                Search a mob and it shows the way to a map to hunt it, portal by portal. Mark your EXP bar and it keeps your
+                Search a mob or a map and it shows the way there, portal by portal. Mark your EXP bar and it keeps your
                 pace, your time to level and your best on every map.
               </p>
               <p class="note problem">
@@ -452,7 +452,7 @@
               <ul class="toolbar-legend">
                 <li>
                   <span class="icon-button" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.25" /><path d="M10.2 10.2 13.5 13.5" /></svg></span>
-                  <span>Search a mob, to hunt it: <a href="#search">Hunting</a>.</span>
+                  <span>Search for a mob to hunt, a map to go to, or an item: <a href="#search">Hunting</a>.</span>
                 </li>
                 <li>
                   <span class="icon-button" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M2.5 5.5h10M10 3l2.5 2.5L10 8M13.5 10.5h-10M6 8l-2.5 2.5L6 13" /></svg></span>
@@ -575,26 +575,37 @@
         <section class="tab-page" id="hunting" aria-labelledby="hunting-title">
           <header class="tab-opener">
             <h2 id="hunting-title">Hunting</h2>
-            <p>Find where a mob spawns, pick a map, and follow the way there.</p>
-            <p class="in-tab"><a href="#search">Search a mob</a> · <a href="#navigation">Navigation to your Hunting Target</a></p>
+            <p>Find where a mob spawns, or any map, and follow the way there.</p>
+            <p class="in-tab"><a href="#search">Search</a> · <a href="#navigation">Navigation</a></p>
           </header>
 
           <section class="topic with-aside" id="search" aria-labelledby="search-title">
             <div class="topic-text">
-              <h3 id="search-title">Search a mob</h3>
+              <h3 id="search-title">Search</h3>
               <p>
-                <kbd>Ctrl+Shift+F</kbd>, or the magnifier at the top of the panel, opens the search view. Type part of a mob's
-                name and pick the mob, with the arrow keys and Enter or a click.
+                <kbd>Ctrl+Shift+F</kbd>, or the magnifier at the top of the panel, opens the search view. Type part of a name:
+                the mobs, maps and items that have it show in a section each, mobs first, with the mobs' and items' pictures.
+                Names that start with what you typed come first. Each section shows its best five and counts the rest: type
+                more to narrow them down. Pick one with the arrow keys and Enter, or a click.
               </p>
+              <ul class="brief">
+                <li><b>A mob:</b> lists the maps it spawns on, to pick one to hunt it on.</li>
+                <li><b>A map:</b> becomes your Destination, and the panel shows the way there.</li>
+                <li>
+                  <b>An item:</b> shows its <a href="#item-card">Item Card</a> beside the panel, with what a shop pays for it
+                  and your market prices.
+                </li>
+              </ul>
               <p>
-                <b class="run-in">The mob's maps.</b> The panel then lists every map the mob spawns on, ranked by
+                <b class="run-in">The mob's maps.</b> Picking a mob lists every map it spawns on, ranked by
                 <strong>Density Tier</strong> and then the nearest within a tier, each with its figures. Tick
                 <strong>Taxis</strong> or <strong>Teleport Scrolls</strong> to count them as ways to travel. Event maps and
-                the developers' room aren't listed.
+                the developers' room aren't listed, nor found as maps.
               </p>
               <p>
                 <b class="run-in">The keyboard.</b> The search view takes over the panel, and your typing, until it closes;
-                then the game has the keyboard again. The back arrow or Esc leaves without changing anything.
+                then the game has the keyboard again. The back arrow or Esc goes back a step without changing anything: from
+                a mob's maps to what you typed, and from there to the panel.
               </p>
             </div>
             <aside class="aside" aria-labelledby="figures-title">
@@ -614,11 +625,16 @@
 
           <section class="topic with-shot" id="navigation" data-mini="Navigation" aria-labelledby="navigation-title">
             <div class="topic-text">
-              <h3 id="navigation-title"><span class="mark route" aria-hidden="true"></span>Navigation to your Hunting Target</h3>
+              <h3 id="navigation-title"><span class="mark route" aria-hidden="true"></span>Navigation</h3>
               <p>
-                Pick a map the same way and it becomes your <strong>Hunting Target</strong>. The panel goes back to its
+                Pick one of a mob's maps and it becomes your <strong>Hunting Target</strong>. The panel goes back to its
                 normal view with a Navigation section between the Map and the Mobs: the mob as OSMS animates it, the map,
                 its figures, and the route there from the map you're on, worked out again as you move.
+              </p>
+              <p>
+                <b class="run-in">A Destination.</b> Pick a map itself in search and it becomes your
+                <strong>Destination</strong> instead: Navigation shows the map, its street, how far it is and the route
+                there, without a mob or its figures. You have one or the other: the last you picked.
               </p>
               <p>
                 <b class="run-in">The next portal.</b> On the map's picture, the portal your route takes next wears a wide
@@ -626,11 +642,11 @@
               </p>
               <p>
                 <b class="run-in">Arriving.</b> The route gives way to <strong>You're here</strong>, with how far you came,
-                until you leave the map.
+                until you leave the map. A Destination picked on the map you're on says so at once.
               </p>
               <p>
-                <b class="run-in">Changing or clearing it.</b> Navigation's magnifier reopens the mob's map list to pick
-                another map, and its × clears the Hunting Target. Otherwise it lasts until you close MapleCompass.
+                <b class="run-in">Changing or clearing it.</b> A Hunting Target's magnifier reopens the mob's map list to pick
+                another map, and the × clears either. Otherwise it lasts until you close MapleCompass.
               </p>
             </div>
             <figure class="shot">
@@ -741,7 +757,7 @@
         <section class="tab-page" id="items" aria-labelledby="items-title">
           <header class="tab-opener">
             <h2 id="items-title">Items</h2>
-            <p>What an item is worth, from its tooltip in the game, and its MeowDB page.</p>
+            <p>What an item is worth, from its tooltip in the game or from search, and its MeowDB page.</p>
           </header>
 
           <section class="topic with-shot full-shot" id="item-card" aria-labelledby="item-card-title">
@@ -757,6 +773,11 @@
                 <li><b>Shop pays:</b> what an NPC shop pays for one.</li>
                 <li><b>Market:</b> the prices you keep for it, from what you've seen players pay, one on each of your lines.</li>
               </ul>
+              <p>
+                <b class="run-in">From search.</b> You don't need the item in hand: find it in <a href="#search">search</a>
+                and pick it, and its card opens beside the panel. Items that share a name but don't look alike are listed
+                each with its picture and kind.
+              </p>
               <p>
                 <b class="run-in">Your market prices.</b> MapleCompass reads no market prices of its own, so you keep them for
                 the items you care about. Click a price (or "Not set") and type it as players write it: 450,000, 450k or
@@ -777,10 +798,10 @@
               </p>
               <p>
                 <b class="run-in">Moving and closing it.</b> Drag the card by its bar to move it out of the way; it stays
-                there until it closes, and the next card opens at the pointer again. It stays until you click its ×, or
-                press <kbd>Ctrl+Shift+I</kbd> again: over another item for that item's card, anywhere else to close it. One
-                card shows at a time. Clicks on the card never reach the game, and a click in the game leaves the card where
-                it is. A long card scrolls under its bar.
+                there until it closes, and the next card opens at the pointer again (or beside the panel, from search). It
+                stays until you click its ×, or press <kbd>Ctrl+Shift+I</kbd> again: over another item for that item's card,
+                anywhere else to close it. One card shows at a time. Clicks on the card never reach the game, and a click in
+                the game leaves the card where it is. A long card scrolls under its bar.
               </p>
               <p>
                 <b class="run-in">Items sharing a name.</b> When items that don't look alike share the name (Blue Moon is a

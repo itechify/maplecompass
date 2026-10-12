@@ -1,4 +1,4 @@
-//! Mob search in the overlay. The overlay is always clickable but never activated by a
+//! Search in the overlay. The overlay is always clickable but never activated by a
 //! click; only while the search view (or the settings view) is open does it take the
 //! keyboard (ADR 0001): it becomes focusable and comes to the front when the view opens,
 //! and gives focus back when it closes, so Windows returns it to the game. Nothing is sent
@@ -89,19 +89,31 @@ pub fn search_move(down: bool, commands: State<'_, Sender<Command>>) {
     act(&commands, if down { Action::SearchNext } else { Action::SearchPrevious });
 }
 
-/// Enter: pick the highlighted mob, or the highlighted map.
+/// Enter: pick the highlighted match, or the highlighted map in a mob's map list.
 #[tauri::command]
 pub fn search_enter(commands: State<'_, Sender<Command>>) {
     act(&commands, Action::SearchEnter);
 }
 
-/// A click on a suggested mob or a listed map (its ID): pick it.
+/// A click on a matched mob, or on a map in a mob's map list (its ID): pick it.
 #[tauri::command]
 pub fn search_pick(id: String, commands: State<'_, Sender<Command>>) {
     let _ = commands.send(Command::SearchPick(id));
 }
 
-/// Esc or the back arrow: back to the normal view, with nothing changed.
+/// A click on a matched map (its ID): make it the Destination.
+#[tauri::command]
+pub fn search_pick_destination(id: String, commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::SearchPickDestination(id));
+}
+
+/// A click on matched items (the first one's ID): show their Item Card.
+#[tauri::command]
+pub fn search_pick_item(id: String, commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::SearchPickItem(id));
+}
+
+/// Esc or the back arrow: back a step, with nothing changed.
 #[tauri::command]
 pub fn search_escape(commands: State<'_, Sender<Command>>) {
     act(&commands, Action::SearchEscape);
@@ -113,7 +125,7 @@ pub fn hunting_reopen(commands: State<'_, Sender<Command>>) {
     act(&commands, Action::ReopenMapList);
 }
 
-/// The Navigation section's ×: clear the Hunting Target.
+/// The Navigation section's ×: clear the Hunting Target or the Destination.
 #[tauri::command]
 pub fn hunting_clear(commands: State<'_, Sender<Command>>) {
     act(&commands, Action::ClearHuntingTarget);

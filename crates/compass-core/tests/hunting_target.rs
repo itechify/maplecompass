@@ -317,15 +317,17 @@ fn another_map_picked_from_the_reopened_list_becomes_the_target() {
 }
 
 #[test]
-fn esc_from_the_reopened_list_keeps_the_target() {
+fn esc_from_the_reopened_list_goes_back_to_an_empty_search_and_keeps_the_target() {
     let mut compass = on_sunset_sky(near_and_far_fields());
     let before = hunt_orange_on(&mut compass, "100000001");
     compass.act(Action::ReopenMapList);
     compass.act(Action::SearchPrevious);
 
-    let state = compass.act(Action::SearchEscape);
+    let state = compass.act(Action::SearchEscape).clone();
 
-    assert_eq!(*state, before);
+    assert_eq!((state.search.view, state.search.query.as_str()), (Some(SearchView::Matches), ""));
+    assert_eq!(state.search.hunting, before.search.hunting);
+    assert_eq!(*compass.act(Action::SearchEscape), before);
 }
 
 #[test]
