@@ -4,10 +4,10 @@ import { listen } from "@tauri-apps/api/event";
 import { byId, span } from "./dom";
 import { keyLabel } from "./hotkeys";
 
-/** Mirror of `compass_core::ItemChoice`: one of several MeowDB items sharing a name. */
+/** Mirror of `minerva_core::ItemChoice`: one of several MeowDB items sharing a name. */
 type ItemChoice = { id: string; name: string; category: string | null; url: string };
 
-/** Mirror of `compass_core::ItemLookupLine`: what the latest Item Lookup came to, or what
+/** Mirror of `minerva_core::ItemLookupLine`: what the latest Item Lookup came to, or what
  * kept an Item Card from showing (`hotkey` says which the player pressed). */
 type ItemLookupLine = { lookup: number; hotkey: "itemCard" | "itemLookup" } & (
   | { status: "lookingUp"; read: string }
@@ -31,7 +31,7 @@ type AlertView = { shown: boolean; line: ItemLookupLine | null; hotkey: string }
 
 /**
  * How long the core keeps an alert (ms; `LINE_MS` and `CHOICES_MS` in
- * `crates/compass-core/src/item_lookup.rs`): it fades out over its last second.
+ * `crates/minerva-core/src/item_lookup.rs`): it fades out over its last second.
  */
 const LINE_MS = 6_000;
 const CHOICES_MS = 30_000;
@@ -40,7 +40,7 @@ const alertEl = byId("alert");
 const lineEl = byId("line");
 const choices = byId("choices");
 
-/** Mirror of `compass_core::OurWindow`: our windows, which show in our captures. */
+/** Mirror of `minerva_core::OurWindow`: our windows, which show in our captures. */
 const COVERS = {
   panel: "The panel",
   grindTracker: "The Grind Tracker",
@@ -76,7 +76,7 @@ function sentence(line: ItemLookupLine, key: string): [string, boolean] {
     case "itemsUnavailable":
       return ["The item list can't be loaded: OSMS Data Explorer can't be reached right now.", true];
     case "itemsFormatChanged":
-      return ["The Item Card is unavailable: OSMS Data Explorer's item list has changed. MapleCompass needs an update.", true];
+      return ["The Item Card is unavailable: OSMS Data Explorer's item list has changed. Minerva needs an update.", true];
   }
 }
 

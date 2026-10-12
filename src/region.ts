@@ -5,7 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 // The shell lays this window exactly over the game's client area, so a point here in
 // CSS px times the device pixel ratio is the same point in client px.
 
-/** What the player marks: mirror of `compass_core::MarkTarget`. */
+/** What the player marks: mirror of `minerva_core::MarkTarget`. */
 type Target = "title" | "expBar";
 
 /** The window's heading for each. */

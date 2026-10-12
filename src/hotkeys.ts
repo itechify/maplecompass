@@ -11,7 +11,7 @@ export type Hotkeys = {
   itemLookup: string;
 };
 
-/** Mirror of `compass_core::Hotkey`: one of the hotkeys, named as in `Hotkeys`. */
+/** Mirror of `minerva_core::Hotkey`: one of the hotkeys, named as in `Hotkeys`. */
 export type Hotkey = keyof Hotkeys;
 
 /**
@@ -33,19 +33,19 @@ export const HOTKEY_NAMES: [Hotkey, string][] = [
 /** The hotkeys whose actions have no button: turned off, they can't be used at all. */
 export const KEY_ONLY: Hotkey[] = ["itemCard", "itemLookup"];
 
-/** Mirror of `compass_core::RebindProblem`. */
+/** Mirror of `minerva_core::RebindProblem`. */
 export type RebindProblem =
   | { kind: "noModifier"; pressed: string }
   | { kind: "unsupportedKey"; code: string }
   | { kind: "inUse"; pressed: string; by: Hotkey };
 
-/** Mirror of `compass_core::SettingsNotice`: what the player's last change came to. */
+/** Mirror of `minerva_core::SettingsNotice`: what the player's last change came to. */
 export type SettingsNotice =
   | { kind: "saved"; hotkey: Hotkey; swappedWith: Hotkey | null }
   | { kind: "restored" }
   | { kind: "restoreUndone" };
 
-/** Mirror of `compass_core::SettingsView`. */
+/** Mirror of `minerva_core::SettingsView`. */
 export type SettingsView = {
   rebinding: Hotkey | null;
   problem: RebindProblem | null;

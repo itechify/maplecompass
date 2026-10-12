@@ -11,7 +11,7 @@
 use crate::errors::error;
 use crate::view::{LastView, ViewSender};
 use crate::{Command, keep_on_top, physical, place};
-use compass_core::{Hotkey, ItemLookup, ItemLookupLine, PanelState, Size};
+use minerva_core::{Hotkey, ItemLookup, ItemLookupLine, PanelState, Size};
 use serde::Serialize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

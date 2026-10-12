@@ -1,5 +1,5 @@
 //! OSMS Data Explorer's item files (ADR 0010): the two files under
-//! [`compass_core::osms::DATA_URL`] the Item Card reads, fetched with MapleCompass's own
+//! [`minerva_core::osms::DATA_URL`] the Item Card reads, fetched with Minerva's own
 //! user agent, one request at a time and with no other pace. Nothing from OSMS is bundled.
 //!
 //! Saved apart from the map set ([`crate::osms`]) as one file of their own, so a change in
@@ -10,9 +10,9 @@
 
 use crate::errors::error;
 use crate::http;
-use compass_core::SourceError;
-use compass_core::osms::DATA_URL;
-use compass_core::osms_items::{self, ItemFiles, SavedItemFiles};
+use minerva_core::SourceError;
+use minerva_core::osms::DATA_URL;
+use minerva_core::osms_items::{self, ItemFiles, SavedItemFiles};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Receiver;
 use std::task::Poll;
@@ -104,7 +104,7 @@ mod tests {
 
     #[test]
     fn the_saved_item_files_are_read_back_with_when_they_were_saved() {
-        let dir = std::env::temp_dir().join(format!("maplecompass-osms-items-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("minerva-osms-items-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let items = OsmsItems::new(reqwest::Client::new(), &dir);

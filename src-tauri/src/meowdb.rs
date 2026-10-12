@@ -1,4 +1,4 @@
-//! MeowDB's search (ADR 0007), MapleCompass's only request to MeowDB: fetched over HTTPS
+//! MeowDB's search (ADR 0007), Minerva's only request to MeowDB: fetched over HTTPS
 //! with an honest user agent and kept in a disk cache. Reading it is left to the core. No
 //! MeowDB page is fetched.
 //!
@@ -9,7 +9,7 @@
 
 use crate::errors::error;
 use crate::http;
-use compass_core::{Fetched, ItemHit, SourceError, meowdb};
+use minerva_core::{Fetched, ItemHit, SourceError, meowdb};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Receiver;
 use std::task::Poll;

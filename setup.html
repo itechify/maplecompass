@@ -4,13 +4,13 @@
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="/src/setup.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MapleCompass Setup</title>
+    <title>Minerva Setup</title>
     <script type="module" src="/src/setup.ts" defer></script>
   </head>
   <body>
     <header>
-      <img class="mark-icon" src="/assets/icon.png" width="28" height="28" alt="" />
-      <h1>MapleCompass Setup</h1>
+      <img class="mark-icon" src="/assets/icon-32.png" width="32" height="32" alt="" />
+      <h1>Minerva Setup</h1>
       <span class="progress" id="progress"></span>
       <button class="secondary guide-button" id="guide-open">Guide</button>
       <button class="secondary guide-button" id="about-open">About &amp; Credits</button>
@@ -23,11 +23,11 @@
       <section data-step="warning">
         <h2 tabindex="-1">Before you start: your account</h2>
         <p>
-          MapleCompass is a third-party tool, not made or approved by Nexon. Nexon's terms forbid
+          Minerva is a third-party tool, not made or approved by Nexon. Nexon's terms forbid
           some third-party programs, and a penalty in Classic World applies to your whole account,
-          MapleStory included. <strong>Using MapleCompass is at your own risk.</strong>
+          MapleStory included. <strong>Using Minerva is at your own risk.</strong>
         </p>
-        <p>To keep that risk low, MapleCompass only looks at the screen:</p>
+        <p>To keep that risk low, Minerva only looks at the screen:</p>
         <ul>
           <li>
             It captures the minimap title (and, if you choose, the EXP bar) the same way a
@@ -57,7 +57,7 @@
         <ul class="checklist">
           <li>
             <strong>Keep the minimap open, with its title showing.</strong>
-            MapleCompass reads the street name and map name at the top of the minimap.
+            Minerva reads the street name and map name at the top of the minimap.
           </li>
           <li>
             <strong>Play in windowed or borderless mode.</strong>
@@ -148,7 +148,7 @@
         </dl>
         <p>Drag the panel by its header to move it, Inside or Detached; Docked panels stay beside the game. Placement cycles through Inside, Docked Right, Docked Left, and Detached. The magnifier at the top of the panel, or the search shortcut, finds mobs, maps and items. Pick a mob, then one of the maps it spawns on, to make it your Hunting Target, or pick a map to make it your Destination: the panel shows the way there until you arrive. To see what an item is worth, pick it in search, or hover it in the game until its tooltip shows and press the item card shortcut: its card shows what a shop pays for it, and the market price you keep for it, with a button to look it up on MesoWatch. Its name opens its MeowDB page in your browser, as the MeowDB shortcut does at once.</p>
         <p class="muted"><strong>Map Summary:</strong> 6+ means a party of six or more players. Share is a mob's share of all spawns on the Map.</p>
-        <p class="muted"><strong>Something wrong?</strong> Choose Bug Report in the menu of MapleCompass's compass in the notification area, by the clock. It saves what MapleCompass read and made of it, and opens a form to report the bug on GitHub with it.</p>
+        <p class="muted"><strong>Something wrong?</strong> Choose Bug Report in the menu of Minerva's owl in the notification area, by the clock. It saves what Minerva read and made of it, and opens a form to report the bug on GitHub with it.</p>
         <p class="muted" id="change-hotkeys-note" role="status" hidden></p>
         <footer>
           <button class="secondary" id="change-hotkeys">Change hotkeys</button>
@@ -158,15 +158,15 @@
 
       <section data-step="about" hidden>
         <h2 tabindex="-1">About &amp; Credits</h2>
-        <p>MapleCompass <span id="app-version"></span> is a free helper overlay for MapleStory Classic World. Its source and releases are at github.com/itechify/maplecompass. It isn't made, endorsed or supported by NEXON. Using any third-party tool with MapleStory is at your own risk.</p>
-        <p><button type="button" class="link" id="site-open">The MapleCompass site</button> (itechify.github.io/maplecompass) explains each feature and how to use it. The link opens it in your browser.</p>
+        <p>Minerva <span id="app-version"></span> is a free helper overlay for MapleStory Classic World. Its source and releases are at github.com/itechify/minerva. It isn't made, endorsed or supported by NEXON. Using any third-party tool with MapleStory is at your own risk.</p>
+        <p><button type="button" class="link" id="site-open">The Minerva site</button> (itechify.github.io/minerva) explains each feature and how to use it. The link opens it in your browser.</p>
         <dl class="credits">
           <dt>Map, mob and item data, map pictures, mob animations and item pictures</dt>
           <dd>OSMS Data Explorer (osmsdataexplorer.com), mined from the game. The pictures and animations are NEXON's art.</dd>
           <dt>Map, mob and item pages</dt>
           <dd>NiaMeowDB (meowdb.com)</dd>
           <dt>Market prices</dt>
-          <dd>MesoWatch (meso.watch), which the Item Card opens. MapleCompass reads nothing from it.</dd>
+          <dd>MesoWatch (meso.watch), which the Item Card opens. Minerva reads nothing from it.</dd>
           <dt>Title and item recognition</dt>
           <dd>The text-recognition model of ocrs by Robert Knight (github.com/robertknight/ocrs), bundled unmodified under the Creative Commons Attribution-ShareAlike 4.0 licence (creativecommons.org/licenses/by-sa/4.0). Trained on HierText (CC BY-SA 4.0) and synthetic data. Provided as is, without warranties of any kind.</dd>
           <dt>Typeface</dt>

@@ -12,7 +12,7 @@
 use crate::gamewin;
 use crate::view::{LastView, ViewSender};
 use crate::Command;
-use compass_core::{
+use minerva_core::{
     Action, Hotkeys, MapMark, MarkTarget, PanelControl, PanelState, Recognition, Rect, ScreenRect, SelectionDirection,
     SetupState,
 };
@@ -25,7 +25,7 @@ use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, 
 pub const SETUP: &str = "setup";
 pub const REGION: &str = "region";
 
-/// What the setup commands share with the compass loop.
+/// What the setup commands share with the core loop.
 pub struct Bridge {
     pub commands: Sender<Command>,
     /// Titles of game windows the player picked by hand.
@@ -101,7 +101,7 @@ impl SetupWindows {
         })
     }
 
-    /// The player started MapleCompass again: bring an open setup window in front, where
+    /// The player started Minerva again: bring an open setup window in front, where
     /// they can see it. Right after their launch, so Windows lets us take the foreground.
     pub fn bring_to_front(&self) {
         if self.shown {
@@ -279,7 +279,7 @@ pub async fn open_hotkey_settings(bridge: State<'_, Bridge>) -> Result<(), Strin
     bridge.commands.send(Command::Press(PanelControl::Settings)).map_err(|e| e.to_string())
 }
 
-/// About & Credits' link: open the MapleCompass site in the browser, as the panel opens
+/// About & Credits' link: open the Minerva site in the browser, as the panel opens
 /// MeowDB's pages.
 #[tauri::command]
 pub async fn open_site(bridge: State<'_, Bridge>) -> Result<(), String> {

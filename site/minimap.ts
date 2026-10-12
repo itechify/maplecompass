@@ -91,7 +91,7 @@ export function minimap(tabs: HTMLAnchorElement[], line: () => number) {
       });
     });
   });
-  stops.push({ el: foot, part: n, name: "Credits", street: "MapleCompass", href: "#credits", mark: "portal", x: W / 2, y: ledge(n) - STAND });
+  stops.push({ el: foot, part: n, name: "Credits", street: "Minerva", href: "#credits", mark: "portal", x: W / 2, y: ledge(n) - STAND });
 
   // The window: the game's Mini Map bar, the sky-blue title saying where you are, the map.
   const nav = make("nav", "minimap");
@@ -103,7 +103,8 @@ export function minimap(tabs: HTMLAnchorElement[], line: () => number) {
   bar.append(make("p", "mm-name", "Mini Map"), fold);
   const title = make("div", "mm-title");
   const emblem = make("img", "mm-emblem");
-  emblem.src = document.querySelector<HTMLImageElement>(".mark-icon")!.src;
+  // The owl's 16px drawing, the favicon's, at its own size.
+  emblem.src = document.querySelector<HTMLLinkElement>('link[rel="icon"][sizes="16x16"]')!.href;
   emblem.alt = "";
   const street = make("p", "mm-street");
   const place = make("p", "mm-place");

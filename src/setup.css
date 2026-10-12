@@ -28,7 +28,7 @@ body {
   flex-direction: column;
 }
 
-/* The game's window bar, full width: the compass, the window's name, the step. */
+/* The game's window bar, full width: the owl, the window's name, the step. */
 header {
   display: flex;
   align-items: center;
@@ -40,11 +40,12 @@ header {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
-/* The app icon, the pixel-art compass, small. */
+/* The app icon, the pixel-art owl, at its own 32px. */
 .mark-icon {
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
 }
 
 h1 {
@@ -380,7 +381,7 @@ h3 {
   overflow-wrap: anywhere;
 }
 
-/* About & Credits' link to the MapleCompass site, the window's one link: Ink with a 1px
+/* About & Credits' link to the Minerva site, the window's one link: Ink with a 1px
    Selection Edge underline at rest, Portal Blue under the pointer, Frame Navy while
    pressed, as the site draws its links. */
 button.link {

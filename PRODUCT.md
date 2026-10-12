@@ -1,4 +1,4 @@
-# MapleCompass
+# Minerva
 
 <!-- impeccable:product-schema 1 -->
 
@@ -8,13 +8,13 @@ web
 
 ## Users
 
-The primary user is the average MapleStory Classic player, playing MapleStory Classic World. Product decisions should serve ordinary players rather than assume expert map knowledge or familiarity with MapleCompass internals.
+The primary user is the average MapleStory Classic player, playing MapleStory Classic World. Product decisions should serve ordinary players rather than assume expert map knowledge or familiarity with Minerva internals.
 
-MapleCompass is public: its repository and its releases (from 0.7.0) are on GitHub, and the MapleCompass site explains it to players before and after they install it. ADR 0008 lifted ADR 0003's ban on a public release, and the repo's history was cleaned of MeowDB's pages before it went public. `docs/releasing.md` says how a version is made and released.
+Minerva is public: its repository and its releases (from 0.7.0) are on GitHub, and the Minerva site explains it to players before and after they install it. ADR 0008 lifted ADR 0003's ban on a public release, and the repo's history was cleaned of MeowDB's pages before it went public. `docs/releasing.md` says how a version is made and released.
 
 ## Product Purpose
 
-MapleCompass identifies the player's current Map and shows its Map Preview, Hidden Portals, Map Summary, and mobs while they play. Success means the player can check useful information about where they are without interrupting play to look up the Map manually.
+Minerva identifies the player's current Map and shows its Map Preview, Hidden Portals, Map Summary, and mobs while they play. Success means the player can check useful information about where they are without interrupting play to look up the Map manually.
 
 ## Positioning
 
@@ -25,8 +25,8 @@ The companion follows the player's current Map by recognising the displayed Mini
 - The app is Windows-first, with an HTML/CSS and vanilla TypeScript interface hosted in Tauri v2. `web` describes the UI implementation, not a standalone browser product. ADR 0002 preserves the possibility of macOS and Linux (Wine/Proton); those platforms are not confirmed shipping support.
 - The game runs windowed or borderless, with the minimap open and both lines of the Minimap Title visible. Exclusive fullscreen is outside the supported workflow.
 - First-run setup presents the account-risk warning, finds or lets the player pick the game window, explains game requirements, asks them to mark the Title Region, and verifies a recognised Map before finishing. A game-window size change requires marking again.
-- During play, the panel can sit inside the game window, dock to either side, or remain detached, including on another monitor. It can collapse to an icon. Registered hotkeys control collapse, editing, placement, setup, opening the map's MeowDB page, choosing a Candidate, the Item Card (what the item whose tooltip shows by the pointer is worth, where it comes from and what it's for) and Item Lookup (that item's MeowDB page); the defaults are documented on the MapleCompass site (`site/`), and the player rebinds any of them, or turns it off, in the panel's settings view (its gear, or Change hotkeys in setup's Overlay Guide) by pressing the new combination.
-- The overlay panel is always clickable but never takes the keyboard on a click, so the game keeps focus; only the open search view, the open settings view and the Item Card's open market price field take the keyboard. Title Region marking also receives interaction in MapleCompass's own window. The panel avoids covering the Title Region, never grows taller than the space where it is placed, and appears in screenshots and streams. Wherever it is placed, it and MapleCompass's other overlay windows (the Grind Tracker, the Item Lookup alert, the Item Card) show on top of everything, but only while the game window or one of MapleCompass's own windows is in front; with another app in front, or the game minimised or gone, they hide. Opening a MeowDB page in the browser therefore hides them until the player returns to the game. The setup and title-marking windows are outside this rule.
+- During play, the panel can sit inside the game window, dock to either side, or remain detached, including on another monitor. It can collapse to an icon. Registered hotkeys control collapse, editing, placement, setup, opening the map's MeowDB page, choosing a Candidate, the Item Card (what the item whose tooltip shows by the pointer is worth, where it comes from and what it's for) and Item Lookup (that item's MeowDB page); the defaults are documented on the Minerva site (`site/`), and the player rebinds any of them, or turns it off, in the panel's settings view (its gear, or Change hotkeys in setup's Overlay Guide) by pressing the new combination.
+- The overlay panel is always clickable but never takes the keyboard on a click, so the game keeps focus; only the open search view, the open settings view and the Item Card's open market price field take the keyboard. Title Region marking also receives interaction in Minerva's own window. The panel avoids covering the Title Region, never grows taller than the space where it is placed, and appears in screenshots and streams. Wherever it is placed, it and Minerva's other overlay windows (the Grind Tracker, the Item Lookup alert, the Item Card) show on top of everything, but only while the game window or one of Minerva's own windows is in front; with another app in front, or the game minimised or gone, they hide. Opening a MeowDB page in the browser therefore hides them until the player returns to the game. The setup and title-marking windows are outside this rule.
 - Settings retain the marked Title Region, placement, selected game window, and hotkeys across sessions; the Personal Bests and the market prices the player keeps are saved beside them.
 
 ## Capabilities and Constraints
@@ -40,11 +40,11 @@ The companion follows the player's current Map by recognising the displayed Mini
 - Preserve [ADR 0001](docs/adr/0001-observe-game-from-outside-only.md): ordinary screen capture and separate app windows only. No game memory or file access, injection, game input, hooks, cross-process window parenting, or `PrintWindow`. Hotkeys use operating-system registration.
 - Preserve [ADR 0008](docs/adr/0008-map-and-mob-data-from-osms-data-explorer.md): fetch OSMS's files and ship none of them, and read no MeowDB page. Item Lookup's search is the one request to MeowDB, one per request for an item's page at MeowDB's 2-second pace ([ADR 0007](docs/adr/0007-item-lookup-on-a-hotkey-through-meowdb-search.md)). Any other source meets the test of ADR 0010, or waits for its owner's written permission. Do not claim Nexon approval or guaranteed account safety.
 - The tray's Bug Report saves what the core took in and made of it over the run, with crops of the two marked regions and of the game around the pointer at an item hotkey's press, as a `.zip` that replays ([ADR 0009](docs/adr/0009-bug-reports-replay-the-cores-inputs.md)). It stays on the player's PC until they attach it to an issue, and holds no OSMS data.
-- All product logic belongs in `crates/compass-core`, taking plain data and returning `PanelState` without OS, UI, network, or file dependencies. `src-tauri` adapts the platform; the web UI renders state.
+- All product logic belongs in `crates/minerva-core`, taking plain data and returning `PanelState` without OS, UI, network, or file dependencies. `src-tauri` adapts the platform; the web UI renders state.
 
 ## Brand Commitments
 
-- Product name: MapleCompass. The app icon is the pixel-art gold compass in [assets/icon.png](assets/icon.png), with packaged variants in `src-tauri/icons`.
+- Product name: Minerva. The app icon is the pixel-art owl, supplied by the owner in three drawings: [assets/icon.png](assets/icon.png) (37×42), [assets/icon-32.png](assets/icon-32.png) and [assets/icon-16.png](assets/icon-16.png), each shown pixel for pixel or by whole steps. The logo, the owl over "Minerva", is [assets/logo.png](assets/logo.png). Packaged variants are in `src-tauri/icons`.
 - The windows are set in NEXON's Maplestory typeface, bundled in `assets/fonts` with its provenance in `NOTICE.md`. Help & Setup's About & Credits and `THIRD-PARTY-NOTICES.md` credit it.
 - Each screen credits what it shows. The panel's footer (as the tooltip of its info icon) and the Personal Bests window credit `Data: OSMS Data Explorer (osmsdataexplorer.com) · Pages: NiaMeowDB (meowdb.com)`; the search view, which opens no pages, credits `Data: OSMS Data Explorer (osmsdataexplorer.com)`; the Item Card credits `Data: OSMS Data Explorer · Pages: NiaMeowDB, MesoWatch`; setup's test read says `Map names from OSMS Data Explorer`.
 - Preserve the explicit first-run account-risk disclosure. The product is a third-party companion, not made or approved by Nexon.
@@ -52,11 +52,11 @@ The companion follows the player's current Map by recognising the displayed Mini
 
 ## Evidence on Hand
 
-- The MapleCompass site (`site/`, published at itechify.github.io/maplecompass from each release's tag) is the player manual: current behavior, setup, hotkeys, what MapleCompass fetches and keeps, and the account-risk warning word for word. A change a player notices updates it in the same PR. [README.md](README.md) holds the layout and the Windows build commands.
+- The Minerva site (`site/`, published at itechify.github.io/minerva from each release's tag) is the player manual: current behavior, setup, hotkeys, what Minerva fetches and keeps, and the account-risk warning word for word. A change a player notices updates it in the same PR. [README.md](README.md) holds the layout and the Windows build commands.
 - [GLOSSARY.md](GLOSSARY.md) and [docs/adr](docs/adr/) hold the domain vocabulary and accepted technical decisions.
 - `samples/minimap/` contains real title and game-window screenshots used for recognition and setup tests. These are evidence for recognition, not screenshots of the overlay design.
-- `crates/compass-core/tests/` exercises public inputs and resulting panel state, on made-up worlds in OSMS's shape. Its `fixtures/` directory holds only the map names fixture (every Map's ID, Street Name, Map Name and Region), which recognition is tested against.
-- [ADR 0002](docs/adr/0002-one-bundled-title-recogniser.md) records the recogniser selection and model attribution requirements. `crates/compass-core/models/NOTICE.md` contains the bundled model notice, and Help & Setup's About & Credits and `THIRD-PARTY-NOTICES.md` carry its attribution and licence, as that ADR requires of a public release.
+- `crates/minerva-core/tests/` exercises public inputs and resulting panel state, on made-up worlds in OSMS's shape. Its `fixtures/` directory holds only the map names fixture (every Map's ID, Street Name, Map Name and Region), which recognition is tested against.
+- [ADR 0002](docs/adr/0002-one-bundled-title-recogniser.md) records the recogniser selection and model attribution requirements. `crates/minerva-core/models/NOTICE.md` contains the bundled model notice, and Help & Setup's About & Credits and `THIRD-PARTY-NOTICES.md` carry its attribution and licence, as that ADR requires of a public release.
 
 ## Product Principles
 

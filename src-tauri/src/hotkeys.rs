@@ -11,7 +11,7 @@
 
 use crate::errors::error;
 use crate::Command;
-use compass_core::Hotkeys;
+use minerva_core::Hotkeys;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use tauri::AppHandle;
@@ -34,7 +34,7 @@ pub struct GlobalHotkeys {
 }
 
 /// Set up the player's hotkeys, registering none yet; once registered, each press sends
-/// its accelerator string to the compass loop.
+/// its accelerator string to the core loop.
 pub fn install(app: &tauri::App, hotkeys: &Hotkeys, commands: Sender<Command>) -> tauri::Result<GlobalHotkeys> {
     let (parsed, invalid) = parse(hotkeys);
     let bindings: Bindings = Arc::new(Mutex::new(parsed));

@@ -1,7 +1,7 @@
 /** Map Marks: the emblem the game's Mini Map draws beside a map's title, for the area the
  *  map belongs to, which every window shows beside a map's name. */
 
-/** Mirror of `compass_core::MapMark`. */
+/** Mirror of `minerva_core::MapMark`. */
 export type MapMark = { name: string; image: string | null };
 
 /** Mirror of the panel state's `mapMarks`: every mark, by OSMS's name for it, which each

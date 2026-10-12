@@ -1,5 +1,5 @@
 //! OSMS Data Explorer's file set (ADR 0008): the five files under
-//! [`compass_core::osms::DATA_URL`], fetched with MapleCompass's own user agent, one
+//! [`minerva_core::osms::DATA_URL`], fetched with Minerva's own user agent, one
 //! request at a time and with no other pace. Nothing from OSMS is bundled.
 //!
 //! The set is saved on disk as one file, so it is swapped whole, and the file's
@@ -11,8 +11,8 @@
 
 use crate::errors::error;
 use crate::http;
-use compass_core::SourceError;
-use compass_core::osms::{self, OsmsFiles, SavedFiles};
+use minerva_core::SourceError;
+use minerva_core::osms::{self, OsmsFiles, SavedFiles};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Receiver;
 use std::task::Poll;
@@ -105,7 +105,7 @@ mod tests {
 
     #[test]
     fn the_saved_set_is_read_back_with_when_it_was_saved() {
-        let dir = std::env::temp_dir().join(format!("maplecompass-osms-set-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("minerva-osms-set-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let set = OsmsSet::new(reqwest::Client::new(), &dir);

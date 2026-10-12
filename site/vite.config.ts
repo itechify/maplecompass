@@ -5,13 +5,13 @@ import { defineConfig, type Plugin } from "vite";
 import pkg from "../package.json" with { type: "json" };
 import { hotkeyRows } from "./hotkeys.ts";
 
-// The MapleCompass site: one page for players, published on GitHub Pages from a release's
+// The Minerva site: one page for players, published on GitHub Pages from a release's
 // tag (.github/workflows/site.yml). `pnpm site:dev` serves it, `pnpm site:build` builds it
 // into site/dist.
 
 /** Where the site is published, for the links that must be absolute (Open Graph). */
-const SITE_URL = "https://itechify.github.io/maplecompass/";
-const RELEASES = "https://github.com/itechify/maplecompass/releases";
+const SITE_URL = "https://itechify.github.io/minerva/";
+const RELEASES = "https://github.com/itechify/minerva/releases";
 
 /**
  * The page's placeholders, filled at build: the version it describes (package.json's, which
@@ -21,13 +21,13 @@ function fillPlaceholders(): Plugin {
   const version = pkg.version;
   const values: Record<string, string> = {
     "@VERSION@": version,
-    "@SETUP_URL@": `${RELEASES}/download/v${version}/MapleCompass_${version}_x64-setup.exe`,
+    "@SETUP_URL@": `${RELEASES}/download/v${version}/Minerva_${version}_x64-setup.exe`,
     "@RELEASE_URL@": `${RELEASES}/tag/v${version}`,
     "@SITE_URL@": SITE_URL,
     "@HOTKEY_ROWS@": hotkeyRows(),
   };
   return {
-    name: "maplecompass-site:placeholders",
+    name: "minerva-site:placeholders",
     transformIndexHtml: {
       order: "pre",
       handler: (html) => html.replace(/@[A-Z_]+@/g, (token) => values[token] ?? token),
@@ -43,7 +43,7 @@ function fillPlaceholders(): Plugin {
  */
 function screenshots(): Plugin {
   return {
-    name: "maplecompass-site:screenshots",
+    name: "minerva-site:screenshots",
     apply: "build",
     transformIndexHtml: {
       order: "post",
@@ -68,7 +68,7 @@ function screenshots(): Plugin {
  */
 function screenshotSizes(): Plugin {
   return {
-    name: "maplecompass-site:screenshot-sizes",
+    name: "minerva-site:screenshot-sizes",
     transformIndexHtml: {
       order: "pre",
       handler: (html) =>
@@ -102,7 +102,7 @@ function webpScreenshots(): Plugin {
     await sharp(png).resize(width ? { width } : undefined).webp({ quality: 90 }).toFile(file);
   }
   return {
-    name: "maplecompass-site:webp-screenshots",
+    name: "minerva-site:webp-screenshots",
     transformIndexHtml: {
       order: "pre",
       async handler(html) {
@@ -133,13 +133,13 @@ function webpScreenshots(): Plugin {
  */
 function serveAppFiles(): Plugin {
   return {
-    name: "maplecompass-site:app-files",
+    name: "minerva-site:app-files",
     apply: "serve",
     configureServer(server) {
       server.middlewares.use((req, _res, next) => {
         if (req.url && /^\/(src|assets)\//.test(req.url)) {
           const file = fileURLToPath(new URL(`..${req.url}`, import.meta.url)).replace(/\\/g, "/");
-          req.url = `/maplecompass/@fs${file.startsWith("/") ? "" : "/"}${file}`;
+          req.url = `/minerva/@fs${file.startsWith("/") ? "" : "/"}${file}`;
         }
         next();
       });
@@ -153,7 +153,7 @@ function serveAppFiles(): Plugin {
  */
 function themeWithoutFonts(): Plugin {
   return {
-    name: "maplecompass-site:theme-tokens",
+    name: "minerva-site:theme-tokens",
     enforce: "pre",
     transform(code, id) {
       if (!id.split("?")[0].endsWith("/src/theme.css")) return;
@@ -164,7 +164,7 @@ function themeWithoutFonts(): Plugin {
 
 export default defineConfig({
   root: "site",
-  base: "/maplecompass/",
+  base: "/minerva/",
   publicDir: false,
   plugins: [
     fillPlaceholders(),

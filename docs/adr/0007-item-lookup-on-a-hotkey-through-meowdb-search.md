@@ -1,14 +1,14 @@
 ---
-status: accepted, amended by ADR-0008 (its search is MapleCompass's only MeowDB request, and no longer bars a public release) and ADR-0010 (its hotkey is Ctrl+Shift+U, and the Item Card's name opens the page too)
+status: accepted, amended by ADR-0008 (its search is Minerva's only MeowDB request, and no longer bars a public release) and ADR-0010 (its hotkey is Ctrl+Shift+U, and the Item Card's name opens the page too)
 ---
 
 # Item Lookup on a hotkey through MeowDB's search
 
-Item Lookup opens the MeowDB page of the item the player is hovering in the game. The player presses a hotkey (Ctrl+Shift+I by default) while the game shows the item's Item Tooltip. MapleCompass then reads the pointer position, captures the game's client area once, finds the Item Tooltip box nearest the pointer, and reads the name on the line with the blue bullet. It sends that name to MeowDB's search and opens the page of the item whose name matches.
+Item Lookup opens the MeowDB page of the item the player is hovering in the game. The player presses a hotkey (Ctrl+Shift+I by default) while the game shows the item's Item Tooltip. Minerva then reads the pointer position, captures the game's client area once, finds the Item Tooltip box nearest the pointer, and reads the name on the line with the blue bullet. It sends that name to MeowDB's search and opens the page of the item whose name matches.
 
 ## A hotkey, not Ctrl+Shift+click
 
-The natural gesture would be Ctrl+Shift+click on the item. ADR 0001 rules it out: keyboard input comes only through `RegisterHotKey`, and a mouse click can't be registered that way. Seeing one would need a low-level mouse hook (`WH_MOUSE_LL`) or polling key state (`GetAsyncKeyState`), and ADR 0001 bans both. The click would also reach the game, and clicking an inventory item picks it up, which closes the tooltip before it can be read. A hotkey reaches only MapleCompass, so the tooltip stays where it is. Reading the pointer position (`GetCursorPos`) is window-manager state, like the window pick at setup.
+The natural gesture would be Ctrl+Shift+click on the item. ADR 0001 rules it out: keyboard input comes only through `RegisterHotKey`, and a mouse click can't be registered that way. Seeing one would need a low-level mouse hook (`WH_MOUSE_LL`) or polling key state (`GetAsyncKeyState`), and ADR 0001 bans both. The click would also reach the game, and clicking an inventory item picks it up, which closes the tooltip before it can be read. A hotkey reaches only Minerva, so the tooltip stays where it is. Reading the pointer position (`GetCursorPos`) is window-manager state, like the window pick at setup.
 
 ## MeowDB's search, not an index of every item
 
@@ -34,7 +34,7 @@ What a lookup comes to (looking up, opened, why nothing opened, or the items to 
 
 ## Since ADR 0008
 
-Maps and mobs now come from OSMS Data Explorer's files (ADR 0008), so this search is MapleCompass's only remaining request to MeowDB. With no crawl left to keep MeowDB's pace of one request every 2 seconds, a lookup now keeps it itself: its search waits until 2 seconds after the last one that went over the network. An answer from the cache still comes at once. The letter of MeowDB's terms (§4, "automated scripts, bots, or scrapers") arguably covers the search, while its Content Reuse Policy, aimed at bulk scraping and republishing, doesn't. We take it as a grey area to raise with MeowDB, not a bar to a public release.
+Maps and mobs now come from OSMS Data Explorer's files (ADR 0008), so this search is Minerva's only remaining request to MeowDB. With no crawl left to keep MeowDB's pace of one request every 2 seconds, a lookup now keeps it itself: its search waits until 2 seconds after the last one that went over the network. An answer from the cache still comes at once. The letter of MeowDB's terms (§4, "automated scripts, bots, or scrapers") arguably covers the search, while its Content Reuse Policy, aimed at bulk scraping and republishing, doesn't. We take it as a grey area to raise with MeowDB, not a bar to a public release.
 
 ## Since ADR 0010
 

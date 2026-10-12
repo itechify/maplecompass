@@ -4,11 +4,11 @@
 //! core shows. It only reads window geometry and screen pixels (ADR 0001), and fetches
 //! OSMS Data Explorer's file set once (saved for a day, ADR 0008).
 //!
-//! `cargo run -p maplecompass --example probe [reads] [save.png]`
+//! `cargo run -p minerva --example probe [reads] [save.png]`
 //! With a path, the last captured Title Region is saved there for inspection; as a
 //! `--title-region` sample in `samples/minimap` it is read exactly as the probe read it.
 //!
-//! `cargo run -p maplecompass --example probe record <out-dir> <name>=<x>,<y>,<w>,<h>@<hz> ... [--seconds <n>]`
+//! `cargo run -p minerva --example probe record <out-dir> <name>=<x>,<y>,<w>,<h>@<hz> ... [--seconds <n>]`
 //! Record mode: capture each named rectangle of the game's client area (physical px,
 //! relative to its top-left corner) at its own rate, until stopped (Ctrl+C) or for `n`
 //! seconds, saving every crop as `<out-dir>/<name>/<ms>.png`. `<ms>` is zero-padded
@@ -16,7 +16,7 @@
 //! `exp-bar=1015,1150,200,22@1 pickup-log=1630,830,285,135@10`. Nothing is read or
 //! fetched: it only finds the game window and copies screen pixels.
 //!
-//! `cargo run -p maplecompass --example probe item <out-dir> "<item name>" [--desc <tag>] [--delay <s>]`
+//! `cargo run -p minerva --example probe item <out-dir> "<item name>" [--desc <tag>] [--delay <s>]`
 //! Item mode, for `samples/item-tooltip`: count down (3 s by default) while the player
 //! hovers the item in the game, then save the whole client area as
 //! `<out-dir>/<item-name>@<x>,<y>[--<tag>].png`, where `(x, y)` is the mouse pointer in
@@ -24,13 +24,13 @@
 //! and digits as `-`. Nothing is read or fetched: it only finds the game window, reads
 //! the pointer position and copies screen pixels.
 //!
-//! `cargo run -p maplecompass --example probe osms`
+//! `cargo run -p minerva --example probe osms`
 //! OSMS mode: fetch OSMS Data Explorer's live file set and the Item Card's item files
 //! (whatever is saved) and read them in full with the core's readers, reporting what they
 //! hold, or what didn't read. Run it by hand when OSMS changes and before a release. No
 //! game window is needed.
 //!
-//! `cargo run -p maplecompass --example probe replay <report.zip> [--all] [--osms <osms-set.json>] [--items <osms-items.json>]`
+//! `cargo run -p minerva --example probe replay <report.zip> [--all] [--osms <osms-set.json>] [--items <osms-items.json>]`
 //! Replay mode, for a Bug Report (ADR 0009): print what it holds and its timeline (from 10
 //! minutes before it was saved, every line the core made something of before that; with
 //! `--all`, every line), then feed its inputs to a new core and say whether it goes
@@ -40,8 +40,8 @@
 //! fetched live only if the run had them, or read from the `osms-items.json` given. No game
 //! window is needed.
 
-use compass_core::{Compass, GAME_WINDOW_TITLE, PortalKind, Rect, TitleReader};
-use maplecompass_lib::{capture, capture_title_frame, gamewin, source::WebSource};
+use minerva_core::{Minerva, GAME_WINDOW_TITLE, PortalKind, Rect, TitleReader};
+use minerva_lib::{capture, capture_title_frame, gamewin, source::WebSource};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -84,13 +84,13 @@ fn main() {
     let reads: u32 = args.next().and_then(|s| s.parse().ok()).unwrap_or(5);
     let save = args.next();
     // Its own cache, outside the app's: the probe has no Tauri path resolver.
-    let cache = std::env::temp_dir().join("maplecompass-probe-cache");
-    let mut compass = Compass::new(WebSource::new(cache).expect("HTTP client"));
+    let cache = std::env::temp_dir().join("minerva-probe-cache");
+    let mut minerva = Minerva::new(WebSource::new(cache).expect("HTTP client"));
     // The core goes by the wall clock to tell whether the set saved is a day old.
     let since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
-    compass.on_wall_clock(since_epoch.as_millis() as u64);
+    minerva.on_wall_clock(since_epoch.as_millis() as u64);
     let reader = TitleReader::bundled();
-    let title = compass.panel_state().game_window_title.clone();
+    let title = minerva.panel_state().game_window_title.clone();
     gamewin::look_for(&title);
     let Some(client) = gamewin::find_game_client() else {
         println!("No visible \"{title}\" window found.");
@@ -109,7 +109,7 @@ fn main() {
                     Some(lines) => println!("{:>4} ms  read {:?} / {:?}", t.elapsed().as_millis(), lines.street, lines.map),
                     None => println!("{:>4} ms  read nothing (unreadable)", t.elapsed().as_millis()),
                 }
-                let state = compass.on_reading(reading);
+                let state = minerva.on_reading(reading);
                 println!("         {:?} {:?} not sure: {}", state.recognition, state.map, state.not_sure);
             }
             Err(e) => println!("capture failed: {e}"),
@@ -125,13 +125,13 @@ fn main() {
 
 /// Fetch OSMS's live set, read it in full, and report its counts.
 fn osms() -> Result<(), String> {
-    let files = maplecompass_lib::osms::fetch_live()?;
+    let files = minerva_lib::osms::fetch_live()?;
     let sizes = [&files.maps, &files.portals, &files.monsters, &files.map_manifest, &files.lookups];
-    for (name, text) in compass_core::osms::OsmsFiles::NAMES.iter().zip(sizes) {
+    for (name, text) in minerva_core::osms::OsmsFiles::NAMES.iter().zip(sizes) {
         println!("{name:>18}: {} KB", text.len() / 1024);
     }
     let listed = serde_json::from_str::<serde_json::Value>(&files.maps).ok().and_then(|maps| maps["total"].as_u64());
-    let set = compass_core::osms::read(&files).map_err(|e| format!("OSMS's set doesn't read: {e}"))?;
+    let set = minerva_core::osms::read(&files).map_err(|e| format!("OSMS's set doesn't read: {e}"))?;
     let maps: Vec<_> = set.maps().collect();
     let mut regions: Vec<(&str, usize)> = Vec::new();
     for (entry, _) in &maps {
@@ -175,12 +175,12 @@ fn osms() -> Result<(), String> {
     println!("Hidden Portal rows: {} (to a Hidden Street: {})", hidden.len(), hidden.iter().filter(|p| p.to_hidden_street).count());
     println!("Mobs spawning: {}", mobs.len());
 
-    let files = maplecompass_lib::osms_items::fetch_live()?;
+    let files = minerva_lib::osms_items::fetch_live()?;
     let sizes = [&files.items, &files.cash_shop];
-    for (name, text) in compass_core::osms_items::ItemFiles::NAMES.iter().zip(sizes) {
+    for (name, text) in minerva_core::osms_items::ItemFiles::NAMES.iter().zip(sizes) {
         println!("{name:>18}: {} KB", text.len() / 1024);
     }
-    let items = compass_core::osms_items::read(&files).map_err(|e| format!("OSMS's item files don't read: {e}"))?;
+    let items = minerva_core::osms_items::read(&files).map_err(|e| format!("OSMS's item files don't read: {e}"))?;
     let counts = items.counts();
     println!("Item files read in full.");
     println!(
@@ -192,7 +192,7 @@ fn osms() -> Result<(), String> {
 
 /// `<report.zip> [--all] [--osms <osms-set.json>]`
 fn replay(args: &[String]) -> Result<(), String> {
-    use compass_core::bug_report;
+    use minerva_core::bug_report;
     let mut rest = args.iter();
     let path = rest.next().ok_or("no Bug Report")?;
     let (mut all, mut set_file, mut items_file) = (false, None, None);
@@ -207,7 +207,7 @@ fn replay(args: &[String]) -> Result<(), String> {
     let zip = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
     let recording = bug_report::read(&zip)?;
     let report = &recording.report;
-    println!("MapleCompass {} on {}, display scale {}", report.version, report.os, report.display_scale);
+    println!("Minerva {} on {}, display scale {}", report.version, report.os, report.display_scale);
     println!("Saved {} ({} ms after launch); {} lines, {} crops", report.saved_at, report.saved_at_ms, recording.lines.len(), recording.crops.len());
     if report.truncated {
         println!("The run outlasted a day: the trace starts at {} ms, after the lines that set the run up", report.trace_from_ms);
@@ -225,9 +225,9 @@ fn replay(args: &[String]) -> Result<(), String> {
     let files = match set_file {
         Some(file) => {
             let json = std::fs::read(file).map_err(|e| format!("{file}: {e}"))?;
-            Some(serde_json::from_slice::<compass_core::osms::OsmsFiles>(&json).map_err(|e| format!("{file}: {e}"))?)
+            Some(serde_json::from_slice::<minerva_core::osms::OsmsFiles>(&json).map_err(|e| format!("{file}: {e}"))?)
         }
-        None => match maplecompass_lib::osms::fetch_live() {
+        None => match minerva_lib::osms::fetch_live() {
             Ok(files) => Some(files),
             Err(e) => {
                 println!("OSMS's set couldn't be fetched ({e}): replaying without it.");
@@ -246,10 +246,10 @@ fn replay(args: &[String]) -> Result<(), String> {
     let items = match items_file {
         Some(file) => {
             let json = std::fs::read(file).map_err(|e| format!("{file}: {e}"))?;
-            Some(serde_json::from_slice::<compass_core::osms_items::ItemFiles>(&json).map_err(|e| format!("{file}: {e}"))?)
+            Some(serde_json::from_slice::<minerva_core::osms_items::ItemFiles>(&json).map_err(|e| format!("{file}: {e}"))?)
         }
         None if had(|a| matches!(a, bug_report::Answer::Items { answer: Ok(_) } | bug_report::Answer::SavedItems { saved: Some(_) })) => {
-            match maplecompass_lib::osms_items::fetch_live() {
+            match minerva_lib::osms_items::fetch_live() {
                 Ok(files) => Some(files),
                 Err(e) => {
                     println!("OSMS's item files couldn't be fetched ({e}): replaying without them.");

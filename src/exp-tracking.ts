@@ -1,10 +1,10 @@
-/** Mirror of `compass_core::ExpRate`. */
+/** Mirror of `minerva_core::ExpRate`. */
 export type ExpRate = { expPerHour: number; percentPerHourHundredths: number | null };
 
-/** Mirror of `compass_core::ExpBar`: the EXP bar's figures, "EXP 160 [3.81%]". */
+/** Mirror of `minerva_core::ExpBar`: the EXP bar's figures, "EXP 160 [3.81%]". */
 export type ExpBar = { exp: number; percentHundredths: number };
 
-/** Mirror of `compass_core::ExpTracking`. */
+/** Mirror of `minerva_core::ExpTracking`. */
 export type ExpTracking = {
   state: "off" | "waiting" | "warmingUp" | "active" | "paused" | "unreadable";
   timeToLevelS: number | null;

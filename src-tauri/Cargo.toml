@@ -1,7 +1,7 @@
 [package]
-name = "maplecompass"
+name = "minerva"
 version = "0.8.0"
-description = "MapleCompass overlay shell: window lookup, Title Region capture and rendering around compass-core"
+description = "Minerva overlay shell: window lookup, Title Region capture and rendering around minerva-core"
 authors = ["Jeffrey Davis"]
 edition.workspace = true
 rust-version.workspace = true
@@ -10,20 +10,20 @@ publish = false
 
 [lib]
 # The `_lib` suffix keeps the lib name distinct from the bin (cargo#8519 on Windows).
-name = "maplecompass_lib"
+name = "minerva_lib"
 crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2.7", features = [] }
 
 [dependencies]
-compass-core = { path = "../crates/compass-core" }
+minerva-core = { path = "../crates/minerva-core" }
 tauri = { version = "2.12", features = ["tray-icon"] }
 # RegisterHotKey on Windows: no keyboard hook, no input sent anywhere (ADR 0001).
 tauri-plugin-global-shortcut = "2.4"
 # Opens the shown map's MeowDB page in the player's browser.
 tauri-plugin-opener = "2"
-# A second launch exits and tells the running MapleCompass, which shows itself.
+# A second launch exits and tells the running Minerva, which shows itself.
 tauri-plugin-single-instance = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }

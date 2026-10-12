@@ -1,5 +1,5 @@
 //! Errors that would otherwise go nowhere: a release build has no console. Each is
-//! printed, and handed to the compass loop for the core's Bug Report (ADR 0009). The same
+//! printed, and handed to the core loop for the core's Bug Report (ADR 0009). The same
 //! error again is handed on at most once a minute, so one that repeats every frame (a
 //! capture failing while the screen is locked) doesn't fill the report.
 
@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 const AGAIN_AFTER: Duration = Duration::from_secs(60);
 
 struct Errors {
-    /// The compass loop's; `None` until it is set up.
+    /// The core loop's; `None` until it is set up.
     commands: Option<Sender<Command>>,
     /// Errors from before then, to hand on once it is.
     held: Vec<(String, String)>,
@@ -22,7 +22,7 @@ struct Errors {
 
 static ERRORS: Mutex<Errors> = Mutex::new(Errors { commands: None, held: Vec::new(), last: None });
 
-/// Hand errors to the compass loop from now on, those from before first.
+/// Hand errors to the core loop from now on, those from before first.
 pub fn send_to(commands: Sender<Command>) {
     let Ok(mut errors) = ERRORS.lock() else { return };
     for (from, message) in std::mem::take(&mut errors.held) {

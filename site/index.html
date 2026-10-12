@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- The MapleCompass site: the player manual, one of the game's windows opened wide. Its
+<!-- The Minerva site: the player manual, one of the game's windows opened wide. Its
      raised tabs file the manual as a player meets the app. The text describes the release
      whose tag the site is built from (docs/releasing.md); a change a player notices updates
      it in the same PR. -->
@@ -7,16 +7,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MapleCompass: a map overlay for MapleStory Classic World</title>
+    <title>Minerva: your guide for MapleStory Classic World</title>
     <meta
       name="description"
       content="A free helper overlay for MapleStory Classic World. It reads the minimap title by ordinary screen capture and shows the map you're on: every portal, the hidden ones too, its mobs, the way to the mob you want to hunt, and your EXP pace."
     />
     <link rel="canonical" href="@SITE_URL@" />
-    <link rel="icon" type="image/png" href="../assets/icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="../assets/icon-16.png" />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="MapleCompass" />
-    <meta property="og:title" content="MapleCompass: a map overlay for MapleStory Classic World" />
+    <meta property="og:site_name" content="Minerva" />
+    <meta property="og:title" content="Minerva: your guide for MapleStory Classic World" />
     <meta
       property="og:description"
       content="See the map you're on at a glance: every portal ringed, the Hidden Portals the game doesn't show, its mobs, and the way to the mob you want to hunt."
@@ -25,7 +26,7 @@
     <meta property="og:image" content="@CARD_IMAGE@" />
     <meta
       property="og:image:alt"
-      content="MapleStory's minimap and, under it, the MapleCompass panel showing the same map: its picture with every portal ringed, and the way to a mob to hunt."
+      content="MapleStory's minimap and, under it, the Minerva panel showing the same map: its picture with every portal ringed, and the way to a mob to hunt."
     />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="@CARD_IMAGE@" />
@@ -40,8 +41,8 @@
     <div class="window">
       <div class="window-head">
         <header class="window-bar">
-          <img class="mark-icon" src="../assets/icon.png" alt="" width="32" height="32" />
-          <p class="window-name">MapleCompass</p>
+          <img class="mark-icon" src="../assets/icon-32.png" alt="" width="32" height="32" />
+          <p class="window-name">Minerva</p>
           <p class="window-version">@VERSION@ · Windows 10 and 11</p>
           <a class="button small" href="@SETUP_URL@">Download</a>
         </header>
@@ -60,9 +61,10 @@
         <section class="tab-page" id="get-started" aria-labelledby="title">
           <div class="hero" data-mini="At a glance">
             <div class="hero-text">
+              <img class="logo" src="../assets/logo.png" alt="Minerva" width="300" height="200" />
               <h1 id="title">The map you're&nbsp;on, at a glance</h1>
               <p class="lede">
-                MapleCompass is a free helper overlay for MapleStory Classic World. It reads the minimap title the way a
+                Minerva is a free helper overlay for MapleStory Classic World. It reads the minimap title the way a
                 screenshot does and shows you the map you're on: a picture of the whole map with every portal ringed, the
                 Hidden Portals the game doesn't show, and its mobs with what they're worth.
               </p>
@@ -71,20 +73,20 @@
                 pace, your time to level and your best on every map.
               </p>
               <p class="note problem">
-                MapleCompass isn't made, endorsed or supported by NEXON. Using any third-party tool with MapleStory is at
+                Minerva isn't made, endorsed or supported by NEXON. Using any third-party tool with MapleStory is at
                 your own risk.
               </p>
               <p class="phone-note">
-                On a phone? MapleCompass runs on a Windows PC, beside the game: open this page there to download it.
+                On a phone? Minerva runs on a Windows PC, beside the game: open this page there to download it.
               </p>
               <div class="actions">
                 <a class="button" href="@SETUP_URL@">Download for Windows</a>
                 <a class="button secondary" href="#safe">How it stays safe</a>
               </div>
               <p class="fine">
-                MapleCompass @VERSION@ · <span class="whole">Windows 10 and 11, 64-bit</span> ·
+                Minerva @VERSION@ · <span class="whole">Windows 10 and 11, 64-bit</span> ·
                 <a href="@RELEASE_URL@">Other downloads</a> ·
-                <a href="https://github.com/itechify/maplecompass/releases">What's new</a>
+                <a href="https://github.com/itechify/minerva/releases">What's new</a>
               </p>
               <p class="fine">
                 The files aren't code-signed, so Windows may say it "protected your PC": choose <strong>More info</strong>,
@@ -95,7 +97,7 @@
               <img
                 id="hero-shot"
                 src="./screenshots/hero.png"
-                alt="MapleStory's minimap on Victoria Road, Henesys Hunting Ground I, and under it the MapleCompass panel naming the same map beside Henesys's shield, its Map Mark: its picture with every portal ringed, then the map's EXP and mobs per hour and all seven of its mobs."
+                alt="MapleStory's minimap on Victoria Road, Henesys Hunting Ground I, and under it the Minerva panel naming the same map beside Henesys's shield, its Map Mark: its picture with every portal ringed, then the map's EXP and mobs per hour and all seven of its mobs."
                 fetchpriority="high"
               />
               <figcaption>The minimap's title, and the panel under it showing that map.</figcaption>
@@ -112,11 +114,11 @@
             <div class="topic-text">
               <h3 id="safe-title">How it stays safe</h3>
               <p>
-                MapleCompass is a third-party tool, not made or approved by Nexon. Nexon's terms forbid some third-party
+                Minerva is a third-party tool, not made or approved by Nexon. Nexon's terms forbid some third-party
                 programs, and a penalty in Classic World applies to your whole account, MapleStory included.
-                <strong>Using MapleCompass is at your own risk.</strong>
+                <strong>Using Minerva is at your own risk.</strong>
               </p>
-              <p>To keep that risk low, MapleCompass only looks at the screen:</p>
+              <p>To keep that risk low, Minerva only looks at the screen:</p>
               <ul>
                 <li>
                   It captures the minimap title (and, if you choose, the EXP bar) the same way a screenshot does, and draws
@@ -127,11 +129,11 @@
               </ul>
               <p>
                 <b class="run-in">Its hotkeys.</b> They are ordinary hotkeys registered with Windows, not a keyboard hook, and
-                they act only while the game or one of MapleCompass's windows is in front.
+                they act only while the game or one of Minerva's windows is in front.
               </p>
               <p>
                 <b class="run-in">Check for yourself.</b> You don't have to take this on trust: its source code is public on
-                <a href="https://github.com/itechify/maplecompass">GitHub</a>, for anyone to read.
+                <a href="https://github.com/itechify/minerva">GitHub</a>, for anyone to read.
               </p>
             </div>
           </section>
@@ -140,7 +142,7 @@
             <div class="topic-text">
               <h3 id="install-title">Install</h3>
               <p>
-                MapleCompass runs on Windows 10 and 11, 64-bit, beside MapleStory Classic World played windowed or
+                Minerva runs on Windows 10 and 11, 64-bit, beside MapleStory Classic World played windowed or
                 borderless (not fullscreen), with the minimap open and both lines of its title showing.
               </p>
               <p>
@@ -148,18 +150,18 @@
                 "protected your PC": choose <strong>More info</strong>, then <strong>Run anyway</strong>.
               </p>
               <p>
-                <b class="run-in">Updating.</b> Quit the running MapleCompass first (its compass in the notification area:
-                <strong>Quit MapleCompass</strong>). Your settings, hotkeys and Personal Bests carry over.
+                <b class="run-in">Updating.</b> Quit the running Minerva first (its owl in the notification area:
+                <strong>Quit Minerva</strong>). Your settings, hotkeys and Personal Bests carry over.
               </p>
             </div>
             <aside class="aside" aria-labelledby="files-title">
               <h4 id="files-title">The files</h4>
               <dl class="files">
-                <dt><a href="@SETUP_URL@">MapleCompass_@VERSION@_x64-setup.exe</a> <span class="tag">Recommended</span></dt>
+                <dt><a href="@SETUP_URL@">Minerva_@VERSION@_x64-setup.exe</a> <span class="tag">Recommended</span></dt>
                 <dd>Installs for your user, over earlier versions, with a Start menu entry and an uninstaller.</dd>
-                <dt>MapleCompass_@VERSION@_x64_en-US.msi</dt>
+                <dt>Minerva_@VERSION@_x64_en-US.msi</dt>
                 <dd>The same, as an MSI package. It installs for all users, so it asks for admin rights.</dd>
-                <dt>maplecompass-@VERSION@-portable.exe</dt>
+                <dt>minerva-@VERSION@-portable.exe</dt>
                 <dd>No install: run it from any folder. It needs the Microsoft Edge WebView2 runtime, which Windows 11 already has.</dd>
               </dl>
               <p>The MSI and portable files are on <a href="@RELEASE_URL@">the release's page</a>.</p>
@@ -188,16 +190,16 @@
               <p>
                 <b class="run-in">Opening it again.</b> <kbd>Ctrl+Shift+S</kbd> opens setup again, to mark the title anew or
                 read the Overlay Guide, which lists your hotkeys and explains placement and the hunting figures. About
-                &amp; Credits, beside it, links back to this page. MapleCompass asks you to set up again when the game
+                &amp; Credits, beside it, links back to this page. Minerva asks you to set up again when the game
                 window changes size.
               </p>
               <p>
-                <b class="run-in">In the tray.</b> While it runs, its gold compass sits in the notification area (the system
-                tray, by the clock). Click it for <strong>Help &amp; Setup</strong> or <strong>Quit MapleCompass</strong>, the
+                <b class="run-in">In the tray.</b> While it runs, its owl sits in the notification area (the system
+                tray, by the clock). Click it for <strong>Help &amp; Setup</strong> or <strong>Quit Minerva</strong>, the
                 one way to quit, whether or not the game is open.
               </p>
               <p class="detail">
-                Closing setup on first run quits. Only one MapleCompass runs at a time: starting it again shows the one that
+                Closing setup on first run quits. Only one Minerva runs at a time: starting it again shows the one that
                 is running.
               </p>
             </div>
@@ -236,7 +238,7 @@
                 <div>
                   <dt>The panel doesn't show</dt>
                   <dd>
-                    It shows only while the game is open and not minimised, and the game or one of MapleCompass's windows is in
+                    It shows only while the game is open and not minimised, and the game or one of Minerva's windows is in
                     front: click into the game. Screen capture can't see exclusive fullscreen, so play windowed or borderless.
                   </dd>
                 </div>
@@ -258,14 +260,14 @@
                   <dt>The panel says "Map recognition unavailable"</dt>
                   <dd>
                     It couldn't load the map list from OSMS Data Explorer, which the first launch needs. Check your connection:
-                    it tries again every minute. If it says OSMS's data has changed format, MapleCompass needs an update.
+                    it tries again every minute. If it says OSMS's data has changed format, Minerva needs an update.
                   </dd>
                 </div>
                 <div>
                   <dt>A hotkey does nothing</dt>
                   <dd>
                     The panel says when another app has its keys: close that app, or <a href="#settings">change the hotkey</a>.
-                    Hotkeys act only while the game or one of MapleCompass's windows is in front.
+                    Hotkeys act only while the game or one of Minerva's windows is in front.
                   </dd>
                 </div>
                 <div>
@@ -278,7 +280,7 @@
               </dl>
               <p>
                 Something else? <a href="#bug-reports">Save a Bug Report</a> and report it on GitHub: what you did, what you
-                expected, and what MapleCompass showed.
+                expected, and what Minerva showed.
               </p>
             </div>
           </section>
@@ -287,23 +289,23 @@
             <div class="topic-text">
               <h3 id="bug-reports-title">Reporting a bug</h3>
               <p>
-                When MapleCompass shows something wrong, like a rate far higher than you're getting, click its compass in the
+                When Minerva shows something wrong, like a rate far higher than you're getting, click its owl in the
                 notification area, by the clock, and choose <strong>Bug Report</strong> right away. It saves a Bug Report: a
-                <code>.zip</code> of what MapleCompass read and made of it since you started it, up to a day back. It shows the
+                <code>.zip</code> of what Minerva read and made of it since you started it, up to a day back. It shows the
                 file selected in its folder, and opens the bug form on
-                <a href="https://github.com/itechify/maplecompass/issues">GitHub</a>. Drag the file into the form, and say what
+                <a href="https://github.com/itechify/minerva/issues">GitHub</a>. Drag the file into the form, and say what
                 looked wrong and about when.
               </p>
               <p>
                 With a Bug Report, the bug can be played back as it happened instead of guessed at. Saving one changes
-                nothing in MapleCompass, which keeps the 10 newest.
+                nothing in Minerva, which keeps the 10 newest.
               </p>
             </div>
             <aside class="aside" aria-labelledby="report-holds-title">
               <h4 id="report-holds-title">What's in a Bug Report</h4>
               <ul>
                 <li>
-                  What MapleCompass read: each reading of the minimap title and the EXP bar, with pictures of the two boxes
+                  What Minerva read: each reading of the minimap title and the EXP bar, with pictures of the two boxes
                   you marked at setup, and the name of each item you looked up or opened a card for, with a picture of the
                   game around the pointer when you pressed the hotkey (your inventory, say, and whatever is beside it).
                   Nothing else on your screen.
@@ -312,15 +314,15 @@
                   What it made of them: the map it showed, the Grind Tracker's figures, and why they changed (a level-up, a
                   death, a misread set aside).
                 </li>
-                <li>What you did in MapleCompass: its buttons, hotkeys and searches.</li>
+                <li>What you did in Minerva: its buttons, hotkeys and searches.</li>
                 <li>
-                  Your settings and Personal Bests, MapleCompass's version, your Windows version and display scaling, and any
+                  Your settings and Personal Bests, Minerva's version, your Windows version and display scaling, and any
                   errors it ran into.
                 </li>
               </ul>
               <p class="detail">
                 It's never sent anywhere: it stays on your PC, in
-                <code class="path">%APPDATA%\<wbr />com.<wbr />itechify.<wbr />maplecompass\<wbr />Bug Reports</code>, until you
+                <code class="path">%APPDATA%\<wbr />com.<wbr />itechify.<wbr />minerva\<wbr />Bug Reports</code>, until you
                 attach it to an issue.
               </p>
             </aside>
@@ -333,7 +335,7 @@
                 <dt>Map and mob data</dt>
                 <dd>
                   From <a href="https://osmsdataexplorer.com">OSMS Data Explorer</a>: five files, under 1 MB together,
-                  fetched when you start MapleCompass if its saved copy is a day old, and every 24 hours while it runs. It
+                  fetched when you start Minerva if its saved copy is a day old, and every 24 hours while it runs. It
                   works offline after the first launch, which needs a connection. If OSMS can't be reached for over a week,
                   the panel says it shows a saved copy, with its date.
                 </dd>
@@ -348,7 +350,7 @@
                 <dd>
                   Item Lookup asks <a href="https://meowdb.com">NiaMeowDB</a>'s search for the name of the item, only when
                   you press its hotkey or click an Item Card's name: each name once a week at most, 2 seconds apart.
-                  These are MapleCompass's only requests to MeowDB; its links open MeowDB's pages in your browser.
+                  These are Minerva's only requests to MeowDB; its links open MeowDB's pages in your browser.
                 </dd>
                 <dt>Nothing else</dt>
                 <dd>There is no account, no analytics and no update check.</dd>
@@ -359,18 +361,18 @@
               <ul>
                 <li>
                   Your settings (the placement, collapsed sections, the marked title, a hand-picked game window and the
-                  hotkeys) in <code class="path">%APPDATA%\<wbr />com.<wbr />itechify.<wbr />maplecompass\<wbr />settings.json</code>.
+                  hotkeys) in <code class="path">%APPDATA%\<wbr />com.<wbr />itechify.<wbr />minerva\<wbr />settings.json</code>.
                 </li>
                 <li>
                   Your Personal Bests, each map's 10 best visits with when each was set, beside them in
                   <code>personal-bests.json</code>, saved as they change.
                 </li>
                 <li>The market prices you keep on Item Cards, beside them in <code>market-prices.json</code>.</li>
-                <li>The map and item data, pictures and animations in <code class="path">%LOCALAPPDATA%\<wbr />com.<wbr />itechify.<wbr />maplecompass\<wbr />cache</code>.</li>
+                <li>The map and item data, pictures and animations in <code class="path">%LOCALAPPDATA%\<wbr />com.<wbr />itechify.<wbr />minerva\<wbr />cache</code>.</li>
                 <li>The <a href="#bug-reports">Bug Reports</a> you save, the 10 newest, in <code>Bug Reports</code> beside your settings.</li>
               </ul>
               <p class="detail">
-                If your Personal Bests file can't be read, MapleCompass renames it <code>personal-bests.json.bad</code> and
+                If your Personal Bests file can't be read, Minerva renames it <code>personal-bests.json.bad</code> and
                 starts with no bests; if it can't rename it, it leaves it as it is and saves no bests until the next launch.
               </p>
             </aside>
@@ -406,16 +408,16 @@
                 <b class="run-in">Clicking it.</b> You can click it at any time, and a click never takes the keyboard from the
                 game: only the search view and Settings do. Click a section's heading to collapse it to its heading, and
                 again to open it; a collapsed section stays collapsed from map to map and the next time you start
-                MapleCompass.
+                Minerva.
               </p>
               <p>
                 <b class="run-in">Moving and sizing it.</b> Drag it by its header to move it, or by a side or a bottom corner
                 to make it wider or narrower; its height follows what it shows, and a long list scrolls instead. Dragged onto
-                the minimap title, which MapleCompass reads, it moves just clear of it when you let go.
+                the minimap title, which Minerva reads, it moves just clear of it when you let go.
               </p>
               <p>
                 <b class="run-in">Showing and hiding.</b> It shows on top of everything, but only while the game or one of
-                MapleCompass's windows is in front. While another app is, or the game is minimised, it hides: opening a MeowDB page in your
+                Minerva's windows is in front. While another app is, or the game is minimised, it hides: opening a MeowDB page in your
                 browser hides it until you go back to the game. It shows up in your screenshots and streams.
               </p>
               <h4>Placement</h4>
@@ -440,7 +442,7 @@
                 <img
                   src="./screenshots/game-window.png"
                   sizes="(max-width: 640px) calc(100vw - 36px), 608px"
-                  alt="MapleStory on Henesys Hunting Ground I, with the MapleCompass panel inside the game window, dragged under the minimap: the map's picture, its EXP and mobs per hour and all seven of its mobs, and the Grind Tracker under the panel."
+                  alt="MapleStory on Henesys Hunting Ground I, with the Minerva panel inside the game window, dragged under the minimap: the map's picture, its EXP and mobs per hour and all seven of its mobs, and the Grind Tracker under the panel."
                   loading="lazy"
                   decoding="async"
                 />
@@ -493,7 +495,7 @@
               <ul class="key-list">
                 <li><span class="ring-key portal" aria-hidden="true"></span>blue to another map;</li>
                 <li><span class="ring-key teleport" aria-hidden="true"></span>green within the map, with a dashed arrow to where it lands;</li>
-                <li><span class="ring-key unknown" aria-hidden="true"></span>grey to a map MapleCompass doesn't know.</li>
+                <li><span class="ring-key unknown" aria-hidden="true"></span>grey to a map Minerva doesn't know.</li>
               </ul>
               <p>
                 <b class="run-in">Hidden Portals.</b> Below the picture are the map's exits to other maps the game doesn't
@@ -561,7 +563,7 @@
               </ol>
               <p>The picture shows once it's settled which map you're on.</p>
               <p class="detail">
-                Many map names differ only in a Roman numeral, such as Rocky Road I, II and III. When MapleCompass can't
+                Many map names differ only in a Roman numeral, such as Rocky Road I, II and III. When Minerva can't
                 make the numeral out, it picks the map the one you came from leads to, if it leads to just one of them;
                 otherwise it says it isn't sure rather than guess.
               </p>
@@ -646,7 +648,7 @@
               </p>
               <p>
                 <b class="run-in">Changing or clearing it.</b> A Hunting Target's magnifier reopens the mob's map list to pick
-                another map, and the × clears either. Otherwise it lasts until you close MapleCompass.
+                another map, and the × clears either. Otherwise it lasts until you close Minerva.
               </p>
             </div>
             <figure class="shot">
@@ -764,7 +766,7 @@
             <div class="topic-text">
               <h3 id="item-card-title">Item Card</h3>
               <p>
-                Hover an item in the game until its tooltip shows, then press <kbd>Ctrl+Shift+I</kbd>. MapleCompass reads the
+                Hover an item in the game until its tooltip shows, then press <kbd>Ctrl+Shift+I</kbd>. Minerva reads the
                 name in the tooltip nearest the pointer (the inventory's, or any window's drawn the same way) and shows the
                 item's card at the pointer: what the game's tooltip doesn't say, for deciding whether to sell it to a shop,
                 sell it to other players, or keep it.
@@ -779,7 +781,7 @@
                 each with its picture and kind.
               </p>
               <p>
-                <b class="run-in">Your market prices.</b> MapleCompass reads no market prices of its own, so you keep them for
+                <b class="run-in">Your market prices.</b> Minerva reads no market prices of its own, so you keep them for
                 the items you care about. Click a price (or "Not set") and type it as players write it: 450,000, 450k or
                 1.2m. <kbd>Enter</kbd> keeps it, <kbd>Esc</kbd> leaves it as it was, and an empty field clears it. It's saved
                 with the day you set it, which its tooltip shows, and the next card for that item shows it. The button by
@@ -814,7 +816,7 @@
               </p>
               <p class="detail">
                 When no card can show, the alert at the top centre of the game window says why: no tooltip by the pointer,
-                a name it couldn't read, a MapleCompass window covering the name, no item of that name, or the item data not
+                a name it couldn't read, a Minerva window covering the name, no item of that name, or the item data not
                 loaded yet. The Item Card has no button, so it can't be used while its hotkey is turned off. While you type a
                 price or a line's name, the card has the keyboard; clicking back into the game gives it back, keeping what
                 you typed.
@@ -835,7 +837,7 @@
             <div class="topic-text">
               <h3 id="item-lookup-title">Item Lookup</h3>
               <p>
-                Hover an item in the game until its tooltip shows, then press <kbd>Ctrl+Shift+U</kbd>. MapleCompass reads the
+                Hover an item in the game until its tooltip shows, then press <kbd>Ctrl+Shift+U</kbd>. Minerva reads the
                 name in the tooltip nearest the pointer and opens the item's MeowDB page in your browser, as clicking an Item
                 Card's name does.
               </p>
@@ -851,7 +853,7 @@
               <ul class="brief">
                 <li>no tooltip by the pointer;</li>
                 <li>a name it couldn't read;</li>
-                <li>a MapleCompass window covering the name;</li>
+                <li>a Minerva window covering the name;</li>
                 <li>no MeowDB item of that name;</li>
                 <li>MeowDB out of reach.</li>
               </ul>
@@ -889,7 +891,7 @@
             <div class="topic-text">
               <h3 id="hotkeys-title">Hotkeys</h3>
               <p>
-                They work while the game or one of MapleCompass's windows is in front, and the game never sees them. In any
+                They work while the game or one of Minerva's windows is in front, and the game never sees them. In any
                 other app, the same keys do what that app makes them do.
               </p>
               <table class="hotkeys">
@@ -921,7 +923,7 @@
                 MapleStory attacks with Ctrl and jumps with Alt by default.
               </p>
               <p>
-                <b class="run-in">Keys already taken.</b> If another MapleCompass hotkey has it, <strong>Swap</strong> trades
+                <b class="run-in">Keys already taken.</b> If another Minerva hotkey has it, <strong>Swap</strong> trades
                 the two. If Windows or another app already has one, the panel and the setup window say which, and Settings
                 marks the row.
               </p>
@@ -957,7 +959,7 @@
             <a href="https://meowdb.com">NiaMeowDB</a>. The Map Summary is worked out as NiaMeowDB works it out.
           </dd>
           <dt>Market prices</dt>
-          <dd><a href="https://meso.watch">MesoWatch</a>, which the Item Card opens. MapleCompass reads nothing from it.</dd>
+          <dd><a href="https://meso.watch">MesoWatch</a>, which the Item Card opens. Minerva reads nothing from it.</dd>
           <dt>Title and item recognition</dt>
           <dd>
             The text-recognition model of <a href="https://github.com/robertknight/ocrs">ocrs</a> by Robert Knight, under
@@ -972,13 +974,13 @@
           <dt>Open-source software</dt>
           <dd>
             Built with Tauri, ocrs, rten and other open-source packages under their own licences:
-            <a href="https://github.com/itechify/maplecompass/blob/main/THIRD-PARTY-NOTICES.md">THIRD-PARTY-NOTICES.md</a>.
+            <a href="https://github.com/itechify/minerva/blob/main/THIRD-PARTY-NOTICES.md">THIRD-PARTY-NOTICES.md</a>.
           </dd>
         </dl>
         <p class="fine">
-          This page describes MapleCompass @VERSION@. Its source and releases are on
-          <a href="https://github.com/itechify/maplecompass">GitHub</a>; each release's notes say
-          <a href="https://github.com/itechify/maplecompass/releases">what's new</a>. MapleCompass isn't made, endorsed or
+          This page describes Minerva @VERSION@. Its source and releases are on
+          <a href="https://github.com/itechify/minerva">GitHub</a>; each release's notes say
+          <a href="https://github.com/itechify/minerva/releases">what's new</a>. Minerva isn't made, endorsed or
           supported by NEXON. Using any third-party tool with MapleStory is at your own risk.
         </p>
       </footer>

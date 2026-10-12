@@ -1,16 +1,16 @@
 # OSMS Data Explorer as the data source in place of MeowDB
 
-Checked on 10 October 2026, against OSMS's `data/current` (its "Public Release" set, dated 6 October 2026), the MeowDB pages then kept in `crates/compass-core/tests/fixtures` (saved 7 October, since removed), and three live MeowDB pages. The decisions it led to, and what shipped, are in ADR 0008.
+Checked on 10 October 2026, against OSMS's `data/current` (its "Public Release" set, dated 6 October 2026), the MeowDB pages then kept in `crates/minerva-core/tests/fixtures` (saved 7 October, since removed), and three live MeowDB pages. The decisions it led to, and what shipped, are in ADR 0008.
 
 ## Answer
 
-OSMS Data Explorer can supply nearly everything MapleCompass reads from MeowDB, and it doesn't have MeowDB's scraping problem in the same form. It is a static site that loads a handful of plain JSON files. No terms forbid fetching them, and the five files the whole world needs are about 0.8 MB in one go, not about 420 map pages and the listed mobs' pages, fetched one every 2 seconds. Most of the panel's data maps over directly, the Map Summary can be computed exactly, and three Mob Card figures can be derived with fitted rules. Two things have no OSMS equivalent: minimap bounds, which place Hidden Portals, and whether a mob jumps between floors. Item Lookup can keep opening MeowDB pages, but it still needs one MeowDB search per press to find the page.
+OSMS Data Explorer can supply nearly everything Minerva reads from MeowDB, and it doesn't have MeowDB's scraping problem in the same form. It is a static site that loads a handful of plain JSON files. No terms forbid fetching them, and the five files the whole world needs are about 0.8 MB in one go, not about 420 map pages and the listed mobs' pages, fetched one every 2 seconds. Most of the panel's data maps over directly, the Map Summary can be computed exactly, and three Mob Card figures can be derived with fitted rules. Two things have no OSMS equivalent: minimap bounds, which place Hidden Portals, and whether a mob jumps between floors. Item Lookup can keep opening MeowDB pages, but it still needs one MeowDB search per press to find the page.
 
 ## What OSMS is
 
 [osmsdataexplorer.com](https://osmsdataexplorer.com/#overview) is a GitHub Pages site behind Cloudflare, built from the public repo [ohmi69/osms_datamine_dashboard](https://github.com/ohmi69/osms_datamine_dashboard) ("Made by @ohmi on Discord"). The repo was last pushed on 10 October 2026. The browser fetches these files from `https://osmsdataexplorer.com/data/current/`:
 
-| File | Size | What MapleCompass would use |
+| File | Size | What Minerva would use |
 | --- | --- | --- |
 | `maps.json` | 349 KB | every map: ID, name, street, region, `is_town`, `return_map_id`, `exits`, `mob_rate`, `mob_positions` (one entry per spawn point), `map_mark` (the Mini Map's emblem for its area, `"None"` for none); and `map_mark_icons`, each mark's 38×38 PNG under `data/current/images/map_marks/` (11 in October 2026) |
 | `portals.json` | 121 KB | every map's portals: `name`, `type`, `dest_map`, `x`, `y` |
@@ -23,9 +23,9 @@ Past datasets are kept and fixed under `data/patches/<version>/` (`cot1`, `cot2`
 
 ## The scraping question
 
-- **MeowDB:** its terms (§4) forbid "automated scripts, bots, or scrapers ... without permission" (ADR 0003). MapleCompass parses its HTML and Next.js flight data, page by page.
-- **OSMS:** the site has no terms page, and the repo has no licence (`license: null` on GitHub). Its `robots.txt` is Cloudflare's content-signals preamble with no rules and no signals set, which by its own wording "neither grants nor restricts". Nothing forbids automated access, and Cloudflare served `maps.json` and `portals.json` as JSON to MapleCompass's own user agent. The files are the site's own data files, so reading them parses no HTML and uses no undocumented page structure. Fetching all of them is about as much load as one visit to the site.
-- **What's still open:** having no licence means no one has granted reuse either. Fetching the files live for personal use is fine. Bundling a snapshot in a public release, or redistributing it, still needs permission, but from one person (@ohmi on the [Classic World Discord](https://discord.gg/AK9tZ2TvN8)), not a commercial site. MapleCompass would credit OSMS as it now credits MeowDB.
+- **MeowDB:** its terms (§4) forbid "automated scripts, bots, or scrapers ... without permission" (ADR 0003). Minerva parses its HTML and Next.js flight data, page by page.
+- **OSMS:** the site has no terms page, and the repo has no licence (`license: null` on GitHub). Its `robots.txt` is Cloudflare's content-signals preamble with no rules and no signals set, which by its own wording "neither grants nor restricts". Nothing forbids automated access, and Cloudflare served `maps.json` and `portals.json` as JSON to Minerva's own user agent. The files are the site's own data files, so reading them parses no HTML and uses no undocumented page structure. Fetching all of them is about as much load as one visit to the site.
+- **What's still open:** having no licence means no one has granted reuse either. Fetching the files live for personal use is fine. Bundling a snapshot in a public release, or redistributing it, still needs permission, but from one person (@ohmi on the [Classic World Discord](https://discord.gg/AK9tZ2TvN8)), not a commercial site. Minerva would credit OSMS as it now credits MeowDB.
 - **Nexon:** both sites' data is mined from Nexon's client, so this part doesn't change.
 
 ## Field by field
@@ -112,9 +112,9 @@ Recorded in ADR 0008:
 1. **Hidden Portal positions:** neither. The panel shows OSMS's picture of the map as a Map Preview, with every portal marked and the Hidden Portals set apart. Hovering a mark shows where it leads, and hovering a row shows where the portal is. OSMS's portal positions are already in that picture's pixels, so no minimap bounds are needed.
 2. **Mob movement:** the Mob Card drops the line.
 3. **Item Lookup:** for now it keeps opening MeowDB pages through MeowDB's search (ADR 0007), the one MeowDB request left. The letter of MeowDB's terms arguably covers it, so it's a grey area to raise with MeowDB, but not a bar to release. Pointing the browser at a MeowDB search instead was checked and isn't possible: `/msclassic/search?q=` is a 404, and `/msclassic/item-db?q=` loads the item database without applying the query. OSMS may supply an item card on hover later. (It did: OSMS's item files are in `docs/research/item-card-sources.md`, and the Item Card in ADR 0010.)
-4. **Asking @ohmi:** not needed, since nothing restricts fetching. MapleCompass fetches the files and doesn't bundle them.
+4. **Asking @ohmi:** not needed, since nothing restricts fetching. Minerva fetches the files and doesn't bundle them.
 5. **Tests:** no OSMS file is committed. The tests run on made-up worlds in OSMS's shape, title recognition on a committed list of the game's map names (IDs, streets, names and regions only), and `probe osms` reads the live set in full by hand. The MeowDB fixtures go.
 
 ## How this was checked
 
-OSMS's site code (`main.js`, `lib/data.js`, `tabs/maps/MapBrowser.js`, `tabs/maps/MapPortalOverlay.js`, `tabs/formulas.js`) and its `data/current` and `data/patches/cot2` files were read. Node scripts compared the 12 MeowDB map fixtures and 14 mob fixtures with OSMS, field by field: 9 maps and 12 mobs overlap, and the rest are Ossyria content. Three live MeowDB requests were made, each identifying itself as MapleCompass: Sunset Sky (`010003070`, freshness), the map index (coverage), and The Pig Beach (`010000021`, timed spawns). OSMS's `robots.txt` was read, and its files were fetched once more with MapleCompass's user agent. Later, two MeowDB search URLs were tried, the second also in a browser.
+OSMS's site code (`main.js`, `lib/data.js`, `tabs/maps/MapBrowser.js`, `tabs/maps/MapPortalOverlay.js`, `tabs/formulas.js`) and its `data/current` and `data/patches/cot2` files were read. Node scripts compared the 12 MeowDB map fixtures and 14 mob fixtures with OSMS, field by field: 9 maps and 12 mobs overlap, and the rest are Ossyria content. Three live MeowDB requests were made, each identifying itself as Minerva: Sunset Sky (`010003070`, freshness), the map index (coverage), and The Pig Beach (`010000021`, timed spawns). OSMS's `robots.txt` was read, and its files were fetched once more with Minerva's user agent. Later, two MeowDB search URLs were tried, the second also in a browser.

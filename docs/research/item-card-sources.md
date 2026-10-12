@@ -1,6 +1,6 @@
 # Sources for the Item Card: shop prices, market prices and drops
 
-Checked on 11 October 2026, against OSMS Data Explorer's `data/current` (its "Public Release" set, `items.json` last modified 10 October), BasilMarket.net's live price list (built 11 October 15:25 UTC), and the sites that carry MapleStory Classic World drop tables. Every request identified itself as MapleCompass. The decisions it led to are in ADR 0010.
+Checked on 11 October 2026, against OSMS Data Explorer's `data/current` (its "Public Release" set, `items.json` last modified 10 October), BasilMarket.net's live price list (built 11 October 15:25 UTC), and the sites that carry MapleStory Classic World drop tables. Every request identified itself as Minerva. The decisions it led to are in ADR 0010.
 
 ## Answer
 
@@ -29,7 +29,7 @@ The site loads them all at startup from `https://osmsdataexplorer.com/data/curre
 
 ## BasilMarket.net
 
-**Since 11 October 2026 (about 18:00 UTC), BasilMarket refuses automated access.** `/api/price-index` answers 403 to MapleCompass's user agent and to curl, with the body "Automated access to BasilMarket isn't allowed, including AI crawlers and scrapers. If you're a person and you're seeing this, let us know in the BasilMarket Discord.", and the headers `x-robots-tag: noai, noimageai` and `tdm-reservation: 1`. Its `robots.txt` now disallows `/` for a list of AI crawlers and `/api/` (among others) for everyone. Browsers still get the list. What follows was true earlier that day.
+**Since 11 October 2026 (about 18:00 UTC), BasilMarket refuses automated access.** `/api/price-index` answers 403 to Minerva's user agent and to curl, with the body "Automated access to BasilMarket isn't allowed, including AI crawlers and scrapers. If you're a person and you're seeing this, let us know in the BasilMarket Discord.", and the headers `x-robots-tag: noai, noimageai` and `tdm-reservation: 1`. Its `robots.txt` now disallows `/` for a list of AI crawlers and `/api/` (among others) for everyone. Browsers still get the list. What follows was true earlier that day.
 
 A fan-made revival of the original BasilMarket, run by a registered LLC (unnamed), launched 10 September 2026 for MapleStory Classic World. Contact is its Discord (`discord.gg/RezJphGE3t`).
 

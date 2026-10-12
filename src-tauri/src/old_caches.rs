@@ -50,7 +50,7 @@ mod tests {
 
     #[test]
     fn map_and_mob_caches_and_the_saved_world_are_deleted_and_everything_else_stays() {
-        let cache = std::env::temp_dir().join(format!("maplecompass-old-caches-{}", std::process::id()));
+        let cache = std::env::temp_dir().join(format!("minerva-old-caches-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&cache);
         std::fs::create_dir_all(cache.join("osms-images")).unwrap();
         let old = [
@@ -82,7 +82,7 @@ mod tests {
 
     #[test]
     fn a_cache_folder_that_isnt_there_yet_is_left_alone() {
-        let cache = std::env::temp_dir().join(format!("maplecompass-old-caches-none-{}", std::process::id()));
+        let cache = std::env::temp_dir().join(format!("minerva-old-caches-none-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&cache);
 
         delete(&cache);

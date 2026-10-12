@@ -3,7 +3,7 @@
 //! the game a message, opens its process or hooks it, and the only windows it ever
 //! changes are our own (ADR 0001).
 
-use compass_core::{Foreground, ScreenRect};
+use minerva_core::{Foreground, ScreenRect};
 
 /// The game window as found on screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,7 +40,7 @@ pub use win::{
 };
 
 #[cfg(not(windows))]
-pub fn cursor_position() -> Option<compass_core::ScreenPoint> {
+pub fn cursor_position() -> Option<minerva_core::ScreenPoint> {
     None
 }
 
@@ -116,10 +116,10 @@ mod win {
 
     /// Where the mouse pointer is on screen (physical px), for Item Lookup. Only reads
     /// window-manager state (ADR 0001).
-    pub fn cursor_position() -> Option<compass_core::ScreenPoint> {
+    pub fn cursor_position() -> Option<minerva_core::ScreenPoint> {
         let mut at = POINT::default();
         unsafe { GetCursorPos(&mut at) }.ok()?;
-        Some(compass_core::ScreenPoint { x: at.x, y: at.y })
+        Some(minerva_core::ScreenPoint { x: at.x, y: at.y })
     }
 
     /// The title of the top-level window under the mouse pointer, for picking the game
@@ -133,7 +133,7 @@ mod win {
             return Err("no window under the pointer".into());
         }
         if is_ours(root) {
-            return Err("that is MapleCompass itself".into());
+            return Err("that is Minerva itself".into());
         }
         match caption(root) {
             Some(title) if !title.trim().is_empty() => Ok(title),
@@ -243,7 +243,7 @@ mod win {
         } else if game == Some(foreground.0 as isize) {
             Foreground::Game
         } else if is_ours(foreground) {
-            Foreground::MapleCompass
+            Foreground::Minerva
         } else {
             Foreground::OtherApp
         }

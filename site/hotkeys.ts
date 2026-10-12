@@ -1,8 +1,8 @@
 import { HOTKEY_NAMES, keyLabel, type Hotkey } from "../src/hotkeys.ts";
 
 /**
- * The hotkeys a new install starts with, as `compass_core::Hotkeys::default()` sets them
- * (`crates/compass-core/src/settings.rs`). Written here by hand: when the defaults change,
+ * The hotkeys a new install starts with, as `minerva_core::Hotkeys::default()` sets them
+ * (`crates/minerva-core/src/settings.rs`). Written here by hand: when the defaults change,
  * this changes in the same PR. A hotkey added to `Hotkeys` without one here fails the
  * type check.
  */

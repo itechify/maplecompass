@@ -1,6 +1,6 @@
 /** Whether minimap titles can be recognised as real maps, as the panel and setup say it. */
 
-/** Mirror of `compass_core::Recognition`. */
+/** Mirror of `minerva_core::Recognition`. */
 export type Recognition =
   | { status: "starting" | "ready" | "unavailable" | "formatChanged" }
   | { status: "savedCopy"; savedAtUnixMs: number };
@@ -14,7 +14,7 @@ export function recognitionProblem(recognition: Recognition): string | null {
     case "unavailable":
       return "Couldn't load the map list from OSMS Data Explorer. Check your connection. The map list retries every minute.";
     case "formatChanged":
-      return "OSMS Data Explorer's data has changed format. MapleCompass needs an update to read it.";
+      return "OSMS Data Explorer's data has changed format. Minerva needs an update to read it.";
     default:
       return null;
   }

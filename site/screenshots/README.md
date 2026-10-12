@@ -1,11 +1,11 @@
 # The site's screenshots
 
-The pictures on the MapleCompass site, taken by hand in the game. The site's build fails while one the page shows is missing, so the page is never published without it.
+The pictures on the Minerva site, taken by hand in the game. The site's build fails while one the page shows is missing, so the page is never published without it.
 
 ## How to take them
 
 - The game at **1920×1200**, windowed or borderless, with the minimap open.
-- MapleCompass from the release the site describes, with the panel inside the game window.
+- Minerva from the release the site describes, with the panel inside the game window.
 - Capture as PNG, for example with Snipping Tool: its window mode for `game-window.png`, a rectangle for the others.
 - **`game-window.png`** is the whole game window as Windows draws it, title bar included. **The others** are crops at full size, never scaled, so their text stays readable, each framing what the table says at about the size it gives. Cut the hero from `game-window.png`: it is that window's top-left corner at full size, and the hero's film (`site/reel.ts`) ends on that corner of the window, so the two must match pixel for pixel.
 - Save each under its file name here, replacing the old one, and set the version it was taken on. The page takes each picture's size from the file, and the build makes its WebP copy (`webp/`, not committed), so nothing else needs to change; if what a picture shows changes, update its alt text and caption in `site/index.html` to match.
@@ -27,4 +27,6 @@ The pictures on the MapleCompass site, taken by hand in the game. The site's bui
 
 When a change alters something a shot shows, the PR that makes it lists the shot here, with what changed. At release, the smoke test retakes every shot listed (`docs/releasing.md`) and empties the list.
 
-- `item-card.png`: the card's market section is now Market Lines: a "Market" heading with its + and MesoWatch buttons, then a row per line. Retake it with two or three lines, some with a price (for example "Your price" and "Lowest ask"), and update its alt text to say so. The card also heads with the item's picture now, beside its name: the alt text says so too.
+- `item-card.png`: the card's market section is now Market Lines: a "Market" heading with its + and MesoWatch buttons, then a row per line. Retake it with two or three lines, some with a price (for example "Your price" and "Lowest ask"), and update its alt text to say so. The card also heads with the item's picture now, beside its name: the alt text says so too. Its window bar shows the owl now, not the compass.
+- `game-window.png` and `hero.png`: the app is Minerva now. The panel's window bar shows the owl and "Minerva" where it showed the compass and "MapleCompass". Retake the game window and cut the hero from it again, keeping the same map with the minimap's title and the panel's where they are, so `site/reel.ts` needs no change.
+- `setup.png`: the window's title and heading say "Minerva Setup", and its bar shows the 32px owl where it showed the 28px compass.

@@ -26,7 +26,7 @@ An item picked in Search closes the search view, and its card opens beside the p
 
 ## Pictures
 
-Item pictures and mob animations come from OSMS when a match first shows, as the Map Preview's picture and the Mob Cards' animations do (ADR 0008), and are kept on disk; while the search view is open, its matches' pictures are asked for before any other. Nothing is bundled with MapleCompass: ADR 0008 and ADR 0010 ship none of OSMS's data, and five matches a section keep the requests few.
+Item pictures and mob animations come from OSMS when a match first shows, as the Map Preview's picture and the Mob Cards' animations do (ADR 0008), and are kept on disk; while the search view is open, its matches' pictures are asked for before any other. Nothing is bundled with Minerva: ADR 0008 and ADR 0010 ship none of OSMS's data, and five matches a section keep the requests few.
 
 ## Considered options
 

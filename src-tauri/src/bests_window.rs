@@ -12,7 +12,7 @@ use crate::grind_tracker::GRIND_TRACKER;
 use crate::sizemove::{self, Gesture, SizeMove};
 use crate::view::{LastView, ViewSender};
 use crate::{Command, LOOP_START_GRACE, keep_on_top, physical, place};
-use compass_core::{MapMark, PanelState, PersonalBestsMap, Size, VisitBest};
+use minerva_core::{MapMark, PanelState, PersonalBestsMap, Size, VisitBest};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::sync::Arc;

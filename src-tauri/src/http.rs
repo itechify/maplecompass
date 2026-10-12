@@ -2,19 +2,19 @@
 //! and fetches that run on the async runtime and never block the caller. A source starts
 //! one with [`in_background`] and answers `Pending`, then [`collect`]s it on later calls.
 
-use compass_core::SourceError;
+use minerva_core::SourceError;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::task::Poll;
 use std::time::Duration;
 
 /// Who is asking: name, version, purpose and where to find out more. Never a browser UA.
 const USER_AGENT: &str = concat!(
-    "MapleCompass/",
+    "Minerva/",
     env!("CARGO_PKG_VERSION"),
-    " (personal-use map helper; +https://github.com/itechify/maplecompass)"
+    " (personal-use map helper; +https://github.com/itechify/minerva)"
 );
 
-/// An HTTP client that says who is asking, with MapleCompass's timeouts.
+/// An HTTP client that says who is asking, with Minerva's timeouts.
 pub(crate) fn client() -> reqwest::Result<reqwest::Client> {
     reqwest::Client::builder()
         .user_agent(USER_AGENT)

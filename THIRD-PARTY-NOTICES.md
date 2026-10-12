@@ -1,28 +1,28 @@
 # Third-party notices
 
-MapleCompass bundles or uses the following third-party material. The app shows the same credits under **About & Credits** in Help & Setup.
+Minerva bundles or uses the following third-party material. The app shows the same credits under **About & Credits** in Help & Setup.
 
 ## Data and pictures
 
 - **Map, mob and item data, map pictures, Map Marks, mob animations and item pictures:** [OSMS Data Explorer](https://osmsdataexplorer.com) (by @ohmi), fetched from its site at run time and never bundled. Its data is mined from MapleStory Classic World, and the pictures, marks and animations are NEXON's art.
-- **Map, mob and item pages:** [NiaMeowDB](https://meowdb.com). MapleCompass opens its pages in your browser, and Item Lookup asks its search which page to open.
-- **Market prices:** [MesoWatch](https://meso.watch). The Item Card's market line opens it in your browser; MapleCompass reads nothing from it.
-- MapleStory and its art are NEXON's. MapleCompass isn't made, endorsed or supported by NEXON.
+- **Map, mob and item pages:** [NiaMeowDB](https://meowdb.com). Minerva opens its pages in your browser, and Item Lookup asks its search which page to open.
+- **Market prices:** [MesoWatch](https://meso.watch). The Item Card's market line opens it in your browser; Minerva reads nothing from it.
+- MapleStory and its art are NEXON's. Minerva isn't made, endorsed or supported by NEXON.
 
 ## Text-recognition model (ocrs)
 
-`crates/compass-core/models/text-recognition.onnx` is the text-recognition model of **ocrs** by Robert Knight ([github.com/robertknight/ocrs](https://github.com/robertknight/ocrs), trained in [ocrs-models](https://github.com/robertknight/ocrs-models), published at [huggingface.co/robertknight/ocrs](https://huggingface.co/robertknight/ocrs)).
+`crates/minerva-core/models/text-recognition.onnx` is the text-recognition model of **ocrs** by Robert Knight ([github.com/robertknight/ocrs](https://github.com/robertknight/ocrs), trained in [ocrs-models](https://github.com/robertknight/ocrs-models), published at [huggingface.co/robertknight/ocrs](https://huggingface.co/robertknight/ocrs)).
 
 - **Licence:** [Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)](https://creativecommons.org/licenses/by-sa/4.0/).
 - **Training data:** HierText (CC BY-SA 4.0) and synthetic data.
 - **Modified:** no. The file is bundled unmodified.
 - **No warranty:** the model is provided "as is", without warranties of any kind, as set out in sections 5 and 6 of the licence.
 
-The licence covers the model file only. See [ADR 0002](docs/adr/0002-one-bundled-title-recogniser.md) and `crates/compass-core/models/NOTICE.md`.
+The licence covers the model file only. See [ADR 0002](docs/adr/0002-one-bundled-title-recogniser.md) and `crates/minerva-core/models/NOTICE.md`.
 
 ## Typeface (Maplestory)
 
-`assets/fonts/Maplestory-Light.ttf` and `assets/fonts/Maplestory-Bold.ttf` are NEXON's Maplestory typeface, unmodified (version 1.0.0). Copyright (c) 2017 NEXON-Maplestory. All rights reserved. Designed by FONTRIX Inc. (Park Young-rak, Kim Jung-Jin). "Maplestory" is a trademark of NEXON-Maplestory. NEXON publishes the typeface for free use; bundling it doesn't mean NEXON made or approved MapleCompass. See `assets/fonts/NOTICE.md`.
+`assets/fonts/Maplestory-Light.ttf` and `assets/fonts/Maplestory-Bold.ttf` are NEXON's Maplestory typeface, unmodified (version 1.0.0). Copyright (c) 2017 NEXON-Maplestory. All rights reserved. Designed by FONTRIX Inc. (Park Young-rak, Kim Jung-Jin). "Maplestory" is a trademark of NEXON-Maplestory. NEXON publishes the typeface for free use; bundling it doesn't mean NEXON made or approved Minerva. See `assets/fonts/NOTICE.md`.
 
 ## Open-source software
 
@@ -30,7 +30,7 @@ The app is built with [Tauri](https://tauri.app), [ocrs](https://github.com/robe
 
 The overlay's frontend bundles [@tauri-apps/api](https://github.com/tauri-apps/tauri) (Apache-2.0 OR MIT).
 
-These are the Rust crates compiled into the Windows app: the dependencies of `src-tauri`, with no build tools or test dependencies. To regenerate the list, run `cargo metadata --format-version 1 --filter-platform x86_64-pc-windows-msvc`, keep the normal dependencies reachable from `maplecompass`, and drop the workspace's own crates.
+These are the Rust crates compiled into the Windows app: the dependencies of `src-tauri`, with no build tools or test dependencies. To regenerate the list, run `cargo metadata --format-version 1 --filter-platform x86_64-pc-windows-msvc`, keep the normal dependencies reachable from `minerva`, and drop the workspace's own crates.
 
 | Crate | Version | Licence |
 | --- | --- | --- |

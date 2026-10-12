@@ -7,9 +7,9 @@ unmodified (version 1.0.0).
   (Park Young-rak, Kim Jung-Jin). "Maplestory" is a trademark of NEXON-Maplestory.
 - The files carry no licence text; their embedding permission (OS/2 `fsType` 8) allows
   editable embedding. NEXON publishes the typeface for free use.
-- Bundled in MapleCompass's public releases (from 0.7.0) and credited in Help & Setup's
+- Bundled in Minerva's public releases (from 0.7.0) and credited in Help & Setup's
   About & Credits and in `THIRD-PARTY-NOTICES.md`. Bundling it does not mean NEXON made
-  or approved MapleCompass.
-- The MapleCompass site (`site/`) serves WOFF2 copies of these two files, in `site/fonts`:
+  or approved Minerva.
+- The Minerva site (`site/`) serves WOFF2 copies of these two files, in `site/fonts`:
   the same fonts re-encoded as WOFF2 with `woff2_compress`, at a fifth of the size. The
   site credits the typeface in its Credits.

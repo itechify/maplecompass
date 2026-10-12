@@ -4,28 +4,28 @@
 //! all the same, saying why.
 
 use crate::errors::error;
-use compass_core::{Compass, ReportAbout};
+use minerva_core::{Minerva, ReportAbout};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager, WebviewWindow};
 use tauri_plugin_opener::OpenerExt;
 
-/// GitHub's new-issue page for MapleCompass, which takes the bug form and its fields.
-const ISSUE_FORM: &str = "https://github.com/itechify/maplecompass/issues/new";
+/// GitHub's new-issue page for Minerva, which takes the bug form and its fields.
+const ISSUE_FORM: &str = "https://github.com/itechify/minerva/issues/new";
 /// How many Bug Reports are kept.
 const KEPT: usize = 10;
 /// Every Bug Report's name starts so.
-const PREFIX: &str = "maplecompass-bug-report-";
+const PREFIX: &str = "minerva-bug-report-";
 
 /// Save a Bug Report, show it in Explorer, and open the bug form for it.
-pub fn save(app: &AppHandle, compass: &mut Compass, overlay: &WebviewWindow) {
+pub fn save(app: &AppHandle, minerva: &mut Minerva, overlay: &WebviewWindow) {
     let about = ReportAbout {
         version: app.package_info().version.to_string(),
         os: os(),
         display_scale: overlay.scale_factor().unwrap_or(1.0),
         local_time: local_time(),
     };
-    let report = compass.bug_report(&about);
+    let report = minerva.bug_report(&about);
     let saved = folder(app).and_then(|folder| {
         let path = folder.join(&report.file_name);
         crate::files::write_atomically(&path, &report.zip).map_err(|e| format!("couldn't write {}: {e}", path.display()))?;
@@ -128,7 +128,7 @@ fn local_time() -> String {
     format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond)
 }
 
-/// UTC, off Windows (where MapleCompass is only built to test).
+/// UTC, off Windows (where Minerva is only built to test).
 #[cfg(not(windows))]
 fn local_time() -> String {
     let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());

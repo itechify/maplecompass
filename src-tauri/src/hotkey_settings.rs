@@ -5,7 +5,7 @@
 //! Every decision is the core's; this only relays the player's clicks and key presses.
 
 use crate::Command;
-use compass_core::{Action, Hotkey, KeyPress};
+use minerva_core::{Action, Hotkey, KeyPress};
 use std::sync::mpsc::Sender;
 use tauri::State;
 

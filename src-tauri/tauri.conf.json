@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "MapleCompass",
+  "productName": "Minerva",
   "version": "0.8.0",
-  "identifier": "com.itechify.maplecompass",
+  "identifier": "com.itechify.minerva",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "overlay",
-        "title": "MapleCompass",
+        "title": "Minerva",
         "url": "index.html",
         "width": 380,
         "height": 72,
@@ -94,7 +94,7 @@
       },
       {
         "label": "setup",
-        "title": "MapleCompass Setup",
+        "title": "Minerva Setup",
         "url": "setup.html",
         "width": 520,
         "height": 560,

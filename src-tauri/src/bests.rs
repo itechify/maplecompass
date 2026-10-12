@@ -1,10 +1,10 @@
 //! Keeping the Personal Bests between launches: the core's [`SavedBests`] as pretty JSON
-//! beside the settings (`%APPDATA%\com.itechify.maplecompass\personal-bests.json` on
+//! beside the settings (`%APPDATA%\com.itechify.minerva\personal-bests.json` on
 //! Windows), read at startup and written whenever the core's bests revision changes, but
 //! never over a file that was there and didn't read.
 
 use crate::errors::error;
-use compass_core::{BESTS_VERSION, SavedBests};
+use minerva_core::{BESTS_VERSION, SavedBests};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
@@ -64,13 +64,13 @@ impl BestsFile {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use compass_core::{MapBests, VisitBest};
+    use minerva_core::{MapBests, VisitBest};
     use std::path::Path;
 
     /// `personal-bests.json` in a folder of `test`'s own under the temp folder, emptied
     /// first.
     fn file(test: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("maplecompass-bests-{test}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("minerva-bests-{test}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir.join("personal-bests.json")

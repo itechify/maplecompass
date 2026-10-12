@@ -1,11 +1,11 @@
 //! Keeping the market prices the player types into Item Cards, on their Market Lines,
 //! between launches: the core's [`SavedMarketPrices`] as pretty JSON beside the settings
-//! (`%APPDATA%\com.itechify.maplecompass\market-prices.json` on Windows), read at startup
+//! (`%APPDATA%\com.itechify.minerva\market-prices.json` on Windows), read at startup
 //! and written whenever the core's market prices revision changes, but never over a file
 //! that was there and didn't read.
 
 use crate::errors::error;
-use compass_core::{MARKET_PRICES_VERSION, SavedMarketPrices};
+use minerva_core::{MARKET_PRICES_VERSION, SavedMarketPrices};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
@@ -68,11 +68,11 @@ impl MarketPricesFile {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use compass_core::{MarketPrice, SavedMarketLine};
+    use minerva_core::{MarketPrice, SavedMarketLine};
 
     /// `market-prices.json` in a folder of `test`'s own under the temp folder, emptied first.
     fn file(test: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("maplecompass-market-prices-{test}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("minerva-market-prices-{test}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir.join("market-prices.json")

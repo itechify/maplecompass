@@ -1,4 +1,4 @@
-# Builds the MapleCompass site on a pull request that could change it, so a broken build
+# Builds the Minerva site on a pull request that could change it, so a broken build
 # shows before a release would publish it. The build fails while a screenshot the page shows
 # hasn't been taken (site/screenshots/README.md).
 name: Site check

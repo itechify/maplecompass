@@ -1,7 +1,7 @@
-// The hero's opening: how MapleCompass reads the map you're on, filmed in the game window as
+// The hero's opening: how Minerva reads the map you're on, filmed in the game window as
 // the page scrolls. The camera moves in from the whole game window to the minimap's title;
 // setup's dashed box is marked around its two lines; a read passes over them and turns them
-// into MapleCompass's own lettering, which drops into the panel's title under the minimap;
+// into Minerva's own lettering, which drops into the panel's title under the minimap;
 // and the camera draws back to the hero shot as it is. While it plays, the hero stays put
 // and the scroll runs the film, as the minimap's dot moves only with the scroll: never on a
 // timer. With reduced motion, without the script, in print or on a screen too short to
@@ -47,7 +47,7 @@ const BACK = [0.84, 1];
 const CAPTIONS: [string, number, number][] = [
   ["MapleStory, windowed, with its minimap open.", -1, 0.29],
   ["At setup, you mark the minimap's title: both its lines.", 0.29, 0.45],
-  ["MapleCompass captures just that box, the way a screenshot does, and reads it.", 0.45, 0.61],
+  ["Minerva captures just that box, the way a screenshot does, and reads it.", 0.45, 0.61],
   ["The panel names the map it read.", 0.61, 0.84],
   ["", 0.84, 2],
 ];
@@ -266,7 +266,7 @@ export function reel(head: () => number) {
     box.style.opacity = String(1 - seg(p, VEIL_OUT));
     visible(box, drag > 0 && p < VEIL_OUT[1]);
 
-    // The read: a line across the box, MapleCompass's lettering where it has passed.
+    // The read: a line across the box, Minerva's lettering where it has passed.
     const done = seg(p, READ);
     visible(sweep, done > 0 && done < 1);
     sweep.style.transform = `translate(${left + MARK.w * s * done - 1}px, ${top}px)`;

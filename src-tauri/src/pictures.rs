@@ -1,5 +1,5 @@
 //! OSMS's pictures (ADR 0008): mob animations and map pictures, each named by its content
-//! at a path below [`PICTURES_URL`]. They are fetched one at a time with MapleCompass's
+//! at a path below [`PICTURES_URL`]. They are fetched one at a time with Minerva's
 //! own user agent, kept under the cache's [`FOLDER`] at the same path, and served to the
 //! overlay from there through the [`SCHEME`] URL scheme: the webview never asks OSMS
 //! itself.
@@ -10,8 +10,8 @@
 
 use crate::errors::error;
 use crate::http;
-use compass_core::SourceError;
-use compass_core::osms::PICTURES_URL;
+use minerva_core::SourceError;
+use minerva_core::osms::PICTURES_URL;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Receiver;
 use std::task::Poll;
@@ -159,7 +159,7 @@ fn touch(file: &Path) {
 }
 
 /// Delete every picture kept under `cache_dir` that hasn't been used for [`KEPT_FOR`].
-/// Slow with many pictures: call it off the compass loop.
+/// Slow with many pictures: call it off the core loop.
 pub fn sweep(cache_dir: &Path) {
     sweep_older_than(&cache_dir.join(FOLDER), SystemTime::now() - KEPT_FOR);
 }
@@ -185,7 +185,7 @@ mod tests {
 
     /// A fresh, empty folder for one test.
     fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("maplecompass-pictures-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("minerva-pictures-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir

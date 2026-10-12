@@ -1,4 +1,4 @@
-//! MapleCompass shell: a thin adapter around `compass-core`. It finds the game window,
+//! Minerva shell: a thin adapter around `minerva-core`. It finds the game window,
 //! captures the Title Region and the EXP Bar Region (and, for Item Lookup, the client
 //! area with the pointer), feeds frames, hotkeys and drags to the core and renders the
 //! panel state in an overlay on top of everything (detached, with a taskbar entry), the
@@ -34,8 +34,8 @@ pub mod source;
 mod tray;
 mod view;
 
-use compass_core::{
-    Action, Compass, ExpBarReader, ExpBarReading, Frame, GameWindow, ItemCapture, ItemTooltipReader,
+use minerva_core::{
+    Action, Minerva, ExpBarReader, ExpBarReading, Frame, GameWindow, ItemCapture, ItemTooltipReader,
     ItemTooltipReading, KeyPress, Layer, MIN_PANEL_WIDTH, PanelControl, PanelSizes, PlacementMode, PanelState, Request,
     ScreenPoint, ScreenRect, Size, TitleReader, TitleReading, VisitBest, default_title_region,
 };
@@ -78,7 +78,7 @@ const COLLAPSED: (f64, f64) = (44.0, 44.0);
 /// long never will (the mouse was let go first): the shell places the panel again.
 pub(crate) const LOOP_START_GRACE: Duration = Duration::from_secs(1);
 
-/// What the compass loop is asked to do.
+/// What the core loop is asked to do.
 #[derive(Debug, Clone)]
 pub(crate) enum Command {
     /// Something the player did in the overlay or the setup window, for the core.
@@ -162,7 +162,7 @@ pub(crate) enum Command {
     BugReport,
     /// The shell or one of our windows (`from`) ran into an error, for the Bug Report.
     Error { from: String, message: String },
-    /// The player started MapleCompass again; that one exited, and this one shows itself.
+    /// The player started Minerva again; that one exited, and this one shows itself.
     LaunchedAgain,
     /// A watcher took one of our windows out of sight, with another app in front, while
     /// the core still showed it: check the game window and the foreground now.
@@ -178,7 +178,7 @@ pub(crate) enum Command {
     ReadItemTooltip { capture: Box<ItemCapture>, reading: ItemTooltipReading },
 }
 
-/// The overlay's drags and resizes, as the compass loop hears them.
+/// The overlay's drags and resizes, as the core loop hears them.
 fn overlay_size_move(what: SizeMove) -> Command {
     match what {
         SizeMove::Pressed(gesture) => Command::GestureStarted(gesture),
@@ -216,7 +216,7 @@ pub fn capture_title_frame(client: ScreenRect, at_ms: u64) -> Result<Frame, Stri
 pub fn run() {
     tauri::Builder::default()
         // First, so a second launch exits before it sets anything up: only one
-        // MapleCompass runs, and the running one shows itself instead.
+        // Minerva runs, and the running one shows itself instead.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(commands) = app.try_state::<Sender<Command>>() {
                 let _ = commands.send(Command::LaunchedAgain);
@@ -249,7 +249,7 @@ pub fn run() {
             // OSMS's file set and pictures are kept on disk (ADR 0008), and so are MeowDB's
             // search answers (ADR 0007).
             let cache = cache_dir(app.handle())?;
-            // Off the compass loop: what earlier versions cached and nothing reads now, and
+            // Off the core loop: what earlier versions cached and nothing reads now, and
             // the pictures unused for 30 days.
             let swept = cache.clone();
             std::thread::Builder::new().name("cache-sweeper".into()).spawn(move || {
@@ -257,24 +257,24 @@ pub fn run() {
                 pictures::sweep(&swept);
             })?;
             let source = WebSource::new(cache)?;
-            let mut compass = Compass::new(source);
+            let mut minerva = Minerva::new(source);
             let settings_path = settings::path(app.handle())?;
             // The core brings older settings up to date (hotkeys included).
-            compass.restore(settings::load(&settings_path));
+            minerva.restore(settings::load(&settings_path));
             // The Personal Bests earlier launches set, beside the settings: a small file,
             // read before anything is captured, so no best is set before they are back.
             let (bests_file, saved_bests) = bests::BestsFile::load(bests::path(app.handle())?);
-            compass.restore_bests(saved_bests);
+            minerva.restore_bests(saved_bests);
             // The market prices the player keeps on Item Cards, beside them.
             let (prices_file, saved_prices) =
                 market_prices::MarketPricesFile::load(market_prices::path(app.handle())?);
-            compass.restore_market_prices(saved_prices);
+            minerva.restore_market_prices(saved_prices);
             let (commands, commands_rx) = mpsc::channel();
             // From now on errors go to the core too, for the Bug Report; those from before
             // (the settings or bests not reading) are held for it till now.
             errors::send_to(commands.clone());
             // Registered only while the game or one of our windows is in front.
-            let hotkeys = hotkeys::install(app, &compass.panel_state().hotkeys, commands.clone())?;
+            let hotkeys = hotkeys::install(app, &minerva.panel_state().hotkeys, commands.clone())?;
             // The one way to quit at any time, the game open or not.
             tray::install(app, commands.clone())?;
             app.manage(commands.clone());
@@ -333,9 +333,9 @@ pub fn run() {
                 item_card,
                 hotkeys,
             };
-            std::thread::Builder::new().name("compass-loop".into()).spawn(move || {
+            std::thread::Builder::new().name("core-loop".into()).spawn(move || {
                 let files = Files { settings: settings_path, bests: bests_file, market_prices: prices_file };
-                compass_loop(handle, windows, compass, reader, channels, files)
+                core_loop(handle, windows, minerva, reader, channels, files)
             })?;
             Ok(())
         })
@@ -417,7 +417,7 @@ struct Windows {
     hotkeys: hotkeys::GlobalHotkeys,
 }
 
-/// Where the compass loop saves the settings, the Personal Bests and the market prices.
+/// Where the core loop saves the settings, the Personal Bests and the market prices.
 struct Files {
     settings: PathBuf,
     bests: bests::BestsFile,
@@ -426,15 +426,15 @@ struct Files {
 
 /// Save the Personal Bests if the core's bests revision moved on from `saved` (the one
 /// last saved, or restored at startup). At once, not once they settle: the Visit under
-/// way's best is kept as it changes, so however MapleCompass closes, it keeps it. Never
+/// way's best is kept as it changes, so however Minerva closes, it keeps it. Never
 /// over a file that didn't read at startup and couldn't be set aside.
-fn save_bests(compass: &Compass, file: &bests::BestsFile, saved: &mut u64) {
-    let revision = compass.bests_revision();
+fn save_bests(minerva: &Minerva, file: &bests::BestsFile, saved: &mut u64) {
+    let revision = minerva.bests_revision();
     if *saved == revision {
         return;
     }
     *saved = revision;
-    if let Err(e) = file.save(&compass.bests()) {
+    if let Err(e) = file.save(&minerva.bests()) {
         error!("saving personal bests failed: {e}");
     }
 }
@@ -442,13 +442,13 @@ fn save_bests(compass: &Compass, file: &bests::BestsFile, saved: &mut u64) {
 /// Save the market prices the player keeps if the core's revision of them moved on from
 /// `saved`, at once, as the Personal Bests are. Never over a file that didn't read at
 /// startup and couldn't be set aside.
-fn save_market_prices(compass: &Compass, file: &market_prices::MarketPricesFile, saved: &mut u64) {
-    let revision = compass.market_prices_revision();
+fn save_market_prices(minerva: &Minerva, file: &market_prices::MarketPricesFile, saved: &mut u64) {
+    let revision = minerva.market_prices_revision();
     if *saved == revision {
         return;
     }
     *saved = revision;
-    if let Err(e) = file.save(&compass.market_prices()) {
+    if let Err(e) = file.save(&minerva.market_prices()) {
         error!("saving market prices failed: {e}");
     }
 }
@@ -458,7 +458,7 @@ fn unix_now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
 }
 
-/// What the compass loop hears from hotkeys, the overlay, the setup window and the
+/// What the core loop hears from hotkeys, the overlay, the setup window and the
 /// reader thread.
 struct Channels {
     commands: Receiver<Command>,
@@ -477,7 +477,7 @@ enum Capture {
 
 /// Captures and reads the Title Region and the EXP Bar Region on its own thread, and reads
 /// Item Lookup's captures (taken at the press, while the Item Tooltip shows). Reading
-/// takes tens of ms (far more in a debug build), so the compass loop never waits for it:
+/// takes tens of ms (far more in a debug build), so the core loop never waits for it:
 /// it keeps following the game window at its own pace and takes each reading when it
 /// arrives.
 struct ReaderThread {
@@ -570,18 +570,18 @@ impl ReaderThread {
     }
 }
 
-fn compass_loop(
+fn core_loop(
     app: AppHandle,
     windows: Windows,
-    mut compass: Compass,
+    mut minerva: Minerva,
     mut reader: ReaderThread,
     channels: Channels,
     files: Files,
 ) {
     let settings_path = files.settings;
     // Restored at startup: saved already.
-    let mut bests_saved = compass.bests_revision();
-    let mut prices_saved = compass.market_prices_revision();
+    let mut bests_saved = minerva.bests_revision();
+    let mut prices_saved = minerva.market_prices_revision();
     let Windows {
         overlay: mut window,
         setup: mut setup_windows,
@@ -591,7 +591,7 @@ fn compass_loop(
         mut item_card,
         mut hotkeys,
     } = windows;
-    let mut saved = compass.settings();
+    let mut saved = minerva.settings();
     let mut pending = (saved.clone(), Instant::now());
     let mut emitted: Option<PanelState> = None;
     let mut game = None;
@@ -604,88 +604,88 @@ fn compass_loop(
         let due = next_capture.min(next_exp_bar_capture).min(next_window_check);
         match channels.commands.recv_timeout(due.saturating_duration_since(Instant::now())) {
             Ok(Command::Act(action)) => {
-                compass.act(action);
+                minerva.act(action);
             }
             Ok(Command::Hotkey(pressed)) => {
-                let request = compass.on_hotkey(&pressed);
-                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
+                let request = minerva.on_hotkey(&pressed);
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut minerva, request);
             }
             Ok(Command::Press(control)) => {
-                let request = compass.press(control);
-                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
+                let request = minerva.press(control);
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut minerva, request);
             }
             Ok(Command::SearchQuery(query)) => {
-                compass.search_query(&query);
+                minerva.search_query(&query);
             }
             Ok(Command::RebindKey(press)) => {
-                compass.rebind_key(press);
+                minerva.rebind_key(press);
             }
             Ok(Command::SearchPick(id)) => {
-                compass.search_pick(&id);
+                minerva.search_pick(&id);
             }
             Ok(Command::SearchPickDestination(id)) => {
-                compass.search_pick_destination(&id);
+                minerva.search_pick_destination(&id);
             }
             Ok(Command::SearchPickItem(id)) => {
-                compass.search_pick_item(&id);
+                minerva.search_pick_item(&id);
             }
             Ok(Command::OpenMobPage(id)) => {
-                let request = compass.open_mob_page(&id);
-                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
+                let request = minerva.open_mob_page(&id);
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut minerva, request);
             }
             Ok(Command::OpenBestsMapPage(id)) => {
-                let request = compass.open_bests_map_page(&id);
-                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
+                let request = minerva.open_bests_map_page(&id);
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut minerva, request);
             }
             Ok(Command::RemoveVisit { map, visit }) => {
-                compass.remove_visit(&map, visit);
+                minerva.remove_visit(&map, visit);
             }
             Ok(Command::PickItem(id)) => {
-                let request = compass.pick_item(&id);
-                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
+                let request = minerva.pick_item(&id);
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut minerva, request);
             }
             Ok(Command::CloseItemCard) => {
-                compass.close_item_card();
+                minerva.close_item_card();
             }
             Ok(Command::PickCardItem(id)) => {
-                compass.pick_card_item(&id);
+                minerva.pick_card_item(&id);
             }
             Ok(Command::OpenCardMeowdbPage) => {
                 // Its page comes from `take_request`, once MeowDB's search has answered.
-                compass.open_card_meowdb_page(reader.now_ms());
+                minerva.open_card_meowdb_page(reader.now_ms());
             }
             Ok(Command::EditCardMarketPrice(line)) => {
-                compass.edit_card_market_price(&line);
+                minerva.edit_card_market_price(&line);
             }
             Ok(Command::EnterCardMarket(typed)) => {
-                compass.enter_card_market(&typed);
+                minerva.enter_card_market(&typed);
             }
             Ok(Command::EditCardMarketLine(line)) => {
-                compass.edit_card_market_line(&line);
+                minerva.edit_card_market_line(&line);
             }
             Ok(Command::EnterCardMarketLine(typed)) => {
-                compass.enter_card_market_line(&typed);
+                minerva.enter_card_market_line(&typed);
             }
             Ok(Command::OpenCardMesowatch) => {
-                let request = compass.open_card_mesowatch();
-                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, request);
+                let request = minerva.open_card_mesowatch();
+                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut minerva, request);
             }
             Ok(Command::PanelHeight(height)) => {
                 expanded_height = height.clamp(MIN_EXPANDED_HEIGHT, MAX_EXPANDED_HEIGHT);
-                set_panel_sizes(&mut compass, &window.overlay, expanded_height);
+                set_panel_sizes(&mut minerva, &window.overlay, expanded_height);
             }
             Ok(Command::LaunchedAgain) => {
-                compass.act(Action::LaunchedAgain);
+                minerva.act(Action::LaunchedAgain);
                 setup_windows.bring_to_front();
             }
             Ok(Command::CheckForeground) => next_window_check = Instant::now(),
-            Ok(Command::BugReport) => bug_reports::save(&app, &mut compass, &window.overlay),
-            Ok(Command::Error { from, message }) => compass.note_error(&from, &message),
+            Ok(Command::BugReport) => bug_reports::save(&app, &mut minerva, &window.overlay),
+            Ok(Command::Error { from, message }) => minerva.note_error(&from, &message),
             Ok(Command::Quit) => {
                 // Whatever the player changed last (a drag, say) is saved first.
-                save_bests(&compass, &files.bests, &mut bests_saved);
-                save_market_prices(&compass, &files.market_prices, &mut prices_saved);
-                let current = compass.settings();
+                save_bests(&minerva, &files.bests, &mut bests_saved);
+                save_market_prices(&minerva, &files.market_prices, &mut prices_saved);
+                let current = minerva.settings();
                 if current != saved
                     && let Err(e) = settings::save(&settings_path, &current)
                 {
@@ -704,138 +704,138 @@ fn compass_loop(
                 if let Some(size) = window.size_move_ended()
                     && let Ok(scale) = window.overlay.scale_factor()
                 {
-                    compass.act(Action::PanelResized { width: (f64::from(size.width) / scale).round() as u32 });
-                    set_panel_sizes(&mut compass, &window.overlay, expanded_height);
+                    minerva.act(Action::PanelResized { width: (f64::from(size.width) / scale).round() as u32 });
+                    set_panel_sizes(&mut minerva, &window.overlay, expanded_height);
                     if let Ok(at) = window.overlay.outer_position() {
-                        compass.act(Action::PanelMoved { x: at.x, y: at.y });
+                        minerva.act(Action::PanelMoved { x: at.x, y: at.y });
                     }
                 }
             }
             Ok(Command::Moved(to)) => {
                 if window.player_moved() {
-                    compass.act(Action::PanelMoved { x: to.x, y: to.y });
+                    minerva.act(Action::PanelMoved { x: to.x, y: to.y });
                 }
             }
             Ok(Command::GrindTrackerHeight(height)) => {
                 grind_tracker.set_height(height);
                 if let Some(size) = grind_tracker.size() {
-                    compass.set_grind_tracker_size(size);
+                    minerva.set_grind_tracker_size(size);
                 }
             }
             Ok(Command::ItemLookupHeight(height)) => {
                 item_lookup.set_height(height);
                 if let Some(size) = item_lookup.size() {
-                    compass.set_item_lookup_size(size);
+                    minerva.set_item_lookup_size(size);
                 }
             }
             Ok(Command::ItemCardHeight(height)) => {
                 item_card.set_height(height);
                 if let Some(size) = item_card.size() {
-                    compass.set_item_card_size(size);
+                    minerva.set_item_card_size(size);
                 }
             }
             Ok(Command::GrindTrackerSizeMove(what)) => {
                 if let Some(at) = grind_tracker.size_move(what) {
-                    compass.act(Action::GrindTrackerMoved { x: at.x, y: at.y });
+                    minerva.act(Action::GrindTrackerMoved { x: at.x, y: at.y });
                 }
             }
             Ok(Command::PersonalBestsHeight(height)) => {
                 personal_bests.set_height(height);
                 if let Some(size) = personal_bests.size() {
-                    compass.set_personal_bests_size(size);
+                    minerva.set_personal_bests_size(size);
                 }
             }
             Ok(Command::ItemCardSizeMove(what)) => {
                 if let Some(at) = item_card.size_move(what) {
-                    compass.act(Action::ItemCardMoved { x: at.x, y: at.y });
+                    minerva.act(Action::ItemCardMoved { x: at.x, y: at.y });
                 }
             }
             Ok(Command::PersonalBestsSizeMove(what)) => {
                 if let Some(at) = personal_bests.size_move(what) {
-                    compass.act(Action::PersonalBestsMoved { x: at.x, y: at.y });
+                    minerva.act(Action::PersonalBestsMoved { x: at.x, y: at.y });
                 }
             }
             Ok(Command::Read { region, reading }) => {
                 reader.title_busy = false;
                 // A reading of a region no longer captured (setup marked a new one, or
                 // the game window moved) would judge the wrong spot.
-                if let (Some((frame, reading)), true) = (reading, compass.panel_state().title_region == Some(region)) {
-                    compass.on_title_frame_read(frame, reading);
+                if let (Some((frame, reading)), true) = (reading, minerva.panel_state().title_region == Some(region)) {
+                    minerva.on_title_frame_read(frame, reading);
                 }
             }
             Ok(Command::ReadExpBar { region, reading }) => {
                 reader.exp_bar_busy = false;
-                if let (Some((frame, reading)), true) = (reading, compass.panel_state().exp_bar_region == Some(region)) {
-                    compass.on_exp_bar_frame_read(frame, reading);
+                if let (Some((frame, reading)), true) = (reading, minerva.panel_state().exp_bar_region == Some(region)) {
+                    minerva.on_exp_bar_frame_read(frame, reading);
                 }
             }
             Ok(Command::ReadItemTooltip { capture, reading }) => {
                 // With the capture, whose part around the pointer a Bug Report keeps.
-                compass.on_item_capture_read(*capture, reading);
+                minerva.on_item_capture_read(*capture, reading);
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
         }
         while let Ok(title) = channels.picks.try_recv() {
-            compass.pick_game_window(title);
+            minerva.pick_game_window(title);
             next_window_check = Instant::now(); // look for it at once
         }
-        gamewin::look_for(&compass.panel_state().game_window_title);
+        gamewin::look_for(&minerva.panel_state().game_window_title);
         // Checked after every wake-up, so a stream of drag moves can't starve them.
         if Instant::now() >= next_window_check {
             next_window_check = Instant::now() + WINDOW_TICK;
-            game = find_game(&mut compass, &window.overlay, expanded_height);
+            game = find_game(&mut minerva, &window.overlay, expanded_height);
             // For the display they are on now.
             if let Some(size) = grind_tracker.size() {
-                compass.set_grind_tracker_size(size);
+                minerva.set_grind_tracker_size(size);
             }
             if let Some(size) = personal_bests.size() {
-                compass.set_personal_bests_size(size);
+                minerva.set_personal_bests_size(size);
             }
             if let Some(size) = item_lookup.size() {
-                compass.set_item_lookup_size(size);
+                minerva.set_item_lookup_size(size);
             }
             if let Some(size) = item_card.size() {
-                compass.set_item_card_size(size);
+                minerva.set_item_card_size(size);
             }
             // The hotkeys are live, and our windows show, only while the game or one of our
             // windows is in front.
-            compass.on_foreground(gamewin::foreground(game.map(|g| g.handle)));
+            minerva.on_foreground(gamewin::foreground(game.map(|g| g.handle)));
         }
         // After every wake-up too: the hotkeys are released as soon as the player starts
         // rebinding one (a registered combination would never reach the overlay), and the
         // new one is registered as soon as they have pressed it.
-        let state = compass.panel_state();
+        let state = minerva.panel_state();
         if let Some((taken, invalid)) = hotkeys.sync(&app, &state.hotkeys, state.hotkeys_live) {
-            compass.hotkeys_unavailable(taken, invalid);
+            minerva.hotkeys_unavailable(taken, invalid);
         }
         // Fetches in flight (OSMS's file set and pictures, MeowDB's search) are checked on,
         // never waited for.
-        compass.on_wall_clock(unix_now_ms());
-        compass.tick(reader.now_ms());
+        minerva.on_wall_clock(unix_now_ms());
+        minerva.tick(reader.now_ms());
         // An Item Lookup's page, once MeowDB has answered.
-        while let Some(request) = compass.take_request() {
-            carry_out(&app, &window.overlay, &mut item_card, &reader, &mut compass, Some(request));
+        while let Some(request) = minerva.take_request() {
+            carry_out(&app, &window.overlay, &mut item_card, &reader, &mut minerva, Some(request));
         }
         if Instant::now() >= next_capture {
             next_capture = Instant::now() + TICK;
             // The region the player marked; none until setup is done, nor after the
             // game's resolution changes.
-            if let Some(region) = compass.panel_state().title_region {
+            if let Some(region) = minerva.panel_state().title_region {
                 reader.read_title(region);
             }
         }
         if Instant::now() >= next_exp_bar_capture {
             next_exp_bar_capture = Instant::now() + EXP_BAR_TICK;
             // None while EXP tracking is off.
-            if let Some(region) = compass.panel_state().exp_bar_region {
+            if let Some(region) = minerva.panel_state().exp_bar_region {
                 reader.read_exp_bar(region);
             }
         }
-        let state = compass.panel_state();
+        let state = minerva.panel_state();
         if state.quit {
-            save_bests(&compass, &files.bests, &mut bests_saved);
-            save_market_prices(&compass, &files.market_prices, &mut prices_saved);
+            save_bests(&minerva, &files.bests, &mut bests_saved);
+            save_market_prices(&minerva, &files.market_prices, &mut prices_saved);
             app.exit(0);
             return;
         }
@@ -853,7 +853,7 @@ fn compass_loop(
         item_card.sync(state);
 
         // Save once the settings settle, not on every move of a drag.
-        let current = compass.settings();
+        let current = minerva.settings();
         if current != pending.0 {
             pending = (current, Instant::now());
         }
@@ -863,16 +863,16 @@ fn compass_loop(
             }
             saved = pending.0.clone();
         }
-        save_bests(&compass, &files.bests, &mut bests_saved);
-        save_market_prices(&compass, &files.market_prices, &mut prices_saved);
+        save_bests(&minerva, &files.bests, &mut bests_saved);
+        save_market_prices(&minerva, &files.market_prices, &mut prices_saved);
     }
 }
 
 /// Find the game window and the monitors, and feed them to the core.
-fn find_game(compass: &mut Compass, overlay: &WebviewWindow, expanded_height: f64) -> Option<gamewin::Game> {
-    set_panel_sizes(compass, overlay, expanded_height);
+fn find_game(minerva: &mut Minerva, overlay: &WebviewWindow, expanded_height: f64) -> Option<gamewin::Game> {
+    set_panel_sizes(minerva, overlay, expanded_height);
     let game = gamewin::find_game();
-    compass.on_game_window(game.map(|g| GameWindow {
+    minerva.on_game_window(game.map(|g| GameWindow {
         client: g.client,
         frame: g.frame,
         screens: gamewin::monitor_work_areas(),
@@ -882,10 +882,10 @@ fn find_game(compass: &mut Compass, overlay: &WebviewWindow, expanded_height: f6
 
 /// Tell the core the panel's sizes in physical px, for the overlay's current display:
 /// expanded, as wide as the core says and as tall as its content.
-fn set_panel_sizes(compass: &mut Compass, overlay: &WebviewWindow, expanded_height: f64) {
+fn set_panel_sizes(minerva: &mut Minerva, overlay: &WebviewWindow, expanded_height: f64) {
     if let Ok(scale) = overlay.scale_factor() {
-        let width = f64::from(compass.panel_state().panel_width);
-        compass.set_panel_sizes(PanelSizes {
+        let width = f64::from(minerva.panel_state().panel_width);
+        minerva.set_panel_sizes(PanelSizes {
             expanded: physical((width, expanded_height), scale),
             collapsed: physical(COLLAPSED, scale),
         });
@@ -899,7 +899,7 @@ fn carry_out(
     overlay: &WebviewWindow,
     item_card: &mut ItemCardWindow,
     reader: &ReaderThread,
-    compass: &mut Compass,
+    minerva: &mut Minerva,
     request: Option<Request>,
 ) {
     match request {
@@ -911,14 +911,14 @@ fn carry_out(
             item_card.out_of_the_capture();
             if let Err(e) = reader.read_item_tooltip() {
                 error!("Item Lookup: {e}");
-                compass.on_item_tooltip_reading(None);
+                minerva.on_item_tooltip_reading(None);
             }
         }
         None => {}
     }
 }
 
-/// Open a page (a MeowDB page, or the MapleCompass site) in the player's browser.
+/// Open a page (a MeowDB page, or the Minerva site) in the player's browser.
 fn open_in_browser(app: &AppHandle, url: &str) {
     if let Err(e) = app.opener().open_url(url, None::<&str>) {
         error!("couldn't open {url}: {e}");
@@ -1090,12 +1090,12 @@ impl OverlayWindow {
 }
 
 /// Keep our `window` on top of every other window while the core shows it (the flag
-/// returned, which the compass loop sets) and the game or one of our windows is in front,
+/// returned, which the core loop sets) and the game or one of our windows is in front,
 /// and out of sight otherwise: on a thread of its own (named `name`), at its own steady
-/// pace. On top, it stays above our windows `beneath` too. The core decides what shows, but the compass loop can stall for a while (setting
+/// pace. On top, it stays above our windows `beneath` too. The core decides what shows, but the core loop can stall for a while (setting
 /// window sizes and positions), and a window on top of everything must not sit over
 /// another app meanwhile: this watcher checks what is in front itself, takes the window
-/// out of sight within a tick of another app coming to the front, and tells the compass
+/// out of sight within a tick of another app coming to the front, and tells the minerva
 /// loop (`commands`) to check the foreground at once. It gets the window's handle once,
 /// here: asking Tauri for it from another thread waits on the main thread's event loop,
 /// which can leave the watcher idle for seconds while another app is in front.
@@ -1130,16 +1130,16 @@ pub(crate) fn keep_on_top(
 /// if not; on top, back above our windows `beneath` should one have come over it. Nothing
 /// here waits on the main thread.
 ///
-/// The core alone decides what shows (`Panel::layer` in compass-core's panel.rs: a game
+/// The core alone decides what shows (`Panel::layer` in minerva-core's panel.rs: a game
 /// window, and the game or one of ours in front), and `shows` is its last word. The
-/// watcher restates that rule against what is in front now, as a fast path: the compass
+/// watcher restates that rule against what is in front now, as a fast path: the minerva
 /// loop reports the foreground to the core every tick but can stall (setting window
 /// sizes and positions), and a window on top of everything must not sit over another
 /// app while it does. So the rule here must agree with the core's: never show what the
 /// core wouldn't. Should they part, change both.
 #[cfg(windows)]
 fn keep_on_top_while_in_front(window: isize, beneath: Vec<isize>, shows: Arc<AtomicBool>, commands: Sender<Command>) {
-    use compass_core::Foreground;
+    use minerva_core::Foreground;
     use gamewin::Stacking;
     use windows::Win32::Foundation::HWND;
     let window = HWND(window as *mut _);
@@ -1152,7 +1152,7 @@ fn keep_on_top_while_in_front(window: isize, beneath: Vec<isize>, shows: Arc<Ato
         std::thread::sleep(WINDOW_TICK);
         let shows = shows.load(Ordering::Relaxed);
         // The core's rule (`Panel::layer`), from what is in front now rather than at the
-        // compass loop's last report, which a stall can leave behind.
+        // core loop's last report, which a stall can leave behind.
         let in_front = || {
             gamewin::find_game().is_some_and(|game| gamewin::foreground(Some(game.handle)) != Foreground::OtherApp)
         };
@@ -1164,7 +1164,7 @@ fn keep_on_top_while_in_front(window: isize, beneath: Vec<isize>, shows: Arc<Ato
         if moved.is_ok() {
             set_before = Some(to);
         }
-        // The core still shows it, over another app: the compass loop is behind.
+        // The core still shows it, over another app: the core loop is behind.
         let behind = shows && to == Stacking::Bottom && matches!(moved, Ok(true));
         if behind && commands.send(Command::CheckForeground).is_err() {
             return;
