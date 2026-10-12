@@ -14,8 +14,11 @@
 //!   within [`RELEARN_PERCENT`] of the one learned, the level was learned wrong (a
 //!   misread that fitted it narrowed the range past the true total), or they are one
 //!   misread repeated on still frames: it is learned anew from them, and the Session
-//!   goes on. Otherwise it is a character switch, which starts a new
-//!   Session. A reading barely into the next level may fit the range too (2 [0.01%]
+//!   goes on. Otherwise it is a character switch, which starts a new Session, if the
+//!   bar was out of sight between the last reading taken and the first of them: the
+//!   character select screen has no EXP bar. If it wasn't, they are one misread
+//!   repeated, however often (a still bar shows the same frame again and again), and
+//!   are set aside. A reading barely into the next level may fit the range too (2 [0.01%]
 //!   allows a wide range of totals); when the bar went from near 100% to as near 0%, it
 //!   is a level-up all the same.
 //! - The Session starts on the first EXP change, from the EXP the bar shows then.
@@ -171,8 +174,13 @@ const HOUR_MS: u64 = 3_600_000;
 const HUNDRED_PERCENT: u32 = 10_000;
 /// Readings in a row that fit a level of their own, and not the one learned, that make
 /// a character switch (or show the level was learned wrong). A misread has been seen to
-/// repeat on two frames.
+/// repeat on four frames of a still bar, which is why a switch also needs the bar to
+/// have been out of sight.
 const SWITCH_READINGS: u32 = 3;
+/// No frame of the EXP bar for this long is the bar out of sight, as a frame that
+/// doesn't read whole is: it isn't being captured (the game window gone, or its size
+/// changed). Frames come every second.
+const OUT_OF_SIGHT_MS: u64 = 5_000;
 /// Readings that fit a level of their own, carrying on from the last reading taken,
 /// are the same level learned anew if their level is within this many percent of the
 /// one learned. A misread narrows the range by far less, and another character's level
@@ -238,6 +246,9 @@ struct Misfits {
     total: Total,
     /// How many there are.
     count: u32,
+    /// The bar was out of sight between the last reading taken and the first of them,
+    /// as it is when another character's readings come.
+    after_out_of_sight: bool,
 }
 
 /// The Session and what it has learned about the level from the EXP bar.
@@ -250,6 +261,9 @@ pub(crate) struct Session {
     /// The readings rejected since the last one accepted, which may be another
     /// character's level.
     misfits: Option<Misfits>,
+    /// The bar has been out of sight since the last reading accepted: a frame didn't
+    /// read whole, or none came for [`OUT_OF_SIGHT_MS`].
+    out_of_sight: bool,
     /// The largest gain between two readings in this Session, in hundredths of a
     /// percent: how near 100% the bar must have been for a level-up.
     largest_gain_hundredths: u32,
@@ -461,6 +475,9 @@ impl Session {
         self.tick(at_ms);
         let unseen = self.unread_since.is_some()
             && self.read_at.is_some_and(|read_at| at_ms.saturating_sub(read_at) > IDLE_MS);
+        if self.read_at.is_some_and(|read_at| at_ms.saturating_sub(read_at) > OUT_OF_SIGHT_MS) {
+            self.out_of_sight = true;
+        }
         // Even a reading no level allows (a misread) shows the bar is there to read.
         self.read_at = Some(at_ms);
         self.unread_since = None;
@@ -469,8 +486,7 @@ impl Session {
             return;
         };
         let (Some(total), Some(last)) = (self.total, self.last) else {
-            self.total = Some(allowed);
-            self.last = Some(bar);
+            self.accept(allowed, bar);
             return;
         };
         let wrapped = self.wrapped(total, last, bar, allowed);
@@ -498,9 +514,10 @@ impl Session {
             self.level_ups += 1;
         } else {
             // A misread, or another character's level: that takes readings in a row
-            // that fit it.
-            let more = self.misfits.and_then(|m| Some(Misfits { total: m.total.meet(allowed)?, count: m.count + 1 }));
-            let misfits = more.unwrap_or(Misfits { total: allowed, count: 1 });
+            // that fit it, after the bar was out of sight.
+            let more = self.misfits.and_then(|m| Some(Misfits { total: m.total.meet(allowed)?, count: m.count + 1, ..m }));
+            let after_out_of_sight = self.out_of_sight;
+            let misfits = more.unwrap_or(Misfits { total: allowed, count: 1, after_out_of_sight });
             self.misfits = Some(misfits);
             if misfits.count < SWITCH_READINGS {
                 // Not yet.
@@ -509,6 +526,9 @@ impl Session {
                 // The level was learned wrong: the Session goes on.
                 self.notes.push(Note::Relearned { from: total.level(), to: misfits.total.level() });
                 self.same_level(misfits.total, last, bar, at_ms);
+            } else if !misfits.after_out_of_sight {
+                // The bar read all along: one misread, repeated.
+                self.notes.push(Note::Misfit { count: misfits.count, level: total.level() });
             } else {
                 self.notes.push(Note::CharacterSwitch { level: misfits.total.level() });
                 self.accept(misfits.total, bar);
@@ -573,6 +593,7 @@ impl Session {
         self.total = Some(total);
         self.last = Some(bar);
         self.misfits = None;
+        self.out_of_sight = false;
     }
 
     /// Back to waiting for an EXP change; what was learned about the level stays, but
@@ -678,6 +699,7 @@ impl Session {
     pub fn on_unread(&mut self, at_ms: u64) {
         self.tick(at_ms);
         self.unread_since.get_or_insert(at_ms);
+        self.out_of_sight = true;
     }
 
     /// Whether the bar has gone [`UNREADABLE_MS`] without reading whole.
