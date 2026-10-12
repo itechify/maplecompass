@@ -558,6 +558,31 @@ fn each_listed_item_shows_its_picture_once_it_is_in() {
     assert_eq!(*asked.lock().unwrap(), ["current/images/items/01002067.png", "current/images/items/01032001.png"]);
 }
 
+#[test]
+fn the_card_shows_its_items_picture_once_it_is_in() {
+    let source = FakeSource::osms_offline().with_items(shop());
+    let asked = source.picture_requests.clone();
+    let mut compass = started_with(source);
+
+    let pressed = press_over(&mut compass, "Bronze Ore", 1_000);
+    let state = compass.tick(1_100).clone();
+
+    assert_eq!(card(&pressed).expect("a card").icon, None, "not in yet");
+    assert_eq!(card(&state).expect("a card").icon.as_deref(), Some("picture:current/images/items/04010000.png"));
+    assert_eq!(*asked.lock().unwrap(), ["current/images/items/04010000.png"]);
+}
+
+#[test]
+fn the_picked_items_card_shows_the_picture_it_was_listed_with() {
+    let mut compass = started_with(FakeSource::osms_offline().with_items(namesakes()));
+    press_over(&mut compass, "Blue Moon", 1_000);
+    compass.tick(1_100);
+
+    let state = compass.pick_card_item("01032001").clone();
+
+    assert_eq!(card(&state).expect("a card").icon.as_deref(), Some("picture:current/images/items/01032001.png"));
+}
+
 /// When a saved copy was made: 2026-10-01 00:00 UTC, in ms since the Unix epoch.
 const SAVED_AT: u64 = 1_790_812_800_000;
 const DAY_MS: u64 = 24 * 60 * 60 * 1000;

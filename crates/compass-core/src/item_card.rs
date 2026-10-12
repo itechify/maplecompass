@@ -91,6 +91,9 @@ pub struct ItemCard {
     /// The game's item ID, 8 digits as the game writes them (`"02000000"`).
     pub id: String,
     pub name: String,
+    /// Where the overlay loads its picture from (OSMS's, as the game draws it), once it is
+    /// in; `None` until then.
+    pub icon: Option<String>,
     pub shop: ShopPrice,
     /// Every Market Line, in the player's order, each with the item's price on it.
     pub market: Vec<MarketLine>,
@@ -241,14 +244,15 @@ impl ItemCards {
         }
     }
 
-    /// The pictures of the items listed to pick from, if the card lists any, below
-    /// [`crate::osms::PICTURES_URL`].
+    /// The pictures the card showing wants, below [`crate::osms::PICTURES_URL`]: its item's,
+    /// or those of the items it lists to pick from.
     pub fn pictures(&self) -> Vec<String> {
         match &self.shown {
+            Some(Shown { showing: Showing::Card(ids), .. }) => ids.first().map(|&id| icon_path(id)).into_iter().collect(),
             Some(Shown { showing: Showing::Choose(groups), .. }) => {
                 groups.iter().filter_map(|ids| ids.first()).map(|&id| icon_path(id)).collect()
             }
-            _ => Vec::new(),
+            None => Vec::new(),
         }
     }
 
@@ -332,7 +336,7 @@ impl ItemCards {
         let items = items?;
         let view = match &shown.showing {
             Showing::Card(ids) => {
-                let card = card(ids, items)?;
+                let card = card(ids, items, &picture)?;
                 let lines = market
                     .lines()
                     .iter()
@@ -379,12 +383,14 @@ fn market_edit(editing: &Editing, market: &MarketPrices) -> Option<MarketEdit> {
     })
 }
 
-/// The card of the items `ids`, which look alike: the first's.
-fn card(ids: &[u32], items: &ItemSet) -> Option<ItemCard> {
+/// The card of the items `ids`, which look alike: the first's, with its picture once
+/// `picture` has it.
+fn card(ids: &[u32], items: &ItemSet, picture: impl Fn(&str) -> Option<String>) -> Option<ItemCard> {
     let first = items.item(*ids.first()?)?;
     Some(ItemCard {
         id: item_id(first.id),
         name: first.name.clone(),
+        icon: picture(&icon_path(first.id)),
         shop: first.shop,
         market: Vec::new(),
         market_edit: None,

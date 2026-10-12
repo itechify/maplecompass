@@ -667,10 +667,10 @@ impl Compass {
         }
     }
 
-    /// Ask for the pictures the panel wants, one at a time: the pictures of the items the
-    /// Item Card lists to pick from first, as the player is looking at it; then every Map
-    /// Mark, few and small and shown beside every map's name; then the Map Preview's, then
-    /// the map's mobs' animations, then the Hunting Target mob's.
+    /// Ask for the pictures the panel wants, one at a time: the Item Card's first (its
+    /// item's, or those of the items it lists to pick from), as the player is looking at it;
+    /// then every Map Mark, few and small and shown beside every map's name; then the Map
+    /// Preview's, then the map's mobs' animations, then the Hunting Target mob's.
     fn poll_pictures(&mut self, at_ms: u64) {
         let mut wanted = self.item_cards.pictures();
         if let Some(set) = &self.set {
