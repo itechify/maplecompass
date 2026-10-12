@@ -1,7 +1,6 @@
 import "./errors";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { dayText } from "./dates";
 import { byId, cardTop, span } from "./dom";
 import { LOADING_MAP_LIST, recognitionProblem, type Recognition } from "./recognition";
@@ -722,7 +721,7 @@ function hotkeyRow(hotkey: Hotkey, name: string, panel: PanelState, view: Settin
     row.append(rowNote("It has no button, so it can't be used while it is off.", "help"));
   } else if (binding !== "" && !hotkeyAvailable(binding, panel.unavailableHotkeys)) {
     const invalid = panel.invalidHotkeys.some((key) => sameHotkey(key, binding));
-    const why = invalid ? "These aren't keys a hotkey can use." : "Windows or another app has these keys.";
+    const why = invalid ? "These aren't keys a hotkey can use." : "Your system or another app has these keys.";
     row.append(rowNote(why, "broken", invalid ? "Invalid" : "Taken"));
     change.setAttribute("aria-label", `Change ${name}, now ${spokenKeys(binding)}, which does nothing: ${why}`);
   }
@@ -1199,7 +1198,7 @@ document.fonts.ready.then(reportHeight);
 // detached), never by its buttons. A click anywhere leaves the keyboard with the game:
 // the overlay can't be activated, except while the search view is open.
 function startDrag() {
-  getCurrentWindow().startDragging();
+  invoke("start_drag");
 }
 
 document.addEventListener("mousedown", (e) => {
@@ -1216,7 +1215,7 @@ document.addEventListener("mousedown", (e) => {
 for (const grip of document.querySelectorAll<HTMLElement>(".grip")) {
   grip.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
-    getCurrentWindow().startResizeDragging(grip.dataset.resize === "West" ? "West" : "East");
+    invoke("start_resize", { side: grip.dataset.resize === "West" ? "West" : "East" });
   });
 }
 

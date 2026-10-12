@@ -3,7 +3,7 @@
 //! like it on top of everything while it shows (only while the game or one of our
 //! windows is in front), and never activated by a click (`focusable: false` in
 //! `tauri.conf.json`, ADR 0001). Like the Grind Tracker's window
-//! it is declared in `tauri.conf.json` and never hidden: without an alert its page draws
+//! it is declared in `tauri.conf.json` and never hidden (on Windows): without an alert its page draws
 //! nothing. Clicks pass through it to the game, except while it lists items to pick
 //! from. Every decision is the core's; this only places the window, sends its page what
 //! it renders, and lets clicks through or not.

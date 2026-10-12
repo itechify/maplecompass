@@ -6,7 +6,8 @@
 //! never hidden: while the core says it doesn't show, the page draws nothing and every
 //! click goes through. (Showing a hidden window again either activates it, taking the
 //! keyboard from the game, or, done with `SW_SHOWNOACTIVATE` behind tao's back, leaves
-//! it in the system's title bar and frame.) Every decision is the core's; this only
+//! it in the system's title bar and frame. On Linux, where neither happens, its watcher
+//! hides it out of sight: see `keep_on_top`.) Every decision is the core's; this only
 //! shows, hides and places the window, sends it what it renders, and relays the
 //! player's drags.
 

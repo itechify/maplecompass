@@ -16,7 +16,10 @@ use tauri::{State, WebviewWindow};
 /// box. Only `SetForegroundWindow` on our own window, which Windows allows us right
 /// after the player pressed our hotkey or clicked the overlay (our process received the
 /// last input). Not tao's `set_focus`: when that call is refused, it synthesises an Alt
-/// key press (`SendInput`), which would go to the game.
+/// key press (`SendInput`), which would go to the game. On Linux, `x11::take_focus`: the
+/// window manager may refuse it (Hyprland does after a hotkey, unless it lets apps
+/// activate their windows), and then the player's click on the query box gives it the
+/// keyboard.
 pub fn take_focus(overlay: &WebviewWindow) {
     #[cfg(windows)]
     if let Ok(hwnd) = overlay.hwnd() {
@@ -26,7 +29,11 @@ pub fn take_focus(overlay: &WebviewWindow) {
             crate::errors::error!("Windows refused the overlay the foreground: the game keeps the keyboard");
         }
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    if let Err(e) = crate::x11::take_focus(overlay) {
+        crate::errors::error!("the overlay couldn't take the keyboard: {e}");
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     let _ = overlay;
 }
 
@@ -46,7 +53,14 @@ pub fn give_focus_back(overlay: &WebviewWindow) {
             }
         }
     }
-    #[cfg(not(windows))]
+    // Linux: the window manager gives the keyboard to another window (the game, the last
+    // one the player had) as ours hides.
+    #[cfg(target_os = "linux")]
+    if overlay.is_focused().unwrap_or(false) {
+        let _ = overlay.hide();
+        let _ = overlay.show();
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     let _ = overlay;
 }
 

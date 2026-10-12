@@ -1,5 +1,5 @@
 ---
-status: accepted, amended 2026-10-09 (the overlay windows are on top of everything while they show, and hide while another app is in front) and by ADR-0010 (the Item Card's window)
+status: accepted, amended 2026-10-09 (the overlay windows are on top of everything while they show, and hide while another app is in front), by ADR-0010 (the Item Card's window) and by ADR-0013 (the same rules on Linux, through the X server)
 ---
 
 # Observe the game from outside only

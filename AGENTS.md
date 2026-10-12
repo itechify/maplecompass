@@ -4,8 +4,8 @@
 
 - `cargo test`: runs the `minerva-core` tests. The core is the default workspace member, so this never builds Tauri.
 - `cargo test -p minerva --lib`: runs the app's own unit tests, which `cargo test` leaves out.
-- `cargo clippy --workspace --all-targets -- -D warnings`: lint everything.
-- `pnpm install` then `pnpm tauri build --debug --no-bundle`: build the app. `pnpm tauri dev` runs it.
+- `cargo clippy --workspace --all-targets -- -D warnings`: lint everything. On Linux, run it again with `--target x86_64-pc-windows-msvc` to lint the Windows shell too.
+- `pnpm install` then `pnpm tauri build --debug --no-bundle`: build the app. `pnpm tauri dev` runs it. A plain `cargo build` of the app makes a binary that loads its pages from `pnpm dev`'s server, so its windows stay blank without it.
 - `pnpm site:dev` runs the site (`site/`, the player site at owlofminerva.app); `pnpm site:build` builds it, and fails while a screenshot it shows is missing or the home page names a FAQ question there isn't.
 - `cargo run -p minerva --example probe [reads] [out.png]`: read-only smoke test against a running game, with no UI.
 - `cargo run -p minerva --example probe record <out-dir> <name>=<x>,<y>,<w>,<h>@<hz> ... [--seconds <n>]`: record timestamped crops of client-area regions from a running game, for samples.
@@ -26,7 +26,7 @@
 - Tests run on made-up worlds in OSMS's shape (`crates/minerva-core/tests/common/osms.rs`); the map names fixture (IDs, streets, map names and regions) is the only data committed from OSMS. `probe osms` must read OSMS's live set and item files in full. A shape OSMS ever serves that reads wrong becomes a made-up fixture with that shape. Item Lookup's tests write their own made-up answers in MeowDB's search shape (`tests/item_lookup.rs`); nothing from MeowDB is committed. The Item Card's tests use made-up item files in OSMS's shape (`tests/common/items.rs`).
 - Bug Reports (ADR 0009): every input `Minerva` takes writes itself down, so a new input needs an `Event` and a line in `bug_report::replay`. A Bug Report is never committed: it becomes the smallest test that reproduces its bug, on a made-up world, and a frame in it read wrong becomes a sample.
 - The site (`site/`) is for players, and the README keeps only the developer's side. Its home page shows what Minerva does, a feature at a time in a sentence or two; the FAQ (`site/faq/index.html`) holds every detail a player needs, as the questions they ask, each written once there and shown again on the home page by its id. A change a player notices updates the site in the same PR (the feature's words, or the FAQ's answer), the setup warning's wording included, and lists each screenshot it alters under Retake in `site/screenshots/README.md`.
-- `src-tauri` only adapts window lookup, capture and rendering. It must follow ADR 0001: no `PrintWindow`, no messages, input, hooks or process access to the game.
+- `src-tauri` only adapts window lookup, capture and rendering. It must follow ADR 0001: no `PrintWindow`, no messages, input, hooks or process access to the game. On Linux it does all of it through the X server, as ADR 0013 maps it (`x11.rs`).
 
 ## Agent skills
 

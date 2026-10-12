@@ -1,7 +1,6 @@
 import "./errors";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { dayText } from "./dates";
 import { byId, span } from "./dom";
 import { type LevelRange, levels, rate, sharePercent, whole } from "./figures";
@@ -389,7 +388,7 @@ document.fonts.ready.then(reportHeight);
 document.addEventListener("mousedown", (e) => {
   const target = e.target instanceof Element ? e.target : null;
   const onHeader = !!target?.closest(".drag-handle") && !target?.closest("button");
-  if (e.button === 0 && onHeader) getCurrentWindow().startDragging();
+  if (e.button === 0 && onHeader) invoke("start_drag");
 });
 
 // Its ×, through the core like the panel's icons; a map's name, to its MeowDB page; a

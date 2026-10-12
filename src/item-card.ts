@@ -1,7 +1,6 @@
 import "./errors";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { dayText } from "./dates";
 import { byId, span } from "./dom";
 
@@ -423,7 +422,7 @@ new ResizeObserver(reportHeight).observe(cardEl);
 document.addEventListener("mousedown", (e) => {
   const target = e.target instanceof Element ? e.target : null;
   const onBar = !!target?.closest(".drag-handle") && !target?.closest("button");
-  if (e.button === 0 && onBar) getCurrentWindow().startDragging();
+  if (e.button === 0 && onBar) invoke("start_drag");
 });
 byId("close").addEventListener("click", () => invoke("item_card_close"));
 

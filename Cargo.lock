@@ -2142,8 +2142,11 @@ checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 name = "minerva"
 version = "0.9.0"
 dependencies = [
+ "gtk",
  "image",
+ "libc",
  "minerva-core",
+ "raw-window-handle",
  "reqwest",
  "serde",
  "serde_json",
@@ -2152,7 +2155,9 @@ dependencies = [
  "tauri-plugin-global-shortcut",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "tauri-runtime",
  "windows 0.62.2",
+ "x11rb",
 ]
 
 [[package]]

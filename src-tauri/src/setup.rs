@@ -86,6 +86,11 @@ impl SetupWindows {
     /// quitting).
     pub fn new(app: &AppHandle) -> tauri::Result<Self> {
         let setup = app.get_webview_window(SETUP).expect("setup window in tauri.conf.json");
+        // Laid over the game like the overlay.
+        #[cfg(target_os = "linux")]
+        if let Some(region) = app.get_webview_window(REGION) {
+            crate::x11::as_utility_window(&region);
+        }
         let handle = app.clone();
         setup.on_window_event(move |event| {
             if let WindowEvent::CloseRequested { api, .. } = event {

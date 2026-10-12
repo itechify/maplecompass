@@ -1,6 +1,7 @@
 //! Screen capture of the Title Region (Windows): a GDI BitBlt from the desktop DC.
 //! It copies screen pixels only; it never uses PrintWindow (which would send the game
-//! WM_PRINT) or any capture session tied to the game window (ADR 0001).
+//! WM_PRINT) or any capture session tied to the game window (ADR 0001). On Linux the X
+//! server copies the game window's pixels (`x11.rs`).
 
 /// Capture `w`x`h` physical pixels at virtual-screen `(x, y)` as tightly packed RGBA,
 /// top-down rows.
@@ -51,7 +52,10 @@ pub fn capture_rgba(x: i32, y: i32, w: i32, h: i32) -> Result<Vec<u8>, String> {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+pub use crate::x11::capture_rgba;
+
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn capture_rgba(_x: i32, _y: i32, _w: i32, _h: i32) -> Result<Vec<u8>, String> {
     Err("screen capture is only implemented on Windows so far".into())
 }

@@ -1,9 +1,9 @@
 //! Game window locator, foreground check, and the switch that puts our windows on top of
-//! everything or out of sight (Windows). Reads window-manager state only: it never sends
-//! the game a message, opens its process or hooks it, and the only windows it ever
-//! changes are our own (ADR 0001).
+//! everything or out of sight (Windows; on Linux, `x11.rs`). Reads window-manager state
+//! only: it never sends the game a message, opens its process or hooks it, and the only
+//! windows it ever changes are our own (ADR 0001).
 
-use minerva_core::{Foreground, ScreenRect};
+use minerva_core::ScreenRect;
 
 /// The game window as found on screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,20 +39,23 @@ pub use win::{
     window_under_cursor,
 };
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+pub use crate::x11::{cursor_position, find_game, foreground, foreground_is_ours, monitor_work_areas, window_under_cursor};
+
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn cursor_position() -> Option<minerva_core::ScreenPoint> {
     None
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn foreground_is_ours() -> bool {
     false
 }
 
 /// Elsewhere the foreground can't be told apart yet, so the hotkeys stay live as before.
-#[cfg(not(windows))]
-pub fn foreground(_game: Option<isize>) -> Foreground {
-    Foreground::Game
+#[cfg(not(any(windows, target_os = "linux")))]
+pub fn foreground(_game: Option<isize>) -> minerva_core::Foreground {
+    minerva_core::Foreground::Game
 }
 
 /// The game's client area, or `None` when it isn't running or is minimised.
@@ -60,24 +63,25 @@ pub fn find_game_client() -> Option<ScreenRect> {
     find_game().map(|game| game.client)
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn find_game() -> Option<Game> {
     None
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn window_under_cursor() -> Result<String, String> {
     Err("picking a window is only implemented on Windows so far".into())
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn monitor_work_areas() -> Vec<ScreenRect> {
     Vec::new()
 }
 
 #[cfg(windows)]
 mod win {
-    use super::{Foreground, Game, ScreenRect};
+    use super::{Game, ScreenRect};
+    use minerva_core::Foreground;
     use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
     use windows::Win32::Graphics::Dwm::{
         DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute,

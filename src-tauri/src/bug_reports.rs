@@ -115,7 +115,26 @@ fn os() -> String {
     }
 }
 
-#[cfg(not(windows))]
+/// The distribution, desktop and session, as the report states them: "Arch Linux,
+/// Hyprland on wayland". Under XWayland, how the game and our windows behave depends on
+/// the desktop.
+#[cfg(target_os = "linux")]
+fn os() -> String {
+    let release = std::fs::read_to_string("/etc/os-release").unwrap_or_default();
+    let name = release
+        .lines()
+        .find_map(|line| line.strip_prefix("PRETTY_NAME="))
+        .map_or("Linux".to_string(), |name| name.trim_matches('"').to_string());
+    let var = |name| std::env::var(name).ok().filter(|value: &String| !value.is_empty());
+    match (var("XDG_CURRENT_DESKTOP"), var("XDG_SESSION_TYPE")) {
+        (Some(desktop), Some(session)) => format!("{name}, {desktop} on {session}"),
+        (Some(desktop), None) => format!("{name}, {desktop}"),
+        (None, Some(session)) => format!("{name}, {session}"),
+        (None, None) => name,
+    }
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 fn os() -> String {
     std::env::consts::OS.to_string()
 }
@@ -128,9 +147,34 @@ fn local_time() -> String {
     format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond)
 }
 
-/// UTC, off Windows (where Minerva is only built to test).
-#[cfg(not(windows))]
+/// The local date and time now, `yyyy-mm-dd hh:mm:ss`.
+#[cfg(target_os = "linux")]
 fn local_time() -> String {
+    // SAFETY: `time` with no out-pointer only returns the time; `localtime_r` only fills
+    // in the `tm` it is given.
+    let local = unsafe {
+        let now = libc::time(std::ptr::null_mut());
+        let mut t: libc::tm = std::mem::zeroed();
+        (!libc::localtime_r(&now, &mut t).is_null()).then_some(t)
+    };
+    match local {
+        Some(t) => format!(
+            "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+            t.tm_year + 1900,
+            t.tm_mon + 1,
+            t.tm_mday,
+            t.tm_hour,
+            t.tm_min,
+            t.tm_sec
+        ),
+        None => utc_time(),
+    }
+}
+
+/// UTC, where the local time zone isn't known (and off Windows and Linux, where Minerva
+/// is only built to test).
+#[cfg(not(windows))]
+fn utc_time() -> String {
     let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
     let (days, time) = (secs / 86_400, secs % 86_400);
     // Days since 1970-01-01 to a civil date (Howard Hinnant's algorithm).
@@ -144,4 +188,9 @@ fn local_time() -> String {
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = yoe + era * 400 + i64::from(month <= 2);
     format!("{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02} UTC", time / 3600, time / 60 % 60, time % 60)
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
+fn local_time() -> String {
+    utc_time()
 }

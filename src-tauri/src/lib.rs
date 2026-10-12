@@ -33,6 +33,8 @@ mod sizemove;
 pub mod source;
 mod tray;
 mod view;
+#[cfg(target_os = "linux")]
+mod x11;
 
 use minerva_core::{
     Action, Minerva, ExpBarReader, ExpBarReading, Frame, GameWindow, ItemCapture, ItemTooltipReader,
@@ -352,6 +354,8 @@ pub fn run() {
             setup::clear_exp_bar_region,
             setup::cancel_marking,
             setup::finish_setup,
+            sizemove::start_drag,
+            sizemove::start_resize,
             search::panel_press,
             search::open_mob_page,
             search::pick_item,
@@ -1091,8 +1095,8 @@ impl OverlayWindow {
 
 /// Keep our `window` on top of every other window while the core shows it (the flag
 /// returned, which the core loop sets) and the game or one of our windows is in front,
-/// and out of sight otherwise: on a thread of its own (named `name`), at its own steady
-/// pace. On top, it stays above our windows `beneath` too. The core decides what shows, but the core loop can stall for a while (setting
+/// and out of sight otherwise (on Linux, hidden): on a thread of its own (named `name`),
+/// at its own steady pace. On top, it stays above our windows `beneath` too. The core decides what shows, but the core loop can stall for a while (setting
 /// window sizes and positions), and a window on top of everything must not sit over
 /// another app meanwhile: this watcher checks what is in front itself, takes the window
 /// out of sight within a tick of another app coming to the front, and tells the minerva
@@ -1120,7 +1124,20 @@ pub(crate) fn keep_on_top(
         }
         Err(e) => error!("{name} watcher not started: no {} window handle: {e}", window.label()),
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        x11::as_utility_window(window);
+        let (window, watcher_flag) = (window.clone(), shows.clone());
+        let spawned = std::thread::Builder::new()
+            .name(name.into())
+            .spawn(move || keep_on_top_while_in_front(window, watcher_flag, commands));
+        if let Err(e) = spawned {
+            error!("{name} watcher not started: {e}");
+        }
+        // The window manager stacks the windows on top as they come there.
+        let _ = beneath;
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     let _ = (window, name, commands, beneath);
     shows
 }
@@ -1173,6 +1190,47 @@ fn keep_on_top_while_in_front(window: isize, beneath: Vec<isize>, shows: Arc<Ato
         let error = moved.err().map(|e| e.to_string());
         if error.is_some() && error != last_error {
             error!("putting our window on top or out of sight failed: {}", error.as_deref().unwrap_or_default());
+        }
+        last_error = error;
+    }
+}
+
+/// Linux: as on Windows, every `WINDOW_TICK`, our window shows on top of everything if
+/// `shows` is set and the game or one of our windows is in front, and is out of sight if
+/// not; asked of the window manager only when that changes. Out of sight, it is hidden:
+/// unlike Windows, nothing activates a window as it shows (it takes no input, see
+/// `x11::as_utility_window`), every window manager raises a window as it shows, and one
+/// that stacks no window above the others (Hyprland) would draw its border around the
+/// empty window. On top is the window manager's `_NET_WM_STATE_ABOVE`, set at setup.
+/// Tauri's setters don't wait on the main thread.
+#[cfg(target_os = "linux")]
+fn keep_on_top_while_in_front(window: WebviewWindow, shows: Arc<AtomicBool>, commands: Sender<Command>) {
+    use minerva_core::Foreground;
+    let mut last_error = None;
+    // Showing or not, as this watcher last put it.
+    let mut set_before = None;
+    loop {
+        std::thread::sleep(WINDOW_TICK);
+        let shows = shows.load(Ordering::Relaxed);
+        // The core's rule (`Panel::layer`), from what is in front now.
+        let in_front = || {
+            gamewin::find_game().is_some_and(|game| gamewin::foreground(Some(game.handle)) != Foreground::OtherApp)
+        };
+        let on_top = shows && in_front();
+        if set_before == Some(on_top) {
+            continue;
+        }
+        let moved = if on_top { window.show() } else { window.hide() };
+        if moved.is_ok() {
+            set_before = Some(on_top);
+        }
+        // The core still shows it, over another app: the core loop is behind.
+        if shows && !on_top && commands.send(Command::CheckForeground).is_err() {
+            return;
+        }
+        let error = moved.err().map(|e| e.to_string());
+        if error.is_some() && error != last_error {
+            error!("showing our window or hiding it failed: {}", error.as_deref().unwrap_or_default());
         }
         last_error = error;
     }

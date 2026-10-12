@@ -3,7 +3,7 @@
 //! and like it on top of everything while it shows (only while the game or one of our
 //! windows is in front), and never activated by a click (`focusable: false` in
 //! `tauri.conf.json`, ADR 0001). Like the Personal Bests window it is declared in
-//! `tauri.conf.json` and never hidden: without a card its page draws nothing, and clicks
+//! `tauri.conf.json` and never hidden (on Windows): without a card its page draws nothing, and clicks
 //! pass through it. While a card shows it takes the clicks on it (its bar, its ×, its name,
 //! its Market Lines and buttons, an item to pick), and none reach the game. While a price
 //! or line name field is open it takes the keyboard too, as the search view does: it comes

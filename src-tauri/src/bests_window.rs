@@ -3,8 +3,8 @@
 //! while the game or one of our windows is in front), above the panel and the Grind
 //! Tracker's window, clickable but never activated by a click (`focusable: false` in
 //! `tauri.conf.json`, ADR 0001). Like the Grind Tracker's window it is declared in
-//! `tauri.conf.json` and never hidden: while the core says it doesn't show, the page draws
-//! nothing and every click goes through. Every decision is the core's; this only places
+//! `tauri.conf.json` and never hidden (on Windows): while the core says it doesn't show,
+//! the page draws nothing and every click goes through. Every decision is the core's; this only places
 //! the window, sends its page what it renders, and relays the player's drags.
 
 use crate::errors::error;

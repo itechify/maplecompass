@@ -36,6 +36,8 @@ reqwest = { version = "0.13", default-features = false, features = ["native-tls"
 image = { workspace = true, features = ["png"] }
 
 [target.'cfg(windows)'.dependencies]
+# The side the page's corner grips start Windows' size loop by (Tauri doesn't re-export it).
+tauri-runtime = "2"
 windows = { version = "=0.62.2", features = [
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",
@@ -47,3 +49,14 @@ windows = { version = "=0.62.2", features = [
     "Win32_System_SystemInformation",
     "Win32_UI_Shell",
 ] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# The game window, what is in front and the game's pixels, from the X server (XWayland's
+# on a Wayland desktop), where Wine and Proton put the game.
+x11rb = { version = "0.13", features = ["randr"] }
+# Our windows' type, which window managers float and keep above (tao's GTK, as Tauri hands it).
+gtk = "0.18"
+# Our own windows' X11 IDs, to give one the keyboard.
+raw-window-handle = "0.6"
+# The Bug Report's local time.
+libc = "0.2"
