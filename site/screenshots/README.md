@@ -19,14 +19,12 @@ The pictures on the Minerva site, taken by hand in the game. The site's build fa
 | `map.png` | The Map section on a map with a Hidden Portal: the Map Preview with its rings, the pointer resting on the dashed ring with its card showing, and the Hidden Portal's row, each with its destination's Map Mark. | 332×247, the panel's Map section | 0.8.0 |
 | `navigation.png` | The Map section with the next portal's magenta ring, and Navigation with a Hunting Target: the mob, the figures, and the route from the map you're on, each map with its Map Mark. | 317×475, the panel's Map and Navigation sections | 0.8.0 |
 | `grind-tracker.png` | The Grind Tracker: Time to Level, the rates, a Best row and the EXP gauge at its foot. | 280×159, the Grind Tracker's window | 0.7.0 |
-| `item-card.png` | An Item Card at the pointer over the inventory, on an item with a shop price and a market price you set (Garnet), with its window bar and the game's tooltip under it. | 488×386, the card and the tooltip | 0.8.0 |
+| `item-card.png` | An Item Card at the pointer over the inventory, on an item with two Market Lines (Claw Attack Scroll: Intermediate): its window bar, the item's picture beside its name, Shop pays, and Your price and Lowest ask under Market, with the game's tooltip under it. | 659×546, the inventory, the card and the tooltip | 0.9.0 |
 | `item-lookup.png` | An item's tooltip in the inventory, and the Item Lookup alert above it saying the page it opened. | 611×742, the inventory, the tooltip and the alert | 0.7.0 |
-| `setup.png` | Setup's step for marking the minimap title, on first run. | 522×592, the setup window | 0.8.0 |
+| `setup.png` | Setup's step for marking the minimap title, reopened from Help & Setup (step 3 of 6), with Keep the current title. | 522×592, the setup window | 0.9.0 |
 
 ## Retake
 
 When a change alters something a shot shows, the PR that makes it lists the shot here, with what changed. At release, the smoke test retakes every shot listed (`docs/releasing.md`) and empties the list.
 
-- `item-card.png`: the card's market section is now Market Lines: a "Market" heading with its + and MesoWatch buttons, then a row per line. Retake it with two or three lines, some with a price (for example "Your price" and "Lowest ask"), and update its alt text to say so. The card also heads with the item's picture now, beside its name: the alt text says so too. Its window bar shows the owl now, not the compass.
 - `game-window.png` and `hero.png`: the app is Minerva now. The panel's window bar shows the owl and "Minerva" where it showed the compass and "MapleCompass". Retake the game window and cut the hero from it again, keeping the same map with the minimap's title and the panel's where they are, so `site/reel.ts` needs no change.
-- `setup.png`: the window's title and heading say "Minerva Setup", and its bar shows the 32px owl where it showed the 28px compass.
