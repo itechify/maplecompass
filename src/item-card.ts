@@ -28,6 +28,8 @@ type MarketEdit =
 type ItemCard = {
   id: string;
   name: string;
+  /** Where its picture loads from, once it's in. */
+  icon: string | null;
   shop: ShopPrice;
   market: MarketLine[];
   marketEdit: MarketEdit | null;
@@ -291,9 +293,25 @@ function marketSection(card: ItemCard): HTMLElement {
   return section;
 }
 
-/** One item's card. */
+/** An item's picture as the game draws it, in a box that holds its place until it's in. */
+function itemIcon(url: string | null): HTMLSpanElement {
+  const icon = document.createElement("span");
+  icon.className = "item-card-icon";
+  if (url) {
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = "";
+    icon.append(img);
+  }
+  return icon;
+}
+
+/** One item's card: its picture beside its name. */
 function renderCard(card: ItemCard) {
-  title.replaceChildren(link(card.name, `Open ${card.name} on MeowDB`, () => invoke("item_card_open_meowdb")));
+  title.replaceChildren(
+    itemIcon(card.icon),
+    link(card.name, `Open ${card.name} on MeowDB`, () => invoke("item_card_open_meowdb")),
+  );
   const prices = document.createElement("dl");
   prices.className = "item-card-prices";
   prices.append(shopFigure(card.shop));
@@ -326,15 +344,7 @@ function renderChoice(name: string, items: ItemCardChoice[]) {
       button.type = "button";
       button.className = "item-card-choice";
       button.title = `The ${item.kind} ${name}`;
-      const icon = document.createElement("span");
-      icon.className = "item-card-icon";
-      if (item.icon) {
-        const img = document.createElement("img");
-        img.src = item.icon;
-        img.alt = "";
-        icon.append(img);
-      }
-      button.append(icon, span("kind", item.kind));
+      button.append(itemIcon(item.icon), span("kind", item.kind));
       button.addEventListener("click", () => invoke("item_card_pick", { id: item.id }));
       row.append(button);
       return row;

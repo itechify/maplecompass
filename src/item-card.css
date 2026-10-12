@@ -10,8 +10,12 @@
   padding-bottom: 10px;
 }
 
-/* The item's name, a link to its MeowDB page, or the question when items share it. */
+/* The item's picture and its name, a link to its MeowDB page, or the question when items
+   share it. The name is cut short, never the picture. */
 .panel .item-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-block: 0;
   font-size: 14px;
   line-height: 18px;
@@ -19,6 +23,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.item-card-title > .item-card-link,
+.item-card-title > .item-card-ask {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .item-card-body {
@@ -311,8 +322,8 @@
   outline-offset: 2px;
 }
 
-/* The same 32px box with or without its picture, so the list doesn't jump when one
-   arrives; the picture at its own size, drawn pixelated, as the game draws it. */
+/* The same 32px box with or without its picture, so the card and the list don't jump when
+   one arrives; the picture at its own size, drawn pixelated, as the game draws it. */
 .item-card-icon {
   flex: none;
   display: grid;
