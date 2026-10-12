@@ -4,7 +4,11 @@
 //! - Single samples are named for their reading: `<exp>__<percent>[--variant].png`
 //!   ("160__3.81--kerning-city-window"), or `unreadable[--variant].png`. The
 //!   `--window` ones are client (1005, h-56) 240x32 cropped from the window samples in
-//!   `samples/minimap`.
+//!   `samples/minimap`. The unreadable ones are frames ocrs once misread, named for
+//!   what they show and how it went wrong ("unreadable--68012-71.07-seven-as-two"):
+//!   a Bug Report's EXP Bar Region crops (2026-10-11, client (1010, 1143) 396x33 of a
+//!   1920x1200 client), each of a misread that ended the Session as a character
+//!   switch, or could have.
 //! - `recording-*` folders are the probe's record mode (one crop a second, named by
 //!   capture time in ms) with their readings in `readings.json` (`null`: unreadable).
 //!   2026-10-07: 150 s of hunting at Lv 15, client (1005,1144) 240x32 of a 1920x1200

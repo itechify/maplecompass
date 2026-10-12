@@ -355,9 +355,14 @@ fn a_switch_to_another_character_starts_a_new_session() {
     let old = compass.panel_state().exp_tracking.clone();
     assert_eq!(old.deaths.count, 1);
 
-    // The recording's character: a higher level (~16,682 EXP) with less EXP, as after a
-    // level-up, but the bar was nowhere near 100%. Not one reading fits the old level;
-    // two in a row could still be misreads...
+    // The character select screen, which has no EXP bar...
+    for at in 76..=79 {
+        unread(&mut compass, at * S);
+    }
+
+    // ...then the recording's character: a higher level (~16,682 EXP) with less EXP, as
+    // after a level-up, but the bar was nowhere near 100%. Not one reading fits the old
+    // level; two in a row could still be misreads...
     let first = read(&mut compass, 80 * S, 149, 89);
     let second = read(&mut compass, 81 * S, 157, 94);
     assert_eq!(first.exp_tracking, old);
@@ -396,8 +401,9 @@ fn a_switch_to_a_character_of_a_similar_level_is_a_switch_when_the_bar_jumps() {
         read(&mut compass, k as u64 * 10 * S, exp, percent_lv15(exp));
     }
 
-    // A character on a level of 17,500 EXP, not 5% more than the ~16,682 learned, but
-    // at 40%: the bar can't have jumped 39 points from 0.99%.
+    // No frames for 10 s (the game window gone a while, or the character select screen
+    // at another size), then a character on a level of 17,500 EXP, not 5% more than the
+    // ~16,682 learned, but at 40%: the bar can't have jumped 39 points from 0.99%.
     for at in [30, 31, 32] {
         read(&mut compass, at * S, 7000, 4000);
     }
@@ -503,6 +509,37 @@ fn the_same_misread_as_the_bar_moves_on_keeps_the_session() {
     assert_eq!(misread.exp_tracking.state, TrackingState::Active);
     assert_eq!(exp_per_hour(&misread), exp_per_hour(&clean));
     // From 4,550 at 10 s, the Session's start; the 30 s since 5,050 count too.
+    assert_eq!(exp_per_hour(&misread), (Some(12_857), Some(12_857)), "500 EXP in 140 s");
+}
+
+#[test]
+fn a_misread_far_from_the_level_on_a_still_bar_is_not_a_character_switch() {
+    // 50 EXP every 10 s on the recording's ~16,682 EXP level, up to 11,900 [71.33%] at
+    // 100 s; then the bar stands still while the player loots, and 11,950 at 120 s.
+    let mut readings: Vec<(u64, u64, u32)> =
+        (0..=10).map(|k| (k * 10, 11_400 + 50 * k, percent_lv15(11_400 + 50 * k))).collect();
+    readings.extend((101..=110).map(|at| (at, 11_900, percent_lv15(11_900))));
+    readings.push((120, 11_950, percent_lv15(11_950)));
+    let mut clean = tracking();
+    for &(at, exp, percent) in &readings {
+        read(&mut clean, at * S, exp, percent);
+    }
+
+    // Every still frame reads 71.33% as 21.33%, as ocrs once read "71.12%" as "21.12%":
+    // a level of ~55,790 EXP, nowhere near the one learned, ten times in a row. But the
+    // bar read all along, and another character's comes only after it has been out of
+    // sight (the character select screen has no EXP bar): one misread, however often.
+    let mut misread = tracking();
+    for &(at, exp, percent) in &readings {
+        let percent = if (101..=110).contains(&at) { 2133 } else { percent };
+        let state = read(&mut misread, at * S, exp, percent);
+        assert!(!state.exp_tracking.character_switched, "at {at} s");
+    }
+
+    let clean = clean.tick(150 * S).clone();
+    let misread = misread.tick(150 * S).clone();
+    assert_eq!(misread.exp_tracking, clean.exp_tracking);
+    // From 11,450 at 10 s, the Session's start; the 30 s since 11,950 count too.
     assert_eq!(exp_per_hour(&misread), (Some(12_857), Some(12_857)), "500 EXP in 140 s");
 }
 

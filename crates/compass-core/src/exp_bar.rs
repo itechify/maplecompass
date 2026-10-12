@@ -12,6 +12,11 @@
 //! 3. ocrs reads both as black-on-white lines, enlarged twice over. Only their digits
 //!    count: the percentage always has two decimals, so its digits are hundredths of a
 //!    percent.
+//! 4. ocrs misreads this font now and then, the same way on every frame alike, so a
+//!    reading must be one the bar could show, or the frame is unreadable: each figure in
+//!    the game's shape ("68,063", "71.12%": a glyph merged into its neighbour or lost
+//!    under the pointer breaks it), and a 2 read wherever the mask has a 2's flat foot,
+//!    and nowhere else (ocrs has read the 7 of "71.07%" as a 2).
 
 use crate::Frame;
 use crate::prep::{PAD, Rect};
@@ -58,9 +63,12 @@ impl ExpBarReader {
         let prepared = prepare(img)?;
         let lines = self.recogniser.read_lines(&prepared.canvas, &[prepared.exp, prepared.percent])?;
         let text = |i: usize| lines.get(i)?.as_ref().map(|l| l.to_string());
-        let exp = digits(&text(0)?)?;
-        let percent_hundredths = percent(&text(1)?)?;
-        let bar = ExpBar { exp: exp.parse().ok()?, percent_hundredths };
+        let (exp_text, percent_text) = (text(0)?, text(1)?);
+        let twos = |text: &str| text.chars().filter(|&c| c == '2').count();
+        if twos(&exp_text) != prepared.exp_feet || twos(&percent_text) != prepared.percent_feet {
+            return None;
+        }
+        let bar = ExpBar { exp: thousands(&exp_text)?, percent_hundredths: percent(&percent_text)? };
         consistent(bar).then_some(bar)
     }
 }
@@ -71,11 +79,8 @@ fn consistent(bar: ExpBar) -> bool {
     bar.percent_hundredths < 10_000 && (bar.percent_hundredths > 0 || bar.exp < 10_000)
 }
 
-/// The digits of a figure as ocrs read it, with the letters it mistakes for digits in
-/// this font put right. `None` if anything else is in it. Both figures are whole
-/// numbers of digits, so a point or comma in one is only a separator: the EXP's
-/// thousands comma ("8,435"), which ocrs reads as a point at this size, or the
-/// percentage's decimal point.
+/// The digits of a run of them as ocrs read it, with the letters it mistakes for digits
+/// in this font put right. `None` if anything else is in it, or nothing is.
 fn digits(text: &str) -> Option<String> {
     let mut out = String::new();
     for c in text.chars() {
@@ -83,25 +88,41 @@ fn digits(text: &str) -> Option<String> {
             '0'..='9' => out.push(c),
             'O' | 'o' | 'D' => out.push('0'),
             'l' | 'I' | '|' | 'i' => out.push('1'),
-            ' ' | ',' | '.' => {}
+            ' ' => {}
             _ => return None,
         }
     }
     (!out.is_empty() && out.len() <= 12).then_some(out)
 }
 
-/// Hundredths of a percent from "3.81%": the digits before the "%". The point may be
-/// lost (it is one pixel square); the two decimals never are.
-fn percent(text: &str) -> Option<u32> {
-    let digits = digits(text.trim().trim_end_matches(['%', ')', ']']))?;
-    (digits.len() >= 3).then(|| digits.parse().ok()).flatten()
+/// The EXP from "68,063": one to three digits, then threes after each thousands comma
+/// (which ocrs reads as a point at this size, "8.435"). ocrs has merged a glyph into the
+/// one beside it ("26,777" read "26,77"), and the pointer over the "EXP." label has cut
+/// a figure short at its comma (".909"); neither has this shape.
+fn thousands(text: &str) -> Option<u64> {
+    let groups: Vec<String> = text.trim().split([',', '.']).map(digits).collect::<Option<_>>()?;
+    let (first, rest) = groups.split_first()?;
+    let shaped = first.len() <= 3 && rest.iter().all(|group| group.len() == 3);
+    shaped.then(|| groups.concat().parse().ok()).flatten()
 }
 
-/// The figures, masked and boxed for ocrs.
+/// Hundredths of a percent from "3.81%": one or two digits, the point (or a comma, as
+/// ocrs reads it at times) and two decimals. ocrs has merged two glyphs into one
+/// ("30.05%" read "30.0%"), which doesn't have this shape.
+fn percent(text: &str) -> Option<u32> {
+    let (whole, decimals) = text.trim().trim_end_matches(['%', ')', ']']).split_once(['.', ','])?;
+    let (whole, decimals) = (digits(whole)?, digits(decimals)?);
+    let shaped = whole.len() <= 2 && decimals.len() == 2;
+    shaped.then(|| format!("{whole}{decimals}").parse().ok()).flatten()
+}
+
+/// The figures, masked and boxed for ocrs, and how many 2s each shows.
 struct Prepared {
     canvas: GrayImage,
     exp: Rect,
     percent: Rect,
+    exp_feet: usize,
+    percent_feet: usize,
 }
 
 /// Bracket colour: yellow-green, (150,198,61) at its core.
@@ -140,9 +161,14 @@ const GLYPH_GAP_PER_H: f32 = 0.2;
 const SPACE_PER_H: f32 = 0.6;
 /// The "EXP." label rises this many rows above the brackets; digits never do.
 const LABEL_RISE: u32 = 3;
+/// Per row of bracket height: a 2's flat foot, along the brackets' bottom row, is at
+/// least this long. No other glyph's is: the rest end in a curve or a stroke, half as
+/// long or less.
+const FOOT_PER_H: f32 = 0.6;
 /// The masked figures are enlarged this many times before ocrs reads them. At their
-/// own 11-13 rows, ocrs read the 7 of "1.74%" as a 2 on the 2026-10-07 recording; every
-/// sample reads right enlarged anywhere from 1.25x to 2.25x.
+/// own 11-13 rows, ocrs read the 7 of "1.74%" as a 2 on the 2026-10-07 recording. No
+/// size stops its misreads for good: on the 2026-10-11 Bug Report's frames, 1.5x to 4x
+/// each misread some, as did spacing the glyphs apart; step 4 catches them.
 const UPSCALE: u32 = 2;
 
 /// A connected run of bracket-coloured pixels: its bounding box.
@@ -224,6 +250,7 @@ fn prepare(img: &RgbImage) -> Option<Prepared> {
     let h = (open.y1 - open.y0 + 1) as f32;
     let split = (h * GLYPH_GAP_PER_H).ceil() as usize;
     let max_gap = (h * SPACE_PER_H).ceil() as u32;
+    let foot = (h * FOOT_PER_H).ceil() as u32;
     let on: Vec<bool> = (0..open.x0).map(inked).collect();
     let mut number: Option<(u32, u32)> = None;
     for (x0, x1) in clusters(&on, split).into_iter().rev() {
@@ -253,7 +280,30 @@ fn prepare(img: &RgbImage) -> Option<Prepared> {
         w: (x1 - x0) * UPSCALE,
         h: ch * UPSCALE,
     };
-    Some(Prepared { canvas, exp: line(ex0, ex1), percent: line(px0, px1) })
+    // The 2s: their flat feet, on the brackets' bottom row.
+    let feet = |x0: u32, x1: u32| flat_feet(img, open.y1, x0..x1, foot);
+    Some(Prepared {
+        canvas,
+        exp: line(ex0, ex1),
+        percent: line(px0, px1),
+        exp_feet: feet(ex0, ex1),
+        percent_feet: feet(px0, px1),
+    })
+}
+
+/// How many runs of ink, at least `foot` columns long, row `y` has in `columns`.
+fn flat_feet(img: &RgbImage, y: u32, columns: std::ops::Range<u32>, foot: u32) -> usize {
+    let mut feet = 0;
+    let mut run = 0;
+    for x in columns {
+        if ink(img.get_pixel(x, y).0) >= 0.5 {
+            run += 1;
+        } else {
+            feet += usize::from(run >= foot);
+            run = 0;
+        }
+    }
+    feet + usize::from(run >= foot)
 }
 
 /// Runs of `on` columns as (start, end_exclusive), joining runs fewer than `split`
