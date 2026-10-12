@@ -25,7 +25,7 @@ How a Minerva version is numbered, made and published as a GitHub Release. Follo
   - `cargo clippy --workspace --all-targets -- -D warnings`
   - `pnpm build`
 - **The live data still reads:** `cargo run -p minerva --example probe osms` reads OSMS Data Explorer's live set in full.
-- **A smoke test against the game** (`pnpm tauri dev`): the map is recognised; the Map section shows its picture; Search sets a Hunting Target, then a Destination, and Navigation shows the route to each; an item picked in Search shows its card beside the panel; a Mob Card opens; Item Lookup opens a page.
+- **A smoke test against the game** (`pnpm tauri dev`): the map is recognised; the Map section shows its picture; Search sets a Hunting Target, then a Destination, and Navigation shows the route to each; an item picked in Search shows its card beside the panel; a Mob Card opens; Item Lookup opens a page. When the shell changed, the same on Linux too, beside the game under Wine or Proton: the panel shows over the game, a click on it leaves the game the keyboard, it hides while another app is in front, and it drags.
 - **The site describes this release** (`site/`, published from the tag in step 6): every change a player notices is on it, and nothing that's gone. While the game is open for the smoke test, retake each shot under Retake in `site/screenshots/README.md` as it says, set the version they were taken on, empty the list, and merge them into `main`. `pnpm site:build` passes, and `pnpm site:dev` reads right.
 - **The credits are current:**
   - If dependencies were added, removed or upgraded, regenerate the crate table in `THIRD-PARTY-NOTICES.md` (how is described there).
@@ -80,6 +80,14 @@ Tauri builds the optimised app and both installers. It downloads the NSIS and Wi
 
 Before uploading, install the setup `.exe` over the previous version and check that it starts: About & Credits shows `X.Y.Z`, and settings and Personal Bests carried over.
 
+The Linux packages aren't built here. Publishing the release (step 6) runs the Linux packages workflow (`.github/workflows/linux.yml`). It builds the `.deb`, `.rpm` and AppImage from the tag on Ubuntu 22.04, so that they run on older distributions than the one you'd build on, and attaches them to the release:
+
+| Built by the workflow | Attached as |
+| --- | --- |
+| `Minerva_X.Y.Z_amd64.AppImage` | as is |
+| `Minerva_X.Y.Z_amd64.deb` | as is |
+| `Minerva-X.Y.Z-1.x86_64.rpm` | as is |
+
 ## 4. Tag
 
 ```bash
@@ -113,6 +121,16 @@ Your settings, hotkeys and Personal Bests carry over from <previous version>.
 
 Quit the running Minerva first (its owl in the notification area: **Quit Minerva**). The files aren't code-signed, so Windows SmartScreen may say it "protected your PC": choose **More info**, then **Run anyway**.
 
+## Download (Linux, 64-bit)
+
+| File | What it is |
+| --- | --- |
+| `Minerva_X.Y.Z_amd64.AppImage` | Any distribution, and the Steam Deck's Desktop Mode. No install: allow it to run as a program, then run it. |
+| `Minerva_X.Y.Z_amd64.deb` | Debian, Ubuntu, Linux Mint and Pop!_OS. |
+| `Minerva-X.Y.Z-1.x86_64.rpm` | Fedora and openSUSE. |
+
+Minerva runs beside the game under Wine or Proton, on a desktop with X11 or XWayland. On Hyprland, pin its windows with [the window rule on the site](https://owlofminerva.app/faq/#hyprland).
+
 Map and mob data, map pictures and mob animations: [OSMS Data Explorer](https://osmsdataexplorer.com). Pages: [NiaMeowDB](https://meowdb.com). Title and item recognition: [ocrs](https://github.com/robertknight/ocrs) (model under CC BY-SA 4.0). Typeface: Maplestory by NEXON. See THIRD-PARTY-NOTICES.md, attached, and About & Credits in Help & Setup.
 ```
 
@@ -129,10 +147,10 @@ gh release create vX.Y.Z --verify-tag --title "Minerva X.Y.Z" --notes-file notes
   THIRD-PARTY-NOTICES.md
 ```
 
-The newest release becomes Latest, which the README's download link points to. Publishing it runs the Site workflow (`.github/workflows/site.yml`), which builds the site from the tag and publishes it to <https://owlofminerva.app/>.
+The newest release becomes Latest, which the README's download link points to. Publishing it runs two workflows from the tag. The Site workflow (`.github/workflows/site.yml`) builds the site and publishes it to <https://owlofminerva.app/>. The Linux packages workflow (`.github/workflows/linux.yml`) attaches the three Linux files after about 15 minutes.
 
 Then check the release:
-- `gh release view vX.Y.Z` lists the four files.
+- `gh release view vX.Y.Z` lists the four files, and the three Linux ones once the Linux packages workflow passed (`gh run list --workflow linux.yml --limit 1`).
 - The release page reads correctly.
 - Downloading the setup `.exe` from it and installing works.
 - The Site workflow passed (`gh run list --workflow site.yml --limit 1`), and the site says it describes X.Y.Z, its Download button fetching that version's setup `.exe`.
@@ -144,3 +162,4 @@ Then check the release:
   2. Fix the problem on `main`.
   3. Tag and publish again from step 3.
 - **After that:** leave the release, and publish `X.Y.(Z+1)` with the fix.
+- **If only the Linux packages workflow failed:** when the failure was GitHub's (a runner, a download), run it again, with `gh run rerun <run-id> --failed`. If it had attached some of the files already, remove them first, with `gh release delete-asset vX.Y.Z <file>`. When the tag's code doesn't build on Linux, the release stays Windows-only: add a line to its notes saying so, and the next PATCH brings the Linux packages.

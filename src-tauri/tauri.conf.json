@@ -126,6 +126,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "category": "Game",
+    "shortDescription": "Your guide for MapleStory Classic World",
+    "longDescription": "A free overlay for MapleStory Classic World that shows the map you're on: every portal, even the hidden ones, its mobs, and the way to the mob you want to hunt. It only looks at the screen.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

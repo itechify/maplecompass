@@ -345,3 +345,112 @@ These are the Rust crates compiled into the Windows app: the dependencies of `sr
 | [zip](https://github.com/zip-rs/zip2) | 7.2.0 | MIT |
 | [zlib-rs](https://github.com/trifectatechfoundation/zlib-rs) | 0.6.8 | Zlib |
 | [zmij](https://github.com/dtolnay/zmij) | 1.0.23 | MIT |
+
+### The Linux app
+
+The Linux packages are built from the crates above and these, which only the Linux app compiles in: the same dependencies of `src-tauri`, listed with `--filter-platform x86_64-unknown-linux-gnu`, less the crates in the table above.
+
+| Crate | Version | Licence |
+| --- | --- | --- |
+| [async-broadcast](https://github.com/smol-rs/async-broadcast) | 0.7.2 | MIT OR Apache-2.0 |
+| [async-channel](https://github.com/smol-rs/async-channel) | 2.5.0 | Apache-2.0 OR MIT |
+| [async-executor](https://github.com/smol-rs/async-executor) | 1.14.0 | Apache-2.0 OR MIT |
+| [async-io](https://github.com/smol-rs/async-io) | 2.6.0 | Apache-2.0 OR MIT |
+| [async-lock](https://github.com/smol-rs/async-lock) | 3.4.2 | Apache-2.0 OR MIT |
+| [async-process](https://github.com/smol-rs/async-process) | 2.5.0 | Apache-2.0 OR MIT |
+| [async-signal](https://github.com/smol-rs/async-signal) | 0.2.14 | Apache-2.0 OR MIT |
+| [async-task](https://github.com/smol-rs/async-task) | 4.7.1 | Apache-2.0 OR MIT |
+| [async-trait](https://github.com/dtolnay/async-trait) | 0.1.92 | MIT OR Apache-2.0 |
+| [atk](https://github.com/gtk-rs/gtk3-rs) | 0.18.2 | MIT |
+| [atk-sys](https://github.com/gtk-rs/gtk3-rs) | 0.18.2 | MIT |
+| [blocking](https://github.com/smol-rs/blocking) | 1.7.0 | Apache-2.0 OR MIT |
+| [cairo-rs](https://github.com/gtk-rs/gtk-rs-core) | 0.18.5 | MIT |
+| [cairo-sys-rs](https://github.com/gtk-rs/gtk-rs-core) | 0.18.2 | MIT |
+| [concurrent-queue](https://github.com/smol-rs/concurrent-queue) | 2.5.0 | Apache-2.0 OR MIT |
+| [dbus](https://github.com/diwic/dbus-rs) | 0.9.12 | Apache-2.0/MIT |
+| [dlopen2](https://github.com/OpenByteDev/dlopen2) | 0.8.2 | MIT |
+| [dlopen2_derive](https://github.com/OpenByteDev/dlopen2) | 0.4.3 | MIT |
+| [endi](https://github.com/zeenix/endi) | 1.1.1 | MIT |
+| [enumflags2](https://github.com/meithecatte/enumflags2) | 0.7.12 | MIT OR Apache-2.0 |
+| [enumflags2_derive](https://github.com/meithecatte/enumflags2) | 0.7.12 | MIT OR Apache-2.0 |
+| [errno](https://github.com/lambda-fairy/rust-errno) | 0.3.14 | MIT OR Apache-2.0 |
+| [event-listener](https://github.com/smol-rs/event-listener) | 5.4.2 | Apache-2.0 OR MIT |
+| [event-listener-strategy](https://github.com/smol-rs/event-listener-strategy) | 0.5.4 | Apache-2.0 OR MIT |
+| [field-offset](https://github.com/Diggsey/rust-field-offset) | 0.3.6 | MIT OR Apache-2.0 |
+| [foreign-types](https://github.com/sfackler/foreign-types) | 0.3.2 | MIT/Apache-2.0 |
+| [foreign-types-shared](https://github.com/sfackler/foreign-types) | 0.1.1 | MIT/Apache-2.0 |
+| [futures-executor](https://github.com/rust-lang/futures-rs) | 0.3.34 | MIT OR Apache-2.0 |
+| [futures-lite](https://github.com/smol-rs/futures-lite) | 2.6.1 | Apache-2.0 OR MIT |
+| [gdk](https://github.com/gtk-rs/gtk3-rs) | 0.18.2 | MIT |
+| [gdk-pixbuf](https://github.com/gtk-rs/gtk-rs-core) | 0.18.5 | MIT |
+| [gdk-pixbuf-sys](https://github.com/gtk-rs/gtk-rs-core) | 0.18.0 | MIT |
+| [gdk-sys](https://github.com/gtk-rs/gtk3-rs) | 0.18.2 | MIT |
+| [gdkwayland-sys](https://github.com/gtk-rs/gtk3-rs) | 0.18.2 | MIT |
+| [gdkx11](https://github.com/gtk-rs/gtk3-rs) | 0.18.2 | MIT |
+| [gdkx11-sys](https://github.com/gtk-rs/gtk3-rs) | 0.18.2 | MIT |
+| [gethostname](https://codeberg.org/swsnr/gethostname.rs.git) | 1.1.0 | Apache-2.0 |
+| [gio](https://github.com/gtk-rs/gtk-rs-core) | 0.18.4 | MIT |
+| [gio-sys](https://github.com/gtk-rs/gtk-rs-core) | 0.18.1 | MIT |
+| [glib](https://github.com/gtk-rs/gtk-rs-core) | 0.18.5 | MIT |
+| [glib-macros](https://github.com/gtk-rs/gtk-rs-core) | 0.18.5 | MIT |
+| [glib-sys](https://github.com/gtk-rs/gtk-rs-core) | 0.18.1 | MIT |
+| [gobject-sys](https://github.com/gtk-rs/gtk-rs-core) | 0.18.0 | MIT |
+| [gtk](https://github.com/gtk-rs/gtk3-rs) | 0.18.2 | MIT |
+| [gtk-sys](https://github.com/gtk-rs/gtk3-rs) | 0.18.2 | MIT |
+| [gtk3-macros](https://github.com/gtk-rs/gtk3-rs) | 0.18.2 | MIT |
+| [heck](https://github.com/withoutboats/heck) | 0.4.1 | MIT OR Apache-2.0 |
+| [iana-time-zone](https://github.com/strawlab/iana-time-zone) | 0.1.65 | MIT OR Apache-2.0 |
+| [is-docker](https://github.com/TheLarkInn/is-docker) | 0.2.0 | MIT |
+| [is-wsl](https://github.com/TheLarkInn/is-wsl) | 0.4.0 | MIT |
+| [javascriptcore-rs](https://github.com/tauri-apps/javascriptcore-rs) | 1.1.2 | MIT |
+| [javascriptcore-rs-sys](https://github.com/tauri-apps/javascriptcore-rs) | 1.1.1 | MIT |
+| [libappindicator](https://crates.io/crates/libappindicator) | 0.9.0 | Apache-2.0 OR MIT |
+| [libappindicator-sys](https://crates.io/crates/libappindicator-sys) | 0.9.0 | Apache-2.0 OR MIT |
+| [libdbus-sys](https://github.com/diwic/dbus-rs) | 0.2.7 | Apache-2.0/MIT |
+| [libloading](https://github.com/nagisa/rust_libloading/) | 0.7.4 | ISC |
+| [linux-raw-sys](https://github.com/sunfishcode/linux-raw-sys) | 0.12.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
+| [memoffset](https://github.com/Gilnaa/memoffset) | 0.9.1 | MIT |
+| [openssl](https://github.com/rust-openssl/rust-openssl) | 0.10.81 | Apache-2.0 |
+| [openssl-macros](https://crates.io/crates/openssl-macros) | 0.1.1 | MIT/Apache-2.0 |
+| [openssl-probe](https://github.com/rustls/openssl-probe) | 0.2.1 | MIT OR Apache-2.0 |
+| [openssl-sys](https://github.com/rust-openssl/rust-openssl) | 0.9.117 | MIT |
+| [ordered-stream](https://github.com/danieldg/ordered-stream) | 0.2.0 | MIT OR Apache-2.0 |
+| [pango](https://github.com/gtk-rs/gtk-rs-core) | 0.18.3 | MIT |
+| [pango-sys](https://github.com/gtk-rs/gtk-rs-core) | 0.18.0 | MIT |
+| [parking](https://github.com/smol-rs/parking) | 2.2.1 | Apache-2.0 OR MIT |
+| [piper](https://github.com/smol-rs/piper) | 0.2.5 | MIT OR Apache-2.0 |
+| [polling](https://github.com/smol-rs/polling) | 3.11.0 | Apache-2.0 OR MIT |
+| [proc-macro-crate](https://github.com/bkchr/proc-macro-crate) | 1.3.1 | MIT OR Apache-2.0 |
+| [proc-macro-crate](https://github.com/bkchr/proc-macro-crate) | 2.0.2 | MIT OR Apache-2.0 |
+| [proc-macro-crate](https://github.com/bkchr/proc-macro-crate) | 3.5.0 | MIT OR Apache-2.0 |
+| [proc-macro-error](https://gitlab.com/CreepySkeleton/proc-macro-error) | 1.0.4 | MIT OR Apache-2.0 |
+| [proc-macro-error-attr](https://gitlab.com/CreepySkeleton/proc-macro-error) | 1.0.4 | MIT OR Apache-2.0 |
+| [rustix](https://github.com/bytecodealliance/rustix) | 1.1.5 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
+| [serde_spanned](https://github.com/toml-rs/toml) | 0.6.9 | MIT OR Apache-2.0 |
+| [signal-hook-registry](https://github.com/vorner/signal-hook) | 1.4.8 | MIT OR Apache-2.0 |
+| [soup3](https://gitlab.gnome.org/World/Rust/soup3-rs) | 0.5.0 | MIT |
+| [soup3-sys](https://gitlab.gnome.org/World/Rust/soup3-rs) | 0.5.0 | MIT |
+| [syn](https://github.com/dtolnay/syn) | 1.0.109 | MIT OR Apache-2.0 |
+| [thiserror](https://github.com/dtolnay/thiserror) | 1.0.69 | MIT OR Apache-2.0 |
+| [thiserror-impl](https://github.com/dtolnay/thiserror) | 1.0.69 | MIT OR Apache-2.0 |
+| [toml_datetime](https://github.com/toml-rs/toml) | 0.6.3 | MIT OR Apache-2.0 |
+| [toml_edit](https://github.com/toml-rs/toml) | 0.19.15 | MIT OR Apache-2.0 |
+| [toml_edit](https://github.com/toml-rs/toml) | 0.20.2 | MIT OR Apache-2.0 |
+| [toml_edit](https://github.com/toml-rs/toml) | 0.25.15+spec-1.1.0 | MIT OR Apache-2.0 |
+| [webkit2gtk](https://github.com/tauri-apps/webkit2gtk-rs) | 2.0.2 | MIT |
+| [webkit2gtk-sys](https://github.com/tauri-apps/webkit2gtk-rs) | 2.0.2 | MIT |
+| [winnow](https://github.com/winnow-rs/winnow) | 0.5.40 | MIT |
+| [winnow](https://github.com/winnow-rs/winnow) | 0.7.15 | MIT |
+| [x11](https://github.com/AltF02/x11-rs.git) | 2.21.0 | MIT |
+| [x11-dl](https://github.com/AltF02/x11-rs.git) | 2.21.0 | MIT |
+| [x11rb](https://github.com/psychon/x11rb) | 0.13.2 | MIT OR Apache-2.0 |
+| [x11rb-protocol](https://github.com/psychon/x11rb) | 0.13.2 | MIT OR Apache-2.0 |
+| [xkeysym](https://github.com/notgull/xkeysym) | 0.2.1 | MIT OR Apache-2.0 OR Zlib |
+| [zbus](https://github.com/z-galaxy/zbus/) | 5.13.2 | MIT |
+| [zbus_macros](https://github.com/z-galaxy/zbus/) | 5.13.2 | MIT |
+| [zbus_names](https://github.com/z-galaxy/zbus/) | 4.3.1 | MIT |
+| [zvariant](https://github.com/z-galaxy/zbus/) | 5.9.2 | MIT |
+| [zvariant_derive](https://github.com/z-galaxy/zbus/) | 5.9.2 | MIT |
+| [zvariant_utils](https://github.com/z-galaxy/zbus/) | 3.3.0 | MIT |
+
+The `.deb` and `.rpm` packages use the system's own GTK 3, WebKitGTK 4.1 and libayatana-appindicator. The AppImage carries copies of them and of the shared libraries they need, unmodified, as Ubuntu 22.04 packages them: GLib, GTK 3, WebKitGTK 4.1, GStreamer, Cairo, Pango, HarfBuzz, ICU, libsoup, OpenSSL, libayatana-appindicator and others. Each is under its own licence, most of them the LGPL (version 2.1 or later), and Ubuntu publishes each one's source and licence with its package. The AppImage can be unpacked (`--appimage-extract`) to replace any of them.
