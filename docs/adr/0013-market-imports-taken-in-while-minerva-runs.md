@@ -10,7 +10,7 @@ So Minerva stays the only writer of `market-prices.json`, and a tool hands its p
 
 ## The folder
 
-- A tool leaves a `.json` file there in `market-prices.json`'s shape: version 2, and its lines, each with its ID, its name and its prices by the game's item ID. It writes the file whole under another name (a dot file, or one not ending in `.json`), then renames it into place: Minerva reads neither. A tool that keeps one name (`mesowatch.json`) replaces its own import that wasn't taken in yet.
+- A tool leaves a `.json` file there in `market-prices.json`'s shape: version 2, and its lines, each with its ID, its name and its prices by the game's item ID. It writes the file whole under another name (a dot file, or one not ending in `.json`), then renames it into place: Minerva reads neither. A tool that keeps one name (`tool.json`) replaces its own import that wasn't taken in yet.
 - Minerva looks in the folder every 2 seconds while it runs, so at launch too. It moves each file out of the tool's way (`<name>.json.taken`), reads it and deletes it, in the files' names' order. One that doesn't read, or is in another shape, is set aside as `<name>.json.bad` and logged, as `market-prices.json` is.
 - While `market-prices.json` didn't read at launch and couldn't be set aside, nothing is saved, so imports are left waiting rather than taken in and lost.
 

@@ -1263,16 +1263,16 @@ fn a_line_keeps_the_id_it_was_saved_with_and_a_new_line_takes_none_of_theirs() {
     // Lines as a tool of the player's own might write them, beside the player's.
     let kept = r#"{"version":2,"lines":[
         {"id":"1","name":"Your price","prices":{}},
-        {"id":"mesowatch-typical","name":"Typical","prices":{"04010000":{"mesos":500000}}},
+        {"id":"tool-typical","name":"Typical","prices":{"04010000":{"mesos":500000}}},
         {"id":"4","name":"Mine","prices":{}}]}"#;
     minerva.restore_market_prices(serde_json::from_str(kept).expect("reads"));
     let state = press_over(&mut minerva, "Bronze Ore", 1_000);
-    assert_eq!(line(&state, "Typical"), "mesowatch-typical");
+    assert_eq!(line(&state, "Typical"), "tool-typical");
 
     let state = add_line(&mut minerva, "Lowest ask");
 
     let ids: Vec<String> = card(&state).expect("a card").market.into_iter().map(|line| line.id).collect();
-    assert_eq!(ids, ["1", "mesowatch-typical", "4", "5"]);
+    assert_eq!(ids, ["1", "tool-typical", "4", "5"]);
     assert_eq!(market(&state)[1], ("Typical".to_string(), Some(500_000)));
 }
 
@@ -1365,13 +1365,13 @@ fn an_imported_line_keeps_the_name_and_place_the_player_gave_it() {
     minerva.import_market_prices(typical(500_000, SAVED_AT));
     press_over(&mut minerva, "Bronze Ore", 1_000);
     minerva.edit_card_market_line("tool-typical");
-    minerva.enter_card_market_line("MesoWatch");
+    minerva.enter_card_market_line("Median");
     let state = add_line(&mut minerva, "Mine");
-    assert_eq!(market(&state), [("Your price".to_string(), None), ("MesoWatch".to_string(), Some(500_000)), ("Mine".to_string(), None)]);
+    assert_eq!(market(&state), [("Your price".to_string(), None), ("Median".to_string(), Some(500_000)), ("Mine".to_string(), None)]);
 
     let state = minerva.import_market_prices(typical(520_000, SAVED_AT + DAY_MS)).clone();
 
-    assert_eq!(market(&state), [("Your price".to_string(), None), ("MesoWatch".to_string(), Some(520_000)), ("Mine".to_string(), None)]);
+    assert_eq!(market(&state), [("Your price".to_string(), None), ("Median".to_string(), Some(520_000)), ("Mine".to_string(), None)]);
 }
 
 #[test]
