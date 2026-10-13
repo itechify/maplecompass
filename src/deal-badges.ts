@@ -56,13 +56,13 @@ function gauge(item: DealItem, { quantity, mesos }: ListedPrice, lineMesos: numb
 }
 
 /** A price on a badge, as players write it: in full under a million ("188,888"), past it in
- * millions to two places ("1.25m", "2m"); the tooltip says it in full. */
+ * millions to two places ("1.25m", "2m"); its accessible name says it in full. */
 function short(mesos: number): string {
   if (mesos < 1_000_000) return whole(mesos);
   return `${Number((mesos / 1_000_000).toFixed(2))}m`;
 }
 
-/** The badge's words, and what it says in full for its tooltip. */
+/** The badge's words, and what it says in full for its accessible name. */
 function words(badge: DealBadge, line: string): [string, string] {
   switch (badge.verdict) {
     case "deal":
@@ -103,7 +103,7 @@ function badgeItem(badge: DealBadge, line: string): HTMLLIElement {
   el.className = `deal-badge ${badge.verdict}`;
   el.classList.toggle("covered", badge.covered);
   el.classList.toggle("open", badge.open);
-  el.title = full;
+  // Said to screen readers only: a tooltip would pop up over the shop's listings.
   el.setAttribute("aria-label", full);
   if (el instanceof HTMLButtonElement) {
     el.type = "button";
