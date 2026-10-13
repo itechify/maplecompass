@@ -311,3 +311,40 @@ fn a_sold_out_listing_is_never_taken_for_a_covered_one_without_the_pointer_or_it
     let shown: Vec<(bool, Option<String>)> = badges(state).iter().map(|b| (b.covered, read(b).map(|(name, _)| name))).collect();
     assert_eq!(shown, [(false, Some("Silver Ore".to_string())), (false, Some("Emerald Ore".to_string()))]);
 }
+
+/// A live capture of the game's client area holding `file`, a Bug Report's crop of a shop's
+/// list, back where it was captured: its top-left corner at `at`, the rest the game's sky.
+fn placed(file: &str, at: (u32, u32), at_ms: u64) -> ShopCapture {
+    let crop = image::open(samples_dir().join(file)).unwrap_or_else(|e| panic!("{file}: {e}")).to_rgba8();
+    let mut client = image::RgbaImage::from_pixel(1920, 1200, image::Rgba([96, 150, 210, 255]));
+    image::imageops::replace(&mut client, &crop, at.0 as i64, at.1 as i64);
+    let frame = Frame { width: client.width(), height: client.height(), rgba: client.into_raw(), at_ms };
+    ShopCapture { frame, origin: ScreenPoint { x: 0, y: 0 } }
+}
+
+/// A Bug Report's run, as the player saw it: one shop, then another opened a few px higher
+/// where it was, then that one scrolled down to five sold-out listings and Brown Guise. Live
+/// captures show a sold-out listing near white, its rules white: none of it covers anything.
+#[test]
+fn sold_out_listings_in_live_captures_get_no_badge_from_one_shop_to_the_next() {
+    let samples = samples();
+    let mut minerva = started(&samples);
+    let shown = |state: &PanelState| -> Vec<(bool, Option<String>)> {
+        badges(state).iter().map(|b| (b.covered, read(b).map(|(name, _)| name))).collect()
+    };
+    let name = |name: &str| (false, Some(name.to_string()));
+
+    let state = minerva.on_player_shop_capture(placed("live-ores-four-sold-out.png", (1343, 680), 18_605));
+    assert_eq!(shown(state), [name("Silver Ore"), name("Emerald Ore")]);
+
+    let state = minerva.on_player_shop_capture(placed("live-hats-two-sold-out.png", (1343, 643), 22_011));
+    let sailor = item_name("White Ribboned Sailor Dr...");
+    assert_eq!(
+        shown(state),
+        [name("Blue Cap"), name("Bunny Earmuffs"), name("Bunny Earmuffs"), (false, Some(sailor))],
+        "none on the last shop's slots, which lie between this one's"
+    );
+
+    let state = minerva.on_player_shop_capture(placed("live-hats-scrolled-five-sold-out.png", (1343, 696), 25_481));
+    assert_eq!(shown(state), [name("Brown Guise")], "none on the sold-out listings, nor what was there before");
+}
