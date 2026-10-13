@@ -40,7 +40,7 @@ type BestsMap = {
  *  first, and every Map Mark, which each row's map names its own by. */
 type BestsView = { shown: boolean; maps: BestsMap[]; credit: string; mapMarks: MapMarks };
 
-type Column = "map" | "region" | "levels" | "exp" | "share" | "set";
+type Column = "map" | "levels" | "exp" | "share" | "set";
 type Way = "ascending" | "descending";
 type Key = string | number | [number, number] | null;
 
@@ -48,6 +48,8 @@ const panelEl = byId("panel");
 const count = byId("count");
 const rows = byId("rows");
 const noteMissing = byId("note-missing");
+const noteDot = byId("note-dot");
+const scaleEl = byId("scale");
 const footer = byId("footer");
 const credit = byId("credit");
 const announce = byId("announce");
@@ -57,7 +59,6 @@ const headers = [...document.querySelectorAll<HTMLTableCellElement>("th[data-col
  *  said each way. A map without the figure goes last either way. */
 const COLUMNS: Record<Column, { name: string; key: (m: BestsMap) => Key; first: Way; ways: [string, string] }> = {
   map: { name: "map", key: (m) => m.mapName.toLowerCase() || null, first: "ascending", ways: ["A to Z", "Z to A"] },
-  region: { name: "region", key: (m) => m.region.toLowerCase() || null, first: "ascending", ways: ["A to Z", "Z to A"] },
   levels: {
     name: "mob levels",
     key: (m) => (m.mobLevels ? [m.mobLevels.lowest, m.mobLevels.highest] : null),
@@ -149,6 +150,103 @@ function star() {
   return svg;
 }
 
+/** The scale every map's bar is drawn on: from 0 to the best of all maps, which runs the
+ *  lane's whole length, with a line at each round step, three to five of them. */
+type Scale = { top: number; lines: number[] };
+
+function scaleOf(maps: BestsMap[]): Scale {
+  const top = Math.max(1, ...maps.flatMap((m) => [m.expPerHour, ...m.visits.map((v) => v.expPerHour)]));
+  // The smallest of 1, 2, 2.5 and 5 to a power of ten that is at least a fifth of the top.
+  const power = 10 ** Math.floor(Math.log10(top / 5));
+  const step = Math.max(1, power * ([1, 2, 2.5, 5, 10].find((n) => n * power >= top / 5) ?? 10));
+  const lines: number[] = [];
+  for (let n = step; n <= top; n += step) lines.push(n);
+  return { top, lines };
+}
+
+/** A step on the scale as its header writes it: 0, 500, 20k, 1.25M. */
+function short(n: number) {
+  if (n >= 1_000_000) return `${Number((n / 1_000_000).toFixed(2))}M`;
+  if (n >= 1_000) return `${Number((n / 1_000).toFixed(1))}k`;
+  return String(n);
+}
+
+/** How far along the lane an EXP/h is. */
+const along = (n: number) => String(Math.min(1, n / scale.top));
+
+/** A span at a place along the lane. */
+function at(className: string, n: number) {
+  const el = span(className, "");
+  el.style.setProperty("--at", along(n));
+  return el;
+}
+
+/** The header's ruler: each step's figure over a notch, as the Grind Tracker's forecast
+ *  hangs its reaches. */
+function renderScale() {
+  const step = (n: number) => {
+    const el = at(n === 0 ? "step zero" : "step", n);
+    el.textContent = short(n);
+    return el;
+  };
+  scaleEl.replaceChildren(step(0), ...scale.lines.map(step));
+  spaceScale();
+}
+
+/** The ruler's figures far enough apart to read: where the lane is too short for every
+ *  step's, every other one (or third) keeps its notch alone. */
+function spaceScale() {
+  const steps = [...scaleEl.children] as HTMLElement[];
+  const apart = (scaleEl.clientWidth * (scale.lines[0] ?? scale.top)) / scale.top;
+  const widest = Math.max(0, ...steps.map((el) => el.offsetWidth));
+  const every = apart > 0 ? Math.ceil((widest + 8) / apart) : 1;
+  for (const [i, el] of steps.entries()) el.classList.toggle("quiet", i % every !== 0);
+}
+
+/** The scale's lines down a lane's cell, behind its bar. */
+const gridLines = () => scale.lines.map((n) => at("grid", n));
+
+/** A map's lane, in its own column beside the figure. */
+function laneCell(m: BestsMap) {
+  const td = cell(null, "lane-cell");
+  td.append(...gridLines(), lane(m));
+  return td;
+}
+
+/** A map's lane: its best as the EXP gauge's fill, on the scale every map shares; a notch
+ *  in it for each of its other Visits; and You Yellow's dot for the Visit under way's. */
+function lane(m: BestsMap) {
+  const lane = document.createElement("div");
+  lane.className = "lane";
+  lane.append(at("bar", m.expPerHour));
+  const others = m.visits.slice(1).filter((v) => !v.thisVisit);
+  lane.append(...others.map((v) => at("notch", v.expPerHour)));
+  const now = m.visits.find((v) => v.thisVisit);
+  if (now) lane.append(at("visit-dot", now.expPerHour));
+  // Its Visits in words, as the bar draws them.
+  const lowest = m.visits[m.visits.length - 1]?.expPerHour ?? m.expPerHour;
+  const visits = m.visits.length === 1 ? "1 visit" : `${m.visits.length} visits`;
+  const spread = m.visits.length === 1 ? `${rate(lowest)} EXP/h` : `${rate(lowest)} to ${rate(m.expPerHour)} EXP/h`;
+  const label = `${visits}, ${spread}${now ? `; this visit ${rate(now.expPerHour)}` : ""}`;
+  lane.setAttribute("role", "img");
+  lane.setAttribute("aria-label", label);
+  lane.title = label;
+  return lane;
+}
+
+/** A Visit's own bar under its map's, on the same scale, the Visit under way's ending in
+ *  its dot. */
+function visitLane(v: BestsVisit) {
+  const td = cell(null, "lane-cell");
+  const lane = document.createElement("div");
+  lane.className = "lane visit-lane";
+  lane.setAttribute("aria-hidden", "true");
+  lane.append(at("bar", v.expPerHour));
+  if (v.thisVisit) lane.append(at("visit-dot", v.expPerHour));
+  td.append(...gridLines(), lane);
+  return td;
+}
+
 function row(m: BestsMap, best: BestsMap | null, marks: MapMarks) {
   const tr = document.createElement("tr");
   const known = m.mapName !== "";
@@ -175,15 +273,10 @@ function row(m: BestsMap, best: BestsMap | null, marks: MapMarks) {
   mapCell.append(named);
   const street = document.createElement("div");
   street.className = known ? "row-street" : "row-street unknown";
-  if (known) street.append(m.streetName, span("region", ` · ${m.region}`));
-  else street.textContent = NOT_LISTED;
+  // The street and its region: "Victoria Road · Victoria Island".
+  street.textContent = known ? [m.streetName, m.region].filter(Boolean).join(" · ") : NOT_LISTED;
   mapCell.append(street);
   tr.append(mapCell);
-
-  const region = cell(null, "text region-cell");
-  if (known) region.textContent = m.region;
-  else missing(region, NOT_LISTED);
-  tr.append(region);
 
   const lv = cell("Mob levels");
   if (m.mobLevels) lv.textContent = levels(m.mobLevels);
@@ -192,8 +285,11 @@ function row(m: BestsMap, best: BestsMap | null, marks: MapMarks) {
 
   const exp = cell("Best EXP/h", "exp");
   if (m === best) exp.append(star());
-  exp.append(rate(m.expPerHour));
-  tr.append(exp);
+  // Its lane again under the figure, for a window too narrow for the lanes' own column.
+  const under = lane(m);
+  under.classList.add("under");
+  exp.append(rate(m.expPerHour), under);
+  tr.append(exp, laneCell(m));
 
   const share = cell("% of solo");
   if (m.ceilingShareHundredths !== null && m.soloExpCeiling !== null) {
@@ -259,11 +355,11 @@ function visitRow(m: BestsMap, v: BestsVisit, key: string | null, place: number,
 
   const first = cell(null, "text blank");
   first.append(span("sr-only", `${mapName(m)}, visit ${place} of ${m.visits.length}`));
-  tr.append(first, cell(null, "text region-cell blank"), cell(null, "blank"));
+  tr.append(first, cell(null, "blank"));
 
   const exp = cell(null, "visit-exp");
   exp.textContent = rate(v.expPerHour);
-  tr.append(exp);
+  tr.append(exp, visitLane(v));
 
   const share = cell(null, "visit-share");
   if (v.ceilingShareHundredths !== null) share.textContent = sharePercent(v.ceilingShareHundredths);
@@ -309,6 +405,7 @@ function removeButton(m: BestsMap, v: BestsVisit, key: string) {
 let maps: BestsMap[] = [];
 let marks: MapMarks = {};
 let sort: { column: Column; way: Way } = { column: "exp", way: "descending" };
+let scale: Scale = { top: 1, lines: [] };
 /** The maps opened to their Visit History, by ID, kept as the sort is. */
 const opened = new Set<string>();
 /** The × clicked once, by its Visit's key, until the second click removes it, a click
@@ -319,6 +416,8 @@ function renderRows() {
   // The best of all maps, which the star marks; none with only one map to compare.
   const best = maps.length > 1 ? maps[0] : null;
   const keys = new Map(maps.map((m) => [m.id, visitKeys(m)]));
+  scale = scaleOf(maps);
+  renderScale();
   if (armed !== null && ![...keys.values()].some((k) => k.includes(armed))) armed = null;
   rows.replaceChildren(
     ...sorted(maps, sort).flatMap((m) => {
@@ -351,6 +450,7 @@ function render(view: BestsView) {
   credit.title = view.credit;
   credit.setAttribute("aria-label", view.credit);
   noteMissing.hidden = maps.every((m) => m.mobLevels !== null && m.ceilingShareHundredths !== null);
+  noteDot.hidden = !maps.some((m) => m.visits.some((v) => v.thisVisit));
   renderRows();
   reportHeight();
 }
@@ -379,10 +479,17 @@ function reportHeight() {
     invoke("personal_bests_height", { height });
   }
 }
-// Narrowed to a smaller game, the rows lay out again, as cards at the narrowest.
-window.addEventListener("resize", reportHeight);
-// The height depends on the font: measure again once it has loaded.
-document.fonts.ready.then(reportHeight);
+// Narrowed to a smaller game, the rows lay out again, as cards at the narrowest, and the
+// ruler spaces its figures for the lane's new length.
+window.addEventListener("resize", () => {
+  spaceScale();
+  reportHeight();
+});
+// The height and the ruler's figures depend on the font: measure again once it has loaded.
+document.fonts.ready.then(() => {
+  spaceScale();
+  reportHeight();
+});
 
 // Dragged by its header, never by its button. A click leaves the keyboard with the game:
 // the window can't be activated.

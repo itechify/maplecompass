@@ -42,6 +42,7 @@ td {
    on one edge; a long name wraps rather than widening the table. */
 th:first-child,
 td:first-child {
+  width: 28%;
   padding-left: 24px;
   text-align: left;
   white-space: normal;
@@ -211,17 +212,148 @@ tbody tr:hover td {
   color: var(--ink-2);
 }
 
-/* Shown in the street line once the Region column folds away. */
-.row-street .region {
-  display: none;
-}
-
 .row-street.unknown {
   color: var(--ink-3);
 }
 
 .exp {
   font-weight: 700;
+}
+
+/* Every best on one scale, in the lane beside its figure: the map's best drawn as the
+   Grind Tracker's EXP gauge draws the bar, lime in its grey frame, from 0 to the best of
+   all maps, which runs the lane's whole length. Read down the window, the lanes are a
+   chart. A notch in a bar is another of the map's Visits, so a map played the same way
+   each time shows its notches bunched at the end, and one lucky Visit a long way past
+   the rest; You Yellow's dot is the Visit under way's best, stepping with the EXP as the
+   game's own gauge does, never eased. */
+.lane-cell {
+  --lane-inset: 14px;
+  --lane-end: 14px;
+  width: 23%;
+}
+
+/* Clear of the figure before it and of the next column's after it, so the last step's
+   figure in the header has room. */
+th.lane-cell,
+td.lane-cell {
+  padding-right: var(--lane-end);
+}
+
+td.lane-cell {
+  position: relative;
+}
+
+/* The scale's lines run down every lane, the rows' and the Visits', behind the bars. */
+td.lane-cell .grid {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--lane-inset) + var(--at) * (100% - var(--lane-inset) - var(--lane-end)));
+  width: 1px;
+  background: rgba(30, 45, 90, 0.09);
+}
+
+.lane {
+  position: relative;
+  height: 10px;
+  margin-top: 4px;
+}
+
+.lane .bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  width: calc(var(--at) * 100%);
+  min-width: 3px;
+  height: 100%;
+  border: 1px solid var(--exp-frame);
+  border-radius: 2px;
+  background: var(--exp-fill);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* Where another Visit's bar would end: its right edge, a hairline in the frame's grey. */
+.lane .notch {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  left: calc(var(--at) * 100%);
+  width: 1px;
+  margin-left: -1px;
+  background: rgba(103, 109, 112, 0.7);
+}
+
+/* The minimap's dot for the player, as the Pace Trace draws it. */
+.lane .visit-dot {
+  position: absolute;
+  top: 1px;
+  left: calc(var(--at) * 100%);
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--you-light) 0 18%, var(--you) 45%);
+  box-shadow: 0 0 0 1px var(--you-edge);
+}
+
+/* An opened map's Visits each draw their own bar under the map's, thinner, on the same
+   scale, so the Visit History reads as a little chart of its own. */
+.visit-lane {
+  height: 6px;
+  margin-top: 0;
+}
+
+.visit-lane .visit-dot {
+  top: -1px;
+}
+
+/* The header's ruler: each step's figure over a notch at the header's foot, as the Grind
+   Tracker's forecast hangs its reaches from the gauge. */
+.scale {
+  position: relative;
+  display: block;
+  height: 21px;
+  margin-bottom: -4px;
+}
+
+.scale .step {
+  position: absolute;
+  top: 1px;
+  left: calc(var(--at) * 100%);
+  transform: translateX(-50%);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.scale .step::after {
+  content: "";
+  position: absolute;
+  top: 17px;
+  left: 50%;
+  width: 1px;
+  height: 3px;
+  background: var(--exp-frame);
+}
+
+.scale .zero {
+  transform: none;
+}
+
+/* A step whose figure would crowd its neighbours' keeps its notch alone. */
+.scale .quiet {
+  color: transparent;
+}
+
+/* The lane under the figure, for a window too narrow for the lanes' column: shown there
+   only. */
+.exp .under {
+  display: none;
+}
+
+.scale .zero::after {
+  left: 0;
 }
 
 /* The best of all maps: the Grind Tracker's new-best star, You Yellow lit up and to the
@@ -364,18 +496,37 @@ tbody tr.visit.last td {
   display: none;
 }
 
-/* Narrower, over a smaller game: Region joins the street line, the date may wrap, and
-   the share's header says less. */
-@container (max-width: 700px) {
-  [data-column="region"],
-  .region-cell {
+/* Narrower, over a smaller game: the lanes' column gives way to the maps' names, each bar
+   going under its figure as a thinner lane the width of the Best EXP/h column, still on
+   the one scale. */
+@container (max-width: 840px) {
+  .lane-cell {
     display: none;
   }
 
-  .row-street .region {
-    display: inline;
+  th:first-child,
+  td:first-child {
+    width: auto;
   }
 
+  .exp .under {
+    display: block;
+    height: 6px;
+    margin-top: 5px;
+  }
+
+  .exp .under .notch {
+    top: 1px;
+    bottom: 1px;
+  }
+
+  .exp .under .visit-dot {
+    top: -1px;
+  }
+}
+
+/* Narrower still: the date may wrap, and the share's header says less. */
+@container (max-width: 700px) {
   .date {
     white-space: normal;
   }
@@ -419,7 +570,8 @@ tbody tr.visit.last td {
     background: none;
   }
 
-  thead th.controls {
+  thead th.controls,
+  thead th.lane-cell {
     display: none;
   }
 
@@ -465,10 +617,41 @@ tbody tr.visit.last td {
     position: static;
   }
 
-  /* The count under the figures. */
+  /* The lane under the figures, the full width of the card, and the count under it. */
+  .exp .under {
+    display: none;
+  }
+
+  tbody tr:not(.visit) td.lane-cell {
+    display: block;
+  }
+
+  tbody td.lane-cell {
+    --lane-inset: 0px;
+    --lane-end: 0px;
+    grid-column: 1 / -1;
+    order: 1;
+    width: auto;
+    position: relative;
+  }
+
+  tbody td.lane-cell .lane {
+    height: 6px;
+    margin-top: 2px;
+  }
+
+  tbody td.lane-cell .visit-dot {
+    top: -1px;
+  }
+
   tbody td.controls {
     grid-column: 1 / -1;
+    order: 2;
     width: auto;
+  }
+
+  tbody tr.visit td.lane-cell {
+    display: none;
   }
 
   /* Each Visit one line under the card: EXP/h · share · date, its × at the end. */
