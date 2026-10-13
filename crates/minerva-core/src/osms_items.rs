@@ -47,6 +47,9 @@ pub(crate) struct ItemFacts {
     /// ("Use", "Etc", "Setup"); "Scroll" or "Cash".
     pub kind: String,
     pub shop: ShopPrice,
+    /// A throwing star or a bullet, recharged at a shop (`unitPrice`): a listing of it is one
+    /// set, its number how many the set holds.
+    pub rechargeable: bool,
 }
 
 /// Every item in OSMS's item files: the game's items, its scrolls and the Cash Shop's.
@@ -127,9 +130,10 @@ fn read_set(files: &ItemFiles) -> Result<ItemSet, String> {
     let file: ItemsFile = parse(&files.items, "items.json")?;
     let cash_shop: CashShopFile = parse(&files.cash_shop, "cash_shop.json")?;
     let mut items = Vec::new();
-    let facts = |id, name: &str, kind: String, shop| ItemFacts { id, name: name.trim().to_string(), kind, shop };
+    let facts = |id, name: &str, kind: String, shop| ItemFacts { id, name: name.trim().to_string(), kind, shop, rechargeable: false };
     for item in &file.items {
-        items.push(facts(item.id, &item.name, kind(item), shop_price(item)?));
+        let rechargeable = item.stats.contains_key("unitPrice");
+        items.push(ItemFacts { rechargeable, ..facts(item.id, &item.name, kind(item), shop_price(item)?) });
     }
     for scroll in &file.scrolls {
         items.push(facts(scroll.id, &scroll.name, "Scroll".into(), ShopPrice::Unknown));

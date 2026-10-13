@@ -7,8 +7,9 @@ import { signed, whole } from "./figures";
 /** Mirror of `minerva_core::ListedPrice`: `quantity` of the item for `mesos`. */
 type ListedPrice = { quantity: number; mesos: number };
 
-/** Mirror of `minerva_core::DealItem`. */
-type DealItem = { id: string; name: string };
+/** Mirror of `minerva_core::DealItem`: `rechargeable` for a throwing star or a bullet, whose
+ * listing is one set, its number how many the set holds. */
+type DealItem = { id: string; name: string; rechargeable: boolean };
 
 /** Mirror of `minerva_core::DealBadge`: one listing's badge, level with it (physical px
  * from the window's top), and what it says; `covered`, what was read there before the
@@ -32,10 +33,12 @@ function off(percent: number, deal: boolean): string {
   return percent > 0 ? `+${percent}%` : signed(`${percent}%`);
 }
 
-/** The price of one, as the game writes prices: whole mesos, or to a tenth. */
-function each({ quantity, mesos }: ListedPrice): string {
+/** What was compared, as the game writes prices: the price of one, in whole mesos or to a
+ * tenth; for a throwing star or a bullet, its set's. */
+function each(item: DealItem, { quantity, mesos }: ListedPrice): string {
+  if (item.rechargeable) return `${whole(mesos)} mesos for the set of ${whole(quantity)}`;
   const one = mesos / quantity;
-  return Number.isInteger(one) ? whole(one) : one.toLocaleString("en-US", { maximumFractionDigits: 1 });
+  return `${Number.isInteger(one) ? whole(one) : one.toLocaleString("en-US", { maximumFractionDigits: 1 })} mesos each`;
 }
 
 /** The badge's words, and what it says in full for its tooltip. */
@@ -44,12 +47,12 @@ function words(badge: DealBadge, line: string): [string, string] {
     case "deal":
       return [
         `${off(badge.percent, true)} · ${whole(badge.lineMesos)}`,
-        `${badge.item.name}: ${each(badge.listed)} mesos each, a deal against ${line} (${whole(badge.lineMesos)}). Click for its card.`,
+        `${badge.item.name}: ${each(badge.item, badge.listed)}, a deal against ${line} (${whole(badge.lineMesos)}). Click for its card.`,
       ];
     case "noDeal":
       return [
         off(badge.percent, false),
-        `${badge.item.name}: ${each(badge.listed)} mesos each, no deal against ${line} (${whole(badge.lineMesos)}). Click for its card.`,
+        `${badge.item.name}: ${each(badge.item, badge.listed)}, no deal against ${line} (${whole(badge.lineMesos)}). Click for its card.`,
       ];
     case "noPrice":
       return ["no price", `${badge.item.name}: ${line} has no price for it. Click to set one on its card.`];

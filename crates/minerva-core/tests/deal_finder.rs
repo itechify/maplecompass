@@ -14,7 +14,7 @@
 mod common;
 
 use common::FakeSource;
-use common::items::{ItemWorld, equip, etc, item_world, scroll};
+use common::items::{ItemWorld, equip, etc, item_world, scroll, use_item};
 use minerva_core::{
     Action, DealBadge, DealBadges, DealFinderView, DealItem, Foreground, GameWindow, Hotkey, Hotkeys, ItemCardView, ListedPrice,
     MarketPrice, Minerva, PanelControl, PanelSizes, PanelState, Rect, Request, SavedMarketLine, SavedMarketPrices, ScreenRect,
@@ -34,6 +34,7 @@ const GARNET: &str = "04021000";
 const GARNET_ORE: &str = "04020000";
 const BRONZE_ORE: &str = "04010000";
 const EMERALD_STAFF: &str = "01382004";
+const WOODEN_TOP: &str = "02070000";
 
 fn settings() -> Settings {
     Settings {
@@ -52,6 +53,7 @@ fn items() -> ItemWorld {
         equip(1_382_004, "Emerald Staff", "Weapon").sells_for(2_000),
         equip(1_041_078, "Blue Moon", "Top").sells_for(11_000),
         equip(1_032_011, "Blue Moon", "Earring").sells_for(10_500),
+        use_item(2_070_000, "Wooden Top").recharged_at(1.0),
     ])
     .with_scroll(scroll(2_048_000, "Pet Equip Speed Scroll: Legs for Made Up"))
     .with_scroll(scroll(2_048_001, "Pet Equip Speed Scroll: Lungs for Made Up"))
@@ -67,7 +69,11 @@ fn market() -> SavedMarketPrices {
     };
     SavedMarketPrices {
         lines: vec![
-            line("1", "Your price", &[(GARNET, 1_470), (GARNET_ORE, 900), (EMERALD_STAFF, 3_800), ("02048000", 15_000)]),
+            line(
+                "1",
+                "Your price",
+                &[(GARNET, 1_470), (GARNET_ORE, 900), (EMERALD_STAFF, 3_800), ("02048000", 15_000), (WOODEN_TOP, 188_888)],
+            ),
             line("2", "Lowest ask", &[(GARNET, 900), (GARNET_ORE, 700)]),
         ],
         ..SavedMarketPrices::default()
@@ -122,7 +128,7 @@ fn listed(quantity: u64, mesos: u64) -> ListedPrice {
 }
 
 fn item(id: &str, name: &str) -> DealItem {
-    DealItem { id: id.into(), name: name.into() }
+    DealItem { id: id.into(), name: name.into(), rechargeable: false }
 }
 
 fn verdicts(state: &PanelState) -> Vec<Verdict> {
@@ -518,4 +524,21 @@ fn once_the_list_has_changed_a_covered_listing_keeps_nothing_read_before() {
     minerva.act(Action::ToggleDealFinder);
     let state = minerva.on_player_shop_reading(shop(vec![covered(0)], 800));
     assert_eq!(badge(state, 0), (true, Verdict::Unknown));
+}
+
+#[test]
+fn a_throwing_star_is_judged_by_its_listings_whole_price_however_many_it_holds() {
+    let mut minerva = on();
+    let state = minerva.on_player_shop_reading(shop(
+        vec![row(0, Some("Wooden Top"), Some((800, 999_999))), row(1, Some("Wooden Top"), Some((800, 150_000)))],
+        400,
+    ));
+    let star = DealItem { rechargeable: true, ..item(WOODEN_TOP, "Wooden Top") };
+    assert_eq!(
+        verdicts(state),
+        [
+            Verdict::NoDeal { item: star.clone(), listed: listed(800, 999_999), percent: 429, line_mesos: 188_888 },
+            Verdict::Deal { item: star, listed: listed(800, 150_000), percent: -21, line_mesos: 188_888 },
+        ]
+    );
 }

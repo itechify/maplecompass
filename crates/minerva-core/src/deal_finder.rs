@@ -3,7 +3,9 @@
 //! the open Player Shop's listings, and a Deal Badge beside each one says whether its price
 //! is a deal against the Deal Line: the one Market Line (ADR 0011) the player chose on the
 //! Item Card. A listing is a deal when the price of one item is at least the Deal Margin
-//! (a percentage, 0 by default) below the item's price on the Deal Line.
+//! (a percentage, 0 by default) below the item's price on the Deal Line. A throwing star or
+//! a bullet is one set however many it holds (the listing's number), so its listing's whole
+//! price is compared.
 //!
 //! A listing covered for now (by the pointer, or the game's tooltip by it) keeps the badge
 //! of what was read there before, marked covered, while the listings read since say the
@@ -75,6 +77,9 @@ pub struct DealItem {
     /// The game's item ID, 8 digits.
     pub id: String,
     pub name: String,
+    /// A throwing star or a bullet: its listing's number is how many the set holds, and its
+    /// price is the set's.
+    pub rechargeable: bool,
 }
 
 /// The Deal Badges' window, while it shows.
@@ -202,7 +207,7 @@ impl DealFinder {
                 judged.push(named.as_ref().map(|(_, ids)| ids.clone()));
                 let verdict = match (named, listing.price) {
                     (Some((item, ids)), Some(listed)) => {
-                        let item = DealItem { id: item_id(ids[0]), name: item.name.clone() };
+                        let item = DealItem { id: item_id(ids[0]), name: item.name.clone(), rechargeable: item.rechargeable };
                         match line.and_then(|line| line.prices.get(&item.id)) {
                             Some(price) => judge(item, listed, price.mesos, margin_percent),
                             None => Verdict::NoPrice { item, listed },
@@ -245,7 +250,8 @@ impl DealFinder {
 
 /// The verdict on `listed` for `item`, against `line_mesos` on the Deal Line.
 fn judge(item: DealItem, listed: ListedPrice, line_mesos: u64, margin_percent: u32) -> Verdict {
-    let each = listed.mesos as f64 / listed.quantity as f64;
+    // The price of one; of a throwing star's or a bullet's set, the listing's.
+    let each = if item.rechargeable { listed.mesos as f64 } else { listed.mesos as f64 / listed.quantity as f64 };
     let line = line_mesos as f64;
     let percent = if line > 0.0 { ((each - line) / line * 100.0).round() as i32 } else { 0 };
     let deal = each < line && each <= line * (1.0 - f64::from(margin_percent) / 100.0);
@@ -274,7 +280,7 @@ mod tests {
     use super::*;
 
     fn item() -> DealItem {
-        DealItem { id: "04020000".into(), name: "Garnet Ore".into() }
+        DealItem { id: "04020000".into(), name: "Garnet Ore".into(), rechargeable: false }
     }
 
     fn verdict(quantity: u64, mesos: u64, line: u64, margin: u32) -> (bool, i32) {

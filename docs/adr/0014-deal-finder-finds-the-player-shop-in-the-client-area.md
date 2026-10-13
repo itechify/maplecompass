@@ -21,7 +21,7 @@ So the Deal Finder finds the shop itself: while it is on, the shell captures the
 
 ## Judging a listing
 
-- The price compared is the price of one: the listing's mesos over its quantity. It is a deal when it is below the Deal Line's price for the item by at least the Deal Margin, a percentage in the settings (0 by default: any price below).
+- The price compared is the price of one: the listing's mesos over its quantity. A throwing star or a bullet (an item OSMS gives a recharge price, `unitPrice`) is one set however many it holds: its listing's number is the set's count, so its whole price is compared, as players price a set. It is a deal when it is below the Deal Line's price for the item by at least the Deal Margin, a percentage in the settings (0 by default: any price below).
 - The name is matched against OSMS's item files as the Item Card matches a tooltip's (ADR 0010). A name the game cut short ("Pet Equip Speed Scroll: L...") is the one item whose name starts so; several, and the listing is "?". Several items sharing the name that don't look alike (their kinds or shop prices differ) are "?" too.
 - Equipment is judged by its name alone: Market Lines keep one price per item, whatever its stats, and the listing doesn't show them.
 - Only the listings on screen are read. Minerva sends no input to the game (ADR 0001), so the player scrolls, and the badges follow within half a second.

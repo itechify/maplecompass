@@ -209,7 +209,7 @@ The one Market Line the Deal Finder compares listings with, marked on every Item
 _Avoid_: target price, reference price
 
 **Deal Margin**:
-How far below the Deal Line, in percent, the price of one item in a listing must be for it to be a deal. Set in Settings; 0 by default, so any price below the line is a deal.
+How far below the Deal Line, in percent, the price of one item in a listing (of a throwing star's or a bullet's set, the listing's price) must be for it to be a deal. Set in Settings; 0 by default, so any price below the line is a deal.
 _Avoid_: threshold, discount
 
 **Deal Badge**:
