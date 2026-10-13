@@ -55,3 +55,13 @@ Chosen by the user from three directions (close-up, labelled map at zoom, prefet
 - **The one motion.** A new spot dives from the map at the preview's scale to the close-up in 360ms, on an exponential ease-out interpolated in log scale, the first frame drawn at once. The same spot lit again holds; reduced motion, or a preview already as close, opens on the spot.
 - **How.** A canvas at the screen's resolution, drawn from the preview's own decoded `<img>`, so no picture is fetched twice and no layer is ever larger than the card. On a screen at twice the scale, the settled close-up is the picture's own pixels.
 - **Checked** headless at 1× and 2× on a real OSMS picture (3-Way Road-Split's two hidden portals, and its exits at either end), filmed at a twentieth of the speed, and with reduced motion forced.
+
+## Spawns on the map (overdrive, 12 Oct 2026)
+
+Chosen by the user over a map that moves like a map and a labelled map at zoom. OSMS's `maps.json` gives every spawn point's `x` and `y` in the same picture pixels as the portals, and the core already read the points to count them; it now passes them to the overlay in `MapPreview.spawns`, each with its mob's ID.
+
+- **The map.** Every spawn point is the minimap's red mob dot, under the arrows and rings, on a white halo a pixel wider so it holds on dark art. A busy map wears dozens, as its minimap does: 3-Way Road-Split has 68.
+- **Lit together.** Resting on a mob's row (or its name taking focus) rings that mob's dots in the same red and fades the others to 30%. Resting on a dot does the same for its mob and lights its row in Selection Periwinkle, the row's own red dot ringed as the map's. The Mobs table is set out 5px at each side, its text where it was, so the lit tint clears it as a Hidden Portal row's does.
+- **A dot's card.** The Mark Card, with its close-up and dive, for a spawn point: OSMS draws the mobs into its pictures, so the close-up shows the mob standing on its spot, and the words name it after the table's red dot, with "Lv 8 · 9 spawn points". Every close-up draws the dots in view, the lit mob's ringed.
+- **No new motion.** Lighting is at once, as a ring's is.
+- **Checked** headless at 2× on 3-Way Road-Split's real picture with its real 68 spawn points (its seven mobs stood in for by the made-up world's), at rest, with a row lit, a dot's card, a ring's card, and the narrow card layout with a row lit.

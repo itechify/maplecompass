@@ -1,5 +1,6 @@
 //! The Map Preview: OSMS's picture of the whole of the shown map, with every portal on it
-//! marked where it is, as OSMS Data Explorer's own map view marks them (ADR 0008).
+//! marked where it is, as OSMS Data Explorer's own map view marks them (ADR 0008), and
+//! every Spawn Point dotted, as the minimap dots mobs.
 //!
 //! The picture is asked of the source while the preview shows, ahead of the Mob Cards'
 //! animations, and its answer kept for the run, so a map shown again shows it at once.
@@ -19,6 +20,8 @@ pub struct MapPreview {
     pub image: PreviewImage,
     /// Every portal on the map but those to the dead end, in OSMS's order.
     pub marks: Vec<PortalMark>,
+    /// Every Spawn Point on the map with a position, in OSMS's order.
+    pub spawns: Vec<SpawnMark>,
 }
 
 /// The Map Preview's picture: where the overlay loads it from, or why it can't.
@@ -97,6 +100,17 @@ impl MapPreview {
         }
         self
     }
+}
+
+/// A Spawn Point dotted on the Map Preview: where one of the map's mobs spawns.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpawnMark {
+    /// Where it is (`x` and `y` beside the rest for the overlay).
+    #[serde(flatten)]
+    pub at: PicturePoint,
+    /// The ID of the mob that spawns there, one of the map's [`crate::MapData::mobs`].
+    pub mob: String,
 }
 
 /// Where a portal leads, as OSMS colours its mark.

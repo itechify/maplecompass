@@ -5,7 +5,7 @@
 use crate::map_data::{MapData, MapSummary, Mob, PerParty};
 use crate::map_mark;
 use crate::map_index::{MapEntry, SourceError};
-use crate::map_preview::PicturePoint;
+use crate::map_preview::{PicturePoint, SpawnMark};
 use crate::mob_card::{DamageRange, Elements, HpPerExp, MobDetails};
 use crate::portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 use crate::portals::{self, Destination, Exit, MapFacts};
@@ -116,8 +116,8 @@ impl MapSet {
 /// Hidden Portal rule and the app's hand-kept [`PORTAL_OVERRIDES`]. Teleports within the
 /// map (`intra_map`) are neither, but they are marked on the Map Preview with every other
 /// portal not to the dead end, at its position in the map's picture (named in
-/// `map_manifest.json`). A destination outside the map list is named from `lookups.json`,
-/// with no street, or else by its ID.
+/// `map_manifest.json`), and so is every spawn point with a position. A destination
+/// outside the map list is named from `lookups.json`, with no street, or else by its ID.
 pub fn read(files: &OsmsFiles) -> Result<MapSet, SourceError> {
     read_with(files, PORTAL_OVERRIDES)
 }
@@ -291,6 +291,14 @@ fn map_data(
         None => None,
     };
     let connected_maps = map.exits.iter().map(|&id| map_id(id)).collect::<Result<_, _>>()?;
+    let spawns = map
+        .mob_positions
+        .iter()
+        .filter_map(|point| {
+            let at = PicturePoint { x: pixel(point.x?)?, y: pixel(point.y?)? };
+            Some(SpawnMark { at, mob: point.id.to_string() })
+        })
+        .collect();
     Ok(MapData {
         summary,
         mobs,
@@ -300,6 +308,7 @@ fn map_data(
         mob_rate_percent,
         nearest_town,
         marks: sorted.marks,
+        spawns,
         // The panel picks these out when it shows the data; the reader adds the picture.
         ..MapData::default()
     })
@@ -465,6 +474,9 @@ struct LookupsFile {
 struct SpawnPoint {
     /// The mob's ID.
     id: u64,
+    /// Where it is, in the pixels of the map's picture; a point without both still counts.
+    x: Option<f64>,
+    y: Option<f64>,
 }
 
 /// `monsters.json`.

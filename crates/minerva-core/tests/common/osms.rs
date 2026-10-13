@@ -35,6 +35,20 @@ pub struct Spawn {
     pub points: u32,
     /// The mob's `mob_time` on the map ("300.00", "180.00-1800.00 [720.00]"), if timed.
     pub timer: Option<String>,
+    /// Where its points are in the map's picture.
+    pub at: SpawnAt,
+}
+
+/// Where a [`Spawn`]'s points are in the map's picture.
+#[derive(Debug, Clone, Copy, Default)]
+pub enum SpawnAt {
+    /// Each at a spot of its own along the map.
+    #[default]
+    Spread,
+    /// At (`x`, `y`).
+    Here(i64, i64),
+    /// Nowhere: no `x` or `y`.
+    Unplaced,
 }
 
 /// A portal, as `portals.json` holds it.
@@ -193,13 +207,25 @@ impl Map {
 
     /// `points` spawn points of mob `mob`, untimed.
     pub fn spawns(mut self, mob: u64, points: u32) -> Self {
-        self.spawns.push(Spawn { mob, points, timer: None });
+        self.spawns.push(Spawn { mob, points, timer: None, at: SpawnAt::Spread });
+        self
+    }
+
+    /// A spawn point of mob `mob`, untimed, at (`x`, `y`) in the map's picture.
+    pub fn spawn_at(mut self, mob: u64, x: i64, y: i64) -> Self {
+        self.spawns.push(Spawn { mob, points: 1, timer: None, at: SpawnAt::Here(x, y) });
+        self
+    }
+
+    /// A spawn point of mob `mob`, untimed, with no position.
+    pub fn spawn_unplaced(mut self, mob: u64) -> Self {
+        self.spawns.push(Spawn { mob, points: 1, timer: None, at: SpawnAt::Unplaced });
         self
     }
 
     /// `points` spawn points of mob `mob`, each on this timer.
     pub fn timed(mut self, mob: u64, points: u32, timer: &str) -> Self {
-        self.spawns.push(Spawn { mob, points, timer: Some(timer.into()) });
+        self.spawns.push(Spawn { mob, points, timer: Some(timer.into()), at: SpawnAt::Spread });
         self
     }
 
@@ -393,7 +419,11 @@ impl World {
             let mut positions = Vec::new();
             for spawn in &map.spawns {
                 for point in 0..spawn.points {
-                    positions.push(json!({ "id": spawn.mob, "x": 100 + 40 * positions.len(), "y": 500 + point }));
+                    positions.push(match spawn.at {
+                        SpawnAt::Spread => json!({ "id": spawn.mob, "x": 100 + 40 * positions.len(), "y": 500 + point }),
+                        SpawnAt::Here(x, y) => json!({ "id": spawn.mob, "x": x, "y": y }),
+                        SpawnAt::Unplaced => json!({ "id": spawn.mob }),
+                    });
                 }
             }
             if !positions.is_empty() {
