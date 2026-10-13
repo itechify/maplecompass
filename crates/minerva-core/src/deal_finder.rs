@@ -5,6 +5,10 @@
 //! Item Card. A listing is a deal when the price of one item is at least the Deal Margin
 //! (a percentage, 0 by default) below the item's price on the Deal Line.
 //!
+//! A listing covered for now (by the pointer, or the game's tooltip by it) keeps the badge
+//! of what was read there before, marked covered, while the listings read since say the
+//! list is as it was: none read otherwise, none gone.
+//!
 //! Only what the reader is sure of is judged: a name that isn't one item's (unreadable, or
 //! cut short and shared by several), or a price not in the game's shape, gets a "?" badge,
 //! never another item's verdict. Equipment is judged by its name alone: Market Lines keep
@@ -14,7 +18,7 @@ use crate::item_card::item_id;
 use crate::market_prices::MarketPrices;
 use crate::osms_items::{ItemFacts, ItemSet};
 use crate::panel::{GameWindow, ScreenRect, Size, clear_of};
-use crate::player_shop::{ListedPrice, ShopList, ShopReading};
+use crate::player_shop::{ListedPrice, ShopList, ShopReading, ShopRow};
 use serde::Serialize;
 
 /// The Deal Finder, as the panel shows it.
@@ -41,6 +45,9 @@ pub struct DealBadge {
     /// Its listing's top, from the top of the badges' window, and its height (physical px).
     pub top: u32,
     pub height: u32,
+    /// Its listing is covered now, so its verdict is what was read there before (or "?"
+    /// with nothing read there before).
+    pub covered: bool,
     #[serde(flatten)]
     pub verdict: Verdict,
 }
@@ -87,6 +94,23 @@ pub(crate) struct DealFinder {
     /// The items each listing in `shop` is, as they were last judged: what a click on its
     /// badge opens.
     items: Vec<Option<Vec<u32>>>,
+    /// The listings last read whole, each where it is, while the list stays at `seen_at`
+    /// (its left edge on screen) and nothing read since says it changed: what a covered
+    /// listing's badge says.
+    seen: Vec<ShopRow>,
+    seen_at: Option<i32>,
+}
+
+/// Two listings whose tops are this close (physical px) are in one slot.
+const SAME_SLOT: i32 = 3;
+
+fn same_slot(a: &ShopRow, b: &ShopRow) -> bool {
+    (a.area.y - b.area.y).abs() <= SAME_SLOT
+}
+
+/// Whether `row` was read whole: its name and its price.
+fn whole(row: &ShopRow) -> bool {
+    !row.covered && row.name.is_some() && row.price.is_some()
 }
 
 /// The badges sit this far left of the shop's window (physical px).
@@ -103,15 +127,40 @@ impl DealFinder {
         if !self.on {
             self.shop = None;
             self.items.clear();
+            self.seen.clear();
+            self.seen_at = None;
         }
     }
 
     /// What a capture read as; ignored while it is off (a capture taken before it was
-    /// turned off).
+    /// turned off). The listings read whole are remembered where they are. The list has
+    /// changed (scrolled, or a listing bought or sold out) when one of them reads otherwise
+    /// than what was read there before, or a listing read before is gone and not covered:
+    /// then nothing read before is kept.
     pub fn read(&mut self, reading: ShopReading) {
-        if self.on {
-            self.shop = reading.shop;
+        if !self.on {
+            return;
         }
+        if let Some(list) = &reading.shop {
+            if self.seen_at != Some(list.area.x) {
+                self.seen.clear();
+                self.seen_at = Some(list.area.x);
+            }
+            let otherwise = list.rows.iter().filter(|row| whole(row)).any(|row| {
+                self.seen.iter().any(|seen| same_slot(seen, row) && (seen.name != row.name || seen.price != row.price))
+            });
+            let gone = self.seen.iter().any(|seen| !list.rows.iter().any(|row| same_slot(row, seen)));
+            if otherwise || gone {
+                self.seen.clear();
+            }
+            for row in list.rows.iter().filter(|row| whole(row)) {
+                match self.seen.iter_mut().find(|seen| same_slot(seen, row)) {
+                    Some(seen) => *seen = row.clone(),
+                    None => self.seen.push(row.clone()),
+                }
+            }
+        }
+        self.shop = reading.shop;
     }
 
     pub fn shop(&self) -> Option<&ShopList> {
@@ -145,7 +194,10 @@ impl DealFinder {
             .rows
             .iter()
             .enumerate()
-            .map(|(row, listing)| {
+            .map(|(row, shown)| {
+                // Covered, what was read there before.
+                let seen = shown.covered.then(|| self.seen.iter().find(|seen| same_slot(seen, shown))).flatten();
+                let listing = seen.unwrap_or(shown);
                 let named = items.zip(listing.name.as_deref()).and_then(|(items, name)| item_named(items, name));
                 judged.push(named.as_ref().map(|(_, ids)| ids.clone()));
                 let verdict = match (named, listing.price) {
@@ -160,8 +212,9 @@ impl DealFinder {
                 };
                 DealBadge {
                     row: row as u32,
-                    top: (listing.area.y - top).max(0) as u32,
-                    height: listing.area.height,
+                    top: (shown.area.y - top).max(0) as u32,
+                    height: shown.area.height,
+                    covered: shown.covered,
                     verdict,
                 }
             })
@@ -175,12 +228,17 @@ impl DealFinder {
     /// the client area and off `avoid` (the captured regions). `None` while no shop was
     /// found.
     pub fn placement(&self, game: &GameWindow, size: Size, avoid: &[ScreenRect]) -> Option<ScreenRect> {
-        let list = self.shop.as_ref()?.area;
+        let shop = self.shop.as_ref()?;
+        let list = shop.area;
+        // Down to every listing: a covered or selected one may lie past the bands found.
+        let bottom = |r: ScreenRect| r.y + r.height as i32;
+        let top = shop.rows.iter().map(|row| row.area.y).fold(list.y, i32::min);
+        let height = (shop.rows.iter().map(|row| bottom(row.area)).fold(bottom(list), i32::max) - top) as u32;
         let client = game.client;
         let width = size.width.min(client.width);
         let left = list.x - SHOP_LEFT_OF_LIST - SHOP_GAP - width as i32;
         let x = if left >= client.x { left } else { list.x + SHOP_RIGHT_OF_LIST + SHOP_GAP };
-        let strip = ScreenRect { x, y: list.y, width, height: list.height.min(client.height) };
+        let strip = ScreenRect { x, y: top, width, height: height.min(client.height) };
         Some(clear_of(strip, avoid, client))
     }
 }

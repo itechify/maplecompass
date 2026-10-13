@@ -11,8 +11,9 @@ type ListedPrice = { quantity: number; mesos: number };
 type DealItem = { id: string; name: string };
 
 /** Mirror of `minerva_core::DealBadge`: one listing's badge, level with it (physical px
- * from the window's top), and what it says. */
-export type DealBadge = { row: number; top: number; height: number } & (
+ * from the window's top), and what it says; `covered`, what was read there before the
+ * pointer or a tooltip covered it. */
+export type DealBadge = { row: number; top: number; height: number; covered: boolean } & (
   | { verdict: "deal" | "noDeal"; item: DealItem; listed: ListedPrice; percent: number; lineMesos: number }
   | { verdict: "noPrice"; item: DealItem; listed: ListedPrice }
   | { verdict: "unknown" }
@@ -64,16 +65,24 @@ function badgeItem(badge: DealBadge, line: string): HTMLLIElement {
   const scale = window.devicePixelRatio || 1;
   row.style.top = `${badge.top / scale}px`;
   row.style.height = `${badge.height / scale}px`;
-  const [text, full] = words(badge, line);
+  const [text, said] = words(badge, line);
+  const full = !badge.covered
+    ? said
+    : badge.verdict === "unknown"
+      ? "Covered by the pointer or a tooltip, and not read before it was."
+      : `Covered by the pointer or a tooltip: this is what it read before. ${said}`;
   const opens = badge.verdict !== "unknown";
   const el = document.createElement(opens ? "button" : "span");
   el.className = `deal-badge ${badge.verdict}`;
+  el.classList.toggle("covered", badge.covered);
   el.title = full;
   el.setAttribute("aria-label", full);
   if (el instanceof HTMLButtonElement) {
     el.type = "button";
     el.dataset.row = String(badge.row);
   }
+  // Covered, its verdict stays, with the mark that it isn't being read now.
+  if (badge.covered && badge.verdict !== "unknown") el.append(span("deal-covered", "?"));
   el.append(span("deal-words", text));
   row.append(el);
   return row;

@@ -104,7 +104,13 @@ fn row(slot: u32, name: Option<&str>, price: Option<(u64, u64)>) -> ShopRow {
         area: ScreenRect { x: LIST.x + 58, y, width: 253, height: 54 },
         name: name.map(String::from),
         price: price.map(|(quantity, mesos)| ListedPrice { quantity, mesos }),
+        covered: false,
     }
+}
+
+/// The listing in slot `slot` covered: by the pointer, or the game's tooltip by it.
+fn covered(slot: u32) -> ShopRow {
+    ShopRow { covered: true, ..row(slot, None, None) }
 }
 
 fn shop(rows: Vec<ShopRow>, at_ms: u64) -> ShopReading {
@@ -443,4 +449,73 @@ fn market_prices_saved_before_the_deal_line_read_with_the_first_line_as_it() {
     assert_eq!(saved.deal_line, None);
     let written = serde_json::to_string(&SavedMarketPrices { deal_line: Some("1".into()), ..saved }).unwrap();
     assert!(written.contains(r#""dealLine":"1""#), "{written}");
+}
+
+fn badge(state: &PanelState, row: u32) -> (bool, Verdict) {
+    let badge = state.deal_badges.as_ref().expect("badges").badges.iter().find(|b| b.row == row).expect("that badge").clone();
+    (badge.covered, badge.verdict)
+}
+
+fn garnet_deal() -> Verdict {
+    Verdict::Deal { item: item(GARNET, "Garnet"), listed: listed(1, 999), percent: -32, line_mesos: 1_470 }
+}
+
+#[test]
+fn a_covered_listing_keeps_the_verdict_read_there_before_marked_covered() {
+    let mut minerva = on();
+    let ore = || row(1, Some("Garnet Ore"), Some((1, 1_008)));
+    minerva.on_player_shop_reading(shop(vec![row(0, Some("Garnet"), Some((1, 999))), ore()], 400));
+
+    let state = minerva.on_player_shop_reading(shop(vec![covered(0), ore()], 800));
+    assert_eq!(badge(state, 0), (true, garnet_deal()));
+    assert!(!badge(state, 1).0);
+
+    // A click on it shows its item's card, as before it was covered.
+    let state = minerva.act(Action::OpenDealItem { row: 0 });
+    match &state.item_card.as_ref().expect("a card").view {
+        ItemCardView::Card(card) => assert_eq!(card.id, GARNET),
+        other => panic!("{other:?}"),
+    }
+
+    // Uncovered, it is read afresh.
+    let state = minerva.on_player_shop_reading(shop(vec![row(0, Some("Garnet"), Some((1, 999))), ore()], 1_200));
+    assert_eq!(badge(state, 0), (false, garnet_deal()));
+}
+
+#[test]
+fn a_covered_listing_never_read_before_is_a_question_mark() {
+    let mut minerva = on();
+    let state = minerva.on_player_shop_reading(shop(vec![covered(0), row(1, Some("Garnet"), Some((1, 999)))], 400));
+    assert_eq!(badge(state, 0), (true, Verdict::Unknown));
+}
+
+#[test]
+fn once_the_list_has_changed_a_covered_listing_keeps_nothing_read_before() {
+    // Scrolled: another listing reads otherwise where it was.
+    let mut minerva = on();
+    minerva.on_player_shop_reading(shop(vec![row(0, Some("Garnet"), Some((1, 999))), row(1, Some("Garnet Ore"), Some((1, 900)))], 400));
+    let state = minerva.on_player_shop_reading(shop(vec![covered(0), row(1, Some("Bronze Ore"), Some((1, 177)))], 800));
+    assert_eq!(badge(state, 0), (true, Verdict::Unknown));
+
+    // A listing read before is gone (sold out, or bought), and nothing covers its slot.
+    let mut minerva = on();
+    minerva.on_player_shop_reading(shop(vec![row(0, Some("Garnet"), Some((1, 999))), row(1, Some("Garnet Ore"), Some((1, 900)))], 400));
+    let state = minerva.on_player_shop_reading(shop(vec![covered(0)], 800));
+    assert_eq!(badge(state, 0), (true, Verdict::Unknown));
+
+    // The shop moved.
+    let mut minerva = on();
+    minerva.on_player_shop_reading(shop(vec![row(0, Some("Garnet"), Some((1, 999)))], 400));
+    let moved = ShopRow { area: ScreenRect { x: LIST.x + 100, ..covered(0).area }, ..covered(0) };
+    let reading = ShopReading { shop: Some(ShopList { area: ScreenRect { x: LIST.x + 42, ..LIST }, rows: vec![moved] }), at_ms: 800 };
+    let state = minerva.on_player_shop_reading(reading);
+    assert_eq!(badge(state, 0), (true, Verdict::Unknown));
+
+    // Turned off and on again.
+    let mut minerva = on();
+    minerva.on_player_shop_reading(shop(vec![row(0, Some("Garnet"), Some((1, 999)))], 400));
+    minerva.act(Action::ToggleDealFinder);
+    minerva.act(Action::ToggleDealFinder);
+    let state = minerva.on_player_shop_reading(shop(vec![covered(0)], 800));
+    assert_eq!(badge(state, 0), (true, Verdict::Unknown));
 }

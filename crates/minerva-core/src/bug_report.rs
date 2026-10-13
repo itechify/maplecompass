@@ -689,12 +689,12 @@ impl Recorder {
                 (true, unread || no_such)
             }
             // One that changed; for the run, one with a listing that couldn't be read whole,
-            // as it may have been misread.
+            // and nothing covers, as it may have been misread.
             Region::PlayerShop => {
                 let same = matches!(line.event, Event::PlayerShop { same: true, .. });
                 let unread = match &line.event {
                     Event::PlayerShop { shop: Some(shop), .. } => {
-                        shop.rows.iter().any(|row| row.name.is_none() || row.price.is_none())
+                        shop.rows.iter().any(|row| !row.covered && (row.name.is_none() || row.price.is_none()))
                     }
                     _ => false,
                 };
@@ -1531,6 +1531,9 @@ impl Event {
                     .rows
                     .iter()
                     .map(|row| {
+                        if row.covered {
+                            return "covered".to_string();
+                        }
                         let name = row.name.as_deref().map_or("?".to_string(), |name| format!("{name:?}"));
                         let price = row.price.map_or("?".to_string(), |p| format!("{} for {}", p.quantity, thousands(p.mesos)));
                         format!("{name} {price}")

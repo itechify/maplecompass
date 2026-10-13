@@ -1,0 +1,8 @@
+[
+  { "name": "Iron Dagger", "quantity": 1, "mesos": 9500 },
+  { "name": "Mace", "quantity": 1, "mesos": 6000 },
+  { "name": "Steel Shield", "quantity": 1, "mesos": 3800 },
+  { "name": "Magic Potion", "quantity": 1, "mesos": 400 },
+  { "name": "Dexterity Potion", "quantity": 1, "mesos": 400 },
+  { "name": "Speed Potion", "quantity": 1, "mesos": 400 }
+]

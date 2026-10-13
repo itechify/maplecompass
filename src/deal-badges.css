@@ -106,3 +106,28 @@ button.deal-badge.deal:hover {
 .deal-badge.unknown {
   color: var(--unknown);
 }
+
+/* Covered by the pointer or a tooltip: what was read there before, faded and edged in
+   dashes, with the game's orange "?" of doubt before it, as the panel marks a map it isn't
+   sure of. */
+.deal-badge.covered {
+  opacity: 0.7;
+  border-style: dashed;
+}
+
+.deal-covered {
+  display: inline-grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  margin: 0 5px -1px 0;
+  border-radius: 50%;
+  background: var(--orange);
+  box-shadow: 0 0 0 1px var(--orange-deep);
+  color: #fff;
+  font-size: 10px;
+  line-height: 13px;
+  font-weight: 700;
+  text-shadow: none;
+  vertical-align: 1px;
+}

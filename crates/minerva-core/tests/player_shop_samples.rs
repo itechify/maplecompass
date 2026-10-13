@@ -8,7 +8,7 @@
 //!   item's name as the game shows it ("…" and all, for a name it cuts short), the quantity
 //!   and the mesos.
 //! - Each frame is fed as the game's client area at the screen's origin, as it is and as
-//!   the darker colours of live captures (`prep.rs`).
+//!   the darker colours of live captures (`prep.rs`), to a core of its own.
 
 mod common;
 
@@ -120,12 +120,11 @@ fn read(badge: &DealBadge) -> Option<(String, ListedPrice)> {
 fn every_samples_listings_read_as_its_readings_say_or_as_unreadable_never_wrong() {
     let samples = samples();
     assert!(samples.len() >= 3, "expected the Player Shop samples, found {}", samples.len());
-    let mut minerva = started(&samples);
-
     let mut wrong = Vec::new();
     let mut unreadable = 0;
     for sample in &samples {
         for brightness in [1.0, 0.935] {
+            let mut minerva = started(&samples);
             let capture = ShopCapture { frame: frame(sample, brightness), origin: ScreenPoint { x: 0, y: 0 } };
             let badges = badges(minerva.on_player_shop_capture(capture));
             if badges.len() != sample.listings.len() {
@@ -146,4 +145,62 @@ fn every_samples_listings_read_as_its_readings_say_or_as_unreadable_never_wrong(
     // The samples were all read whole when they were added: a reader that reads less of them
     // has got worse, though it says nothing wrong.
     assert_eq!(unreadable, 0, "listings now unreadable");
+}
+
+/// `frame` with `rect` (x, y, w, h) painted as `paint` says, over what was there.
+fn painted(mut frame: Frame, (x0, y0, w, h): (u32, u32, u32, u32), paint: impl Fn(u32, u32) -> Option<[u8; 3]>) -> Frame {
+    for y in y0..y0 + h {
+        for x in x0..x0 + w {
+            if let Some(rgb) = paint(x - x0, y - y0) {
+                let at = ((y * frame.width + x) * 4) as usize;
+                frame.rgba[at..at + 3].copy_from_slice(&rgb);
+            }
+        }
+    }
+    frame
+}
+
+/// The game's pointer, a white glove outlined in near-black, its cuff light blue.
+fn pointer(x: u32, y: u32) -> Option<[u8; 3]> {
+    let inside = |x: i32, y: i32| (x - 10).pow(2) * 9 + (y - 13).pow(2) * 4 <= 9 * 4 * 64;
+    let (x, y) = (x as i32, y as i32);
+    match (inside(x, y), inside(x - 1, y) && inside(x + 1, y) && inside(x, y - 1) && inside(x, y + 1)) {
+        (true, true) if y > 19 => Some([170, 214, 246]),
+        (true, true) => Some([255, 255, 255]),
+        (true, false) => Some([24, 24, 32]),
+        _ => None,
+    }
+}
+
+/// The game's tooltip by the pointer: its dark slate fill, with a line of white text.
+fn tooltip(_: u32, y: u32) -> Option<[u8; 3]> {
+    Some(if (40..52).contains(&y) { [218, 218, 223] } else { [38, 46, 74] })
+}
+
+#[test]
+fn a_listing_the_pointer_or_its_tooltip_covers_keeps_what_was_read_there_marked_covered() {
+    let samples = samples();
+    let sample = samples.iter().find(|s| s.file == "gems-and-ores.png").expect("gems-and-ores");
+    let mut minerva = started(&samples);
+    let capture = |frame: Frame| ShopCapture { frame, origin: ScreenPoint { x: 0, y: 0 } };
+    let shown = |state: &PanelState| -> Vec<(bool, Option<String>)> {
+        badges(state).iter().map(|b| (b.covered, read(b).map(|(name, _)| name))).collect()
+    };
+    let before = shown(minerva.on_player_shop_capture(capture(frame(sample, 1.0))));
+
+    // The pointer on Garnet Ore's name.
+    let state = minerva.on_player_shop_capture(capture(painted(frame(sample, 1.0), (110, 78, 21, 27), pointer)));
+    let mut expected = before.clone();
+    expected[1].0 = true;
+    assert_eq!(shown(state), expected);
+
+    // The tooltip by it over Topaz and Emerald, wholly.
+    let state = minerva.on_player_shop_capture(capture(painted(frame(sample, 1.0), (40, 125, 290, 140), tooltip)));
+    let mut expected = before.clone();
+    expected[2].0 = true;
+    expected[3].0 = true;
+    assert_eq!(shown(state), expected);
+
+    // Uncovered, all read again.
+    assert_eq!(shown(minerva.on_player_shop_capture(capture(frame(sample, 1.0)))), before);
 }

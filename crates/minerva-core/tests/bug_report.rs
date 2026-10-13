@@ -666,6 +666,7 @@ fn shop_reading(names: &[Option<&str>], at_ms: u64) -> ShopReading {
             area: ScreenRect { x: 619, y: 513 + 63 * slot as i32, width: 253, height: 54 },
             name: name.map(String::from),
             price: Some(ListedPrice { quantity: 1, mesos: 999 }),
+            covered: false,
         })
         .collect();
     ShopReading { shop: Some(ShopList { area: ScreenRect { x: 561, y: 513, width: 311, height: 366 }, rows }), at_ms }
