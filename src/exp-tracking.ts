@@ -30,4 +30,31 @@ export type ExpTracking = {
   /** The star on the Last 5 min row: the core says when the Rolling Rate beats the Best
    *  row's figure as both are written. */
   newBest: boolean;
+  /** The Pace Trace; none while waiting. It moves with the EXP, as `bar` does. */
+  pace: PaceTrace | null;
+  /** Where the bar will be at the Last 5 min pace, short of the level-up, nearest first. */
+  forecast: Forecast[];
+  /** The bar's percentage before the last death in this level, while it reads less. */
+  lostFromHundredths: number | null;
 };
+
+/** Mirror of `minerva_core::PacePoint`: active time before the last EXP change, and the
+ *  EXP gained since the trace's first point. */
+export type PacePoint = { agoMs: number; exp: number };
+
+/** Mirror of `minerva_core::PaceTrace`. */
+export type PaceTrace = {
+  spanMs: number;
+  /** Oldest first, the last EXP change last. */
+  points: PacePoint[];
+  /** The pace of the 5 minutes before, from the first point to the last change. */
+  earlier: [PacePoint, PacePoint];
+  /** The Best row's pace, from where the race on the map begins to the last change; only
+   *  once it is within reach on this Visit. */
+  best: [PacePoint, PacePoint] | null;
+  /** Arriving on the map, if within the trace. */
+  arrivedAgoMs: number | null;
+};
+
+/** Mirror of `minerva_core::Forecast`. */
+export type Forecast = { afterS: number; percentHundredths: number };

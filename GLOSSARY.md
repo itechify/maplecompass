@@ -128,7 +128,7 @@ The hunting figures for a map as a whole, such as the EXP-per-hour ceiling and m
 ### Tracking
 
 **Grind Tracker**:
-The window beside the panel, turned on at setup by marking the EXP Bar Region, that measures a Session from the EXP bar: Time to Level, the Rolling Rate and Session rates, how the Rolling Rate compares with the Personal Best, and deaths. Its window bar opens the Personal Bests window. The player closes it with its ×, and opens it again from the panel; closing it doesn't stop the Session.
+The window beside the panel, turned on at setup by marking the EXP Bar Region, that measures a Session from the EXP bar: Time to Level, the Rolling Rate and Session rates, how the Rolling Rate compares with the Personal Best, the Pace Trace, deaths, and where the EXP bar will be at the Rolling Rate. Its window bar opens the Personal Bests window. The player closes it with its ×, and opens it again from the panel; closing it doesn't stop the Session.
 _Avoid_: EXP tracking, EXP tracker
 
 **Session**:
@@ -142,6 +142,10 @@ _Avoid_: status bar region, EXP region
 **Rolling Rate**:
 A rate measured over the last few minutes of active play in a session, as opposed to the average over the whole session.
 _Avoid_: current rate, live rate
+
+**Pace Trace**:
+The last 5 minutes of active play drawn kill by kill on the Grind Tracker, raced against the 5 minutes before them: how far ahead of that earlier pace the player is, or behind it. On a map with a Personal Best, once the player comes within reach of its pace, it races that too.
+_Avoid_: graph, chart, sparkline
 
 **Personal Best**:
 The highest Rolling Rate, in EXP/h, the player has had over a full 5 minutes of active play on one map, shared by all their characters: the best in the map's Visit History. The Grind Tracker shows it and marks the Rolling Rate while it beats it.

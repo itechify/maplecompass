@@ -13,7 +13,7 @@ use common::osms;
 use common::{CONSTRUCTION_SITE_ID, FakeSource, SUNSET_SKY_ID, arrive, sharing_a_title, tracking, tracking_with};
 use std::path::Path;
 use minerva_core::{
-    Action, Minerva, Deaths, ExpBar, ExpBarReading, ExpRate, ExpTracking, GameWindow, PanelControl, PanelState,
+    Action, Minerva, Deaths, ExpBar, ExpBarReading, ExpRate, ExpTracking, GameWindow, PacePoint, PanelControl, PanelState,
     ScreenRect, TrackingState,
 };
 
@@ -442,7 +442,8 @@ fn a_misread_that_fits_the_level_and_misleads_it_keeps_the_session() {
     // The first moment of a new half minute, so the figures are measured afresh.
     let clean = clean.tick(120 * S).clone();
     let misread = misread.tick(120 * S).clone();
-    assert_eq!(misread.exp_tracking, clean.exp_tracking);
+    assert_eq!(held(&misread.exp_tracking), held(&clean.exp_tracking));
+    assert_eq!(misread.exp_tracking.bar, clean.exp_tracking.bar);
     assert_eq!(misread.exp_tracking.state, TrackingState::Active);
     assert_eq!(exp_per_hour(&misread), (Some(29_716), Some(29_716)), "908 EXP in 110 s");
 }
@@ -587,6 +588,9 @@ fn resetting_the_session_clears_it_back_to_waiting() {
             state: TrackingState::Waiting,
             reset_undoable: true,
             bar: Some(ExpBar { exp: 266, percent_hundredths: 633 }),
+            // The death from 335 [7.98%] took that ground back, Session or not: it is the
+            // bar's.
+            lost_from_hundredths: Some(798),
             ..ExpTracking::default()
         }
     );
@@ -646,6 +650,9 @@ fn the_overlay_gets_tracking_as_the_panel_renders_it() {
             "bar": { "exp": 266, "percentHundredths": 633 },
             "personalBest": null,
             "newBest": false,
+            "pace": null,
+            "forecast": [],
+            "lostFromHundredths": null,
         })
     );
 
@@ -670,6 +677,14 @@ fn the_overlay_gets_tracking_as_the_panel_renders_it() {
             "bar": { "exp": 335, "percentHundredths": 798 },
             "personalBest": null,
             "newBest": false,
+            "pace": null,
+            "forecast": [
+                { "afterS": 300, "percentHundredths": 1620 },
+                { "afterS": 600, "percentHundredths": 2441 },
+                { "afterS": 900, "percentHundredths": 3263 },
+                { "afterS": 1800, "percentHundredths": 5727 },
+            ],
+            "lostFromHundredths": null,
         })
     );
     let died = serde_json::to_value(read(&mut minerva, 75 * S, 266, 633)).unwrap();
@@ -700,7 +715,7 @@ fn the_rate_on_a_map_is_compared_with_its_solo_ceiling_after_a_minute_of_play_th
     // Arriving on Sunset Sky, nothing has been earned there yet: the minute's 69 EXP came
     // before it showed. The Session carries on all the same.
     let sunset = arrive(&mut minerva, SUNSET, 70 * S);
-    assert_eq!(sunset.exp_tracking, unrecognised.exp_tracking);
+    assert_eq!(held(&sunset.exp_tracking), held(&unrecognised.exp_tracking));
 
     // A minute there, 65 EXP: 3,900 EXP/h of its 213,571 solo, 1.83%.
     assert_eq!(read(&mut minerva, 100 * S, 360, 857).exp_tracking.ceiling_share_hundredths, None);
@@ -863,10 +878,17 @@ fn replaying_the_2026_10_07_recording_waits_warms_up_and_then_shows_its_rates() 
     assert_eq!(measured.time_to_level_badge.as_deref(), Some("1h 50m"));
     assert_eq!(measured.deaths, Deaths::default());
     // The EXP rose to 492 [2.95%] by 149 s, but the panel holds what it measured at 120 s
-    // for the rest of that half minute. Only the bar's reading moves on.
+    // for the rest of that half minute. Only the bar's reading moves on, and what moves
+    // with it.
     let later = &at[&149_000];
     assert_eq!(later.bar, Some(ExpBar { exp: 492, percent_hundredths: 295 }));
-    assert_eq!(&ExpTracking { bar: measured.bar, ..later.clone() }, measured);
+    assert_eq!(held(later), held(measured));
+}
+
+/// The figures that hold for each half minute: all but the bar's reading and what moves
+/// with it, the Pace Trace, the forecast and the ground a death took back.
+fn held(tracking: &ExpTracking) -> ExpTracking {
+    ExpTracking { bar: None, pace: None, forecast: Vec::new(), lost_from_hundredths: None, ..tracking.clone() }
 }
 
 /// A frame of the EXP bar at `at_ms` whose figures don't read whole.
@@ -1071,10 +1093,10 @@ fn the_figures_hold_for_the_rest_of_each_half_minute_then_refresh() {
 
     // Read on to 145 s, the EXP climbing faster: the panel holds the figures of 120 s,
     // though the bar's reading moves on.
-    let mut held = speeding_up(145);
-    let held = held.tick(149 * S).exp_tracking.clone();
-    assert_ne!(held.bar, measured.bar);
-    assert_eq!(ExpTracking { bar: measured.bar, ..held }, measured);
+    let mut later = speeding_up(145);
+    let later = later.tick(149 * S).exp_tracking.clone();
+    assert_ne!(later.bar, measured.bar);
+    assert_eq!(held(&later), held(&measured));
 
     // The next half minute measures them afresh.
     let refreshed = &minerva.panel_state().exp_tracking;
@@ -1106,4 +1128,126 @@ fn time_to_level_is_rounded_to_the_hour_beyond_ten_hours() {
     let state = read(&mut minerva, 70 * S, 170, percent_lv15(170));
     assert_eq!(state.exp_tracking.time_to_level_s, Some(14 * 3600));
     assert_eq!(state.exp_tracking.time_to_level_badge.as_deref(), Some("14h"));
+}
+
+/// The Pace Trace's points.
+fn pace(state: &PanelState) -> Vec<PacePoint> {
+    state.exp_tracking.pace.as_ref().map_or_else(Vec::new, |p| p.points.clone())
+}
+
+/// 10 EXP every 10 s from 160 [3.81%], the Session starting at 10 s, until `last` s: the
+/// panel state at each reading, from the first change on.
+fn ten_every_ten(minerva: &mut Minerva, last: u64) -> Vec<PanelState> {
+    let mut exp = 160;
+    read(minerva, 0, exp, percent(exp));
+    (1..=last / 10)
+        .map(|k| {
+            exp += 10;
+            read(minerva, k * 10 * S, exp, percent(exp))
+        })
+        .collect()
+}
+
+#[test]
+fn the_pace_trace_waits_for_a_minute_of_play_before_its_five_minutes() {
+    // 5 minutes and 50 s of active play by 360 s: no minute before the 5 minutes to race.
+    let mut minerva = tracking();
+    let states = ten_every_ten(&mut minerva, 360);
+    assert!(states.iter().all(|state| state.exp_tracking.pace.is_none()));
+
+    // 6 minutes by 370 s: the 5 minutes race the minute before them, at the same pace.
+    let six = read(&mut minerva, 370 * S, 530, percent(530));
+    let trace = six.exp_tracking.pace.clone().unwrap();
+    assert_eq!(trace.earlier, [PacePoint { ago_ms: 5 * MIN, exp: 0 }, PacePoint { ago_ms: 0, exp: 300 }]);
+    assert_eq!(trace.points.last(), Some(&PacePoint { ago_ms: 0, exp: 300 }));
+}
+
+#[test]
+fn the_pace_trace_steps_at_each_exp_change_and_holds_between_them() {
+    let mut minerva = tracking();
+    let six = ten_every_ten(&mut minerva, 370).pop().unwrap();
+    // From 5 minutes before the last change, then a step at each of the 30 since.
+    let at_370 = pace(&six);
+    assert_eq!(at_370.len(), 31);
+    assert_eq!(at_370.first(), Some(&PacePoint { ago_ms: 5 * MIN, exp: 0 }));
+    assert_eq!(at_370.last(), Some(&PacePoint { ago_ms: 0, exp: 300 }));
+
+    // It moves only as the EXP does, never with the clock: a minute and a half on with no
+    // change, it is as it was.
+    assert_eq!(pace(minerva.tick(460 * S)), at_370);
+
+    // A death steps it down, 100 s of active play after the last change.
+    let died = read(&mut minerva, 470 * S, 430, percent(430));
+    let steps = pace(&died);
+    assert_eq!(steps[steps.len() - 2..], [PacePoint { ago_ms: 100 * S, exp: 200 }, PacePoint { ago_ms: 0, exp: 100 }]);
+}
+
+#[test]
+fn the_pace_trace_races_the_five_minutes_before_it() {
+    // 5 minutes at 10 EXP every 10 s, then 5 at 20.
+    let mut minerva = tracking();
+    let mut exp = 160;
+    read(&mut minerva, 0, exp, percent(exp));
+    for k in 1..=61 {
+        exp += if k <= 31 { 10 } else { 20 };
+        read(&mut minerva, k * 10 * S, exp, percent(exp));
+    }
+
+    // Twice the pace of the 5 minutes before: 600 EXP to their 300.
+    let trace = minerva.panel_state().exp_tracking.pace.clone().unwrap();
+    assert_eq!(trace.earlier, [PacePoint { ago_ms: 5 * MIN, exp: 0 }, PacePoint { ago_ms: 0, exp: 300 }]);
+    assert_eq!(trace.points.last(), Some(&PacePoint { ago_ms: 0, exp: 600 }));
+}
+
+#[test]
+fn the_pace_trace_covers_the_last_five_minutes_of_active_play_as_last_5_min_does() {
+    let mut minerva = tracking();
+    ten_every_ten(&mut minerva, 420);
+
+    let state = minerva.panel_state();
+    let trace = state.exp_tracking.pace.clone().unwrap();
+    assert_eq!(trace.span_ms, 5 * MIN);
+    assert_eq!(trace.points.first(), Some(&PacePoint { ago_ms: 5 * MIN, exp: 0 }));
+    assert_eq!(trace.points.last(), Some(&PacePoint { ago_ms: 0, exp: 300 }));
+    // 300 EXP in 5 minutes: the Last 5 min shown.
+    assert_eq!(state.exp_tracking.rolling.map(|r| r.exp_per_hour), Some(3600));
+}
+
+/// The forecast as (seconds ahead, the bar's hundredths of a percent then).
+fn forecast(state: &PanelState) -> Vec<(u64, u32)> {
+    state.exp_tracking.forecast.iter().map(|f| (f.after_s, f.percent_hundredths)).collect()
+}
+
+#[test]
+fn the_forecast_marks_where_the_bar_will_be_at_the_last_5_min_pace_short_of_the_level_up() {
+    // 335 [7.98%] at 98.58%/h: 16.20% in 5 minutes, up to 57.27% in half an hour. In an
+    // hour the level would be up, so the forecast stops there.
+    let mut minerva = a_minute_in();
+    assert_eq!(forecast(minerva.panel_state()), [(300, 1620), (600, 2441), (900, 3263), (1800, 5727)]);
+
+    // It moves with the bar, at the pace shown: 360 [8.57%] at 80 s, while the figures
+    // measured at 70 s hold.
+    let moved = read(&mut minerva, 80 * S, 360, 857);
+    assert_eq!(moved.exp_tracking.rolling.and_then(|r| r.percent_per_hour_hundredths), Some(9858));
+    assert_eq!(forecast(&moved), [(300, 1679), (600, 2500), (900, 3322), (1800, 5786)]);
+
+    // Without a gain to go on, there is none: a death takes Last 5 min back to nothing.
+    let died = read(&mut minerva, 85 * S, 266, 633);
+    assert_eq!(forecast(&died), []);
+}
+
+#[test]
+fn after_a_death_the_gauge_marks_the_ground_it_took_back_until_the_bar_is_past_it() {
+    let mut minerva = a_minute_in();
+    let lost = |state: &PanelState| state.exp_tracking.lost_from_hundredths;
+    assert_eq!(lost(minerva.panel_state()), None);
+
+    // A death from 335 [7.98%] to 266 [6.33%], then another, lower: the ground lost is
+    // still from 7.98%.
+    assert_eq!(lost(&read(&mut minerva, 75 * S, 266, 633)), Some(798));
+    assert_eq!(lost(&read(&mut minerva, 80 * S, 200, percent(200))), Some(798));
+
+    // Climbing back, it stays until the bar reads that much again.
+    assert_eq!(lost(&read(&mut minerva, 90 * S, 300, percent(300))), Some(798));
+    assert_eq!(lost(&read(&mut minerva, 100 * S, 336, percent(336))), None);
 }

@@ -43,7 +43,11 @@
 //!   starting, warming up, pausing, resuming, or the bar going unread), the first figures
 //!   there are, a death, a level-up, a reset or its undoing, a character switch, a new
 //!   Visit, a map with another ceiling or Personal Best, and a best removed from the
-//!   history. The bar's last reading shows as it comes.
+//!   history. The bar's last reading shows as it comes, and so do what moves with it:
+//!   the Pace Trace (the 5 minutes of active play up to the last EXP change, a step at
+//!   each, against the pace of the 5 minutes before them, and against the Best row's
+//!   pace from arriving on the map once that is within reach), the forecast (where the
+//!   bar will be at the Last 5 min pace shown) and the ground a death took back.
 //! - The Rolling Rate as shown afresh, over a full 5 minutes of the Visit's play, counts
 //!   towards the Visit's Personal Best on the map (see [`crate::personal_best`]), unless
 //!   the bar can't be read. The core says which map that is, if any: one it is certain
@@ -113,6 +117,65 @@ pub struct ExpTracking {
     /// rate drops back. It is of the Rolling Rate shown, so it holds with it between
     /// refreshes.
     pub new_best: bool,
+    /// The Pace Trace: the last 5 minutes raced against the 5 before them, and against
+    /// the Best row's pace once it is within reach. `None` until there has been a minute
+    /// of play before the 5 minutes to race. It changes with the EXP, as `bar` does,
+    /// rather than holding with the figures.
+    pub pace: Option<PaceTrace>,
+    /// Where the bar will be at the Last 5 min pace shown, after each of [`FORECAST_S`]
+    /// short of the level-up. Measured from the bar's last reading, it moves with it.
+    /// Empty without a gain to go on.
+    pub forecast: Vec<Forecast>,
+    /// The bar's percentage before the last death in this level, while it reads less:
+    /// the ground a death took back. It goes once the bar is past it again, the level is
+    /// up, or another character's bar is read.
+    pub lost_from_hundredths: Option<u32>,
+}
+
+/// The Pace Trace: the Session's EXP over the 5 minutes of active play up to its last
+/// change, a step at each change, against the pace of the 5 minutes before them, and
+/// once it is within reach, the pace of the map's Personal Best. It moves only as the EXP
+/// does, never with the clock: between changes it holds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaceTrace {
+    /// The active time it spans: the Rolling Rate's 5 minutes.
+    pub span_ms: u64,
+    /// Where the 5 minutes begin, then a point at each EXP change since, the last change
+    /// last. Each holds the EXP gained since the first.
+    pub points: Vec<PacePoint>,
+    /// The pace of the 5 minutes of active play before them (or of as many as there
+    /// were, a minute at least), a straight line from the first point to the last change.
+    pub earlier: [PacePoint; 2],
+    /// The Best row's EXP/h as a pace, a straight line: from where the race on the map
+    /// begins (the first point, or arriving on the map if later), at the EXP gained by
+    /// then, to the last change. Only once it is within reach: the play since arriving, a
+    /// minute of it at least, has come within [`IN_REACH_PERCENT`] of it on this Visit.
+    pub best: Option<[PacePoint; 2]>,
+    /// Arriving on the map, if it was within the 5 minutes: how long before the last
+    /// change, 0 if there has been none since.
+    pub arrived_ago_ms: Option<u64>,
+}
+
+/// A point on the Pace Trace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PacePoint {
+    /// How long before the last EXP change, in active time.
+    pub ago_ms: u64,
+    /// The EXP gained since the trace's first point: less after a death, below 0 if
+    /// deaths took more.
+    pub exp: i64,
+}
+
+/// Where the bar will be some time from now at the Last 5 min pace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Forecast {
+    /// How far ahead, in seconds.
+    pub after_s: u64,
+    /// The bar's percentage then, in hundredths: always short of 100%.
+    pub percent_hundredths: u32,
 }
 
 /// The deaths in a Session: drops in EXP within the level.
@@ -192,6 +255,12 @@ const NEAR_LEVEL_UP_HUNDREDTHS: u32 = 1000;
 /// The figures shown are measured afresh once in each stretch of this much capture time
 /// (counted from capture time 0), unless an event shows them sooner.
 const REFRESH_MS: u64 = 30_000;
+/// The Pace Trace shows the Best's pace once the play since arriving on the map comes to
+/// this share of it, in percent: within reach.
+const IN_REACH_PERCENT: i64 = 90;
+/// How far ahead the forecast looks, in seconds: 5, 10, 15 and 30 minutes, then 1, 2, 3,
+/// 6, 12 and 24 hours. The Grind Tracker marks as many as have room on its gauge.
+const FORECAST_S: [u64; 10] = [300, 600, 900, 1_800, 3_600, 7_200, 10_800, 21_600, 43_200, 86_400];
 
 /// The level's total EXP as far as readings tell: `lo..=hi`, `hi` unbounded
 /// (`u64::MAX`) while only 0.00% has been read.
@@ -273,6 +342,12 @@ pub(crate) struct Session {
     figures: Option<Figures>,
     /// Level-ups this Session.
     level_ups: u32,
+    /// The bar's percentage before the last death in this level, until it reads that
+    /// much again. It is the bar's, not the Session's: a reset leaves it.
+    lost_from: Option<u32>,
+    /// The Visit (its id) on which the Best's pace came within reach: the Pace Trace
+    /// shows it for the rest of that Visit.
+    best_in_reach: Option<u64>,
     /// This Session started on a character switch, not the player's reset.
     character_switched: bool,
     /// What the panel shows, and what it was measured for; `None` until it is first
@@ -386,8 +461,8 @@ struct Figures {
     active_at_change: u64,
     /// Net EXP gained since the start.
     gained: i64,
-    /// The start and each change since, back to the last one before the Rolling
-    /// Rate's window.
+    /// The start and each change since, back to the last one before the Pace Trace's
+    /// earlier 5 minutes, which come before the Rolling Rate's window.
     marks: Vec<Mark>,
     /// The deaths so far.
     deaths: Deaths,
@@ -440,7 +515,7 @@ impl Figures {
         self.last_change_at = at;
         self.gained += gain;
         self.marks.push(Mark { active: self.active_at_change, gained: self.gained });
-        let from = self.active_at_change.saturating_sub(ROLLING_MS);
+        let from = self.active_at_change.saturating_sub(2 * ROLLING_MS);
         let before = self.marks.iter().rposition(|m| m.active <= from).unwrap_or(0);
         self.marks.drain(..before);
     }
@@ -506,6 +581,7 @@ impl Session {
             // The new level is bigger than the old: of the totals the reading allows,
             // only those count.
             self.accept(Total { lo: allowed.lo.max(total.hi + 1), ..allowed }, bar);
+            self.lost_from = None;
             if unseen {
                 self.notes.push(Note::Unseen);
             } else {
@@ -533,6 +609,7 @@ impl Session {
                 self.notes.push(Note::CharacterSwitch { level: misfits.total.level() });
                 self.accept(misfits.total, bar);
                 self.reset();
+                self.lost_from = None;
                 self.character_switched = true;
             }
         }
@@ -554,6 +631,8 @@ impl Session {
             figures.deaths.exp_lost += last.exp - bar.exp;
             figures.deaths.percent_lost_hundredths += last.percent_hundredths.saturating_sub(bar.percent_hundredths);
             self.notes.push(Note::Death { exp_lost: last.exp - bar.exp });
+            // Where the bar was: after deaths in a row, the highest it fell from.
+            self.lost_from = Some(self.lost_from.map_or(last.percent_hundredths, |p| p.max(last.percent_hundredths)));
         }
     }
 
@@ -594,6 +673,10 @@ impl Session {
         self.last = Some(bar);
         self.misfits = None;
         self.out_of_sight = false;
+        // The ground a death took back, made good.
+        if self.lost_from.is_some_and(|p| bar.percent_hundredths >= p) {
+            self.lost_from = None;
+        }
     }
 
     /// Back to waiting for an EXP change; what was learned about the level stays, but
@@ -774,7 +857,53 @@ impl Session {
             }
         }
         let held = self.shown.as_ref().map(|shown| shown.tracking.clone()).unwrap_or_default();
-        ExpTracking { bar: self.last, ..held }
+        // The bar, the race and what lies ahead move with the EXP; the figures hold.
+        ExpTracking {
+            bar: self.last,
+            pace: self.pace(held.personal_best),
+            forecast: forecast(self.last, held.rolling),
+            lost_from_hundredths: self.lost_from.filter(|&p| self.last.is_some_and(|bar| bar.percent_hundredths < p)),
+            ..held
+        }
+    }
+
+    /// The Pace Trace up to the last EXP change, against the 5 minutes before and the Best
+    /// row's `best` EXP/h; `None` without a minute of play before the 5 minutes.
+    fn pace(&mut self, best: Option<u64>) -> Option<PaceTrace> {
+        let figures = self.figures.as_ref()?;
+        let end = figures.active_at_change;
+        let from = end.saturating_sub(ROLLING_MS);
+        let before = from.saturating_sub(ROLLING_MS);
+        if from - before < WARM_UP_MS {
+            return None;
+        }
+        // The EXP gained by active time `at`, as the last change by then left it. The
+        // marks reach back to the last one before `before`.
+        let gained = |at: u64| figures.marks.iter().rev().find(|m| m.active <= at).map_or(0, |m| m.gained);
+        let base = gained(from);
+        let point = |at: u64, gained: i64| PacePoint { ago_ms: end - at, exp: gained - base };
+        let points: Vec<PacePoint> = std::iter::once(point(from, base))
+            .chain(figures.marks.iter().filter(|m| m.active > from).map(|m| point(m.active, m.gained)))
+            .collect();
+        let at_earlier = div_round(i128::from(base - gained(before)) * i128::from(end - from), i128::from(from - before));
+        let earlier = [point(from, base), PacePoint { ago_ms: 0, exp: at_earlier as i64 }];
+        // The Best counts only the play on the map, so its race starts on arriving.
+        let race_from = from.max(figures.visit_from);
+        let race = best.filter(|_| race_from < end).map(|best| {
+            let at_best = div_round(i128::from(best) * i128::from(end - race_from), i128::from(HOUR_MS)) as i64;
+            let start = gained(race_from);
+            [point(race_from, start), point(end, start + at_best)]
+        });
+        let arrived_ago_ms = (figures.visit_from > from).then(|| end.saturating_sub(figures.visit_from));
+        let gained_since = |p: PacePoint| points.last().map_or(0, |last| last.exp - p.exp);
+        let in_reach = race.is_some_and(|[start, at_best]| {
+            end - race_from >= WARM_UP_MS && gained_since(start) * 100 >= IN_REACH_PERCENT * (at_best.exp - start.exp)
+        });
+        if in_reach {
+            self.best_in_reach = Some(self.visit.id);
+        }
+        let best = race.filter(|_| self.best_in_reach == Some(self.visit.id));
+        Some(PaceTrace { span_ms: ROLLING_MS, points, earlier, best, arrived_ago_ms })
     }
 
     /// The figures as they stand now.
@@ -830,8 +959,29 @@ impl Session {
             bar: None,
             personal_best: None,
             new_best: false,
+            pace: None,
+            forecast: Vec::new(),
+            lost_from_hundredths: None,
         }
     }
+}
+
+/// Where `bar` will be after each of [`FORECAST_S`] at the `rolling` rate's %/h, as long
+/// as it falls short of the level-up. None without a gain to go on, or while the level's
+/// total isn't known.
+fn forecast(bar: Option<ExpBar>, rolling: Option<ExpRate>) -> Vec<Forecast> {
+    let (Some(bar), Some(per_hour)) = (bar, rolling.and_then(|r| r.percent_per_hour_hundredths)) else {
+        return Vec::new();
+    };
+    if per_hour <= 0 {
+        return Vec::new();
+    }
+    FORECAST_S
+        .iter()
+        .map(|&after_s| (after_s, i128::from(bar.percent_hundredths) + div_round(i128::from(per_hour) * i128::from(after_s), 3_600)))
+        .take_while(|&(_, percent)| percent < i128::from(HUNDRED_PERCENT))
+        .map(|(after_s, percent)| Forecast { after_s, percent_hundredths: percent as u32 })
+        .collect()
 }
 
 /// An EXP rate as the Grind Tracker writes it, to 3 significant figures, halves up:

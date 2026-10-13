@@ -210,6 +210,95 @@
   padding: 0 0 0 1px;
 }
 
+/* The Pace Trace, under the rates it draws: a race with the 5 minutes before, as split
+   times against a ghost. Their pace is the flat Ink Slate line; the trace, Panel Ink, is
+   how far ahead of it the player is, the gap shaded faintly either side, the split by the
+   player's dot, the minimap's own. Once the Best's pace is within reach it joins in the
+   dot's dark gold, ending in a best's star, and the lead over it is lit in You Yellow, as
+   a best's star is. A hairline marks arriving on the map. It moves only as the EXP does:
+   no transition, no animation. */
+.pace {
+  display: block;
+  width: 100%;
+  margin: 4px 0 2px;
+  overflow: visible;
+}
+
+.pace .area {
+  fill: var(--ink);
+  fill-opacity: 0.08;
+}
+
+.pace .lead {
+  fill: var(--you);
+  fill-opacity: 0.55;
+}
+
+.pace .trace {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.pace .arrived {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+.pace .earlier {
+  stroke: var(--ink-3);
+  stroke-width: 1;
+}
+
+.pace .best {
+  stroke: var(--you-edge);
+  stroke-width: 1;
+}
+
+/* Scaled to 10px from the 16px star: its 1px ring is 1.6 before scaling. */
+.pace .best-mark {
+  fill: var(--you);
+  stroke: var(--you-edge);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+/* Words on the trace, haloed in the box's lavender so the line behind can't cross them
+   out: "Earlier" in Ink Steel, the split in bold Panel Ink, Ink Steel when behind, and
+   in the best's dark gold while it is the race with the best. */
+.pace text {
+  font: 700 11px var(--font);
+  -webkit-text-stroke-width: 0;
+  stroke: var(--body-solid);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+
+.pace .name {
+  fill: var(--ink-2);
+}
+
+.pace .split {
+  fill: var(--ink);
+  text-anchor: end;
+}
+
+.pace .split.behind {
+  fill: var(--ink-2);
+}
+
+.pace .split.best {
+  fill: var(--you-edge);
+}
+
+.pace .you {
+  fill: url(#pace-you-light);
+  stroke: var(--you-edge);
+  stroke-width: 1;
+}
+
 .panel .tracking .line {
   white-space: normal;
   text-wrap: pretty;
@@ -266,4 +355,65 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
   transform: scaleX(var(--filled, 0));
   transform-origin: left center;
+}
+
+/* The ground a death took back: from the fill to where the bar was, the track hatched in
+   the frame's grey and closed by a line where the bar stood. Never lime: it isn't the
+   reading. */
+.exp-gauge-lost {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--filled, 0) * 100%);
+  right: calc((1 - var(--lost, 0)) * 100%);
+  background: repeating-linear-gradient(135deg, rgba(103, 109, 112, 0.55) 0 1px, transparent 1px 3px);
+  box-shadow: inset -1px 0 0 var(--exp-frame);
+}
+
+/* The forecast, a ruler hung from the gauge: a tick in the frame's grey where the bar
+   will be in so long, its reach under it, and at the end, where the bar is full, Time to
+   Level in Panel Ink. Held, it steps back to Light with the figures. */
+.forecast {
+  position: relative;
+  height: 16px;
+  margin-top: -3px;
+  font-size: 11px;
+  line-height: 12px;
+  color: var(--ink-2);
+}
+
+.forecast .notch {
+  position: absolute;
+  top: 0;
+  left: calc(var(--at) * 100%);
+  transform: translateX(-50%);
+  padding-top: 4px;
+  white-space: nowrap;
+}
+
+.forecast .notch::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 3px;
+  background: var(--exp-frame);
+}
+
+.forecast .notch.end {
+  left: auto;
+  right: 0;
+  transform: none;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.forecast .notch.end::before {
+  left: auto;
+  right: 0;
+}
+
+.tracking.held .forecast .end {
+  font-weight: 400;
 }

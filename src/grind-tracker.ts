@@ -2,8 +2,8 @@ import "./errors";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { byId } from "./dom";
-import type { ExpRate, ExpTracking } from "./exp-tracking";
+import { byId, span } from "./dom";
+import type { ExpRate, ExpTracking, PacePoint, PaceTrace } from "./exp-tracking";
 import { percent, rate, sharePercent, whole } from "./figures";
 
 /** What the shell sends: the figures, whether the window shows at all, whether some map
@@ -37,7 +37,21 @@ const deaths = byId("tracking-deaths");
 const exp = byId("tracking-exp");
 const expFigures = byId("exp-figures");
 const expGauge = byId("exp-gauge");
-const expGaugeFill = byId("exp-gauge-fill");
+const expGaugeLost = byId("exp-gauge-lost");
+const forecast = byId("forecast");
+const pace = byId("pace");
+const paceName = byId("pace-name");
+const paceAheadPath = byId("pace-ahead-path");
+const paceArea = byId("pace-area");
+const paceLead = byId("pace-lead");
+const paceArrived = byId("pace-arrived");
+const paceEarlier = byId("pace-earlier");
+const paceBest = byId("pace-best");
+const paceTrace = byId("pace-trace");
+const paceBestMark = byId("pace-best-mark");
+const paceEarlierName = byId("pace-earlier-name");
+const paceSplit = byId("pace-split");
+const paceYou = byId("pace-you");
 
 /** A Session's length: "7m", "1h 12m". */
 function length(seconds: number) {
@@ -45,6 +59,15 @@ function length(seconds: number) {
   const [h, m] = [Math.floor(minutes / 60), minutes % 60];
   return h === 0 ? `${m}m` : m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
+
+/** The view last rendered, to draw again at another width. */
+let shown: TrackerView | null = null;
+
+/** "16.2%" from hundredths of a percent, as the bar would show it to one decimal. */
+const barPercent = (hundredths: number) => `${(hundredths / 100).toFixed(1)}%`;
+
+/** A forecast's reach: "5m", "30m", "1h", "24h". */
+const reach = (seconds: number) => (seconds < 3600 ? `${seconds / 60}m` : `${seconds / 3600}h`);
 
 /** Why there is no Time to Level, in words: never a bare dash beside the label. */
 function noTimeToLevel(rolling: ExpRate | null) {
@@ -57,9 +80,11 @@ function noTimeToLevel(rolling: ExpRate | null) {
  *  and what else the Session carries; the map's Best row from arriving, before the
  *  Session starts too; the EXP bar's last reading at the foot, from the first reading on.
  *  Above them, why the figures went or can't move. */
-function render({ shown, tracking: t, personalBests, personalBestsOpen }: TrackerView) {
+function render(view: TrackerView) {
+  shown = view;
+  const { tracking: t, personalBests, personalBestsOpen } = view;
   // Not showing, the window draws nothing (the shell lets clicks through it).
-  document.body.classList.toggle("hidden", !shown);
+  document.body.classList.toggle("hidden", !view.shown);
   // Hidden, not greyed, while no map has a best to show; pressed while their window is open.
   openBests.hidden = !personalBests;
   openBests.setAttribute("aria-pressed", String(personalBestsOpen));
@@ -118,10 +143,159 @@ function render({ shown, tracking: t, personalBests, personalBestsOpen }: Tracke
     const reading = `${whole(t.bar.exp)} [${(t.bar.percentHundredths / 100).toFixed(2)}%]`;
     expFigures.textContent = reading;
     expGauge.setAttribute("aria-valuenow", String(t.bar.percentHundredths / 100));
-    expGauge.setAttribute("aria-valuetext", `EXP ${reading}`);
-    expGaugeFill.style.setProperty("--filled", String(Math.min(t.bar.percentHundredths, 10_000) / 10_000));
+    const lost = t.lostFromHundredths;
+    const before = lost === null ? "" : `, down from ${barPercent(lost)} before a death`;
+    expGauge.setAttribute("aria-valuetext", `EXP ${reading}${before}`);
+    // The fill and the ground lost both measure from the gauge's own --filled.
+    expGauge.style.setProperty("--filled", String(Math.min(t.bar.percentHundredths, 10_000) / 10_000));
+    expGaugeLost.hidden = lost === null;
+    if (lost !== null) expGaugeLost.style.setProperty("--lost", String(Math.min(lost, 10_000) / 10_000));
   }
+  drawForecast(t);
+  drawPace(t.pace);
   reportHeight();
+}
+
+/** The forecast under the gauge: Time to Level at its end, where the bar is full, then a
+ *  notch where the bar will be in so long, clear of the fill, of each other and of the
+ *  end, three at most. Where two crowd, the further reach takes the nearer's place, so a
+ *  slow pace reads in hours rather than skipping one. */
+function drawForecast(t: ExpTracking) {
+  forecast.replaceChildren();
+  forecast.hidden = !t.bar || (t.timeToLevelBadge === null && t.forecast.length === 0);
+  if (!t.bar || forecast.hidden) return;
+  const box = forecast.getBoundingClientRect();
+  const filled = (Math.min(t.bar.percentHundredths, 10_000) / 10_000) * box.width;
+  const notch = (at: number, text: string, className: string) => {
+    const el = span(className, text);
+    el.style.setProperty("--at", String(at));
+    forecast.append(el);
+    const r = el.getBoundingClientRect();
+    return { el, left: r.left - box.left, right: r.right - box.left };
+  };
+  const end = t.timeToLevelBadge === null ? null : notch(1, t.timeToLevelBadge, "notch end");
+  const room = end ? end.left - 6 : box.width;
+  const kept: { el: HTMLElement; left: number; right: number; said: string }[] = [];
+  for (const f of t.forecast) {
+    const at = f.percentHundredths / 10_000;
+    // A notch on the fill's edge says nothing the fill doesn't.
+    if (at * box.width - filled < 12) continue;
+    const n = { ...notch(at, reach(f.afterS), "notch"), said: `${barPercent(f.percentHundredths)} in ${reach(f.afterS)}` };
+    const crowds = () => kept.length > 0 && n.left < kept[kept.length - 1].right + 7;
+    if (n.left < 0 || n.right > room || (!crowds() && kept.length === 3)) {
+      n.el.remove();
+      // Each further reach is further right: none of them fits either.
+      if (n.right > room || kept.length === 3) break;
+      continue;
+    }
+    while (crowds()) kept.pop()!.el.remove();
+    kept.push(n);
+  }
+  const said = kept.map((n) => n.said);
+  const level = t.timeToLevelBadge === null ? "" : `level up in ${t.timeToLevelBadge}`;
+  forecast.setAttribute("aria-label", `At this pace: ${[...said, level].filter(Boolean).join(", ")}`);
+}
+
+/** The Pace Trace's height in CSS px; its width is the figures box's. */
+const PACE_HEIGHT = 40;
+/** Room at the top and the right end for the player's dot. */
+const DOT_ROOM = 5;
+
+function set(el: Element, attributes: Record<string, string | number>) {
+  for (const [name, value] of Object.entries(attributes)) el.setAttribute(name, String(value));
+}
+
+/** To the half pixel, so the 1px lines sit on the pixel grid at 1x. */
+const half = (n: number) => Math.round(n * 2) / 2;
+
+/** "+103" ahead, "−240" behind, as the trace's split says it. */
+const split = (exp: number) => (exp > 0 ? `+${whole(exp)}` : whole(exp));
+
+/** The Pace Trace, a race drawn as split times against a ghost. The 5 minutes before are
+ *  the flat line, and the trace is how far ahead of their pace the player is, falling back
+ *  as that pace runs on while the EXP holds and stepping up at each gain; the gap shaded,
+ *  the split written by the player's dot. Once the Best's pace is within reach it joins
+ *  as a line rising (or falling) against the earlier one, ending in a best's star, the
+ *  lead over it lit, and the split is the race with it, in its gold. The scale is the
+ *  trace's own, so a lead of a few kills fills it as a race should. */
+function drawPace(trace: PaceTrace | null) {
+  // An <svg> has no `hidden` property: the attribute, which the page's [hidden] rule hides.
+  const none = !trace || trace.points.length === 0;
+  pace.toggleAttribute("hidden", none);
+  if (!trace || none) return;
+  const width = Math.round(pace.getBoundingClientRect().width);
+  const height = PACE_HEIGHT;
+  set(pace, { viewBox: `0 0 ${width} ${height}`, height });
+  const { points, earlier, best, spanMs } = trace;
+
+  // Every figure as how far ahead of the earlier pace it is, at its time.
+  const [first, last] = [points[0], points[points.length - 1]];
+  const perMs = (earlier[1].exp - earlier[0].exp) / Math.max(1, earlier[0].agoMs - earlier[1].agoMs);
+  const ahead = (p: PacePoint) => p.exp - earlier[0].exp - perMs * (earlier[0].agoMs - p.agoMs);
+  // The corners, as [ms before the last change, EXP ahead]: along the earlier pace while
+  // the EXP holds, then up (down, after a death) to it.
+  const corners: [number, number][] = [[first.agoMs, ahead(first)]];
+  for (const p of points.slice(1)) {
+    const [agoMs, lead] = corners[corners.length - 1];
+    corners.push([p.agoMs, lead - perMs * (agoMs - p.agoMs)], [p.agoMs, ahead(p)]);
+  }
+  const bestLine = best && best.map((p) => [p.agoMs, ahead(p)] as const);
+
+  const values = corners.map(([, v]) => v).concat(bestLine ? bestLine.map(([, v]) => v) : []);
+  let [lo, hi] = [Math.min(0, ...values), Math.max(0, ...values)];
+  // Never finer than a minute of the earlier pace from top to foot: a lead of a few EXP
+  // is a few EXP, not the whole height.
+  const least = Math.max(1, Math.abs(perMs) * 60_000);
+  if (hi - lo < least) [lo, hi] = [lo - (least - (hi - lo)) / 2, hi + (least - (hi - lo)) / 2];
+  const [left, right, top, bottom] = [0.5, width - DOT_ROOM, DOT_ROOM, height - DOT_ROOM];
+  const x = (agoMs: number) => half(right - (Math.min(agoMs, spanMs) / spanMs) * (right - left));
+  const y = (value: number) => half(bottom - ((value - lo) / (hi - lo)) * (bottom - top));
+
+  const line = corners.map(([agoMs, v], i) => `${i ? "L" : "M"}${x(agoMs)},${y(v)}`).join("");
+  const start = x(first.agoMs);
+  const zero = y(0);
+  const [, now] = corners[corners.length - 1];
+  const dot = { x: x(0), y: y(now) };
+  paceTrace.setAttribute("d", line);
+  // The gap from the earlier pace, either side.
+  paceArea.setAttribute("d", `${line}V${zero}H${start}Z`);
+  set(paceEarlier, { x1: start, y1: zero, x2: dot.x, y2: zero });
+  set(paceYou, { cx: dot.x, cy: dot.y });
+
+  paceArrived.toggleAttribute("hidden", trace.arrivedAgoMs === null);
+  const arrived = x(trace.arrivedAgoMs ?? 0);
+  set(paceArrived, { x1: arrived, x2: arrived, y1: 0, y2: height });
+
+  // "Earlier" at the start of its line, on the side the trace leaves clear there.
+  const early = corners.filter(([agoMs]) => x(agoMs) <= start + 40).map(([, v]) => v);
+  const aboveEarly = early.reduce((sum, v) => sum + v, 0) > 0;
+  const below = (aboveEarly && zero + 11 <= height) || zero < 11;
+  set(paceEarlierName, { x: start + 3, y: below ? zero + 10 : zero - 3 });
+  // The split, by the dot: with the 5 minutes before, or once it's within reach, with
+  // the best.
+  const gap = Math.round(best ? last.exp - best[1].exp : now);
+  paceSplit.textContent = split(gap);
+  paceSplit.classList.toggle("behind", gap < 0);
+  paceSplit.classList.toggle("best", !!best);
+  // Under the dot when it is high, over it when low: clear of the trace coming in to it.
+  const splitY = dot.y < height / 2 ? dot.y + 14 : dot.y - 6;
+  set(paceSplit, { x: dot.x - 4, y: Math.max(9, Math.min(height - 1, splitY)) });
+  const standing = (gap: number) =>
+    gap > 0 ? `${whole(gap)} EXP ahead` : gap < 0 ? `${whole(-gap)} EXP behind` : "level";
+  let name = `Your last 5 minutes of play against the 5 minutes before: ${standing(Math.round(now))}.`;
+
+  for (const el of [paceLead, paceBest, paceBestMark]) el.toggleAttribute("hidden", !bestLine);
+  if (best && bestLine) {
+    const [from, to] = bestLine.map(([agoMs, v]) => ({ x: x(agoMs), y: y(v) }));
+    set(paceBest, { x1: from.x, y1: from.y, x2: to.x, y2: to.y });
+    // The best's star, 10px, where its pace has got to.
+    paceBestMark.setAttribute("transform", `translate(${to.x - 5},${to.y - 5}) scale(0.625)`);
+    // The lead: under the trace and above the Best's pace line.
+    paceLead.setAttribute("d", `${line}V${height}H${start}Z`);
+    paceAheadPath.setAttribute("d", `M${from.x},${from.y}L${to.x},${to.y}V0H${from.x}Z`);
+    name += ` Your best's pace on this map is within reach: ${standing(gap)} of it.`;
+  }
+  paceName.textContent = name;
 }
 
 // The shell sizes the window to the content, as the overlay does the panel. The panel is
@@ -137,7 +311,8 @@ function reportHeight() {
     invoke("grind_tracker_height", { height });
   }
 }
-window.addEventListener("resize", reportHeight);
+// The trace and the forecast are drawn to the window's width.
+window.addEventListener("resize", () => (shown ? render(shown) : reportHeight()));
 // The height depends on the font: measure again once it has loaded.
 document.fonts.ready.then(reportHeight);
 

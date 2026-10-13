@@ -71,7 +71,7 @@ pub use search::{
     DensityTier, Destination, HuntingTarget, ItemMatch, ItemsMissing, MapMatch, Matches, MobChoice, MobMatch, RouteStop,
     SearchResult, SearchState, SearchView, Trip,
 };
-pub use session::{Deaths, ExpRate, ExpTracking, TrackingState};
+pub use session::{Deaths, ExpRate, ExpTracking, Forecast, PacePoint, PaceTrace, TrackingState};
 pub use settings::{Hotkey, Hotkeys, Settings};
 pub use setup::{
     ExpBarRegion, ExpBarTestRead, MarkTarget, SelectionDirection, SetupReason, SetupState, TestRead,
