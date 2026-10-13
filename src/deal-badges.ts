@@ -52,12 +52,19 @@ function gauge(item: DealItem, { quantity, mesos }: ListedPrice, lineMesos: numb
   return { fill: Math.min(Math.max(ratio / 2, 0.02), 1), past: ratio > 2 };
 }
 
+/** A price on a badge, as players write it: in full under a million ("188,888"), past it in
+ * millions to two places ("1.25m", "2m"); the tooltip says it in full. */
+function short(mesos: number): string {
+  if (mesos < 1_000_000) return whole(mesos);
+  return `${Number((mesos / 1_000_000).toFixed(2))}m`;
+}
+
 /** The badge's words, and what it says in full for its tooltip. */
 function words(badge: DealBadge, line: string): [string, string] {
   switch (badge.verdict) {
     case "deal":
       return [
-        `${off(badge.percent, true)} · ${whole(badge.lineMesos)}`,
+        off(badge.percent, true),
         `${badge.item.name}: ${each(badge.item, badge.listed)}, a deal against ${line} (${whole(badge.lineMesos)}). Click for its card.`,
       ];
     case "noDeal":
@@ -105,7 +112,10 @@ function badgeItem(badge: DealBadge, line: string): HTMLLIElement {
     dot.setAttribute("aria-hidden", "true");
     head.append(dot);
   }
-  head.append(span("deal-words", text));
+  const figure = span("deal-words", text);
+  // A deal names the line's price too, a step quieter than how far below it the deal is.
+  if (badge.verdict === "deal") figure.append(span("deal-at", short(badge.lineMesos)));
+  head.append(figure);
   el.append(head);
   // A judged price's gauge, so the column beside the shop reads as a chart.
   if (badge.verdict === "deal" || badge.verdict === "noDeal") {

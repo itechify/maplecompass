@@ -1,5 +1,5 @@
 /* The Deal Badges: one beside each listing of the Player Shop the Deal Finder read, in a
-   window the shell makes 150 CSS px wide (WIDTH in src-tauri/src/deal_badges.rs), as tall
+   window the shell makes 116 CSS px wide (WIDTH in src-tauri/src/deal_badges.rs), as tall
    as the shop's list and just left of the shop, so each badge sits level with its listing
    and points at it. Each badge is one of the game's window buttons, since a click on any
    but "?" opens its item's card: a deal is the deep-steel button, the one step worth
@@ -47,7 +47,7 @@
   width: calc(100% - 7px);
   height: 25px;
   margin-right: 7px;
-  padding: 0 8px 4px;
+  padding: 0 6px 4px;
   border: 1px solid var(--window-edge);
   border-radius: 3px;
   background: var(--button-light);
@@ -73,6 +73,17 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The Deal Line's price after a deal's figure, a step smaller and Light, as a figure's unit. */
+.deal-at {
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.deal-at::before {
+  content: "· ";
 }
 
 /* The tail towards the listing, through the gap to the shop, in the badge's edge colour. */
@@ -151,8 +162,8 @@ button.deal-badge.deal.open {
   --gauge-fill: var(--frame);
   --gauge-notch: var(--ink);
   position: absolute;
-  left: 6px;
-  right: 6px;
+  left: 5px;
+  right: 5px;
   bottom: 3px;
   height: 3px;
   border-radius: 2px;

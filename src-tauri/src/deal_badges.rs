@@ -23,7 +23,7 @@ pub const DEAL_BADGES: &str = "deal-badges";
 
 /// The window's width in CSS px (logical); `src/deal-badges.css` right-aligns the badges in
 /// it, towards the shop. Its height is the shop's list's, as the core places it.
-const WIDTH: f64 = 150.0;
+const WIDTH: f64 = 116.0;
 
 /// The view last sent to the badges' page, for when it loads after it was sent.
 #[derive(Default)]
