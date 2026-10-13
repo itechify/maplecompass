@@ -30,3 +30,4 @@ When a change alters something a shot shows, the PR that makes it lists the shot
 
 - `item-card.png`: the card's credit line at its foot is now an info icon, its words in its tooltip.
 - `mobs.png`: cut from `hero.png` for now; take it on its own, with the pointer on a mob's name and its Mob Card showing.
+- `map.png`: the ring's card now opens on a close-up of the portal's spot, and shows from a Hidden Portal's row too. Retake it with the pointer resting on the dashed ring once the close-up has settled, and update its alt text in `site/index.html`.

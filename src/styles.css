@@ -856,11 +856,32 @@ td:first-child {
   stroke-width: 0.75;
 }
 
-/* The ring's card: where it leads, its street and its kind. A window like the Mob Card
-   (see there), above the ring or below it, never outside the panel. */
+/* The ring's card, or its row's: the spot close up, then where it leads, its street and its
+   kind. A window like the Mob Card (see there), above the ring or below it, never outside
+   the panel. As wide as its words, but never narrower than the close-up wants. */
 .mark-card {
+  width: max-content;
+  min-width: min(272px, calc(100% - 16px));
   max-width: calc(100% - 16px);
-  padding: 4px 8px 6px;
+  padding: 4px 4px 6px;
+}
+
+/* OSMS's picture around the portal at half the game's size, set into the card as the Map
+   Preview is into the panel, on its paper (opaque here, as the card is). */
+.mark-card .close-up {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 104px;
+  border: 1px solid var(--inset-edge);
+  border-radius: 3px;
+  background: color-mix(in srgb, rgb(238 243 251) 45%, var(--body-solid));
+  /* Its pixels at the screen's scale never widen the card: it spans what the words leave. */
+  contain: size;
+}
+
+.mark-card-text {
+  padding: 5px 4px 0;
 }
 
 .mark-card-to {
