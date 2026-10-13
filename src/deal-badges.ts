@@ -20,6 +20,9 @@ export type DealBadge = { row: number; top: number; height: number; covered: boo
   | { verdict: "unknown" }
 );
 
+/** A listing's band at least this tall (CSS px) holds a roomy badge: 38px, the gauge 5px. */
+const ROOMY_BAND = 44;
+
 /** What the shell sends: the badges (none while the window draws nothing), and the Deal
  * Line's name for their words. */
 type BadgesView = { badges: DealBadge[]; dealLine: string | null };
@@ -86,6 +89,9 @@ function badgeItem(badge: DealBadge, line: string): HTMLLIElement {
   const scale = window.devicePixelRatio || 1;
   row.style.top = `${badge.top / scale}px`;
   row.style.height = `${badge.height / scale}px`;
+  // Where the band has room (54 CSS px at 100%), the badge grows into it with a fuller gauge;
+  // at 200% its 27 keep the compact one.
+  row.classList.toggle("roomy", badge.height / scale >= ROOMY_BAND);
   const [text, said] = words(badge, line);
   const full = !badge.covered
     ? said

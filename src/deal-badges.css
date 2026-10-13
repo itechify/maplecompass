@@ -5,9 +5,9 @@
    but "?" opens its item's card: a deal is the deep-steel button, the one step worth
    taking (the same as setup's step forward); every other verdict is the light-steel one,
    there but out of the way. Depth is the game's chrome, a top highlight and a 1px edge,
-   never a drop shadow. Every badge is one width and 25px tall, inside a listing's band even
-   at 200% (the game draws its UI in physical px), and a judged one's bottom edge is a gauge
-   of its listing's price against the Deal Line, so the column beside the shop reads as a chart:
+   never a drop shadow. Every badge is one width, sized to its listing's band, and a judged
+   one's bottom edge is a gauge of its listing's price against the Deal Line, so the column
+   beside the shop reads as a chart:
    how far below the line a deal is shows before its words are read. The badge whose card
    is open stays pressed. A listing the pointer or a tooltip covers keeps the badge read
    there before, faded to 70% and edged in dashes (a place not yet fixed), with the
@@ -244,4 +244,61 @@ button.deal-badge.deal.open {
   box-shadow:
     0 0 0 1px var(--orange-deep),
     0 0 0 2px #fff;
+}
+
+/* Roomy: where a listing's band has room (54 CSS px at 100%; the game draws its UI in physical
+   px, so at 200% it is 27 and the badge keeps its compact 25px), the badge grows to 38px and
+   its gauge to a 5px bar with room under the words, its line a 2px notch standing past it,
+   and the slants of a price past twice the line wide enough to read. */
+.roomy .deal-badge {
+  height: 38px;
+  padding-bottom: 10px;
+}
+
+.roomy .deal-badge.noPrice,
+.roomy .deal-badge.unknown {
+  height: 27px;
+  padding-bottom: 0;
+}
+
+.roomy .deal-gauge {
+  left: 7px;
+  right: 7px;
+  bottom: 6px;
+  height: 5px;
+  border-radius: 3px;
+}
+
+.roomy .deal-gauge::before {
+  border-radius: 3px;
+}
+
+.roomy .deal-gauge::after {
+  top: -3px;
+  bottom: -3px;
+  left: calc(50% - 1px);
+  width: 2px;
+  border-radius: 1px;
+}
+
+.roomy .deal-gauge.past::before {
+  background:
+    repeating-linear-gradient(115deg, var(--gauge-fill) 0 4px, transparent 4px 7px) right / 16px 100% no-repeat,
+    linear-gradient(var(--gauge-fill), var(--gauge-fill)) left / calc(100% - 16px) 100% no-repeat;
+}
+
+/* A deal's gauge on the deep steel: a white fill in a darker well, so the bar reads as set
+   into the button rather than drawn on it. */
+.roomy .deal .deal-gauge {
+  --gauge-track: rgba(10, 25, 70, 0.35);
+  box-shadow:
+    inset 0 1px 1px rgba(10, 20, 50, 0.4),
+    0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+/* A light badge's: the frame's navy fill in a well with the same light lip. */
+.roomy .noDeal .deal-gauge {
+  box-shadow:
+    inset 0 1px 1px rgba(20, 30, 60, 0.2),
+    0 1px 0 rgba(255, 255, 255, 0.9);
 }
