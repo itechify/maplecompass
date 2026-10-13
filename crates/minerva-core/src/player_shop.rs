@@ -139,6 +139,8 @@ const RULE_BRIGHTEST: f32 = 1.04;
 const COVERED_MIN: usize = 15;
 /// Two slots' tops this close are one slot's.
 const SAME_SLOT: u32 = 3;
+/// The slots' tops are this far apart on average: 63 and 62 px in turn.
+const SLOT_PITCH: f32 = 62.6;
 /// A pixel is the band's colour at its brightness within this much per channel...
 const BAND_TOL: f32 = 6.0;
 /// ...at any brightness in this range of the screenshots'.
@@ -176,36 +178,42 @@ impl PlayerShopReader {
         let texts = self.read_lines(img, &lines, list.scale);
         let mut texts = texts.into_iter();
         let band_area = |top: u32| Rect { x: list.x0, y: top, w: BAND_W, h: BAND_H };
-        let mut rows: Vec<(u32, ShopRow)> = listings
-            .iter()
-            .map(|listing| {
-                let (name, price) = if listing.clean {
-                    let name = texts.next().flatten();
-                    let price = texts.next().flatten().as_deref().and_then(parse_price);
-                    (name, price)
-                } else {
-                    (None, None)
-                };
-                let top = listing.top();
-                (top, ShopRow { area: on_screen(band_area(top)), name, price, covered: !listing.clean })
-            })
-            .collect();
-        // The slots listings were read in at this spot; one of them with none now that
-        // something covers is reported covered.
-        let slots = match self.slots.take() {
+        let covered_row = |top: u32| ShopRow { area: on_screen(band_area(top)), name: None, price: None, covered: true };
+        // Each listing read clean, where it is. One that isn't is covered: its lines may be
+        // pieces of others', so it counts only in its slot on the grid.
+        let mut rows: Vec<(u32, ShopRow)> = Vec::new();
+        let mut unclean = Vec::new();
+        for listing in &listings {
+            if listing.clean {
+                let name = texts.next().flatten();
+                let price = texts.next().flatten().as_deref().and_then(parse_price);
+                rows.push((listing.top(), ShopRow { area: on_screen(band_area(listing.top())), name, price, covered: false }));
+            } else {
+                unclean.push(listing.top());
+            }
+        }
+        // The slots listings were read clean in at this spot: the list's slots lie on a grid
+        // every one of them is on.
+        let mut known = match self.slots.take() {
             Some((x0, slots)) if x0 == list.x0 => slots,
             _ => Vec::new(),
         };
-        let mut known = slots.clone();
+        let anchor = rows.first().map(|&(top, _)| top).or(known.first().copied());
         for &(top, _) in &rows {
             if !known.iter().any(|&slot| slot.abs_diff(top) <= SAME_SLOT) {
                 known.push(top);
             }
         }
-        for &slot in &slots {
-            let read = rows.iter().any(|&(top, _)| top.abs_diff(slot) <= SAME_SLOT);
-            if !read && covered(img, &list, slot) {
-                rows.push((slot, ShopRow { area: on_screen(band_area(slot)), name: None, price: None, covered: true }));
+        let free = |rows: &[(u32, ShopRow)], slot: u32| !rows.iter().any(|&(top, _)| top.abs_diff(slot) <= SAME_SLOT);
+        for slot in unclean.into_iter().filter_map(|top| anchor.map(|anchor| on_grid(anchor, top))) {
+            if free(&rows, slot) {
+                rows.push((slot, covered_row(slot)));
+            }
+        }
+        // A slot read before with no listing now, holding what the shop never draws.
+        for &slot in &known {
+            if free(&rows, slot) && covered(img, &list, slot) {
+                rows.push((slot, covered_row(slot)));
             }
         }
         known.sort_unstable();
@@ -488,6 +496,13 @@ fn clean(img: &RgbImage, list: &List, line: &TextLine) -> bool {
     let rgb = band.rgb(list.scale);
     let shops = |p: [u8; 3]| ink_of(p, rgb).1 <= band.foreign() || band.rule(p, list.scale);
     (y0..y1).all(|y| (x0..x1).all(|x| shops(img.get_pixel(x, y).0)))
+}
+
+/// The top of the slot on the list's grid nearest `top`, the grid through `anchor` (a slot's
+/// top).
+fn on_grid(anchor: u32, top: u32) -> u32 {
+    let slots = ((top as f32 - anchor as f32) / SLOT_PITCH).round();
+    (anchor as f32 + (slots * SLOT_PITCH).round()).max(0.0) as u32
 }
 
 /// Whether the slot whose band starts at `top` holds pixels the shop never draws: neither

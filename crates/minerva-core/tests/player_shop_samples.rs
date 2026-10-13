@@ -6,7 +6,9 @@
 //!   `crops/player-shop-<ms>.png` is, so no seller's name, shop title or chat is committed;
 //!   beside it, `<name>.json` lists its listings not sold out, top to bottom, each with the
 //!   item's name as the game shows it ("…" and all, for a name it cuts short), the quantity
-//!   and the mesos.
+//!   and the mesos; or `{ "covered": true }` for one the pointer or the game's tooltip
+//!   covers. Read on its own, a covered listing's badge says it is covered, or it has none:
+//!   with no capture before, a slot the tooltip hides wholly isn't known to hold a listing.
 //! - Each frame is fed as the game's client area at the screen's origin, as it is and as
 //!   the darker colours of live captures (`prep.rs`), to a core of its own.
 
@@ -25,12 +27,12 @@ fn samples_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/player-shop")
 }
 
-/// One listing as a sample's readings write it.
+/// One listing as a sample's readings write it: read, or covered.
 #[derive(Debug, Clone, Deserialize)]
-struct Listing {
-    name: String,
-    quantity: u64,
-    mesos: u64,
+#[serde(untagged)]
+enum Listing {
+    Read { name: String, quantity: u64, mesos: u64 },
+    Covered { covered: bool },
 }
 
 struct Sample {
@@ -50,7 +52,9 @@ fn samples() -> Vec<Sample> {
         .map(|file| {
             let readings = samples_dir().join(file.replace(".png", ".json"));
             let text = std::fs::read_to_string(&readings).unwrap_or_else(|e| panic!("{}: {e}", readings.display()));
-            let listings = serde_json::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", readings.display()));
+            let listings: Vec<Listing> = serde_json::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", readings.display()));
+            let written = listings.iter().all(|l| !matches!(l, Listing::Covered { covered: false }));
+            assert!(written, "{}: a listing is read, or `\"covered\": true`", readings.display());
             Sample { file, listings }
         })
         .collect()
@@ -67,7 +71,14 @@ fn item_name(listing: &str) -> String {
 
 /// Made-up item data with an item of each listing's name.
 fn sample_items(samples: &[Sample]) -> ItemWorld {
-    let mut names: Vec<String> = samples.iter().flat_map(|s| &s.listings).map(|l| item_name(&l.name)).collect();
+    let mut names: Vec<String> = samples
+        .iter()
+        .flat_map(|s| &s.listings)
+        .filter_map(|l| match l {
+            Listing::Read { name, .. } => Some(item_name(name)),
+            Listing::Covered { .. } => None,
+        })
+        .collect();
     names.sort();
     names.dedup();
     let mut items = item_world(Vec::new());
@@ -127,12 +138,23 @@ fn every_samples_listings_read_as_its_readings_say_or_as_unreadable_never_wrong(
             let mut minerva = started(&samples);
             let capture = ShopCapture { frame: frame(sample, brightness), origin: ScreenPoint { x: 0, y: 0 } };
             let badges = badges(minerva.on_player_shop_capture(capture));
-            if badges.len() != sample.listings.len() {
-                wrong.push(format!("{} ×{brightness}: {} listings found, not {}", sample.file, badges.len(), sample.listings.len()));
+            let (covered, uncovered): (Vec<&DealBadge>, Vec<&DealBadge>) = badges.iter().partition(|b| b.covered);
+            let covers = sample.listings.iter().filter(|l| matches!(l, Listing::Covered { .. })).count();
+            let reads: Vec<(&String, u64, u64)> = sample
+                .listings
+                .iter()
+                .filter_map(|l| match l {
+                    Listing::Read { name, quantity, mesos } => Some((name, *quantity, *mesos)),
+                    Listing::Covered { .. } => None,
+                })
+                .collect();
+            if uncovered.len() != reads.len() || covered.len() > covers {
+                let found = format!("{} listings found and {} covered", uncovered.len(), covered.len());
+                wrong.push(format!("{} ×{brightness}: {found}, not {} and up to {covers}", sample.file, reads.len()));
                 continue;
             }
-            for (badge, listing) in badges.iter().zip(&sample.listings) {
-                let expected = (item_name(&listing.name), ListedPrice { quantity: listing.quantity, mesos: listing.mesos });
+            for (badge, (name, quantity, mesos)) in uncovered.into_iter().zip(reads) {
+                let expected = (item_name(name), ListedPrice { quantity, mesos });
                 match read(badge) {
                     Some(read) if read == expected => {}
                     None => unreadable += 1,
@@ -203,4 +225,30 @@ fn a_listing_the_pointer_or_its_tooltip_covers_keeps_what_was_read_there_marked_
 
     // Uncovered, all read again.
     assert_eq!(shown(minerva.on_player_shop_capture(capture(frame(sample, 1.0)))), before);
+}
+
+#[test]
+fn listings_read_before_the_pointer_and_its_tooltip_came_over_them_keep_their_badges_covered() {
+    let samples = samples();
+    let sample = |file: &str| samples.iter().find(|s| s.file == file).unwrap_or_else(|| panic!("no {file}"));
+    let mut minerva = started(&samples);
+    let capture = |frame: Frame| ShopCapture { frame, origin: ScreenPoint { x: 0, y: 0 } };
+    let shown = |state: &PanelState| -> Vec<(bool, Option<String>)> {
+        badges(state).iter().map(|b| (b.covered, read(b).map(|(name, _)| name))).collect()
+    };
+    let name = |name: &str| Some(name.to_string());
+
+    minerva.on_player_shop_capture(capture(frame(sample("equips-two-sold-out.png"), 1.0)));
+    let state = minerva.on_player_shop_capture(capture(frame(sample("equips-under-the-pointer-and-its-tooltip.png"), 1.0)));
+
+    assert_eq!(
+        shown(state),
+        [
+            (false, name("Red Guise")),
+            (true, name("Green Knucklevest")),
+            (true, name("Black Knucklevest")),
+            (true, name("Black Amoria Skirt")),
+        ],
+        "none for the sold-out listings, and none between the listings"
+    );
 }
