@@ -16,7 +16,7 @@ The pictures on the Minerva site, taken by hand in the game. The site's build fa
 | --- | --- | --- | --- |
 | `hero.png` | The minimap on a hunting map (Henesys Hunting Ground I) and the panel under it naming the same map beside its Map Mark, down through its Map (its spawn points dotted) and Mobs sections to the panel's foot, with a strip of the game beside it. Also the picture links to the site show (Discord, Reddit). | 600×960, the game window's top-left corner, its title bar included | 0.10.0 |
 | `game-window.png` | The game on the same map, with the panel inside the game window under the minimap showing its Map and Mobs sections, every spawn point dotted and every mob listed. Also the hero's film, which marks and reads the minimap's title and drops the read into the panel's title: a retake that moves either title, or changes the map, means setting where they are and what the title says at the top of `site/reel.ts`. | 1922×1232, the whole window | 0.10.0 |
-| `map.png` | The Map section on a map with a Hidden Portal: the Map Preview with its rings, the pointer resting on the dashed ring with its card showing, and the Hidden Portal's row, each with its destination's Map Mark. | 332×247, the panel's Map section | 0.8.0 |
+| `map.png` | The Map section on a map with a Hidden Portal, every spawn point dotted: the pointer resting on the Hidden Portal's row, its dashed ring lit, and the card under it opened on the close-up of the portal's spot, with its destination's Map Mark. | 320×410, the panel's Map section and the card | 0.10.0 |
 | `mobs.png` | The panel on the hero's hunting map (Henesys Hunting Ground I), the pointer on a mob's name (Green Mushroom): its row lit, its spawn points ringed on the Map Preview, and its Mob Card over the list. | 320×577, the whole panel | 0.10.0 |
 | `navigation.png` | The Map section with the next portal's magenta ring and every spawn point dotted, and Navigation with a Hunting Target: the mob, the figures, and the route from the map you're on, each map with its Map Mark. | 320×532, the panel down through its Navigation section | 0.10.0 |
 | `grind-tracker.png` | The Grind Tracker: Time to Level, the rates, a Best row, the Pace Trace under them, and the EXP gauge at its foot with its forecast. | 280×261, the Grind Tracker's window | 0.10.0 |
@@ -27,5 +27,3 @@ The pictures on the Minerva site, taken by hand in the game. The site's build fa
 ## Retake
 
 When a change alters something a shot shows, the PR that makes it lists the shot here, with what changed. At release, the smoke test retakes every shot listed (`docs/releasing.md`) and empties the list.
-
-- `map.png`: the ring's card now opens on a close-up of the portal's spot, and shows from a Hidden Portal's row too, and the Map Preview dots every spawn point. Retake it with the pointer resting on the dashed ring once the close-up has settled, and update its alt text in `site/index.html`.
