@@ -1,11 +1,14 @@
 /* The Deal Badges: one beside each listing of the Player Shop the Deal Finder read, in a
    window the shell makes 150 CSS px wide (WIDTH in src-tauri/src/deal_badges.rs), as tall
    as the shop's list and just left of the shop, so each badge sits level with its listing
-   and points at it. Laid over the game world, so each badge is an opaque chip in the
-   panel's lavender, edged in the game's window blue. A deal stands out in the Map
-   Preview's within-the-map green, the one green the panel holds, with white words; every
-   other badge stays quiet: "+12%", "no price" and "?" in the panel's faint ink, so a
-   glance down the column finds the deals. */
+   and points at it. Each badge is one of the game's window buttons, since a click on any
+   but "?" opens its item's card: a deal is the deep-steel button, the one step worth
+   taking (the same as setup's step forward); every other verdict is the light-steel one,
+   there but out of the way. Depth is the game's chrome, a top highlight and a 1px edge,
+   never a drop shadow. A listing the pointer or a tooltip covers keeps the badge read
+   there before, faded to 70% and edged in dashes (a place not yet fixed), with the
+   problem notes' orange dot: doubt, and nothing else, is orange. */
+
 /* Without badges the window draws nothing. */
 .hidden .deal-badges {
   display: none;
@@ -29,29 +32,37 @@
   justify-content: flex-end;
 }
 
+/* The light-steel button: a verdict that isn't a deal. */
 .deal-badge {
   all: unset;
   box-sizing: border-box;
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 5px;
   max-width: calc(100% - 7px);
+  height: 23px;
   margin-right: 7px;
-  padding: 3px 8px 4px;
+  padding: 0 8px;
   border: 1px solid var(--window-edge);
-  border-radius: 4px;
-  background: var(--body-solid);
-  color: var(--ink-3);
-  font-family: var(--font);
-  font-size: 13px;
-  line-height: 17px;
-  font-weight: 700;
+  border-radius: 3px;
+  background: var(--button-light);
+  box-shadow: inset 0 1px 0 #fff;
+  color: var(--ink-2);
+  font: 400 13px/17px var(--font);
+  /* Maplestory's Light is thinner than the game draws its window text, as on the panel. */
+  -webkit-text-stroke-width: 0.3px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
-  box-shadow: 0 1px 2px rgba(20, 30, 60, 0.25);
 }
 
-/* The arrow towards the listing, through the gap to the shop. */
+.deal-words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The tail towards the listing, through the gap to the shop, in the badge's edge colour. */
 .deal-badge::after {
   content: "";
   position: absolute;
@@ -68,8 +79,13 @@ button.deal-badge {
 }
 
 button.deal-badge:hover {
-  border-color: var(--portal);
-  color: var(--portal);
+  background: var(--button-light-hover);
+  color: var(--ink);
+}
+
+button.deal-badge:active {
+  background: var(--button-light);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
 }
 
 button.deal-badge:focus-visible {
@@ -77,57 +93,56 @@ button.deal-badge:focus-visible {
   outline-offset: 2px;
 }
 
+/* A deal: the deep-steel button, its white label dropped 1px in the button's edge. */
 .deal-badge.deal {
-  border-color: #146b28;
-  background: var(--teleport);
+  border-color: var(--button-edge);
+  background: var(--button);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
   color: #fff;
-  font-size: 14px;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+  font-weight: 700;
+  -webkit-text-stroke-width: 0;
+  text-shadow: 0 1px 0 var(--button-edge);
 }
 
 .deal-badge.deal::after {
-  border-left-color: #146b28;
+  border-left-color: var(--button-edge);
 }
 
 button.deal-badge.deal:hover {
-  border-color: #0e4f1d;
-  background: #1a8a33;
+  background: var(--button-hover);
   color: #fff;
 }
 
-/* Not a deal, or not judged: there, but out of the way. */
-.deal-badge.noDeal,
-.deal-badge.noPrice,
-.deal-badge.unknown {
-  opacity: 0.82;
-  font-weight: 400;
+button.deal-badge.deal:active {
+  background: var(--button);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.45);
 }
 
+/* Not read for sure: no item to open, so not pressable, and quieter still. */
 .deal-badge.unknown {
-  color: var(--unknown);
+  background: var(--body-solid);
+  box-shadow: none;
 }
 
-/* Covered by the pointer or a tooltip: what was read there before, faded and edged in
-   dashes, with the game's orange "?" of doubt before it, as the panel marks a map it isn't
-   sure of. */
+/* Covered: what was read there before, receding as an unconfirmed fact does. */
 .deal-badge.covered {
   opacity: 0.7;
   border-style: dashed;
 }
 
+/* The problem notes' doubt dot: orange, ringed in its deep edge. */
 .deal-covered {
-  display: inline-grid;
-  place-items: center;
-  width: 13px;
-  height: 13px;
-  margin: 0 5px -1px 0;
+  flex: none;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--orange);
   box-shadow: 0 0 0 1px var(--orange-deep);
-  color: #fff;
-  font-size: 10px;
-  line-height: 13px;
-  font-weight: 700;
-  text-shadow: none;
-  vertical-align: 1px;
+}
+
+/* On the deep steel the dot keeps a white ring, as the collapsed icon's alert dot does. */
+.deal-badge.deal .deal-covered {
+  box-shadow:
+    0 0 0 1px var(--orange-deep),
+    0 0 0 2px #fff;
 }

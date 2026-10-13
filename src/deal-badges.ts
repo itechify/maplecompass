@@ -84,8 +84,12 @@ function badgeItem(badge: DealBadge, line: string): HTMLLIElement {
     el.type = "button";
     el.dataset.row = String(badge.row);
   }
-  // Covered, its verdict stays, with the mark that it isn't being read now.
-  if (badge.covered && badge.verdict !== "unknown") el.append(span("deal-covered", "?"));
+  // Covered, its verdict stays, with the doubt dot: it isn't being read now.
+  if (badge.covered && badge.verdict !== "unknown") {
+    const dot = span("deal-covered", "");
+    dot.setAttribute("aria-hidden", "true");
+    el.append(dot);
+  }
   el.append(span("deal-words", text));
   row.append(el);
   return row;

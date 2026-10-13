@@ -151,9 +151,9 @@
   min-width: 0;
 }
 
-/* The Deal Line's mark, a radio before each line's name: a ring, filled in the Deal Finder's
-   green on the Deal Line. Centred on the name's line; the ring itself is small, but the
-   button around it is the line's height to aim at. */
+/* The Deal Line's mark, a radio before each line's name: a ring, filled in the deep steel
+   of a deal's badge on the Deal Line. Centred on the name's line; the ring itself is small,
+   but the button around it is the line's height to aim at. */
 .deal-mark {
   all: unset;
   flex: none;
@@ -178,7 +178,8 @@
 }
 
 .deal-mark:hover::before {
-  border-color: var(--teleport);
+  border-color: var(--button-edge);
+  background: var(--button-light-hover);
 }
 
 .deal-mark[aria-checked="true"] {
@@ -186,8 +187,8 @@
 }
 
 .deal-mark[aria-checked="true"]::before {
-  border-color: #146b28;
-  background: var(--teleport);
+  border-color: var(--button-edge);
+  background: var(--button);
   box-shadow: inset 0 0 0 1.5px #fff;
 }
 

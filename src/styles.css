@@ -415,8 +415,8 @@ body {
 }
 
 /* The Deal Finder's line, while it is on: the owl with its magnifier at its own 32 pixels
-   beside what it compares with, in an inset box of the near-opaque body like the map
-   list's, so it reads over any scene, with Turn off at the right. */
+   beside what it compares with, in an inset box of the near-opaque body like the
+   arrival's, so it reads over any scene, with Turn off at the right. */
 .deal-finder {
   display: flex;
   align-items: center;
