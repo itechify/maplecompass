@@ -45,3 +45,13 @@ Assumed in this pass (no one to ask in the session; correct here if wrong):
 - **Quest tag.** Not amber: cream and amber tags already mean a state to notice ("paused", "Taken", "Invalid") and the Orange Means Doubt Rule keeps the game's orange for problems. Quest moves to a violet no other meaning holds.
 - **Loading.** A 140 px placeholder in the same frame and paper, "Loading map…" centred in 12px Panel Ink Steel; then the box takes the picture's own fitted height. **Failure** is the panel's problem note, "Couldn't load the map picture", in the preview's place.
 - **Cursor and focus.** Marks keep the default cursor (a click does nothing) and take no focus; the preview is one image to assistive tech, named with the map and its portal count, and the rows carry the Hidden Portals as text.
+
+## Portal close-up (overdrive, 12 Oct 2026)
+
+Chosen by the user from three directions (close-up, labelled map at zoom, prefetched pictures), with motion allowed in the windows: DESIGN.md's Motion section replaces the old ban, and supersedes "No motion: the panel has none" above.
+
+- **What.** The Mark Card opens on a close-up of the spot: OSMS's picture around the portal, which OSMS draws at the game's own size (mobs in it), at half that, 104px tall across a card at least 272px wide that grows with its words, as the old card did. A player sees the ledge, the fence or the signpost a hidden portal stands by, not a 9px ring on a map shrunk 4 to 15 times. Every ring in view is drawn in it, the card's own lit; the portal sits 62% of the way down, and the view stays on the picture at its edges.
+- **Rows too.** Resting on a Hidden Portal's row shows the same card, below the row (above when there's no room), as the Mob Card sits by its row.
+- **The one motion.** A new spot dives from the map at the preview's scale to the close-up in 360ms, on an exponential ease-out interpolated in log scale, the first frame drawn at once. The same spot lit again holds; reduced motion, or a preview already as close, opens on the spot.
+- **How.** A canvas at the screen's resolution, drawn from the preview's own decoded `<img>`, so no picture is fetched twice and no layer is ever larger than the card. On a screen at twice the scale, the settled close-up is the picture's own pixels.
+- **Checked** headless at 1× and 2× on a real OSMS picture (3-Way Road-Split's two hidden portals, and its exits at either end), filmed at a twentieth of the speed, and with reduced motion forced.

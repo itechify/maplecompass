@@ -9,6 +9,9 @@
  * its box towards the pointer, from the whole map to the picture's own size, the rings
  * keeping theirs; zoomed in, a drag moves it, and a double-click shows the whole map
  * again. A new map shows whole. A click does nothing.
+ *
+ * The card of a ring or a row opens on a close-up of the spot: OSMS's picture around the
+ * portal at half the game's own size, diving to it from the map as the preview shows it.
  */
 
 import { byId, cardTop, span } from "./dom";
@@ -84,6 +87,20 @@ const CARD_GAP = 6;
 const ZOOM_PER_NOTCH = 1.25;
 /** The wheel's delta for a notch, in CSS px; a touchpad sends smaller ones. */
 const NOTCH = 100;
+/**
+ * The close-up's screen pixels to a picture pixel. OSMS draws its pictures at the game's
+ * own size, so this is half of it: a ledge and what stands on it, and on a screen at
+ * twice the scale, the picture's own pixels.
+ */
+const CLOSE_UP_SCALE = 0.5;
+/** How far down the close-up the portal sits: the ground it's on low, what's around it above. */
+const CLOSE_UP_SPOT = 0.62;
+/** How long the close-up takes to dive from the map to the spot. */
+const DIVE_MS = 360;
+/** The close-up's rings: larger than the map's, as its picture is. */
+const CLOSE_RING = 6;
+const CLOSE_LIT_RING = 10.5;
+const CLOSE_ROUTE_RING = 15;
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -101,6 +118,13 @@ const failed = byId("map-failed");
 const rows = byId("portal-rows");
 const card = byId("mark-card");
 const panelEl = byId("panel");
+/** The card's close-up of the spot, drawn from the picture the preview shows. */
+const closeUp = document.createElement("canvas");
+closeUp.className = "close-up";
+closeUp.setAttribute("aria-hidden", "true");
+/** What the card's close-up was opened on (the picture and the mark), and its dive. */
+let closeUpFor = "";
+let dive = 0;
 
 /** The preview last rendered, and the shown map's name for its label. */
 let shown: MapPreview | null = null;
@@ -410,15 +434,22 @@ function kindTags(mark: PortalMark): HTMLElement[] {
 }
 
 /**
- * The card of the ring the pointer is on: where it leads, its street and its kind. Above
- * the ring, centred on it, or below it when there's no room above; never outside the
- * panel or over its window bar. The pointer passes through it.
+ * The card of the ring the pointer is on, or of the row: the spot close up, then where it
+ * leads, its street and its kind. From a ring, above it, centred on it, or below it when
+ * there's no room above; from a row, below it, or above it when there's no room below.
+ * Never outside the panel or over its window bar. The pointer passes through it.
  */
 function renderCard() {
-  const mark = lit?.onRing && shown ? shown.marks[lit.mark] : undefined;
-  const target = mark ? marksSvg.querySelector<SVGGElement>(`.rings > g[data-mark="${lit!.mark}"] .stroke`) : null;
-  if (!mark || !target || !cardAllowed() || preview.hidden) {
+  const mark = lit && shown ? shown.marks[lit.mark] : undefined;
+  const anchor = !mark
+    ? null
+    : lit!.onRing
+      ? marksSvg.querySelector<SVGGElement>(`.rings > g[data-mark="${lit!.mark}"] .stroke`)
+      : rows.querySelector<HTMLElement>(`li[data-mark="${lit!.mark}"]`);
+  if (!mark || !anchor || !frame || !cardAllowed() || preview.hidden) {
     card.hidden = true;
+    closeUpFor = "";
+    cancelAnimationFrame(dive);
     return;
   }
   const head = document.createElement("div");
@@ -433,17 +464,147 @@ function renderCard() {
     line.append(...tags);
     parts.push(line);
   }
-  card.replaceChildren(...parts);
+  const text = document.createElement("div");
+  text.className = "mark-card-text";
+  text.append(...parts);
+  card.replaceChildren(closeUp, text);
   card.hidden = false;
-  const spot = target.getBoundingClientRect();
+  // A new spot dives in from the map as the preview shows it; the same one, lit again after
+  // a redraw, holds where it is.
+  const key = `${image.src}#${lit!.mark}`;
+  if (key !== closeUpFor) {
+    closeUpFor = key;
+    diveTo(lit!.mark, frame.scale);
+  } else if (!dive) {
+    paintCloseUp(lit!.mark, CLOSE_UP_SCALE);
+  }
+  const spot = anchor.getBoundingClientRect();
   const { offsetWidth: width, offsetHeight: height } = card;
-  const centre = spot.left + spot.width / 2 - panelEl.getBoundingClientRect().left;
-  const left = Math.max(8, Math.min(centre - width / 2, panelEl.clientWidth - 8 - width));
-  card.style.left = `${left}px`;
-  card.style.top = `${cardTop(panelEl, panelEl.querySelector(".window-bar"), spot, height, CARD_GAP, "above")}px`;
+  const frameLeft = panelEl.getBoundingClientRect().left;
+  const left = lit!.onRing ? spot.left + spot.width / 2 - frameLeft - width / 2 : spot.left - frameLeft;
+  card.style.left = `${Math.max(8, Math.min(left, panelEl.clientWidth - 8 - width))}px`;
+  const prefer = lit!.onRing ? "above" : "below";
+  card.style.top = `${cardTop(panelEl, panelEl.querySelector(".window-bar"), spot, height, CARD_GAP, prefer)}px`;
 }
 
-// Resting on a ring lights it and its row and shows its card; on a row, lights its ring.
+/**
+ * Open the close-up on `mark`, diving from `from` (the preview's screen pixels to a
+ * picture pixel) to the close-up's own scale: fast, then settling, evenly in zoom rather
+ * than in size. The first frame is drawn at once, so the card is never blank. At once with
+ * reduced motion, or when the preview is already as close.
+ */
+function diveTo(mark: number, from: number) {
+  cancelAnimationFrame(dive);
+  dive = 0;
+  const still = from >= CLOSE_UP_SCALE || matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const start = performance.now();
+  const step = (now: number) => {
+    // A frame's time can come from just before the pointer arrived: never before the start.
+    const t = still ? 1 : Math.min(Math.max((now - start) / DIVE_MS, 0), 1);
+    // An exponential ease-out, landing exactly.
+    const eased = t >= 1 ? 1 : (1 - 2 ** (-10 * t)) / (1 - 2 ** -10);
+    paintCloseUp(mark, from * (CLOSE_UP_SCALE / from) ** eased);
+    dive = t < 1 ? requestAnimationFrame(step) : 0;
+  };
+  step(start);
+}
+
+/** The rings' colours, read once from the panel's own. */
+let ringColours: Record<Leads | "route", string> | null = null;
+
+/**
+ * The close-up at `scale`: the picture around the mark, the mark `CLOSE_UP_SPOT` of the
+ * way down, kept to the picture where it reaches the close-up's sides; then every ring in
+ * it, the route's first, the mark's lit last. Drawn at the screen's own pixels.
+ */
+function paintCloseUp(index: number, scale: number) {
+  const mark = shown?.marks[index];
+  const ctx = closeUp.getContext("2d");
+  if (!mark || !shown || !ctx || !image.naturalWidth) return;
+  const width = closeUp.clientWidth;
+  const height = closeUp.clientHeight;
+  const ratio = window.devicePixelRatio || 1;
+  const pixels = { width: Math.round(width * ratio), height: Math.round(height * ratio) };
+  if (closeUp.width !== pixels.width) closeUp.width = pixels.width;
+  if (closeUp.height !== pixels.height) closeUp.height = pixels.height;
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  // What it shows, in the picture's pixels: from a whole pixel, so at the close-up's own
+  // scale on a screen at twice the scale each of its pixels is one of the picture's.
+  const view = { width: width / scale, height: height / scale };
+  const left = Math.round(within(mark.x - view.width / 2, view.width, image.naturalWidth));
+  const top = Math.round(within(mark.y - view.height * CLOSE_UP_SPOT, view.height, image.naturalHeight));
+  // Only the part of the picture inside it, where the close-up runs past the picture.
+  const sx = Math.max(left, 0);
+  const sy = Math.max(top, 0);
+  const sw = Math.min(left + view.width, image.naturalWidth) - sx;
+  const sh = Math.min(top + view.height, image.naturalHeight) - sy;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  if (sw > 0 && sh > 0) {
+    ctx.drawImage(image, sx, sy, sw, sh, (sx - left) * scale, (sy - top) * scale, sw * scale, sh * scale);
+  }
+  if (!ringColours) {
+    const style = getComputedStyle(panelEl);
+    const colour = (name: string) => style.getPropertyValue(name).trim();
+    ringColours = {
+      anotherMap: colour("--portal"),
+      withinTheMap: colour("--teleport"),
+      mapNotInTheData: colour("--unknown"),
+      route: colour("--route"),
+    };
+  }
+  const colours = ringColours;
+  const spots = shown.marks.map((m) => ({ m, x: (m.x - left) * scale, y: (m.y - top) * scale }));
+  const margin = CLOSE_ROUTE_RING;
+  const inView = (s: { x: number; y: number }) =>
+    s.x > -margin && s.x < width + margin && s.y > -margin && s.y < height + margin;
+  const circle = (x: number, y: number, r: number) => {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+  };
+  const stroke = (colour: string, lineWidth: number, dash: number[] = []) => {
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = lineWidth;
+    ctx.setLineDash(dash);
+    ctx.stroke();
+  };
+  const halo = "rgba(255, 255, 255, 0.95)";
+  for (const s of spots) {
+    if (!s.m.nextOnRoute || !inView(s)) continue;
+    circle(s.x, s.y, CLOSE_ROUTE_RING);
+    stroke(halo, 5);
+    stroke(colours.route, 2.5);
+  }
+  const ringAt = (s: (typeof spots)[number], isLit: boolean) => {
+    const colour = colours[s.m.leads];
+    if (isLit) {
+      circle(s.x, s.y, CLOSE_LIT_RING);
+      stroke(halo, 4);
+      stroke(colour, 1.75);
+    }
+    circle(s.x, s.y, CLOSE_RING);
+    stroke(halo, 4.5);
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = colour;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    const dashed = s.m.kind === "hidden" || s.m.kind === "quest";
+    stroke(colour, 2, dashed ? [3.4, 2.1] : []);
+  };
+  spots.forEach((s, i) => i !== index && inView(s) && ringAt(s, false));
+  ringAt(spots[index], true);
+}
+
+/**
+ * Where a view `size` long starts along a picture `total` long, to show `start` onwards:
+ * kept to the picture while it's the longer, centred on it while it's the shorter.
+ */
+const within = (start: number, size: number, total: number) =>
+  size >= total ? (total - size) / 2 : Math.min(Math.max(start, 0), total - size);
+
+// Resting on a ring lights it and its row and shows its card; on a row, lights its ring and
+// shows the same card.
 // Nothing lights while a drag moves the picture.
 marksSvg.addEventListener("mouseover", (e) => {
   if (panning) return;
