@@ -1,6 +1,6 @@
 //! One map's hunting information, and how the panel shows it.
 
-use crate::map_preview::PortalMark;
+use crate::map_preview::{PortalMark, SpawnMark};
 use serde::{Deserialize, Serialize};
 
 /// One map's data, as read from OSMS's file set.
@@ -38,6 +38,10 @@ pub struct MapData {
     /// them, in the source's order. Rendered in the Map Preview, not here.
     #[serde(skip_serializing)]
     pub marks: Vec<PortalMark>,
+    /// Every Spawn Point with a position, dotted as the Map Preview dots them, in the
+    /// source's order. Rendered in the Map Preview, not here.
+    #[serde(skip_serializing)]
+    pub spawns: Vec<SpawnMark>,
 }
 
 /// A portal from a map to another map.

@@ -828,6 +828,43 @@ td:first-child {
   pointer-events: all;
 }
 
+/* Every spawn point: the minimap's red mob dot on a faint white halo, under every other
+   mark. While a mob is lit, its dots wear a ring in the same red and come over the others,
+   which fade. */
+.spawn circle {
+  pointer-events: none;
+}
+
+.spawn .halo {
+  fill: rgba(255, 255, 255, 0.85);
+}
+
+.spawn .dot {
+  fill: var(--mob);
+  stroke: var(--mob-edge);
+  stroke-width: 0.75;
+}
+
+.spawn .lit-ring {
+  display: none;
+  fill: none;
+  stroke: var(--mob);
+  stroke-width: 1.5;
+}
+
+.spawn.lit .lit-ring {
+  display: inline;
+}
+
+.spawns.lighting .spawn:not(.lit) {
+  opacity: 0.3;
+}
+
+.spawn .hit {
+  fill: transparent;
+  pointer-events: all;
+}
+
 /* A teleport within the map: a dashed green arrow from its ring to where it lands, over a
    white under-stroke; heads at both ends for a pair. */
 .arrow line {
@@ -954,9 +991,14 @@ td:first-child {
   padding: 0 14px 0 4px;
 }
 
+/* Set out 5px at each side, its text where it was, so a lit row's tint clears it as a
+   Hidden Portal's row's does; separate borders, so a lit row's ends can round. */
 .mobs {
-  width: 100%;
+  width: calc(100% + 10px);
+  margin: 0 -5px;
   table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .mobs th:nth-child(1) { width: 40%; }
@@ -964,7 +1006,29 @@ td:first-child {
 .mobs th:nth-child(3), .mobs th:nth-child(4) { width: 17%; }
 .mobs th:nth-child(5) { width: 16%; }
 .mobs th, .mobs td { box-sizing: border-box; padding-left: 6px; }
-.mobs th:first-child, .mobs td:first-child { padding-left: 0; }
+.mobs th:first-child, .mobs td:first-child { padding-left: 5px; }
+.mobs th:last-child, .mobs td:last-child { padding-right: 5px; }
+
+/* A mob whose spawn points are lit on the Map Preview: Selection Periwinkle, as a lit
+   Hidden Portal's row, and its dot ringed as the map rings its dots. */
+.mobs tr.lit td {
+  background: var(--select);
+  box-shadow: inset 0 1px var(--select-edge), inset 0 -1px var(--select-edge);
+}
+
+.mobs tr.lit td:first-child {
+  border-radius: 3px 0 0 3px;
+  box-shadow: inset 1px 0 var(--select-edge), inset 0 1px var(--select-edge), inset 0 -1px var(--select-edge);
+}
+
+.mobs tr.lit td:last-child {
+  border-radius: 0 3px 3px 0;
+  box-shadow: inset -1px 0 var(--select-edge), inset 0 1px var(--select-edge), inset 0 -1px var(--select-edge);
+}
+
+.mobs tr.lit td.mob::before {
+  box-shadow: 0 0 0 1px var(--mob-edge), 0 0 0 2.5px #fff, 0 0 0 3.75px var(--mob);
+}
 .mobs td:not(:first-child) { white-space: normal; overflow-wrap: anywhere; }
 
 .mobs td:first-child {
@@ -973,8 +1037,9 @@ td:first-child {
   font-weight: 700;
 }
 
-/* Each mob wears the minimap's red mob dot. */
-.mobs td.mob::before {
+/* Each mob wears the minimap's red mob dot, as does a spawn point's card. */
+.mobs td.mob::before,
+.mark-card-mob::before {
   content: "";
   display: inline-block;
   width: 6px;
@@ -2119,9 +2184,14 @@ body:has(#badge:not([hidden])) .icon .count {
   .summary .label:not(:first-child) + .value + .unit { margin-top: 4px; }
   /* Each mob a card: its name, then its four figures side by side, labels over them. */
   .mobs, .mobs tbody { display: block; width: 100%; }
+  /* Still set out 5px at each side, so a lit card's tint clears its text. */
+  .mobs { width: auto; }
   .mobs thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .mobs tr { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px 8px; margin-bottom: 8px; }
+  .mobs tr { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px 8px; margin-bottom: 4px; padding: 2px 5px; border-radius: 3px; }
   .mobs td { display: block; text-align: left; padding: 0; white-space: normal; overflow-wrap: anywhere; }
+  .mobs td:first-child, .mobs td:last-child { padding: 0; }
+  .mobs tr.lit { background: var(--select); box-shadow: inset 0 0 0 1px var(--select-edge); }
+  .mobs tr.lit td, .mobs tr.lit td:first-child, .mobs tr.lit td:last-child { background: none; box-shadow: none; }
   .mobs td:first-child { grid-column: 1 / -1; font-weight: 700; }
   .mobs td:not(:first-child)::before { content: attr(data-label); display: block; font-size: 12px; line-height: 15px; color: var(--ink-2); }
   .portals .dest { flex-wrap: wrap; }

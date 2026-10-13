@@ -11,6 +11,8 @@ import { mapMark, showMark, type MapMarks } from "./map-marks";
 import {
   initMapPreview,
   layOutMapPreview,
+  lightMob,
+  litMob,
   renderMapPreview,
   renderPortalRows,
   type HiddenPortal,
@@ -349,7 +351,7 @@ function renderData(panel: PanelState) {
   // won't show the player. With neither picture (nor why it's missing) nor Hidden Portals,
   // it has nothing to show and goes.
   const hiddenPortals: HiddenPortal[] = ready?.hiddenPortals ?? [];
-  const pictured = renderMapPreview(ready ? panel.mapPreview : null, panel.map?.mapName ?? "");
+  const pictured = renderMapPreview(ready ? panel.mapPreview : null, panel.map?.mapName ?? "", ready?.mobs ?? []);
   portals.hidden = !ready || (!pictured && hiddenPortals.length === 0);
   renderPortalRows(hiddenPortals, panel.mapPreview?.marks ?? [], panel.mapMarks);
 
@@ -367,6 +369,9 @@ function renderData(panel: PanelState) {
   mobRows.replaceChildren(
     ...(ready?.mobs ?? []).map((mob) => {
       const row = document.createElement("tr");
+      // Lit while its spawn points are, on the Map Preview.
+      row.dataset.mob = mob.id;
+      row.classList.toggle("lit", mob.id === litMob());
       // The name opens the mob's MeowDB page, and resting on it shows its Mob Card.
       const name = document.createElement("td");
       name.className = "mob";
@@ -937,7 +942,13 @@ function renderBadge(panel: PanelState) {
 
 // The Map Preview's card shows over the expanded panel's normal view only, and the panel
 // is measured again once its picture is in.
-initMapPreview({ cardAllowed: () => !!shownPanel?.expanded && step === null, laidOut: () => reportHeight() });
+initMapPreview({
+  cardAllowed: () => !!shownPanel?.expanded && step === null,
+  laidOut: () => reportHeight(),
+  mobLit: (mob) => {
+    for (const row of mobRows.querySelectorAll<HTMLElement>("tr")) row.classList.toggle("lit", row.dataset.mob === mob);
+  },
+});
 
 /** How long the pointer rests on a mob's name before its Mob Card shows. */
 const MOB_CARD_DELAY_MS = 250;
@@ -1062,11 +1073,23 @@ function renderMobCard() {
 }
 
 // Resting on a listed mob's name shows its Mob Card; clicking it opens its MeowDB page.
+// Resting anywhere on a mob's row lights its spawn points on the Map Preview; on its name,
+// its Mob Card shows too. Its name taking the keyboard's focus lights them as well.
 mobRows.addEventListener("mouseover", (e) => {
-  const button = e.target instanceof Element ? e.target.closest<HTMLElement>(".mob-name") : null;
+  const target = e.target instanceof Element ? e.target : null;
+  const button = target?.closest<HTMLElement>(".mob-name");
   hoverMob(button?.dataset.id ?? null);
+  lightMob(target?.closest<HTMLElement>("tr")?.dataset.mob ?? null);
 });
-mobRows.addEventListener("mouseleave", () => hoverMob(null));
+mobRows.addEventListener("mouseleave", () => {
+  hoverMob(null);
+  lightMob(null);
+});
+mobRows.addEventListener("focusin", (e) => {
+  const button = e.target instanceof Element ? e.target.closest<HTMLElement>(".mob-name") : null;
+  lightMob(button?.dataset.id ?? null);
+});
+mobRows.addEventListener("focusout", () => lightMob(null));
 mobRows.addEventListener("click", (e) => {
   const button = e.target instanceof Element ? e.target.closest<HTMLElement>(".mob-name") : null;
   if (!button?.dataset.id) return;
