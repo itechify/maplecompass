@@ -61,8 +61,9 @@ pub struct DealBadge {
 #[serde(tag = "verdict", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum Verdict {
     /// One item costs at least the Deal Margin less than the Deal Line's price for it:
-    /// `percent` off it (negative: below), rounded, and the line's price.
-    Deal { item: DealItem, listed: ListedPrice, percent: i32, line_mesos: u64 },
+    /// `percent` off it (negative: below), rounded, the line's price, and how good a deal
+    /// that is.
+    Deal { item: DealItem, listed: ListedPrice, percent: i32, line_mesos: u64, grade: DealGrade },
     /// It doesn't: at or above the Deal Line's price, or below it by less than the Deal
     /// Margin.
     NoDeal { item: DealItem, listed: ListedPrice, percent: i32, line_mesos: u64 },
@@ -71,6 +72,21 @@ pub enum Verdict {
     /// The listing's name or price couldn't be read, or the name isn't one item's.
     Unknown,
 }
+
+/// How good a deal is, by how far below the Deal Line it is, graded as the game grades its
+/// items: a good one under [`GREAT_BELOW`]%, a great one under [`STEAL_BELOW`]%, a steal past it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DealGrade {
+    Good,
+    Great,
+    Steal,
+}
+
+/// A deal this many percent below the Deal Line, or more, is great...
+pub const GREAT_BELOW: i32 = 20;
+/// ...and this many, or more, a steal.
+pub const STEAL_BELOW: i32 = 40;
 
 /// The item a listing sells, as OSMS's item files have it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -269,7 +285,12 @@ fn judge(item: DealItem, listed: ListedPrice, line_mesos: u64, margin_percent: u
     let percent = if line > 0.0 { ((each - line) / line * 100.0).round() as i32 } else { 0 };
     let deal = each < line && each <= line * (1.0 - f64::from(margin_percent) / 100.0);
     if deal {
-        Verdict::Deal { item, listed, percent, line_mesos }
+        let grade = match -percent {
+            below if below >= STEAL_BELOW => DealGrade::Steal,
+            below if below >= GREAT_BELOW => DealGrade::Great,
+            _ => DealGrade::Good,
+        };
+        Verdict::Deal { item, listed, percent, line_mesos, grade }
     } else {
         Verdict::NoDeal { item, listed, percent, line_mesos }
     }

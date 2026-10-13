@@ -213,7 +213,7 @@ How far below the Deal Line, in percent, the price of one item in a listing (of 
 _Avoid_: threshold, discount
 
 **Deal Badge**:
-The mark beside a Player Shop listing while the Deal Finder is on: how far below the Deal Line its price is and the line's price ("−32% · 1,470") for a deal, how far off it is ("+12%") for none, "no price" when the Deal Line has none for the item, and "?" when the listing can't be read for sure. While the pointer or the game's tooltip covers its listing, it keeps what was read there before, marked with an orange "?". A click on it opens the item's Item Card.
+The mark beside a Player Shop listing while the Deal Finder is on: how far below the Deal Line its price is and the line's price ("−32% · 1,470") for a deal, coloured as the game grades items (blue for a good deal, purple for a great one, 20% or more below the line, gold for a steal, 40% or more), how far off it is ("+12%") for none, "no price" when the Deal Line has none for the item, and "?" when the listing can't be read for sure. While the pointer or the game's tooltip covers its listing, it keeps what was read there before, marked with an orange dot. A click on it opens the item's Item Card.
 _Avoid_: tag, label, highlight
 
 **Item Lookup**:

@@ -16,7 +16,7 @@ mod common;
 use common::FakeSource;
 use common::items::{ItemWorld, equip, etc, item_world, scroll, use_item};
 use minerva_core::{
-    Action, DealBadge, DealBadges, DealFinderView, DealItem, Edge, Foreground, GameWindow, Hotkey, Hotkeys, ItemCardView, ListedPrice,
+    Action, DealBadge, DealBadges, DealFinderView, DealGrade, DealItem, Edge, Foreground, GameWindow, Hotkey, Hotkeys, ItemCardView, ListedPrice,
     MarketPrice, Minerva, PanelControl, PanelSizes, PanelState, Rect, Request, SavedMarketLine, SavedMarketPrices, ScreenRect,
     Settings, ShopList, ShopReading, ShopRow, Size, TitleRegion, Verdict,
 };
@@ -191,7 +191,7 @@ fn each_listing_gets_a_badge_saying_whether_it_is_a_deal_against_the_deal_line()
     assert_eq!(
         verdicts(state),
         [
-            Verdict::Deal { item: item(GARNET, "Garnet"), listed: listed(1, 999), percent: -32, line_mesos: 1_470 },
+            Verdict::Deal { item: item(GARNET, "Garnet"), listed: listed(1, 999), percent: -32, line_mesos: 1_470, grade: DealGrade::Great },
             Verdict::NoDeal { item: item(GARNET_ORE, "Garnet Ore"), listed: listed(1, 1_008), percent: 12, line_mesos: 900 },
             Verdict::NoPrice { item: item(BRONZE_ORE, "Bronze Ore"), listed: listed(1, 177) },
             Verdict::NoDeal { item: item(GARNET_ORE, "Garnet Ore"), listed: listed(1, 900), percent: 0, line_mesos: 900 },
@@ -206,7 +206,7 @@ fn a_listing_of_several_is_judged_by_the_price_of_one() {
     let state = minerva.on_player_shop_reading(shop(vec![row(0, Some("Garnet Ore"), Some((10, 6_120)))], 400));
     assert_eq!(
         verdicts(state),
-        [Verdict::Deal { item: item(GARNET_ORE, "Garnet Ore"), listed: listed(10, 6_120), percent: -32, line_mesos: 900 }]
+        [Verdict::Deal { item: item(GARNET_ORE, "Garnet Ore"), listed: listed(10, 6_120), percent: -32, line_mesos: 900, grade: DealGrade::Great }]
     );
 }
 
@@ -221,7 +221,7 @@ fn equipment_is_judged_by_its_name_alone() {
         verdicts(state),
         [
             Verdict::NoDeal { item: item(EMERALD_STAFF, "Emerald Staff"), listed: listed(1, 3_999), percent: 5, line_mesos: 3_800 },
-            Verdict::Deal { item: item(EMERALD_STAFF, "Emerald Staff"), listed: listed(1, 3_499), percent: -8, line_mesos: 3_800 },
+            Verdict::Deal { item: item(EMERALD_STAFF, "Emerald Staff"), listed: listed(1, 3_499), percent: -8, line_mesos: 3_800, grade: DealGrade::Good },
         ]
     );
 }
@@ -232,7 +232,7 @@ fn a_name_read_with_the_letters_the_reader_confuses_is_still_the_item() {
     let state = minerva.on_player_shop_reading(shop(vec![row(0, Some("Garnet 0re"), Some((1, 800)))], 400));
     assert_eq!(
         verdicts(state),
-        [Verdict::Deal { item: item(GARNET_ORE, "Garnet Ore"), listed: listed(1, 800), percent: -11, line_mesos: 900 }]
+        [Verdict::Deal { item: item(GARNET_ORE, "Garnet Ore"), listed: listed(1, 800), percent: -11, line_mesos: 900, grade: DealGrade::Good }]
     );
 }
 
@@ -271,6 +271,7 @@ fn a_name_cut_short_is_the_one_item_whose_name_starts_so() {
                 listed: listed(1, 12_999),
                 percent: -13,
                 line_mesos: 15_000,
+                grade: DealGrade::Good,
             },
             Verdict::NoPrice { item: item("02048010", "Pet Equip Jump Scroll: Head for Made Up"), listed: listed(1, 500) },
         ]
@@ -301,7 +302,7 @@ fn the_deal_margin_is_how_far_below_the_line_a_deal_must_be() {
         verdicts(state),
         [
             Verdict::NoDeal { item: item(GARNET_ORE, "Garnet Ore"), listed: listed(1, 855), percent: -5, line_mesos: 900 },
-            Verdict::Deal { item: item(GARNET_ORE, "Garnet Ore"), listed: listed(1, 810), percent: -10, line_mesos: 900 },
+            Verdict::Deal { item: item(GARNET_ORE, "Garnet Ore"), listed: listed(1, 810), percent: -10, line_mesos: 900, grade: DealGrade::Good },
         ]
     );
     assert_eq!(minerva.settings().deal_margin_percent, 10, "saved with the settings");
@@ -463,7 +464,7 @@ fn badge(state: &PanelState, row: u32) -> (bool, Verdict) {
 }
 
 fn garnet_deal() -> Verdict {
-    Verdict::Deal { item: item(GARNET, "Garnet"), listed: listed(1, 999), percent: -32, line_mesos: 1_470 }
+    Verdict::Deal { item: item(GARNET, "Garnet"), listed: listed(1, 999), percent: -32, line_mesos: 1_470, grade: DealGrade::Great }
 }
 
 #[test]
@@ -538,7 +539,7 @@ fn a_throwing_star_is_judged_by_its_listings_whole_price_however_many_it_holds()
         verdicts(state),
         [
             Verdict::NoDeal { item: star.clone(), listed: listed(800, 999_999), percent: 429, line_mesos: 188_888 },
-            Verdict::Deal { item: star, listed: listed(800, 150_000), percent: -21, line_mesos: 188_888 },
+            Verdict::Deal { item: star, listed: listed(800, 150_000), percent: -21, line_mesos: 188_888, grade: DealGrade::Great },
         ]
     );
 }
@@ -563,4 +564,33 @@ fn a_card_opened_from_a_badge_unfolds_from_the_edge_facing_it_and_the_badge_stay
     minerva.act(Action::OpenDealItem { row: 1 });
     let state = minerva.close_item_card();
     assert!(state.deal_badges.as_ref().unwrap().badges.iter().all(|b| !b.open));
+}
+
+#[test]
+fn a_deal_is_graded_good_great_or_a_steal_by_how_far_below_the_line_it_is() {
+    let mut minerva = on();
+    let grades = |state: &PanelState| -> Vec<DealGrade> {
+        verdicts(state)
+            .into_iter()
+            .map(|verdict| match verdict {
+                Verdict::Deal { grade, .. } => grade,
+                other => panic!("{other:?}"),
+            })
+            .collect()
+    };
+    let state = minerva.on_player_shop_reading(shop(
+        vec![
+            row(0, Some("Garnet Ore"), Some((1, 899))),
+            row(1, Some("Garnet Ore"), Some((1, 725))),
+            row(2, Some("Garnet Ore"), Some((1, 720))),
+            row(3, Some("Garnet Ore"), Some((1, 545))),
+            row(4, Some("Garnet Ore"), Some((1, 540))),
+        ],
+        400,
+    ));
+    assert_eq!(
+        grades(state),
+        [DealGrade::Good, DealGrade::Good, DealGrade::Great, DealGrade::Great, DealGrade::Steal],
+        "−0%, −19%, −20%, −39%, −40% of 900"
+    );
 }

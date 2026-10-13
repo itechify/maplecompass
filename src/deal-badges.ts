@@ -7,6 +7,9 @@ import { signed, whole } from "./figures";
 /** Mirror of `minerva_core::ListedPrice`: `quantity` of the item for `mesos`. */
 type ListedPrice = { quantity: number; mesos: number };
 
+/** Mirror of `minerva_core::DealGrade`: how good a deal is, graded as the game grades its items. */
+type DealGrade = "good" | "great" | "steal";
+
 /** Mirror of `minerva_core::DealItem`: `rechargeable` for a throwing star or a bullet, whose
  * listing is one set, its number how many the set holds. */
 type DealItem = { id: string; name: string; rechargeable: boolean };
@@ -15,10 +18,14 @@ type DealItem = { id: string; name: string; rechargeable: boolean };
  * from the window's top), and what it says; `covered`, what was read there before the
  * pointer or a tooltip covered it. */
 export type DealBadge = { row: number; top: number; height: number; covered: boolean; open: boolean } & (
-  | { verdict: "deal" | "noDeal"; item: DealItem; listed: ListedPrice; percent: number; lineMesos: number }
+  | { verdict: "deal"; item: DealItem; listed: ListedPrice; percent: number; lineMesos: number; grade: DealGrade }
+  | { verdict: "noDeal"; item: DealItem; listed: ListedPrice; percent: number; lineMesos: number }
   | { verdict: "noPrice"; item: DealItem; listed: ListedPrice }
   | { verdict: "unknown" }
 );
+
+/** A deal's grade, as its accessible name says it. */
+const GRADE_WORDS: Record<DealGrade, string> = { good: "a good deal", great: "a great deal", steal: "a steal" };
 
 /** A listing's band at least this tall (CSS px) holds a roomy badge: 38px, the gauge 5px. */
 const ROOMY_BAND = 44;
@@ -68,7 +75,7 @@ function words(badge: DealBadge, line: string): [string, string] {
     case "deal":
       return [
         off(badge.percent, true),
-        `${badge.item.name}: ${each(badge.item, badge.listed)}, a deal against ${line} (${whole(badge.lineMesos)}). Click for its card.`,
+        `${badge.item.name}: ${each(badge.item, badge.listed)}, ${GRADE_WORDS[badge.grade]} against ${line} (${whole(badge.lineMesos)}). Click for its card.`,
       ];
     case "noDeal":
       return [
@@ -103,6 +110,7 @@ function badgeItem(badge: DealBadge, line: string): HTMLLIElement {
   el.className = `deal-badge ${badge.verdict}`;
   el.classList.toggle("covered", badge.covered);
   el.classList.toggle("open", badge.open);
+  if (badge.verdict === "deal") el.classList.add(badge.grade);
   // Said to screen readers only: a tooltip would pop up over the shop's listings.
   el.setAttribute("aria-label", full);
   if (el instanceof HTMLButtonElement) {

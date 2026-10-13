@@ -45,7 +45,7 @@ mod world;
 
 pub use bests_window::{PersonalBestsMap, PersonalBestsVisit, PersonalBestsWindow};
 pub use bug_report::{BugReport, ReportAbout};
-pub use deal_finder::{DealBadge, DealBadges, DealFinderView, DealItem, Verdict};
+pub use deal_finder::{DealBadge, DealBadges, DealFinderView, DealGrade, DealItem, GREAT_BELOW, STEAL_BELOW, Verdict};
 pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use grind_tracker::{ClientOffset, GrindTrackerWindow};
 pub use hotkey_settings::{KeyPress, RebindProblem, SettingsNotice, SettingsView};
