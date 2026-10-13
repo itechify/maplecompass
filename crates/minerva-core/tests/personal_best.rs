@@ -443,8 +443,8 @@ fn a_first_visits_best_cannot_be_removed_until_it_has_joined_the_history() {
     assert_eq!(saved_rates(&player, SUNSET_SKY_ID), [] as [u64; 0]);
 }
 
-/// The Pace Trace's race with the Best row: how far its pace line rises, and how far the
-/// trace has come over the same stretch.
+/// The Pace Trace's race with the Best row, once within reach: how far its pace line
+/// rises, and how far the trace has come over the same stretch.
 fn race(state: &PanelState) -> Option<(i64, i64)> {
     let pace = state.exp_tracking.pace.as_ref()?;
     let [from, to] = pace.best?;
@@ -453,36 +453,40 @@ fn race(state: &PanelState) -> Option<(i64, i64)> {
 }
 
 #[test]
-fn the_pace_trace_races_the_best_rows_pace_from_arriving_on_the_map() {
+fn the_pace_trace_shows_the_bests_pace_once_within_reach_for_the_rest_of_the_visit() {
     let (mut player, back) = back_on_sunset_sky_after_a_best_of_7200();
-    // Arriving, the race hasn't started: nothing has been earned on the map yet.
+    // Arriving, the race on the map hasn't started: the trace races the 5 minutes before.
     let trace = back.exp_tracking.pace.clone().unwrap();
     assert_eq!((trace.best, trace.arrived_ago_ms), (None, Some(0)));
 
-    // A minute at the best's 7,200 EXP/h: level with its pace, 120 EXP each.
-    let level = player.hunt(MIN, 20);
-    assert_eq!(race(&level), Some((120, 120)));
-    assert_eq!(level.exp_tracking.pace.as_ref().and_then(|p| p.arrived_ago_ms), Some(MIN));
+    // A minute at half the best's 7,200 EXP/h: out of reach.
+    let slow = player.hunt(MIN, 10);
+    assert_eq!(race(&slow), None);
+    assert_eq!(slow.exp_tracking.pace.and_then(|p| p.arrived_ago_ms), Some(MIN));
 
-    // Two more at 10,800: ahead of it, 480 EXP to its 360.
-    let ahead = player.hunt(2 * MIN, 30);
-    assert_eq!(race(&ahead), Some((360, 480)));
+    // Two more at 10,800: 420 EXP since arriving to the best's 360, so within reach.
+    let close = player.hunt(2 * MIN, 30);
+    assert_eq!(race(&close), Some((360, 420)));
 
-    // 5 minutes there, the race is the whole trace, as the star's comparison is.
-    let five = player.hunt(2 * MIN, 30);
-    let trace = five.exp_tracking.pace.clone().unwrap();
-    assert_eq!(trace.arrived_ago_ms, None);
-    assert_eq!(trace.best.map(|[from, _]| from), trace.points.first().copied());
-    assert!(starred(&five));
+    // It stays for the rest of the Visit, fallen back too: 444 EXP to its 600.
+    let fallen = player.hunt(2 * MIN, 2);
+    assert_eq!(race(&fallen), Some((600, 444)));
+
+    // On the next Visit it is out of reach until it comes within reach there.
+    player.arrive(CONSTRUCTION_SITE);
+    player.hunt(MIN, 30);
+    assert_eq!(race(&player.arrive(SUNSET)), None);
+    assert_eq!(race(&player.hunt(MIN, 10)), None);
 }
 
 #[test]
-fn a_first_visit_has_no_pace_to_race() {
+fn a_first_visit_races_only_the_five_minutes_before() {
     let mut player = Player::new(tracking());
     player.arrive(SUNSET);
-    let state = player.hunt(6 * MIN, 20);
+    let state = player.hunt(11 * MIN, 20);
     let trace = state.exp_tracking.pace.clone().unwrap();
     assert_eq!(trace.best, None);
-    // The trace all the same: 20 EXP every 10 s over its 5 minutes.
+    // 20 EXP every 10 s, as in the 5 minutes before: level with them.
     assert_eq!(trace.points.last().map(|p| p.exp), Some(600));
+    assert_eq!(trace.earlier[1].exp, 600);
 }

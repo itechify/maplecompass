@@ -140,7 +140,7 @@ A rate measured over the last few minutes of active play in a session, as oppose
 _Avoid_: current rate, live rate
 
 **Pace Trace**:
-The last 5 minutes of active play drawn kill by kill on the Grind Tracker. On a map with a Personal Best it races it from arriving: how far ahead of the Personal Best's pace the player is, or behind it.
+The last 5 minutes of active play drawn kill by kill on the Grind Tracker, raced against the 5 minutes before them: how far ahead of that earlier pace the player is, or behind it. On a map with a Personal Best, once the player comes within reach of its pace, it races that too.
 _Avoid_: graph, chart, sparkline
 
 **Personal Best**:

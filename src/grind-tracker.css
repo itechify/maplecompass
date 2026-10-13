@@ -210,11 +210,13 @@
   padding: 0 0 0 1px;
 }
 
-/* The Pace Trace, under the rates it draws. In a race, the Best's pace is a flat Ink
-   Slate line and the trace Panel Ink, the lead over it lit in You Yellow, as a best's star
-   is, and the gap behind shaded faintly; the split by the player's dot, the minimap's own.
-   Without a Best row, the EXP gained in steps over a faint fill. A hairline marks arriving
-   on the map. It moves only as the EXP does: no transition, no animation. */
+/* The Pace Trace, under the rates it draws: a race with the 5 minutes before, as split
+   times against a ghost. Their pace is the flat Ink Slate line; the trace, Panel Ink, is
+   how far ahead of it the player is, the gap shaded faintly either side, the split by the
+   player's dot, the minimap's own. Once the Best's pace is within reach it joins in the
+   dot's dark gold, ending in a best's star, and the lead over it is lit in You Yellow, as
+   a best's star is. A hairline marks arriving on the map. It moves only as the EXP does:
+   no transition, no animation. */
 .pace {
   display: block;
   width: 100%;
@@ -244,13 +246,27 @@
   stroke-width: 1;
 }
 
-.pace .best {
+.pace .earlier {
   stroke: var(--ink-3);
   stroke-width: 1;
 }
 
+.pace .best {
+  stroke: var(--you-edge);
+  stroke-width: 1;
+}
+
+/* Scaled to 10px from the 16px star: its 1px ring is 1.6 before scaling. */
+.pace .best-mark {
+  fill: var(--you);
+  stroke: var(--you-edge);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
 /* Words on the trace, haloed in the box's lavender so the line behind can't cross them
-   out: "Best" in Ink Steel, the split in bold Panel Ink, Ink Steel when behind. */
+   out: "Earlier" in Ink Steel, the split in bold Panel Ink, Ink Steel when behind, and
+   in the best's dark gold while it is the race with the best. */
 .pace text {
   font: 700 11px var(--font);
   -webkit-text-stroke-width: 0;
@@ -271,6 +287,10 @@
 
 .pace .split.behind {
   fill: var(--ink-2);
+}
+
+.pace .split.best {
+  fill: var(--you-edge);
 }
 
 .pace .you {

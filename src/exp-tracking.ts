@@ -47,7 +47,10 @@ export type PaceTrace = {
   spanMs: number;
   /** Oldest first, the last EXP change last. */
   points: PacePoint[];
-  /** The Best row's pace, from where the race on the map begins to the last change. */
+  /** The pace of the 5 minutes before, from the first point to the last change. */
+  earlier: [PacePoint, PacePoint];
+  /** The Best row's pace, from where the race on the map begins to the last change; only
+   *  once it is within reach on this Visit. */
   best: [PacePoint, PacePoint] | null;
   /** Arriving on the map, if within the trace. */
   arrivedAgoMs: number | null;

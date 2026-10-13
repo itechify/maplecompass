@@ -41,14 +41,15 @@ const expGaugeLost = byId("exp-gauge-lost");
 const forecast = byId("forecast");
 const pace = byId("pace");
 const paceName = byId("pace-name");
-const paceAheadRect = byId("pace-ahead-rect");
-const paceBehindRect = byId("pace-behind-rect");
+const paceAheadPath = byId("pace-ahead-path");
 const paceArea = byId("pace-area");
 const paceLead = byId("pace-lead");
 const paceArrived = byId("pace-arrived");
+const paceEarlier = byId("pace-earlier");
 const paceBest = byId("pace-best");
 const paceTrace = byId("pace-trace");
-const paceBestName = byId("pace-best-name");
+const paceBestMark = byId("pace-best-mark");
+const paceEarlierName = byId("pace-earlier-name");
 const paceSplit = byId("pace-split");
 const paceYou = byId("pace-you");
 
@@ -207,12 +208,16 @@ function set(el: Element, attributes: Record<string, string | number>) {
 /** To the half pixel, so the 1px lines sit on the pixel grid at 1x. */
 const half = (n: number) => Math.round(n * 2) / 2;
 
-/** The Pace Trace. With a Best row it is a race, drawn as split times against a ghost:
- *  the Best's pace is a flat line from where the race on the map begins, and the trace is
- *  how far ahead of it the player is, falling back as the Best's pace runs on while the
- *  EXP holds and stepping up at each gain; the lead lit, the gap behind shaded, the split
- *  written by the player's dot. Without one, it is the EXP gained, a step at each gain.
- *  The scale is the trace's own, so a lead of a few kills fills it as a race should. */
+/** "+103" ahead, "−240" behind, as the trace's split says it. */
+const split = (exp: number) => (exp > 0 ? `+${whole(exp)}` : whole(exp));
+
+/** The Pace Trace, a race drawn as split times against a ghost. The 5 minutes before are
+ *  the flat line, and the trace is how far ahead of their pace the player is, falling back
+ *  as that pace runs on while the EXP holds and stepping up at each gain; the gap shaded,
+ *  the split written by the player's dot. Once the Best's pace is within reach it joins
+ *  as a line rising (or falling) against the earlier one, ending in a best's star, the
+ *  lead over it lit, and the split is the race with it, in its gold. The scale is the
+ *  trace's own, so a lead of a few kills fills it as a race should. */
 function drawPace(trace: PaceTrace | null) {
   // An <svg> has no `hidden` property: the attribute, which the page's [hidden] rule hides.
   const none = !trace || trace.points.length === 0;
@@ -221,74 +226,76 @@ function drawPace(trace: PaceTrace | null) {
   const width = Math.round(pace.getBoundingClientRect().width);
   const height = PACE_HEIGHT;
   set(pace, { viewBox: `0 0 ${width} ${height}`, height });
-  const { points, best, spanMs } = trace;
+  const { points, earlier, best, spanMs } = trace;
 
-  // The corners of the trace, as [ms before the last change, EXP].
-  const corners: [number, number][] = [];
-  let perMs = 0;
-  if (best) {
-    const [from, to] = best;
-    perMs = (to.exp - from.exp) / Math.max(1, from.agoMs - to.agoMs);
-    const ahead = (p: PacePoint) => p.exp - from.exp - perMs * (from.agoMs - p.agoMs);
-    corners.push([from.agoMs, 0]);
-    for (const p of points.filter((p) => p.agoMs < from.agoMs)) {
-      const [agoMs, lead] = corners[corners.length - 1];
-      corners.push([p.agoMs, lead - perMs * (agoMs - p.agoMs)], [p.agoMs, ahead(p)]);
-    }
-  } else {
-    corners.push([points[0].agoMs, points[0].exp]);
-    for (const p of points.slice(1)) corners.push([p.agoMs, corners[corners.length - 1][1]], [p.agoMs, p.exp]);
+  // Every figure as how far ahead of the earlier pace it is, at its time.
+  const [first, last] = [points[0], points[points.length - 1]];
+  const perMs = (earlier[1].exp - earlier[0].exp) / Math.max(1, earlier[0].agoMs - earlier[1].agoMs);
+  const ahead = (p: PacePoint) => p.exp - earlier[0].exp - perMs * (earlier[0].agoMs - p.agoMs);
+  // The corners, as [ms before the last change, EXP ahead]: along the earlier pace while
+  // the EXP holds, then up (down, after a death) to it.
+  const corners: [number, number][] = [[first.agoMs, ahead(first)]];
+  for (const p of points.slice(1)) {
+    const [agoMs, lead] = corners[corners.length - 1];
+    corners.push([p.agoMs, lead - perMs * (agoMs - p.agoMs)], [p.agoMs, ahead(p)]);
   }
+  const bestLine = best && best.map((p) => [p.agoMs, ahead(p)] as const);
 
-  const values = corners.map(([, v]) => v);
+  const values = corners.map(([, v]) => v).concat(bestLine ? bestLine.map(([, v]) => v) : []);
   let [lo, hi] = [Math.min(0, ...values), Math.max(0, ...values)];
-  // In a race, never finer than a minute of the Best's pace from top to foot: a lead of a
-  // few EXP is a few EXP, not the whole height.
-  const least = Math.max(1, perMs * 60_000);
+  // Never finer than a minute of the earlier pace from top to foot: a lead of a few EXP
+  // is a few EXP, not the whole height.
+  const least = Math.max(1, Math.abs(perMs) * 60_000);
   if (hi - lo < least) [lo, hi] = [lo - (least - (hi - lo)) / 2, hi + (least - (hi - lo)) / 2];
   const [left, right, top, bottom] = [0.5, width - DOT_ROOM, DOT_ROOM, height - DOT_ROOM];
   const x = (agoMs: number) => half(right - (Math.min(agoMs, spanMs) / spanMs) * (right - left));
   const y = (value: number) => half(bottom - ((value - lo) / (hi - lo)) * (bottom - top));
 
   const line = corners.map(([agoMs, v], i) => `${i ? "L" : "M"}${x(agoMs)},${y(v)}`).join("");
-  const start = x(corners[0][0]);
+  const start = x(first.agoMs);
   const zero = y(0);
+  const [, now] = corners[corners.length - 1];
+  const dot = { x: x(0), y: y(now) };
   paceTrace.setAttribute("d", line);
-  // In a race, the gap between the trace and the Best's line: lit where ahead, shaded
-  // where behind. Otherwise, the EXP gained, shaded down to the foot.
-  paceArea.setAttribute("d", `${line}V${best ? zero : height}H${start}Z`);
-  paceLead.setAttribute("d", `${line}V${zero}H${start}Z`);
-  set(paceAheadRect, { x: 0, y: 0, width, height: zero });
-  set(paceBehindRect, { x: 0, y: zero, width, height: height - zero });
-  if (best) paceArea.setAttribute("clip-path", "url(#pace-behind)");
-  else paceArea.removeAttribute("clip-path");
+  // The gap from the earlier pace, either side.
+  paceArea.setAttribute("d", `${line}V${zero}H${start}Z`);
+  set(paceEarlier, { x1: start, y1: zero, x2: dot.x, y2: zero });
+  set(paceYou, { cx: dot.x, cy: dot.y });
 
   paceArrived.toggleAttribute("hidden", trace.arrivedAgoMs === null);
   const arrived = x(trace.arrivedAgoMs ?? 0);
   set(paceArrived, { x1: arrived, x2: arrived, y1: 0, y2: height });
 
-  const [, now] = corners[corners.length - 1];
-  const dot = { x: x(0), y: y(now) };
-  set(paceYou, { cx: dot.x, cy: dot.y });
-
-  for (const el of [paceLead, paceBest, paceBestName, paceSplit]) el.toggleAttribute("hidden", !best);
-  if (!best) {
-    paceName.textContent = "Your EXP over the last 5 minutes of play, a step at each gain.";
-    return;
-  }
-  set(paceBest, { x1: start, y1: zero, x2: dot.x, y2: zero });
-  // "Best" at the start of its line, on the side the trace leaves clear there.
-  const early = corners.filter(([agoMs]) => x(agoMs) <= start + 30).map(([, v]) => v);
+  // "Earlier" at the start of its line, on the side the trace leaves clear there.
+  const early = corners.filter(([agoMs]) => x(agoMs) <= start + 40).map(([, v]) => v);
   const aboveEarly = early.reduce((sum, v) => sum + v, 0) > 0;
   const below = (aboveEarly && zero + 11 <= height) || zero < 11;
-  set(paceBestName, { x: start + 3, y: below ? zero + 10 : zero - 3 });
-  // The split, by the dot: "+103" ahead, "−240" behind.
-  const split = Math.round(now);
-  paceSplit.textContent = split > 0 ? `+${whole(split)}` : whole(split);
-  paceSplit.classList.toggle("behind", split < 0);
-  set(paceSplit, { x: dot.x - 7, y: Math.max(9, Math.min(height - 1, dot.y + 4)) });
-  const standing = split > 0 ? `${whole(split)} EXP ahead` : split < 0 ? `${whole(-split)} EXP behind` : "level with it";
-  paceName.textContent = `Your last 5 minutes of play against your best's pace on this map: ${standing}.`;
+  set(paceEarlierName, { x: start + 3, y: below ? zero + 10 : zero - 3 });
+  // The split, by the dot: with the 5 minutes before, or once it's within reach, with
+  // the best.
+  const gap = Math.round(best ? last.exp - best[1].exp : now);
+  paceSplit.textContent = split(gap);
+  paceSplit.classList.toggle("behind", gap < 0);
+  paceSplit.classList.toggle("best", !!best);
+  // Under the dot when it is high, over it when low: clear of the trace coming in to it.
+  const splitY = dot.y < height / 2 ? dot.y + 14 : dot.y - 6;
+  set(paceSplit, { x: dot.x - 4, y: Math.max(9, Math.min(height - 1, splitY)) });
+  const standing = (gap: number) =>
+    gap > 0 ? `${whole(gap)} EXP ahead` : gap < 0 ? `${whole(-gap)} EXP behind` : "level";
+  let name = `Your last 5 minutes of play against the 5 minutes before: ${standing(Math.round(now))}.`;
+
+  for (const el of [paceLead, paceBest, paceBestMark]) el.toggleAttribute("hidden", !bestLine);
+  if (best && bestLine) {
+    const [from, to] = bestLine.map(([agoMs, v]) => ({ x: x(agoMs), y: y(v) }));
+    set(paceBest, { x1: from.x, y1: from.y, x2: to.x, y2: to.y });
+    // The best's star, 10px, where its pace has got to.
+    paceBestMark.setAttribute("transform", `translate(${to.x - 5},${to.y - 5}) scale(0.625)`);
+    // The lead: under the trace and above the Best's pace line.
+    paceLead.setAttribute("d", `${line}V${height}H${start}Z`);
+    paceAheadPath.setAttribute("d", `M${from.x},${from.y}L${to.x},${to.y}V0H${from.x}Z`);
+    name += ` Your best's pace on this map is within reach: ${standing(gap)} of it.`;
+  }
+  paceName.textContent = name;
 }
 
 // The shell sizes the window to the content, as the overlay does the panel. The panel is

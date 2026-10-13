@@ -444,11 +444,6 @@ fn a_misread_that_fits_the_level_and_misleads_it_keeps_the_session() {
     let misread = misread.tick(120 * S).clone();
     assert_eq!(held(&misread.exp_tracking), held(&clean.exp_tracking));
     assert_eq!(misread.exp_tracking.bar, clean.exp_tracking.bar);
-    // The Pace Trace has one step where the clean run has three: the readings set aside
-    // at 30 and 40 s counted at once at 50 s, when the level was learned anew. It ends at
-    // the same EXP.
-    let last = |state: &PanelState| state.exp_tracking.pace.as_ref().and_then(|p| p.points.last().copied());
-    assert_eq!(last(&misread), last(&clean));
     assert_eq!(misread.exp_tracking.state, TrackingState::Active);
     assert_eq!(exp_per_hour(&misread), (Some(29_716), Some(29_716)), "908 EXP in 110 s");
 }
@@ -682,12 +677,7 @@ fn the_overlay_gets_tracking_as_the_panel_renders_it() {
             "bar": { "exp": 335, "percentHundredths": 798 },
             "personalBest": null,
             "newBest": false,
-            "pace": {
-                "spanMs": 300_000,
-                "points": [{ "agoMs": 60_000, "exp": 0 }, { "agoMs": 0, "exp": 69 }],
-                "best": null,
-                "arrivedAgoMs": null,
-            },
+            "pace": null,
             "forecast": [
                 { "afterS": 300, "percentHundredths": 1620 },
                 { "afterS": 600, "percentHundredths": 2441 },
@@ -726,8 +716,6 @@ fn the_rate_on_a_map_is_compared_with_its_solo_ceiling_after_a_minute_of_play_th
     // before it showed. The Session carries on all the same.
     let sunset = arrive(&mut minerva, SUNSET, 70 * S);
     assert_eq!(held(&sunset.exp_tracking), held(&unrecognised.exp_tracking));
-    // The Pace Trace marks the arrival at its end: the race on the map starts there.
-    assert_eq!(sunset.exp_tracking.pace.and_then(|p| p.arrived_ago_ms), Some(0));
 
     // A minute there, 65 EXP: 3,900 EXP/h of its 213,571 solo, 1.83%.
     assert_eq!(read(&mut minerva, 100 * S, 360, 857).exp_tracking.ceiling_share_hundredths, None);
@@ -1108,7 +1096,6 @@ fn the_figures_hold_for_the_rest_of_each_half_minute_then_refresh() {
     let mut later = speeding_up(145);
     let later = later.tick(149 * S).exp_tracking.clone();
     assert_ne!(later.bar, measured.bar);
-    assert_ne!(later.pace, measured.pace);
     assert_eq!(held(&later), held(&measured));
 
     // The next half minute measures them afresh.
@@ -1148,52 +1135,78 @@ fn pace(state: &PanelState) -> Vec<PacePoint> {
     state.exp_tracking.pace.as_ref().map_or_else(Vec::new, |p| p.points.clone())
 }
 
-#[test]
-fn the_pace_trace_waits_for_the_session_to_warm_up() {
-    let mut minerva = tracking();
-    read(&mut minerva, 0, 160, 381);
-    let warming_up = read(&mut minerva, 10 * S, 266, 633);
-    assert_eq!(warming_up.exp_tracking.state, TrackingState::WarmingUp);
-    assert_eq!(warming_up.exp_tracking.pace, None);
+/// 10 EXP every 10 s from 160 [3.81%], the Session starting at 10 s, until `last` s: the
+/// panel state at each reading, from the first change on.
+fn ten_every_ten(minerva: &mut Minerva, last: u64) -> Vec<PanelState> {
+    let mut exp = 160;
+    read(minerva, 0, exp, percent(exp));
+    (1..=last / 10)
+        .map(|k| {
+            exp += 10;
+            read(minerva, k * 10 * S, exp, percent(exp))
+        })
+        .collect()
+}
 
-    let warm = read(&mut minerva, 70 * S, 335, 798);
-    assert_eq!(warm.exp_tracking.state, TrackingState::Active);
-    assert!(warm.exp_tracking.pace.is_some());
+#[test]
+fn the_pace_trace_waits_for_a_minute_of_play_before_its_five_minutes() {
+    // 5 minutes and 50 s of active play by 360 s: no minute before the 5 minutes to race.
+    let mut minerva = tracking();
+    let states = ten_every_ten(&mut minerva, 360);
+    assert!(states.iter().all(|state| state.exp_tracking.pace.is_none()));
+
+    // 6 minutes by 370 s: the 5 minutes race the minute before them, at the same pace.
+    let six = read(&mut minerva, 370 * S, 530, percent(530));
+    let trace = six.exp_tracking.pace.clone().unwrap();
+    assert_eq!(trace.earlier, [PacePoint { ago_ms: 5 * MIN, exp: 0 }, PacePoint { ago_ms: 0, exp: 300 }]);
+    assert_eq!(trace.points.last(), Some(&PacePoint { ago_ms: 0, exp: 300 }));
 }
 
 #[test]
 fn the_pace_trace_steps_at_each_exp_change_and_holds_between_them() {
-    let mut minerva = a_minute_in();
-    // Where the Session started at 10 s, and the change a minute later at 70 s.
-    let at_70 = pace(minerva.panel_state());
-    assert_eq!(at_70, [PacePoint { ago_ms: MIN, exp: 0 }, PacePoint { ago_ms: 0, exp: 69 }]);
+    let mut minerva = tracking();
+    let six = ten_every_ten(&mut minerva, 370).pop().unwrap();
+    // From 5 minutes before the last change, then a step at each of the 30 since.
+    let at_370 = pace(&six);
+    assert_eq!(at_370.len(), 31);
+    assert_eq!(at_370.first(), Some(&PacePoint { ago_ms: 5 * MIN, exp: 0 }));
+    assert_eq!(at_370.last(), Some(&PacePoint { ago_ms: 0, exp: 300 }));
 
     // It moves only as the EXP does, never with the clock: a minute and a half on with no
     // change, it is as it was.
-    assert_eq!(pace(minerva.tick(160 * S)), at_70);
+    assert_eq!(pace(minerva.tick(460 * S)), at_370);
 
     // A death steps it down, 100 s of active play after the last change.
-    let died = read(&mut minerva, 170 * S, 266, 633);
-    let steps = [PacePoint { ago_ms: 160 * S, exp: 0 }, PacePoint { ago_ms: 100 * S, exp: 69 }, PacePoint { ago_ms: 0, exp: 0 }];
-    assert_eq!(pace(&died), steps);
+    let died = read(&mut minerva, 470 * S, 430, percent(430));
+    let steps = pace(&died);
+    assert_eq!(steps[steps.len() - 2..], [PacePoint { ago_ms: 100 * S, exp: 200 }, PacePoint { ago_ms: 0, exp: 100 }]);
+}
+
+#[test]
+fn the_pace_trace_races_the_five_minutes_before_it() {
+    // 5 minutes at 10 EXP every 10 s, then 5 at 20.
+    let mut minerva = tracking();
+    let mut exp = 160;
+    read(&mut minerva, 0, exp, percent(exp));
+    for k in 1..=61 {
+        exp += if k <= 31 { 10 } else { 20 };
+        read(&mut minerva, k * 10 * S, exp, percent(exp));
+    }
+
+    // Twice the pace of the 5 minutes before: 600 EXP to their 300.
+    let trace = minerva.panel_state().exp_tracking.pace.clone().unwrap();
+    assert_eq!(trace.earlier, [PacePoint { ago_ms: 5 * MIN, exp: 0 }, PacePoint { ago_ms: 0, exp: 300 }]);
+    assert_eq!(trace.points.last(), Some(&PacePoint { ago_ms: 0, exp: 600 }));
 }
 
 #[test]
 fn the_pace_trace_covers_the_last_five_minutes_of_active_play_as_last_5_min_does() {
-    // 10 EXP every 10 s for 7 minutes.
     let mut minerva = tracking();
-    let mut exp = 160;
-    read(&mut minerva, 0, exp, percent(exp));
-    for k in 1..=42 {
-        exp += 10;
-        read(&mut minerva, k * 10 * S, exp, percent(exp));
-    }
+    ten_every_ten(&mut minerva, 420);
 
     let state = minerva.panel_state();
     let trace = state.exp_tracking.pace.clone().unwrap();
     assert_eq!(trace.span_ms, 5 * MIN);
-    // From 5 minutes before the last change, then a step at each of the 30 since.
-    assert_eq!(trace.points.len(), 31);
     assert_eq!(trace.points.first(), Some(&PacePoint { ago_ms: 5 * MIN, exp: 0 }));
     assert_eq!(trace.points.last(), Some(&PacePoint { ago_ms: 0, exp: 300 }));
     // 300 EXP in 5 minutes: the Last 5 min shown.

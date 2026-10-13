@@ -71,13 +71,14 @@
                 </button>
               </div>
             </div>
-            <!-- The Pace Trace: the last 5 minutes of play up to the last EXP gain. With a
-                 Best row, a race against it, as split times against a ghost: the Best's pace
-                 is the flat line from arriving on the map, and the trace how far ahead of it
-                 (lit in You Yellow, as a best's star is) or behind it the player is, falling
-                 back as the Best's pace runs on and stepping up at each gain. Without one,
-                 the EXP gained, a step at each gain. The player's dot is where they stand
-                 now. It moves only as the EXP does. -->
+            <!-- The Pace Trace: the last 5 minutes of play up to the last EXP gain, raced
+                 against the 5 minutes before them, as split times against a ghost. The flat
+                 line is the earlier pace, and the trace how far ahead of it (or behind) the
+                 player is, falling back as the earlier pace runs on and stepping up at each
+                 gain. Once the Best row's pace is within reach on the map, it joins as a
+                 rising line ending in a best's star, and the lead over it is lit in You
+                 Yellow. The player's dot is where they stand now. It moves only as the EXP
+                 does. -->
             <svg class="pace" id="pace" role="img" aria-labelledby="pace-name" hidden>
               <title id="pace-name"></title>
               <defs>
@@ -86,16 +87,18 @@
                   <stop offset="0.18" style="stop-color: var(--you-light)" />
                   <stop offset="0.45" style="stop-color: var(--you)" />
                 </radialGradient>
-                <!-- Ahead of the Best's pace, and behind it. -->
-                <clipPath id="pace-ahead"><rect id="pace-ahead-rect" /></clipPath>
-                <clipPath id="pace-behind"><rect id="pace-behind-rect" /></clipPath>
+                <!-- Above the Best's pace line: the lead over it. -->
+                <clipPath id="pace-ahead"><path id="pace-ahead-path" /></clipPath>
               </defs>
               <path class="area" id="pace-area" />
               <path class="lead" id="pace-lead" clip-path="url(#pace-ahead)" />
               <line class="arrived" id="pace-arrived" />
+              <line class="earlier" id="pace-earlier" />
               <line class="best" id="pace-best" />
               <path class="trace" id="pace-trace" />
-              <text class="name" id="pace-best-name">Best</text>
+              <!-- A best's star, as on the Last 5 min row, where the Best's pace has got to. -->
+              <path class="best-mark" id="pace-best-mark" d="M8 1.5L9.76 6.07L14.66 6.34L10.85 9.43L12.11 14.16L8 11.5L3.89 14.16L5.15 9.43L1.34 6.34L6.24 6.07Z" />
+              <text class="name" id="pace-earlier-name">Earlier</text>
               <text class="split" id="pace-split"></text>
               <circle class="you" id="pace-you" r="3.5" />
             </svg>
