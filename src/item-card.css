@@ -151,6 +151,53 @@
   min-width: 0;
 }
 
+/* The Deal Line's mark, a radio before each line's name: a ring, filled in the deep steel
+   of a deal's badge on the Deal Line. Centred on the name's line; the ring itself is small,
+   but the button around it is the line's height to aim at. */
+.deal-mark {
+  all: unset;
+  flex: none;
+  align-self: center;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: 13px;
+  height: 17px;
+  margin-right: -6px;
+  cursor: pointer;
+}
+
+.deal-mark::before {
+  content: "";
+  box-sizing: border-box;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--ink-3);
+  border-radius: 50%;
+  background: #fff;
+}
+
+.deal-mark:hover::before {
+  border-color: var(--button-edge);
+  background: var(--button-light-hover);
+}
+
+.deal-mark[aria-checked="true"] {
+  cursor: default;
+}
+
+.deal-mark[aria-checked="true"]::before {
+  border-color: var(--button-edge);
+  background: var(--button);
+  box-shadow: inset 0 0 0 1.5px #fff;
+}
+
+.deal-mark:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
 /* The name gives way to the price: cut short first. */
 .item-card-line .name {
   flex: 0 1 auto;
@@ -331,4 +378,33 @@
   max-width: 32px;
   max-height: 32px;
   image-rendering: pixelated;
+}
+
+/* Opened from a Deal Badge, the card unfolds out of it, from the edge facing it: uncovered over
+   220ms on the system's exponential ease-out, its content at its own size throughout, a third
+   of it showing from the first frame. With reduced motion the script adds neither class. */
+@keyframes unfold-from-right {
+  from {
+    clip-path: inset(0 0 0 66% round 4px);
+  }
+  to {
+    clip-path: inset(0 0 0 0 round 4px);
+  }
+}
+
+@keyframes unfold-from-left {
+  from {
+    clip-path: inset(0 66% 0 0 round 4px);
+  }
+  to {
+    clip-path: inset(0 0 0 0 round 4px);
+  }
+}
+
+.panel.unfold-right {
+  animation: unfold-from-right 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.panel.unfold-left {
+  animation: unfold-from-left 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }

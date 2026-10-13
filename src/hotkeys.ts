@@ -9,6 +9,7 @@ export type Hotkeys = {
   grindTracker: string;
   itemCard: string;
   itemLookup: string;
+  dealFinder: string;
 };
 
 /** Mirror of `minerva_core::Hotkey`: one of the hotkeys, named as in `Hotkeys`. */
@@ -26,6 +27,7 @@ export const HOTKEY_NAMES: [Hotkey, string][] = [
   ["search", "Search"],
   ["itemCard", "Show the hovered item's card"],
   ["itemLookup", "Open the hovered item's MeowDB page"],
+  ["dealFinder", "Turn the Deal Finder on / off"],
   ["grindTracker", "Show / hide the Grind Tracker"],
   ["setup", "Help & Setup"],
 ];

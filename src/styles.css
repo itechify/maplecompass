@@ -414,6 +414,50 @@ body {
   color: var(--ink-2);
 }
 
+/* The Deal Finder's line, while it is on: the owl with its magnifier at its own 32 pixels
+   beside what it compares with, in an inset box of the near-opaque body like the
+   arrival's, so it reads over any scene, with Turn off at the right. */
+.deal-finder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px 3px 4px;
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--body);
+  text-shadow: none;
+}
+
+.deal-owl {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+}
+
+.deal-lines {
+  flex: 1;
+  min-width: 0;
+}
+
+.panel .deal-title {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.deal-state {
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+.panel .deal-detail {
+  white-space: normal;
+  text-wrap: pretty;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-2);
+}
+
 .panel .note.problem {
   position: relative;
   padding: 4px 8px 5px 24px;
@@ -1859,6 +1903,52 @@ td:first-child {
   color: var(--ink-2);
 }
 
+/* The Deal Margin: its name and a percent field, laid out as a hotkey's row is, in the
+   same inset box. */
+.deal-margin {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: -3px;
+  min-height: 23px;
+  padding: 3px 5px 3px 11px;
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--body);
+  text-shadow: none;
+}
+
+.deal-margin .action {
+  line-height: 16px;
+  color: var(--ink-2);
+}
+
+.deal-margin-field {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-2);
+}
+
+.deal-margin input {
+  box-sizing: border-box;
+  width: 46px;
+  height: 21px;
+  padding: 0 4px;
+  border: 1px solid var(--window-edge);
+  border-radius: 2px;
+  background: #fff;
+  color: var(--ink);
+  font: 700 13px/17px var(--font);
+  text-align: right;
+}
+
+.deal-margin input:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 1px;
+}
+
 /* Each hotkey: what it does, its keys and its Change button, in an inset box of the
    near-opaque body, like the map list. What it does wraps rather than truncates: it names
    a control. Its keys break only after a "+", and give way to it down to 8em. Change and
@@ -2062,6 +2152,12 @@ footer {
   margin: 1px 0 0 4px;
   image-rendering: pixelated;
   pointer-events: none;
+}
+
+/* With the Deal Finder on, the owl with its magnifier, at its own 42 pixels: 1 down, 1 in. */
+.icon .art.detective {
+  width: 42px;
+  margin-left: 1px;
 }
 
 .icon .count {

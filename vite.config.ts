@@ -11,8 +11,8 @@ export default defineConfig(() => ({
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
   // The overlay (with mob search), the Grind Tracker's window, the Personal Bests window,
-  // the Item Lookup alert, the Item Card, the setup window and the Title Region marking
-  // window.
+  // the Item Lookup alert, the Item Card, the Deal Badges, the setup window and the Title
+  // Region marking window.
   build: {
     rolldownOptions: {
       input: [
@@ -21,6 +21,7 @@ export default defineConfig(() => ({
         "personal-bests.html",
         "item-lookup.html",
         "item-card.html",
+        "deal-badges.html",
         "setup.html",
         "region.html",
       ],

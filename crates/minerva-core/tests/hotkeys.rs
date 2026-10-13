@@ -34,6 +34,7 @@ fn the_hotkeys_are_ctrl_shift_letters() {
             grind_tracker: ctrl_shift("g"),
             item_card: ctrl_shift("i"),
             item_lookup: ctrl_shift("u"),
+            deal_finder: ctrl_shift("d"),
         }
     );
 }
@@ -49,7 +50,7 @@ fn ctrl_shift_i_shows_the_item_card_and_ctrl_shift_u_looks_the_item_up_even_with
     assert_eq!(state.hotkeys.toggle_panel, ctrl_shift("x"), "the player's own bindings are kept");
     let saved = minerva.settings();
     assert_eq!((saved.hotkeys.item_card.as_str(), saved.hotkeys.item_lookup.as_str()), ("ctrl+shift+i", "ctrl+shift+u"));
-    assert_eq!(saved.version, 5, "and saved with the rest");
+    assert_eq!(saved.version, 6, "and saved with the rest");
 }
 
 /// The Item Card took Item Lookup's key: the key the player presses over an item now
@@ -344,7 +345,8 @@ fn every_hotkey_the_panel_lists_is_one_to_register_the_search_one_included() {
             "ctrl+shift+g",
             "ctrl+shift+i",
             "ctrl+shift+u",
-            "ctrl+shift+f"
+            "ctrl+shift+f",
+            "ctrl+shift+d"
         ]
     );
 }
@@ -358,7 +360,7 @@ fn a_rebound_search_hotkey_another_app_has_taken_is_shown_as_unavailable() {
     let state = minerva.hotkeys_unavailable(vec!["ctrl+shift+q".into()], vec![]);
 
     assert_eq!(state.hotkeys.search, "ctrl+shift+q");
-    assert_eq!(state.hotkeys.all().last(), Some(&"ctrl+shift+q"));
+    assert!(state.hotkeys.all().contains(&"ctrl+shift+q"));
     assert_eq!(state.unavailable_hotkeys, ["ctrl+shift+q"]);
 }
 

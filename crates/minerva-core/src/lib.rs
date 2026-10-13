@@ -7,6 +7,7 @@
 
 mod bests_window;
 pub mod bug_report;
+mod deal_finder;
 mod exp_bar;
 mod grind_tracker;
 mod hotkey_settings;
@@ -27,6 +28,7 @@ pub mod osms_items;
 mod pace;
 mod panel;
 mod personal_best;
+mod player_shop;
 mod pictures;
 mod portal_overrides;
 mod portals;
@@ -43,11 +45,12 @@ mod world;
 
 pub use bests_window::{PersonalBestsMap, PersonalBestsVisit, PersonalBestsWindow};
 pub use bug_report::{BugReport, ReportAbout};
+pub use deal_finder::{DealBadge, DealBadges, DealFinderView, DealGrade, DealItem, GREAT_BELOW, STEAL_BELOW, Verdict};
 pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use grind_tracker::{ClientOffset, GrindTrackerWindow};
 pub use hotkey_settings::{KeyPress, RebindProblem, SettingsNotice, SettingsView};
 pub use item_card::{
-    ITEM_CARD_CREDIT, ItemCard, ItemCardChoice, ItemCardView, MESOWATCH_URL, MarketEdit, MarketLine, NameProblem, ShopPrice,
+    Edge, ITEM_CARD_CREDIT, ItemCard, ItemCardChoice, ItemCardView, MESOWATCH_URL, MarketEdit, MarketLine, NameProblem, ShopPrice,
     ShownItemCard,
 };
 pub use market_prices::{MARKET_PRICES_VERSION, MarketImport, MarketPrice, SavedMarketLine, SavedMarketPrices};
@@ -67,6 +70,7 @@ pub use panel::{
     ScreenRect, Section, Size,
 };
 pub use personal_best::{BESTS_VERSION, MapBests, SavedBests, VisitBest};
+pub use player_shop::{ListedPrice, PlayerShopReader, ShopCapture, ShopList, ShopReading, ShopRow};
 pub use search::{
     DensityTier, Destination, HuntingTarget, ItemMatch, ItemsMissing, MapMatch, Matches, MobChoice, MobMatch, RouteStop,
     SearchResult, SearchState, SearchView, Trip,
@@ -82,6 +86,7 @@ pub use world::{Distance, Step, Travel};
 
 use bests_window::BestsWindow;
 use bug_report::{Event, MapFacts, Outcome, Press, RecordedSource, Recorder, Region};
+use deal_finder::DealFinder;
 use grind_tracker::GrindTracker;
 use hotkey_settings::HotkeySettings;
 use item_card::{Editing, ItemCards, Pressed};
@@ -294,6 +299,15 @@ pub struct PanelState {
     /// of the captured regions; `None` while there is none, no game window, or another app
     /// in front (see [`Layer`]).
     pub item_card_placement: Option<ScreenRect>,
+    /// The Deal Finder (ADR 0014), as the panel shows it.
+    pub deal_finder: DealFinderView,
+    /// Where on screen to capture for the Deal Finder (physical px): the game's client area,
+    /// while it is on, and only while the overlay can show (see [`Layer`]); `None` otherwise.
+    pub deal_finder_capture: Option<ScreenRect>,
+    /// The Deal Badges beside the Player Shop's listings, and where their window goes; `None`
+    /// while the Deal Finder is off, no shop was found, or the overlay can't show, and while
+    /// an Item Card or Item Lookup press's capture is taken, which it would be in.
+    pub deal_badges: Option<DealBadges>,
 }
 
 /// What a hotkey asks the shell to do at once, beyond rendering the panel state.
@@ -313,6 +327,10 @@ pub enum Request {
     /// isn't placed meanwhile: it must be out of the capture.
     CaptureItemTooltip,
 }
+
+/// How often the shell captures [`PanelState::deal_finder_capture`] for the Deal Finder:
+/// a listing's badge follows the player's scrolling within half a second.
+pub const DEAL_FINDER_CAPTURE_MS: u64 = 400;
 
 /// Something the player can do with a hotkey or with the matching icon at the top of
 /// the panel, or with the panel's settings icon, an icon at the top of the Grind
@@ -354,7 +372,12 @@ pub enum PanelControl {
     ClosePersonalBests,
     /// About & Credits' link in Help & Setup: open the Minerva site in the browser.
     OpenSite,
+    /// Turn the Deal Finder on or off.
+    ToggleDealFinder,
 }
+
+/// The most the Deal Margin can be, in percent.
+const MAX_DEAL_MARGIN: u32 = 99;
 
 /// The game window's title, unless the player picked another by hand.
 pub const GAME_WINDOW_TITLE: &str = "MapleStory";
@@ -445,6 +468,13 @@ pub struct Minerva {
     item_card_size: Size,
     /// The market prices the player keeps, which the Item Card shows.
     market_prices: MarketPrices,
+    /// The Deal Finder, and the Player Shop it read last.
+    deal_finder: DealFinder,
+    /// Reads captures fed to [`Minerva::on_player_shop_capture`]; loaded on the first one.
+    shop_reader: Option<PlayerShopReader>,
+    /// The Deal Badges' window's size, in physical px for the current display: its width
+    /// counts, as its height follows the shop's list.
+    deal_badges_size: Size,
     /// What the shell must do that came of time passing (a page MeowDB's answer settled),
     /// for [`Minerva::take_request`].
     requests: VecDeque<Request>,
@@ -496,6 +526,9 @@ impl Minerva {
             card_capturing: false,
             item_card_size: Size { width: 0, height: 0 },
             market_prices: MarketPrices::default(),
+            deal_finder: DealFinder::default(),
+            shop_reader: None,
+            deal_badges_size: Size { width: 0, height: 0 },
             requests: VecDeque::new(),
             panel: Panel::default(),
             setup: Setup::default(),
@@ -728,6 +761,14 @@ impl Minerva {
         self.sync_panel()
     }
 
+    /// The Deal Badges' window's width, in physical px for the current display (its height
+    /// is the shop's list's).
+    pub fn set_deal_badges_size(&mut self, size: Size) -> &PanelState {
+        self.record(Event::DealBadgesSize { size });
+        self.deal_badges_size = size;
+        self.sync_panel()
+    }
+
     /// The Grind Tracker window's size, in physical px for the current display.
     pub fn set_grind_tracker_size(&mut self, size: Size) -> &PanelState {
         self.record(Event::GrindTrackerSize { size });
@@ -930,6 +971,9 @@ impl Minerva {
                     self.forget_unbound_hotkeys();
                 }
             }
+            Action::ToggleDealFinder => self.deal_finder.toggle(),
+            Action::SetDealMargin { percent } => self.settings.deal_margin_percent = percent.min(MAX_DEAL_MARGIN),
+            Action::OpenDealItem { row } => self.open_deal_item(row),
         }
         self.sync_panel()
     }
@@ -993,6 +1037,21 @@ impl Minerva {
         self.sync_panel()
     }
 
+    /// The card of the item listing `row`'s Deal Badge is about shows beside the badge; the
+    /// alert has nothing more to say. Nothing changes for a badge not showing, or one about
+    /// no item ("?").
+    fn open_deal_item(&mut self, row: u32) {
+        let Some(DealBadges { placement, badges }) = &self.state.deal_badges else { return };
+        let (Some(badge), Some(ids), Some(shop)) =
+            (badges.iter().find(|badge| badge.row == row), self.deal_finder.row_items(row), self.deal_finder.shop_window())
+        else {
+            return;
+        };
+        let at = ScreenRect { y: placement.y + badge.top as i32, height: badge.height, ..*placement };
+        self.item_cards.show_beside_badge(ids, at, shop);
+        self.item_lookups.clear();
+    }
+
     /// The card of items `ids`, picked from Search, shows beside the panel; the alert has
     /// nothing more to say.
     fn show_card(&mut self, ids: Vec<u32>) {
@@ -1045,6 +1104,8 @@ impl Minerva {
             PanelControl::ToggleGrindTracker
         } else if is(&hotkeys.open_meowdb_page) {
             PanelControl::OpenMeowdbPage
+        } else if is(&hotkeys.deal_finder) {
+            PanelControl::ToggleDealFinder
         } else {
             return None;
         };
@@ -1072,6 +1133,7 @@ impl Minerva {
             PanelControl::CloseGrindTracker => Action::CloseGrindTracker,
             PanelControl::TogglePersonalBests => Action::TogglePersonalBests,
             PanelControl::ClosePersonalBests => Action::ClosePersonalBests,
+            PanelControl::ToggleDealFinder => Action::ToggleDealFinder,
             // An open search view stays as it is; the shell brings the overlay in front on
             // opening it.
             PanelControl::Search if self.search.is_open() => return Some(Request::RaiseOverlay),
@@ -1165,6 +1227,42 @@ impl Minerva {
         }
         let open = self.item_lookups.read(reading, &ours, &mut self.source, &mut self.meowdb_pace);
         self.requests.extend(open.map(|url| Request::OpenInBrowser { url }));
+        self.sync_panel()
+    }
+
+    /// Read a Deal Finder capture of [`PanelState::deal_finder_capture`] and update the panel
+    /// state: the same as [`Minerva::on_player_shop_read`] with what a [`PlayerShopReader`]
+    /// reads in it, here.
+    pub fn on_player_shop_capture(&mut self, capture: ShopCapture) -> &PanelState {
+        let reading = self.shop_reader.get_or_insert_with(PlayerShopReader::bundled).read(&capture);
+        self.on_player_shop_read(capture, reading)
+    }
+
+    /// As [`Minerva::on_player_shop_reading`], with the capture it was read from (by a
+    /// [`PlayerShopReader`], possibly on another thread), whose shop list a Bug Report keeps
+    /// (ADR 0009).
+    pub fn on_player_shop_read(&mut self, capture: ShopCapture, reading: ShopReading) -> &PanelState {
+        let crop = bug_report::player_shop_crop(&capture, reading.shop.as_ref());
+        let event = Event::PlayerShop { at_ms: reading.at_ms, shop: reading.shop.clone(), same: false };
+        self.record_input(event, Some(reading.at_ms), crop);
+        self.deal_finder.read(reading);
+        self.sync_panel()
+    }
+
+    /// Take what a Deal Finder capture read as (read by a [`PlayerShopReader`], possibly on
+    /// another thread): the Player Shop's listings, whose Deal Badges show beside them.
+    pub fn on_player_shop_reading(&mut self, reading: ShopReading) -> &PanelState {
+        let event = Event::PlayerShop { at_ms: reading.at_ms, shop: reading.shop.clone(), same: false };
+        self.record_input(event, Some(reading.at_ms), None);
+        self.deal_finder.read(reading);
+        self.sync_panel()
+    }
+
+    /// The player chose the Item Card's Market Line `line` (its ID) as the Deal Line, which
+    /// the Deal Finder compares listings with. Saved with the market prices.
+    pub fn choose_deal_line(&mut self, line: &str) -> &PanelState {
+        self.record(Event::ChooseDealLine { line: line.to_string() });
+        self.market_prices.choose_deal_line(line);
         self.sync_panel()
     }
 
@@ -1340,17 +1438,23 @@ impl Minerva {
 
     /// Pick up settings saved by an earlier session. Hotkeys from before version 4
     /// (version 1's Ctrl+Shift letters, versions 2 and 3's Win+Alt) are replaced by the
-    /// defaults, and version 4's Item Lookup key goes to the Item Card; files without an
-    /// EXP Bar Region (all before version 3) start with EXP tracking off.
+    /// defaults, version 4's Item Lookup key goes to the Item Card, and the Deal Finder's
+    /// default is off in a file from before it that gives it to another hotkey; files
+    /// without an EXP Bar Region (all before version 3) start with EXP tracking off.
     pub fn restore(&mut self, mut settings: Settings) -> &PanelState {
         self.record(Event::Restore { settings: Box::new(settings.clone()) });
         // Version 4 brought the Ctrl+Shift defaults, and version 5 the Item Card; a later
         // version keeps the hotkeys.
         match settings.version {
             ..4 => settings.hotkeys = Hotkeys::default(),
-            4 => settings.hotkeys.give_item_lookup_to_card(),
+            4 => {
+                settings.hotkeys.give_item_lookup_to_card();
+                settings.hotkeys.free_deal_finder();
+            }
+            5 => settings.hotkeys.free_deal_finder(),
             _ => {}
         }
+        settings.deal_margin_percent = settings.deal_margin_percent.min(MAX_DEAL_MARGIN);
         settings.version = settings::VERSION;
         self.panel.expanded = settings.expanded;
         self.panel.inside_offset = settings.inside_offset;
@@ -1607,6 +1711,7 @@ impl Minerva {
         self.sync_personal_bests();
         self.sync_item_lookup();
         self.sync_item_card();
+        self.sync_deal_finder();
         self.state.hotkeys = self.settings.hotkeys.clone();
         let in_front = self.panel.foreground.is_some_and(|foreground| foreground != Foreground::OtherApp);
         self.state.hotkeys_live = in_front && !self.hotkey_settings.is_rebinding();
@@ -1652,6 +1757,38 @@ impl Minerva {
                 self.item_cards.placement(game, self.item_card_size, &self.panel.avoid, panel, &others)
             }
             _ => None,
+        };
+        // Opened from a Deal Badge, it unfolds out of it, from the edge facing it.
+        let unfold_from = self.item_cards.badge().zip(self.state.item_card_placement).map(|((badge, _), card)| {
+            if card.x + (card.width as i32) / 2 < badge.x + (badge.width as i32) / 2 { Edge::Right } else { Edge::Left }
+        });
+        if let Some(card) = &mut self.state.item_card {
+            card.unfold_from = unfold_from;
+        }
+    }
+
+    /// The Deal Finder: the client area to capture while it is on, and the badges beside the
+    /// Player Shop it last read, judged afresh against the Deal Line; only while the overlay
+    /// can show (see [`Layer`]), and the badges not while an Item Card or Item Lookup press's
+    /// capture is taken, which they would be in.
+    fn sync_deal_finder(&mut self) {
+        let shows = self.panel.layer() != Layer::Hidden;
+        let game = self.panel.game.as_ref().filter(|_| shows);
+        self.state.deal_finder_capture = game.filter(|_| self.deal_finder.on).map(|game| game.client);
+        let capturing = self.card_capturing || self.item_lookups.capturing();
+        let placement = game
+            .filter(|_| !capturing)
+            .and_then(|game| self.deal_finder.placement(game, self.deal_badges_size, &self.panel.avoid));
+        let top = placement.map_or(0, |at| at.y);
+        let items = self.item_files.items().ok();
+        let opened = self.item_cards.badge().filter(|_| self.state.item_card.is_some());
+        let badges = self.deal_finder.badges(items, &self.market_prices, self.settings.deal_margin_percent, top, opened);
+        self.state.deal_badges = placement.map(|placement| DealBadges { placement, badges });
+        self.state.deal_finder = DealFinderView {
+            on: self.deal_finder.on,
+            deal_line: self.market_prices.deal_line().map(|line| line.name.clone()),
+            margin_percent: self.settings.deal_margin_percent,
+            shop_found: self.deal_finder.shop().is_some(),
         };
     }
 

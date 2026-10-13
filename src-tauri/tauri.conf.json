@@ -93,6 +93,22 @@
         "contentProtected": false
       },
       {
+        "label": "deal-badges",
+        "title": "Deal Badges",
+        "url": "deal-badges.html",
+        "width": 116,
+        "height": 360,
+        "transparent": true,
+        "decorations": false,
+        "shadow": false,
+        "alwaysOnTop": false,
+        "skipTaskbar": true,
+        "resizable": false,
+        "focus": false,
+        "focusable": false,
+        "contentProtected": false
+      },
+      {
         "label": "setup",
         "title": "Minerva Setup",
         "url": "setup.html",

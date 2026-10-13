@@ -47,6 +47,9 @@ pub(crate) struct ItemFacts {
     /// ("Use", "Etc", "Setup"); "Scroll" or "Cash".
     pub kind: String,
     pub shop: ShopPrice,
+    /// A throwing star or a bullet, recharged at a shop (`unitPrice`): a listing of it is one
+    /// set, its number how many the set holds.
+    pub rechargeable: bool,
 }
 
 /// Every item in OSMS's item files: the game's items, its scrolls and the Cash Shop's.
@@ -101,6 +104,20 @@ impl ItemSet {
             .map(|name| self.names[name].1.iter().map(|&item| &self.items[item]).collect())
             .unwrap_or_default()
     }
+
+    /// The items with the one name that starts as `start` does (a name the game cut short),
+    /// as [`ItemSet::named`] compares them. Empty when no name does, or several do.
+    pub(crate) fn starting_with(&self, start: &str) -> Vec<&ItemFacts> {
+        let start = item_key(start);
+        if start.is_empty() {
+            return Vec::new();
+        }
+        let mut starting = self.names.iter().filter(|(name, _)| name.starts_with(&start));
+        match (starting.next(), starting.next()) {
+            (Some((_, items)), None) => items.iter().map(|&item| &self.items[item]).collect(),
+            _ => Vec::new(),
+        }
+    }
 }
 
 /// Read OSMS's item files. All or nothing: a file that isn't JSON, or isn't shaped as the
@@ -113,9 +130,10 @@ fn read_set(files: &ItemFiles) -> Result<ItemSet, String> {
     let file: ItemsFile = parse(&files.items, "items.json")?;
     let cash_shop: CashShopFile = parse(&files.cash_shop, "cash_shop.json")?;
     let mut items = Vec::new();
-    let facts = |id, name: &str, kind: String, shop| ItemFacts { id, name: name.trim().to_string(), kind, shop };
+    let facts = |id, name: &str, kind: String, shop| ItemFacts { id, name: name.trim().to_string(), kind, shop, rechargeable: false };
     for item in &file.items {
-        items.push(facts(item.id, &item.name, kind(item), shop_price(item)?));
+        let rechargeable = item.stats.contains_key("unitPrice");
+        items.push(ItemFacts { rechargeable, ..facts(item.id, &item.name, kind(item), shop_price(item)?) });
     }
     for scroll in &file.scrolls {
         items.push(facts(scroll.id, &scroll.name, "Scroll".into(), ShopPrice::Unknown));

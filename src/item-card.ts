@@ -12,8 +12,8 @@ type ShopPrice = { status: "sells"; mesos: number } | { status: "notSold" } | { 
 type MarketPrice = { mesos: number; setAtUnixMs?: number };
 
 /** Mirror of `minerva_core::MarketLine`: one of the player's Market Lines, with the item's
- * price on it. */
-type MarketLine = { id: string; name: string; price: MarketPrice | null };
+ * price on it, and whether it is the Deal Line the Deal Finder compares listings with. */
+type MarketLine = { id: string; name: string; price: MarketPrice | null; dealLine: boolean };
 
 /** Mirror of `minerva_core::NameProblem`. */
 type NameProblem = { kind: "empty" } | { kind: "taken"; name: string };
@@ -40,8 +40,9 @@ type ItemCard = {
 /** Mirror of `minerva_core::ItemCardChoice`. */
 type ItemCardChoice = { id: string; kind: string; icon: string | null };
 
-/** Mirror of `minerva_core::ShownItemCard`. */
-type ShownItemCard = { card: number } & (
+/** Mirror of `minerva_core::ShownItemCard`: `unfoldFrom`, the edge facing the Deal Badge it
+ * opened from. */
+type ShownItemCard = { card: number; unfoldFrom?: "left" | "right" } & (
   | ({ status: "card" } & ItemCard)
   | { status: "choose"; name: string; items: ItemCardChoice[] }
 );
@@ -166,9 +167,26 @@ function hint(problem: string | null, otherwise: string): HTMLParagraphElement {
 
 const quoted = (name: string) => `“${name}”`;
 
-/** A line: its name at the left (a link that opens its name field) and the item's price on
- * it right-aligned (a link that opens its price field, the day it was set in its tooltip),
- * or "Not set". */
+/** The Deal Line's mark before a line's name: filled on the one the Deal Finder compares
+ * listings with, hollow on the others, where a click makes it the Deal Line. */
+function dealMark(line: MarketLine): HTMLButtonElement {
+  const mark = document.createElement("button");
+  mark.type = "button";
+  mark.className = "deal-mark";
+  mark.setAttribute("role", "radio");
+  mark.setAttribute("aria-checked", String(line.dealLine));
+  const label = line.dealLine
+    ? `${quoted(line.name)} is the Deal Line: the Deal Finder compares Player Shop listings with it`
+    : `Make ${quoted(line.name)} the Deal Line, which the Deal Finder compares Player Shop listings with`;
+  mark.title = label;
+  mark.setAttribute("aria-label", label);
+  if (!line.dealLine) mark.addEventListener("click", () => invoke("item_card_choose_deal_line", { line: line.id }));
+  return mark;
+}
+
+/** A line: the Deal Line's mark and its name at the left (a link that opens its name field)
+ * and the item's price on it right-aligned (a link that opens its price field, the day it
+ * was set in its tooltip), or "Not set". */
 function lineRow(line: MarketLine): HTMLElement {
   const row = document.createElement("div");
   row.className = "item-card-line";
@@ -187,7 +205,7 @@ function lineRow(line: MarketLine): HTMLElement {
     : link("Not set", `Set your price on ${quoted(line.name)}`, editPrice);
   value.classList.toggle("quiet", !line.price);
   value.classList.add("value");
-  row.append(name, value);
+  row.append(dealMark(line), name, value);
   return row;
 }
 
@@ -397,8 +415,27 @@ function render({ shown, card }: CardView) {
   shownKey = key;
   if (card.status === "card") renderCard(card);
   else renderChoice(card.name, card.items);
+  if (card.card !== unfoldedCard) {
+    unfoldedCard = card.card;
+    unfold(card.unfoldFrom);
+  }
   reportHeight();
 }
+
+/**
+ * A card opened from a Deal Badge unfolds out of it, from the edge facing it: the window's one
+ * authored motion, answering the click. Its content keeps its size and is uncovered, never
+ * scaled, from a first frame already showing the third nearest the badge. Any other card,
+ * or with reduced motion, shows at once.
+ */
+let unfoldedCard = -1;
+function unfold(from: "left" | "right" | undefined) {
+  cardEl.classList.remove("unfold-left", "unfold-right");
+  if (!from || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  void cardEl.offsetWidth;
+  cardEl.classList.add(`unfold-${from}`);
+}
+cardEl.addEventListener("animationend", () => cardEl.classList.remove("unfold-left", "unfold-right"));
 
 // The shell sizes the window to the card, up to its most; past that the card scrolls under
 // its bar. The card is no taller than the window, so it is measured without that limit, or

@@ -10,6 +10,7 @@ use common::osms;
 use common::{FakeSource, SUNSET_SKY_ID, frame};
 use minerva_core::bug_report::{self, Answer, Event, Note, Recording, ReplayData, MAX_REPORT_BYTES};
 use minerva_core::{
+    ListedPrice, ShopCapture, ShopList, ShopReading, ShopRow,
     Action, BESTS_VERSION, Minerva, ExpBar, ExpBarReading, ExpBarRegion, Foreground, Frame, GameWindow, ItemCapture, ItemTooltip,
     ItemTooltipReading, MapBests, Rect, ReportAbout, SavedBests, ScreenPoint, ScreenRect, Settings, Size, TitleLines,
     TitleReading, TitleRegion, TrackingState, VisitBest,
@@ -653,4 +654,91 @@ fn zip_bytes(zip: &[u8], name: &str) -> Vec<u8> {
     let mut bytes = Vec::new();
     archive.by_name(name).expect(name).read_to_end(&mut bytes).expect("bytes");
     bytes
+}
+
+/// A Player Shop's list in the Deal Finder's captures, at (561,513), its listings read as
+/// `names` (`None`: unreadable), each for 999 mesos.
+fn shop_reading(names: &[Option<&str>], at_ms: u64) -> ShopReading {
+    let rows = names
+        .iter()
+        .enumerate()
+        .map(|(slot, name)| ShopRow {
+            area: ScreenRect { x: 619, y: 513 + 63 * slot as i32, width: 253, height: 54 },
+            name: name.map(String::from),
+            price: Some(ListedPrice { quantity: 1, mesos: 999 }),
+            covered: false,
+        })
+        .collect();
+    ShopReading { shop: Some(ShopList { area: ScreenRect { x: 561, y: 513, width: 311, height: 366 }, rows }), at_ms }
+}
+
+/// The game's client area as the shell captures it for the Deal Finder.
+fn shop_capture(at_ms: u64) -> ShopCapture {
+    let ItemCapture { frame, origin, .. } = client_capture(ScreenPoint { x: 0, y: 0 }, at_ms);
+    ShopCapture { frame, origin }
+}
+
+/// A run with the Deal Finder: turned on, a shop read the same a few times, then with a
+/// listing unreadable, the Deal Line chosen, the margin set, a badge clicked, and off.
+fn run_with_the_deal_finder() -> Shell {
+    let mut shell = Shell::new(FakeSource::osms().with_items(items()));
+    shell.minerva.restore_market_prices(serde_json::from_str(r#"{"version":2,"lines":[{"id":"1","name":"Your price"},{"id":"2","name":"Lowest ask","prices":{"04010000":{"mesos":1200}}}]}"#).unwrap());
+    shell.minerva.set_deal_badges_size(Size { width: 160, height: 0 });
+    shell.minerva.set_item_card_size(Size { width: 280, height: 160 });
+    shell.play(10 * S, CONSTRUCTION_SITE, grind);
+    assert!(shell.minerva.on_hotkey("ctrl+shift+d").is_none());
+    for at in [10_400, 10_800, 11_200] {
+        shell.minerva.on_player_shop_read(shop_capture(at), shop_reading(&[Some("Bronze Ore"), Some("Blue Moon")], at));
+    }
+    shell.minerva.on_player_shop_read(shop_capture(11_600), shop_reading(&[Some("Bronze Ore"), None], 11_600));
+    shell.minerva.choose_deal_line("2");
+    shell.minerva.act(Action::SetDealMargin { percent: 5 });
+    shell.minerva.act(Action::OpenDealItem { row: 0 });
+    shell.play(20 * S, CONSTRUCTION_SITE, grind);
+    shell.minerva.on_player_shop_reading(ShopReading { shop: None, at_ms: 20 * S });
+    shell.minerva.act(Action::ToggleDealFinder);
+    shell.play(30 * S, CONSTRUCTION_SITE, grind);
+    shell
+}
+
+#[test]
+fn the_deal_finder_replays_through_the_same_states_with_the_runs_item_files() {
+    let (_, recording) = run_with_the_deal_finder().report();
+
+    let with = ReplayData { osms: Some(osms::game().files()), items: Some(items().files()) };
+    let replay = bug_report::replay_with(&recording, with);
+
+    assert_eq!(replay.divergence, None);
+    assert_eq!(replay.lines, recording.lines.len());
+    let timeline = recording.timeline(0).join("\n");
+    assert!(timeline.contains(r#"Player Shop read: "Bronze Ore" 1 for 999, ? 1 for 999"#), "{timeline}");
+    assert!(timeline.contains("market line 2 chosen as the Deal Line"), "{timeline}");
+}
+
+#[test]
+fn a_shop_read_the_same_as_before_is_written_as_such_with_no_crop() {
+    let (_, recording) = run_with_the_deal_finder().report();
+
+    let shops: Vec<&Event> = recording.lines.iter().map(|line| &line.event).filter(|e| matches!(e, Event::PlayerShop { .. })).collect();
+    assert!(matches!(shops[0], Event::PlayerShop { shop: Some(_), same: false, .. }));
+    assert!(matches!(shops[1], Event::PlayerShop { shop: None, same: true, .. }));
+    assert!(matches!(shops[2], Event::PlayerShop { same: true, .. }));
+    assert!(matches!(shops[3], Event::PlayerShop { shop: Some(_), same: false, .. }));
+    let crops: Vec<&str> = recording.crops.iter().map(String::as_str).filter(|name| name.starts_with("crops/player-shop-")).collect();
+    assert_eq!(crops.len(), 2, "the first reading's and the one that changed: {crops:?}");
+}
+
+#[test]
+fn a_shop_with_a_listing_that_couldnt_be_read_keeps_its_list_for_the_run() {
+    let mut shell = run_with_the_deal_finder();
+    shell.play(20 * MIN, CONSTRUCTION_SITE, grind);
+
+    let (report, recording) = shell.report();
+
+    let name = format!("crops/player-shop-{:010}.png", 11_600);
+    let crops: Vec<&str> = recording.crops.iter().map(String::as_str).filter(|name| name.starts_with("crops/player-shop-")).collect();
+    assert_eq!(crops, [name.as_str()], "only the one with a listing unread outlives 10 minutes");
+    let crop = image::load_from_memory(&zip_bytes(&report.zip, &name)).expect("a PNG").to_rgba8();
+    assert_eq!(crop.dimensions(), (362, 386), "the list, 10 px around it and past its scroll bar");
+    assert_eq!(crop.get_pixel(0, 0).0, [(551 % 256) as u8, (503 % 256) as u8, 40, 255], "its corner at (551,503)");
 }

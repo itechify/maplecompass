@@ -101,8 +101,9 @@
                   <summary>Does Minerva read or change the game?</summary>
                   <p>
                     No. It captures only what it needs, the way a screenshot does: the minimap title, the EXP bar if you
-                    mark it, and the tooltip by the pointer when you press an item hotkey. It never reads or changes the
-                    game's memory or files, never injects anything into it, and never presses keys or clicks for you.
+                    mark it, the tooltip by the pointer when you press an item hotkey, and the game window a few times a
+                    second while the Deal Finder is on, to find a Player Shop in it. It never reads or changes the game's
+                    memory or files, never injects anything into it, and never presses keys or clicks for you.
                   </p>
                 </details>
                 <details class="qa" id="hotkeys-hook">
@@ -783,7 +784,7 @@
           <section class="faq-group stop" id="items" data-about="items" aria-labelledby="items-title">
             <div class="faq-group-head">
               <h2 id="items-title">Items</h2>
-              <p>The Item Card, the market prices you keep, and Item Lookup.</p>
+              <p>The Item Card, the market prices you keep, Item Lookup and the Deal Finder.</p>
             </div>
             <div class="faq-group-body">
               <h3>The Item Card</h3>
@@ -891,6 +892,62 @@
                   <p>
                     No: they have no button, so turning off their hotkey turns them off. <a href="#search">Search</a> still
                     opens any item's card, and its name still opens its MeowDB page.
+                  </p>
+                </details>
+              </div>
+
+              <h3>The Deal Finder</h3>
+              <div class="qa-list">
+                <details class="qa" id="deal-finder">
+                  <summary>How do I find the deals in a Player Shop?</summary>
+                  <p>
+                    Press <kbd>Ctrl+Shift+D</kbd>, or click the price tag at the top of the panel, and open a shop: a badge
+                    shows beside each listing, left of the shop's window, and follows as you scroll. It stays on until
+                    you press the key or click the tag again, or Turn off in the panel, where its owl says what it
+                    compares with. It's off each time Minerva starts, and while it's on,
+                    the collapsed icon's owl holds its magnifying glass.
+                  </p>
+                </details>
+                <details class="qa" id="deal-line">
+                  <summary>What does the Deal Finder compare prices with?</summary>
+                  <p>
+                    One of your <a href="#market-lines">market lines</a>, the <b>Deal Line</b>: on any Item Card, the line
+                    with the filled ring. Click another line's ring to compare with that one instead. A listing of several
+                    is judged by the price of one: 10 for 6,800 mesos is 680 each. Throwing stars and bullets are judged by
+                    the listing's whole price, since its number is how many the set holds. To count only bigger savings, set the
+                    <b>Deal Margin</b> in Settings, the gear at the top of the panel: at 10%, a deal is at least 10% below
+                    the line.
+                  </p>
+                </details>
+                <details class="qa" id="deal-badges">
+                  <summary>What do the Deal Finder's badges mean?</summary>
+                  <p>
+                    A coloured badge is a deal: how far below the Deal Line it is, and the line's price, such as −32% ·
+                    1,470. Its colour grades it as the game grades items: blue for a good deal, purple for a great one (20%
+                    or more below the line), gold for a steal (40% or more). A pale one isn't a deal, and says how far off
+                    it is, such as +12%. Along each badge's bottom edge, a
+                    bar shows the price against the Deal Line, the notch in its middle the line itself, so a glance down
+                    the column shows which deals are biggest. <b>no price</b> means the Deal Line has no
+                    price for the item: click it to set one on the item's card. Click any badge for the item's card.
+                    <b>?</b> means it couldn't read the listing for sure, as when a name the shop cut short could be
+                    several items: it never guesses. While the pointer or the item's tooltip covers a listing, its badge
+                    keeps what it read before, faded, with an orange dot before it, until the list changes. Equipment is
+                    judged by its name alone, as the shop doesn't show its stats.
+                  </p>
+                </details>
+                <details class="qa" id="deal-whole-shop">
+                  <summary>Does the Deal Finder read the whole shop?</summary>
+                  <p>
+                    It reads the listings on screen, and you scroll for the rest: Minerva never clicks or scrolls for you.
+                    Sold-out listings get no badge. It finds the shop wherever its window is, so you can drag it. It reads
+                    Player Shops; Hired Merchants aren't read yet.
+                  </p>
+                </details>
+                <details class="qa" id="deal-key-off">
+                  <summary>Can I use the Deal Finder without its hotkey?</summary>
+                  <p>
+                    Yes: the price tag at the top of the panel turns it on and off, as its hotkey does, and stays pressed
+                    while it's on. Turn off its hotkey in Settings, and the tag still works.
                   </p>
                 </details>
               </div>

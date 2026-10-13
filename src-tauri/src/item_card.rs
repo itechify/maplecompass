@@ -37,10 +37,10 @@ const MAX_HEIGHT: f64 = 420.0;
 
 /// Where the card waits while a capture is taken: off every screen, as Windows parks a
 /// minimised window.
-const OUT_OF_SIGHT: PhysicalPosition<i32> = PhysicalPosition::new(-32_000, -32_000);
+pub(crate) const OUT_OF_SIGHT: PhysicalPosition<i32> = PhysicalPosition::new(-32_000, -32_000);
 /// How long a move of the card takes to leave the screen: two frames at 60 Hz, and a
 /// little more, for the desktop's compositor to draw the screen without it.
-const OFF_SCREEN_SETTLE: Duration = Duration::from_millis(50);
+pub(crate) const OFF_SCREEN_SETTLE: Duration = Duration::from_millis(50);
 
 /// The view last sent to the card's page, for when it loads after it was sent.
 #[derive(Default)]
@@ -186,16 +186,12 @@ impl ItemCardWindow {
         }
     }
 
-    /// Before a capture of the game while the card shows: move it off the screen now, and
-    /// wait for the screen to be drawn without it, so it is never read in place of the
-    /// Item Tooltip it may cover. The next sync puts it back where the core says.
-    pub fn out_of_the_capture(&mut self) {
-        if !self.shown {
-            return;
-        }
-        if self.window.set_position(OUT_OF_SIGHT).is_ok() {
-            std::thread::sleep(OFF_SCREEN_SETTLE);
-        }
+    /// Before a capture of the game while the card shows: move it off the screen now, so it
+    /// is never read in place of the Item Tooltip it may cover; whether it moved, so the
+    /// capture waits for the screen to be drawn without it ([`OFF_SCREEN_SETTLE`]). The next
+    /// sync puts it back where the core says.
+    pub fn out_of_the_capture(&mut self) -> bool {
+        self.shown && self.window.set_position(OUT_OF_SIGHT).is_ok()
     }
 }
 
@@ -283,4 +279,11 @@ pub fn item_card_ask_remove_market_line(commands: State<'_, Sender<Command>>) {
 #[tauri::command]
 pub fn item_card_remove_market_line(commands: State<'_, Sender<Command>>) {
     let _ = commands.send(Command::Act(Action::RemoveCardMarketLine));
+}
+
+/// The player chose the Market Line with this ID as the Deal Line, which the Deal Finder
+/// compares listings with.
+#[tauri::command]
+pub fn item_card_choose_deal_line(line: String, commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::ChooseDealLine(line));
 }
