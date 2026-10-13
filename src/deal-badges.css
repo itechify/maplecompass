@@ -5,7 +5,11 @@
    but "?" opens its item's card: a deal is the deep-steel button, the one step worth
    taking (the same as setup's step forward); every other verdict is the light-steel one,
    there but out of the way. Depth is the game's chrome, a top highlight and a 1px edge,
-   never a drop shadow. A listing the pointer or a tooltip covers keeps the badge read
+   never a drop shadow. Every badge is one width and 25px tall, inside a listing's band even
+   at 200% (the game draws its UI in physical px), and a judged one's bottom edge is a gauge
+   of its listing's price against the Deal Line, so the column beside the shop reads as a chart:
+   how far below the line a deal is shows before its words are read. The badge whose card
+   is open stays pressed. A listing the pointer or a tooltip covers keeps the badge read
    there before, faded to 70% and edged in dashes (a place not yet fixed), with the
    problem notes' orange dot: doubt, and nothing else, is orange. */
 
@@ -38,12 +42,12 @@
   box-sizing: border-box;
   position: relative;
   display: flex;
-  align-items: center;
-  gap: 5px;
-  max-width: calc(100% - 7px);
-  height: 23px;
+  flex-direction: column;
+  justify-content: center;
+  width: calc(100% - 7px);
+  height: 25px;
   margin-right: 7px;
-  padding: 0 8px;
+  padding: 0 8px 4px;
   border: 1px solid var(--window-edge);
   border-radius: 3px;
   background: var(--button-light);
@@ -54,6 +58,15 @@
   -webkit-text-stroke-width: 0.3px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+/* Its words, right-aligned as the panel's figures are, so the column's figures line up. */
+.deal-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  min-width: 0;
 }
 
 .deal-words {
@@ -116,6 +129,81 @@ button.deal-badge.deal:hover {
 button.deal-badge.deal:active {
   background: var(--button);
   box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.45);
+}
+
+/* Its card is open: held down, as a pressed button sinks. */
+button.deal-badge.open {
+  background: var(--button-light);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
+}
+
+button.deal-badge.deal.open {
+  background: var(--button);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.45);
+}
+
+/* The gauge, the badge's bottom edge: from nothing at its left to twice the Deal Line at its
+   right, the line a notch at its middle. A deal's fill stops short of the notch; a price
+   over the line runs past it, and one past twice the line runs off the end, its last
+   stretch cut by two slants. */
+.deal-gauge {
+  --gauge-track: rgba(30, 45, 90, 0.14);
+  --gauge-fill: var(--frame);
+  --gauge-notch: var(--ink);
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 3px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--gauge-track);
+  box-shadow: inset 0 1px 1px rgba(20, 30, 60, 0.12);
+}
+
+.deal-gauge::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--fill) * 100%);
+  border-radius: 2px;
+  background: var(--gauge-fill);
+}
+
+.deal-gauge.past::before {
+  background:
+    repeating-linear-gradient(115deg, var(--gauge-fill) 0 3px, transparent 3px 5px) right / 10px 100% no-repeat,
+    linear-gradient(var(--gauge-fill), var(--gauge-fill)) left / calc(100% - 10px) 100% no-repeat;
+}
+
+.deal-gauge::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  bottom: -1px;
+  left: calc(50% - 0.5px);
+  width: 1px;
+  background: var(--gauge-notch);
+}
+
+/* On a light badge the price over the line is the frame's navy at half strength, the line
+   ink; on the deep steel, white on a faint white track. */
+.noDeal .deal-gauge {
+  --gauge-fill: rgba(62, 82, 124, 0.55);
+}
+
+.deal .deal-gauge {
+  --gauge-track: rgba(255, 255, 255, 0.22);
+  --gauge-fill: #fff;
+  --gauge-notch: rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 1px 1px rgba(10, 20, 50, 0.3);
+}
+
+/* Without a gauge, the words sit at the middle. */
+.deal-badge.noPrice,
+.deal-badge.unknown {
+  padding-bottom: 0;
 }
 
 /* Not read for sure: no item to open, so not pressable, and quieter still. */

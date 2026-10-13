@@ -50,7 +50,7 @@ pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
 pub use grind_tracker::{ClientOffset, GrindTrackerWindow};
 pub use hotkey_settings::{KeyPress, RebindProblem, SettingsNotice, SettingsView};
 pub use item_card::{
-    ITEM_CARD_CREDIT, ItemCard, ItemCardChoice, ItemCardView, MESOWATCH_URL, MarketEdit, MarketLine, NameProblem, ShopPrice,
+    Edge, ITEM_CARD_CREDIT, ItemCard, ItemCardChoice, ItemCardView, MESOWATCH_URL, MarketEdit, MarketLine, NameProblem, ShopPrice,
     ShownItemCard,
 };
 pub use market_prices::{MARKET_PRICES_VERSION, MarketImport, MarketPrice, SavedMarketLine, SavedMarketPrices};
@@ -1758,6 +1758,13 @@ impl Minerva {
             }
             _ => None,
         };
+        // Opened from a Deal Badge, it unfolds out of it, from the edge facing it.
+        let unfold_from = self.item_cards.badge().zip(self.state.item_card_placement).map(|((badge, _), card)| {
+            if card.x + (card.width as i32) / 2 < badge.x + (badge.width as i32) / 2 { Edge::Right } else { Edge::Left }
+        });
+        if let Some(card) = &mut self.state.item_card {
+            card.unfold_from = unfold_from;
+        }
     }
 
     /// The Deal Finder: the client area to capture while it is on, and the badges beside the
@@ -1774,7 +1781,8 @@ impl Minerva {
             .and_then(|game| self.deal_finder.placement(game, self.deal_badges_size, &self.panel.avoid));
         let top = placement.map_or(0, |at| at.y);
         let items = self.item_files.items().ok();
-        let badges = self.deal_finder.badges(items, &self.market_prices, self.settings.deal_margin_percent, top);
+        let opened = self.item_cards.badge().filter(|_| self.state.item_card.is_some());
+        let badges = self.deal_finder.badges(items, &self.market_prices, self.settings.deal_margin_percent, top, opened);
         self.state.deal_badges = placement.map(|placement| DealBadges { placement, badges });
         self.state.deal_finder = DealFinderView {
             on: self.deal_finder.on,

@@ -379,3 +379,32 @@
   max-height: 32px;
   image-rendering: pixelated;
 }
+
+/* Opened from a Deal Badge, the card unfolds out of it, from the edge facing it: uncovered over
+   220ms on the system's exponential ease-out, its content at its own size throughout, a third
+   of it showing from the first frame. With reduced motion the script adds neither class. */
+@keyframes unfold-from-right {
+  from {
+    clip-path: inset(0 0 0 66% round 4px);
+  }
+  to {
+    clip-path: inset(0 0 0 0 round 4px);
+  }
+}
+
+@keyframes unfold-from-left {
+  from {
+    clip-path: inset(0 66% 0 0 round 4px);
+  }
+  to {
+    clip-path: inset(0 0 0 0 round 4px);
+  }
+}
+
+.panel.unfold-right {
+  animation: unfold-from-right 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.panel.unfold-left {
+  animation: unfold-from-left 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}

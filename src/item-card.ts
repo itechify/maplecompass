@@ -40,8 +40,9 @@ type ItemCard = {
 /** Mirror of `minerva_core::ItemCardChoice`. */
 type ItemCardChoice = { id: string; kind: string; icon: string | null };
 
-/** Mirror of `minerva_core::ShownItemCard`. */
-type ShownItemCard = { card: number } & (
+/** Mirror of `minerva_core::ShownItemCard`: `unfoldFrom`, the edge facing the Deal Badge it
+ * opened from. */
+type ShownItemCard = { card: number; unfoldFrom?: "left" | "right" } & (
   | ({ status: "card" } & ItemCard)
   | { status: "choose"; name: string; items: ItemCardChoice[] }
 );
@@ -414,8 +415,27 @@ function render({ shown, card }: CardView) {
   shownKey = key;
   if (card.status === "card") renderCard(card);
   else renderChoice(card.name, card.items);
+  if (card.card !== unfoldedCard) {
+    unfoldedCard = card.card;
+    unfold(card.unfoldFrom);
+  }
   reportHeight();
 }
+
+/**
+ * A card opened from a Deal Badge unfolds out of it, from the edge facing it: the window's one
+ * authored motion, answering the click. Its content keeps its size and is uncovered, never
+ * scaled, from a first frame already showing the third nearest the badge. Any other card,
+ * or with reduced motion, shows at once.
+ */
+let unfoldedCard = -1;
+function unfold(from: "left" | "right" | undefined) {
+  cardEl.classList.remove("unfold-left", "unfold-right");
+  if (!from || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  void cardEl.offsetWidth;
+  cardEl.classList.add(`unfold-${from}`);
+}
+cardEl.addEventListener("animationend", () => cardEl.classList.remove("unfold-left", "unfold-right"));
 
 // The shell sizes the window to the card, up to its most; past that the card scrolls under
 // its bar. The card is no taller than the window, so it is measured without that limit, or

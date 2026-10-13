@@ -16,7 +16,7 @@ mod common;
 use common::FakeSource;
 use common::items::{ItemWorld, equip, etc, item_world, scroll, use_item};
 use minerva_core::{
-    Action, DealBadge, DealBadges, DealFinderView, DealItem, Foreground, GameWindow, Hotkey, Hotkeys, ItemCardView, ListedPrice,
+    Action, DealBadge, DealBadges, DealFinderView, DealItem, Edge, Foreground, GameWindow, Hotkey, Hotkeys, ItemCardView, ListedPrice,
     MarketPrice, Minerva, PanelControl, PanelSizes, PanelState, Rect, Request, SavedMarketLine, SavedMarketPrices, ScreenRect,
     Settings, ShopList, ShopReading, ShopRow, Size, TitleRegion, Verdict,
 };
@@ -541,4 +541,26 @@ fn a_throwing_star_is_judged_by_its_listings_whole_price_however_many_it_holds()
             Verdict::Deal { item: star, listed: listed(800, 150_000), percent: -21, line_mesos: 188_888 },
         ]
     );
+}
+
+#[test]
+fn a_card_opened_from_a_badge_unfolds_from_the_edge_facing_it_and_the_badge_stays_pressed() {
+    let mut minerva = on();
+    minerva.on_player_shop_reading(shop(vec![row(0, Some("Bronze Ore"), Some((1, 177))), row(1, Some("Garnet"), Some((1, 999)))], 400));
+
+    let state = minerva.act(Action::OpenDealItem { row: 1 }).clone();
+    assert_eq!(state.item_card.as_ref().and_then(|card| card.unfold_from), Some(Edge::Right), "the card is left of the badge");
+    let open: Vec<bool> = state.deal_badges.as_ref().unwrap().badges.iter().map(|b| b.open).collect();
+    assert_eq!(open, [false, true]);
+
+    // Dragged, it no longer belongs beside the badge.
+    let card = state.item_card_placement.unwrap();
+    let state = minerva.act(Action::ItemCardMoved { x: card.x - 100, y: card.y });
+    assert_eq!(state.item_card.as_ref().and_then(|card| card.unfold_from), None);
+    assert!(state.deal_badges.as_ref().unwrap().badges.iter().all(|b| !b.open));
+
+    // Closed, no badge is pressed.
+    minerva.act(Action::OpenDealItem { row: 1 });
+    let state = minerva.close_item_card();
+    assert!(state.deal_badges.as_ref().unwrap().badges.iter().all(|b| !b.open));
 }

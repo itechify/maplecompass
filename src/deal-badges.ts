@@ -14,7 +14,7 @@ type DealItem = { id: string; name: string; rechargeable: boolean };
 /** Mirror of `minerva_core::DealBadge`: one listing's badge, level with it (physical px
  * from the window's top), and what it says; `covered`, what was read there before the
  * pointer or a tooltip covered it. */
-export type DealBadge = { row: number; top: number; height: number; covered: boolean } & (
+export type DealBadge = { row: number; top: number; height: number; covered: boolean; open: boolean } & (
   | { verdict: "deal" | "noDeal"; item: DealItem; listed: ListedPrice; percent: number; lineMesos: number }
   | { verdict: "noPrice"; item: DealItem; listed: ListedPrice }
   | { verdict: "unknown" }
@@ -39,6 +39,17 @@ function each(item: DealItem, { quantity, mesos }: ListedPrice): string {
   if (item.rechargeable) return `${whole(mesos)} mesos for the set of ${whole(quantity)}`;
   const one = mesos / quantity;
   return `${Number.isInteger(one) ? whole(one) : one.toLocaleString("en-US", { maximumFractionDigits: 1 })} mesos each`;
+}
+
+/**
+ * Where the listing's price sits against the Deal Line, on a gauge from nothing to twice the
+ * line, the line at its middle: the share filled, and whether it runs past the gauge's end.
+ * The price compared is the one the verdict judged: of one item, or a set's.
+ */
+function gauge(item: DealItem, { quantity, mesos }: ListedPrice, lineMesos: number): { fill: number; past: boolean } {
+  const compared = item.rechargeable ? mesos : mesos / quantity;
+  const ratio = lineMesos > 0 ? compared / lineMesos : 2;
+  return { fill: Math.min(Math.max(ratio / 2, 0.02), 1), past: ratio > 2 };
 }
 
 /** The badge's words, and what it says in full for its tooltip. */
@@ -78,19 +89,33 @@ function badgeItem(badge: DealBadge, line: string): HTMLLIElement {
   const el = document.createElement(opens ? "button" : "span");
   el.className = `deal-badge ${badge.verdict}`;
   el.classList.toggle("covered", badge.covered);
+  el.classList.toggle("open", badge.open);
   el.title = full;
   el.setAttribute("aria-label", full);
   if (el instanceof HTMLButtonElement) {
     el.type = "button";
     el.dataset.row = String(badge.row);
+    el.setAttribute("aria-pressed", String(badge.open));
   }
+  const head = document.createElement("span");
+  head.className = "deal-head";
   // Covered, its verdict stays, with the doubt dot: it isn't being read now.
   if (badge.covered && badge.verdict !== "unknown") {
     const dot = span("deal-covered", "");
     dot.setAttribute("aria-hidden", "true");
-    el.append(dot);
+    head.append(dot);
   }
-  el.append(span("deal-words", text));
+  head.append(span("deal-words", text));
+  el.append(head);
+  // A judged price's gauge, so the column beside the shop reads as a chart.
+  if (badge.verdict === "deal" || badge.verdict === "noDeal") {
+    const { fill, past } = gauge(badge.item, badge.listed, badge.lineMesos);
+    const meter = span("deal-gauge", "");
+    meter.setAttribute("aria-hidden", "true");
+    meter.style.setProperty("--fill", String(fill));
+    meter.classList.toggle("past", past);
+    el.append(meter);
+  }
   row.append(el);
   return row;
 }

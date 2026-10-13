@@ -50,6 +50,8 @@ pub struct DealBadge {
     /// Its listing is covered now, so its verdict is what was read there before (or "?"
     /// with nothing read there before).
     pub covered: bool,
+    /// Its item's card shows, opened from it: the badge stays pressed.
+    pub open: bool,
     #[serde(flatten)]
     pub verdict: Verdict,
 }
@@ -188,7 +190,15 @@ impl DealFinder {
     /// Each listing's badge, judged against `market`'s Deal Line with the Deal Margin
     /// `margin_percent`, its items from `items` (none yet: every badge is "?"); tops from
     /// `top`, the badges' window's top on screen.
-    pub fn badges(&mut self, items: Option<&ItemSet>, market: &MarketPrices, margin_percent: u32, top: i32) -> Vec<DealBadge> {
+    /// `opened` is the badge (on screen) the Item Card showing opened from, with its items.
+    pub fn badges(
+        &mut self,
+        items: Option<&ItemSet>,
+        market: &MarketPrices,
+        margin_percent: u32,
+        top: i32,
+        opened: Option<(ScreenRect, &[u32])>,
+    ) -> Vec<DealBadge> {
         let Some(shop) = &self.shop else {
             self.items.clear();
             return Vec::new();
@@ -204,7 +214,9 @@ impl DealFinder {
                 let seen = shown.covered.then(|| self.seen.iter().find(|seen| same_slot(seen, shown))).flatten();
                 let listing = seen.unwrap_or(shown);
                 let named = items.zip(listing.name.as_deref()).and_then(|(items, name)| item_named(items, name));
-                judged.push(named.as_ref().map(|(_, ids)| ids.clone()));
+                let ids = named.as_ref().map(|(_, ids)| ids.clone());
+                let open = opened.is_some_and(|(badge, opened)| badge.y == shown.area.y && ids.as_deref() == Some(opened));
+                judged.push(ids);
                 let verdict = match (named, listing.price) {
                     (Some((item, ids)), Some(listed)) => {
                         let item = DealItem { id: item_id(ids[0]), name: item.name.clone(), rechargeable: item.rechargeable };
@@ -220,6 +232,7 @@ impl DealFinder {
                     top: (shown.area.y - top).max(0) as u32,
                     height: shown.area.height,
                     covered: shown.covered,
+                    open,
                     verdict,
                 }
             })

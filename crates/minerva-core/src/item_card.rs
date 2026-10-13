@@ -136,6 +136,14 @@ pub enum ItemCardView {
     Choose { name: String, items: Vec<ItemCardChoice> },
 }
 
+/// A side of the Item Card's window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Edge {
+    Left,
+    Right,
+}
+
 /// The Item Card showing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -143,6 +151,10 @@ pub struct ShownItemCard {
     /// Counts the cards the player opened, so the window can tell a new card from the last
     /// one when both show the same item.
     pub card: u32,
+    /// Opened from a Deal Badge, the edge of the card that faces it: the card unfolds out of
+    /// the badge from there. `None` for a card opened otherwise, or dragged since.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unfold_from: Option<Edge>,
     #[serde(flatten)]
     pub view: ItemCardView,
 }
@@ -258,6 +270,17 @@ impl ItemCards {
     /// badge, off the shop, in place of any card showing.
     pub fn show_beside_badge(&mut self, ids: Vec<u32>, badge: ScreenRect, shop: ScreenRect) {
         self.open(Opened::BesideBadge { badge, shop }, Showing::Card(ids));
+    }
+
+    /// The Deal Badge (on screen) the card showing opened beside, with its items, while it
+    /// stays there (not dragged).
+    pub fn badge(&self) -> Option<(ScreenRect, &[u32])> {
+        match self.shown.as_ref()? {
+            Shown { opened: Opened::BesideBadge { badge, .. }, moved: None, showing: Showing::Card(ids), .. } => {
+                Some((*badge, ids.as_slice()))
+            }
+            _ => None,
+        }
     }
 
     fn open(&mut self, opened: Opened, showing: Showing) {
@@ -419,7 +442,7 @@ impl ItemCards {
                 }
             }
         };
-        Some(ShownItemCard { card: shown.card, view })
+        Some(ShownItemCard { card: shown.card, unfold_from: None, view })
     }
 }
 

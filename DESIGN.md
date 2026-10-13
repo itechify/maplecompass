@@ -608,7 +608,7 @@ The game's windows mostly hold still, and the panel sits in the corner of the pl
 - **Reduced motion:** with `prefers-reduced-motion: reduce`, everything is at once, in its final state.
 - **One moment at a time:** a window has one authored motion where it matters, not an entrance on every part.
 
-In the windows that moment is, so far, the Mark Card's close-up diving to a portal's or spawn point's spot (see Mark Card). On the site, the minimap's dot and the hero's film move only with the scroll.
+In the windows those moments are, so far, the Mark Card's close-up diving to a portal's or spawn point's spot (see Mark Card), and the Item Card unfolding out of the Deal Badge it was opened from (see Deal Badges). On the site, the minimap's dot and the hero's film move only with the scroll.
 
 ### Named Rules
 **The Motion Answers Rule.** A window moves only to show the player where something they reached for comes from. What the game changes, changes in place.
@@ -765,12 +765,15 @@ A window of its own at the pointer (ADR 0010), built as the Grind Tracker's and 
 - **Which one:** when items that don't look alike share the name read, the title asks "Which Blue Moon?" over a one-line hint, and the box lists them: each a row (padding 2px 6px 2px 2px, 3px radius) of its picture in a 32px inset box (drawn pixelated at its own size; the box stays, empty, until the picture is in) and its kind in bold; Selection Periwinkle with its inset ring and Portal Blue text under the pointer. A click shows that item's card.
 
 ### Deal Badges
-A window of their own left of the Player Shop's window while the Deal Finder is on (ADR 0014), 150px wide and as tall as the shop's list, each badge right-aligned and centred on its listing's band, its 6px tail pointing at the listing through the gap to the shop. Each is one of the game's window buttons (23px tall, padding 0 8px, 3px radius, 13px/17px, a 1px edge), since a click on any but "?" opens its item's card beside it:
+A window of their own left of the Player Shop's window while the Deal Finder is on (ADR 0014), 150px wide and as tall as the shop's list, each badge right-aligned and centred on its listing's band, its 6px tail pointing at the listing through the gap to the shop. Each is one of the game's window buttons, all one width (the window's, less the tail), 25px tall so it stays inside its listing's band even at 200% (the game draws its UI in physical pixels), padding 0 8px, 3px radius, 13px/17px right-aligned as figures are, a 1px edge; a click on any but "?" opens its item's card beside it:
 - **A deal:** the deep-steel primary button: the Button Steel gradient, Button Edge border and tail, a 0.3 white top highlight, the white bold label dropped 1px in Button Edge ("−32% · 1,470"). It is the one thing in the column worth a look, as the step forward is the one in setup. Never green: green is the Map Preview's portal within the map.
 - **No deal, no price:** the light-steel secondary button: the Light Steel gradient, Window Edge border and tail, a solid white top highlight, Light Panel Ink Steel with the panel's 0.3px stroke ("+12%", "no price").
 - **"?":** flat on opaque Window Lavender, not pressable.
 - **Covered:** what was read there before, receding to 70% as an unconfirmed fact does, its edge dashed (a place not yet fixed), with the problem notes' 8px orange dot before its words (on the deep steel, ringed in white as the alert dot is).
-- **States:** hover one gradient step lighter, pressed the matching Pressed shadow, the 2px Edit Blue focus ring. No drop shadow.
+- **Gauge:** a judged badge's bottom edge (3px, 6px in from its sides, 3px up) is its listing's price against the Deal Line, from nothing at the left to twice the line at the right, the line a 1px notch at the middle: a deal's fill stops short of it, a price over the line runs past it, and one past twice the line runs off the end, its last 10px cut by slants. On the light steel, Frame Navy at 55% on a faint navy track with an Ink notch; on the deep steel, white on a faint white track. Stacked down the column, the gauges read as a chart: how far below the line a deal is shows before its words are read.
+- **States:** hover one gradient step lighter, pressed the matching Pressed shadow, the 2px Edit Blue focus ring. The badge whose Item Card is open stays pressed (`aria-pressed`). No drop shadow.
+
+The Item Card opened from a badge unfolds out of it, from its edge facing the badge: uncovered by a clip over 220ms on the system's ease-out, its content at its own size throughout, its first frame already showing the third nearest the badge, the prices and the × readable. It is that window's one authored motion, answering the click; with reduced motion, or opened any other way, it shows at once.
 
 The panel's own line for it, while it is on, sits under the title panel's notes in the arrival's inset box: the detective owl (the app's owl peering through a magnifying glass, at its own 32 pixels), "Deal Finder" in bold with its state in regular ("· reading the shop", "· open a Player Shop"), "Comparing with Typical" (and its Deal Margin) under it in 12px Panel Ink Steel, and a Turn off text button. While it is on, the collapsed icon's owl is the detective owl at its own 42 pixels.
 
