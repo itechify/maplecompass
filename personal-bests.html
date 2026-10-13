@@ -29,14 +29,15 @@
                 <th scope="col" class="text" data-column="map">
                   <button type="button" class="sort"><span class="label" data-label="Map">Map</span></button>
                 </th>
-                <th scope="col" class="text" data-column="region">
-                  <button type="button" class="sort"><span class="label" data-label="Region">Region</span></button>
-                </th>
                 <th scope="col" data-column="levels">
                   <button type="button" class="sort"><span class="label" data-label="Mob levels">Mob levels</span></button>
                 </th>
                 <th scope="col" data-column="exp">
                   <button type="button" class="sort"><span class="label" data-label="Best EXP/h">Best EXP/h</span></button>
+                </th>
+                <th scope="col" class="lane-cell">
+                  <span class="sr-only">Every best on one scale</span>
+                  <span class="scale" id="scale" aria-hidden="true"></span>
                 </th>
                 <th scope="col" data-column="share">
                   <button type="button" class="sort">
@@ -54,6 +55,11 @@
           </table>
         </div>
         <ul class="notes">
+          <li>
+            The bars put every map's best on one scale. A notch in a bar is another of your visits there<span id="note-dot" hidden
+              >, and the dot the visit you're on</span
+            >.
+          </li>
           <li>Solo EXP/h is the map's ceiling, worked out as NiaMeowDB does.</li>
           <li id="note-missing" hidden>A dash is a figure not known for that map: it isn't in the map list, or no mobs spawn there.</li>
         </ul>
