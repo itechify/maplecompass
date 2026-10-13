@@ -71,6 +71,34 @@
                 </button>
               </div>
             </div>
+            <!-- The Pace Trace: the last 5 minutes of play up to the last EXP gain. With a
+                 Best row, a race against it, as split times against a ghost: the Best's pace
+                 is the flat line from arriving on the map, and the trace how far ahead of it
+                 (lit in You Yellow, as a best's star is) or behind it the player is, falling
+                 back as the Best's pace runs on and stepping up at each gain. Without one,
+                 the EXP gained, a step at each gain. The player's dot is where they stand
+                 now. It moves only as the EXP does. -->
+            <svg class="pace" id="pace" role="img" aria-labelledby="pace-name" hidden>
+              <title id="pace-name"></title>
+              <defs>
+                <!-- The minimap's dot for the player, lit up and to the left. -->
+                <radialGradient id="pace-you-light" cx="0.35" cy="0.3" r="0.95">
+                  <stop offset="0.18" style="stop-color: var(--you-light)" />
+                  <stop offset="0.45" style="stop-color: var(--you)" />
+                </radialGradient>
+                <!-- Ahead of the Best's pace, and behind it. -->
+                <clipPath id="pace-ahead"><rect id="pace-ahead-rect" /></clipPath>
+                <clipPath id="pace-behind"><rect id="pace-behind-rect" /></clipPath>
+              </defs>
+              <path class="area" id="pace-area" />
+              <path class="lead" id="pace-lead" clip-path="url(#pace-ahead)" />
+              <line class="arrived" id="pace-arrived" />
+              <line class="best" id="pace-best" />
+              <path class="trace" id="pace-trace" />
+              <text class="name" id="pace-best-name">Best</text>
+              <text class="split" id="pace-split"></text>
+              <circle class="you" id="pace-you" r="3.5" />
+            </svg>
             <p class="line" id="tracking-share" hidden></p>
             <p class="line" id="tracking-deaths" hidden></p>
           </div>
@@ -79,7 +107,12 @@
             <p class="exp-figures"><b>EXP</b> <span id="exp-figures"></span></p>
             <div class="exp-gauge" id="exp-gauge" role="progressbar" aria-label="EXP this level" aria-valuemin="0" aria-valuemax="100">
               <div class="exp-gauge-fill" id="exp-gauge-fill"></div>
+              <!-- Where the bar was before a death, until it is past it again. -->
+              <div class="exp-gauge-lost" id="exp-gauge-lost" hidden></div>
             </div>
+            <!-- What lies ahead at the Last 5 min pace: a notch where the bar will be in so
+                 long, as many as have room, and at the gauge's end, Time to Level. -->
+            <div class="forecast" id="forecast" role="img" hidden></div>
           </div>
         </section>
       </div>

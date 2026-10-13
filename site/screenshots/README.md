@@ -29,4 +29,5 @@ The pictures on the Minerva site, taken by hand in the game. The site's build fa
 When a change alters something a shot shows, the PR that makes it lists the shot here, with what changed. At release, the smoke test retakes every shot listed (`docs/releasing.md`) and empties the list.
 
 - `item-card.png`: the card's credit line at its foot is now an info icon, its words in its tooltip.
+- `grind-tracker.png`: the Pace Trace under the rates (take it back on a map with a Best, ahead of it, so the lead is lit), and the forecast under the EXP gauge.
 - `mobs.png`: cut from `hero.png` for now; take it on its own, with the pointer on a mob's name and its Mob Card showing.

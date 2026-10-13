@@ -442,3 +442,47 @@ fn a_first_visits_best_cannot_be_removed_until_it_has_joined_the_history() {
     assert_eq!(best_row(&removed), None);
     assert_eq!(saved_rates(&player, SUNSET_SKY_ID), [] as [u64; 0]);
 }
+
+/// The Pace Trace's race with the Best row: how far its pace line rises, and how far the
+/// trace has come over the same stretch.
+fn race(state: &PanelState) -> Option<(i64, i64)> {
+    let pace = state.exp_tracking.pace.as_ref()?;
+    let [from, to] = pace.best?;
+    let last = pace.points.last()?;
+    Some((to.exp - from.exp, last.exp - from.exp))
+}
+
+#[test]
+fn the_pace_trace_races_the_best_rows_pace_from_arriving_on_the_map() {
+    let (mut player, back) = back_on_sunset_sky_after_a_best_of_7200();
+    // Arriving, the race hasn't started: nothing has been earned on the map yet.
+    let trace = back.exp_tracking.pace.clone().unwrap();
+    assert_eq!((trace.best, trace.arrived_ago_ms), (None, Some(0)));
+
+    // A minute at the best's 7,200 EXP/h: level with its pace, 120 EXP each.
+    let level = player.hunt(MIN, 20);
+    assert_eq!(race(&level), Some((120, 120)));
+    assert_eq!(level.exp_tracking.pace.as_ref().and_then(|p| p.arrived_ago_ms), Some(MIN));
+
+    // Two more at 10,800: ahead of it, 480 EXP to its 360.
+    let ahead = player.hunt(2 * MIN, 30);
+    assert_eq!(race(&ahead), Some((360, 480)));
+
+    // 5 minutes there, the race is the whole trace, as the star's comparison is.
+    let five = player.hunt(2 * MIN, 30);
+    let trace = five.exp_tracking.pace.clone().unwrap();
+    assert_eq!(trace.arrived_ago_ms, None);
+    assert_eq!(trace.best.map(|[from, _]| from), trace.points.first().copied());
+    assert!(starred(&five));
+}
+
+#[test]
+fn a_first_visit_has_no_pace_to_race() {
+    let mut player = Player::new(tracking());
+    player.arrive(SUNSET);
+    let state = player.hunt(6 * MIN, 20);
+    let trace = state.exp_tracking.pace.clone().unwrap();
+    assert_eq!(trace.best, None);
+    // The trace all the same: 20 EXP every 10 s over its 5 minutes.
+    assert_eq!(trace.points.last().map(|p| p.exp), Some(600));
+}
