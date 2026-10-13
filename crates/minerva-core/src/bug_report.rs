@@ -36,6 +36,7 @@ use crate::osms::{OsmsFiles, SavedFiles};
 use crate::osms_items::{ItemFiles, SavedItemFiles};
 use crate::panel::{Action, Foreground, GameWindow, PanelSizes, ScreenRect, Size};
 use crate::personal_best::{SavedBests, VisitBest};
+use crate::player_shop::{ShopCapture, ShopList, ShopReading};
 use crate::recogniser::{TitleLines, TitleReading};
 use crate::session::{ExpTracking, TrackingState};
 use crate::settings::Settings;
@@ -123,6 +124,7 @@ pub enum Event {
     PanelSizes { sizes: PanelSizes },
     ItemLookupSize { size: Size },
     ItemCardSize { size: Size },
+    DealBadgesSize { size: Size },
     GrindTrackerSize { size: Size },
     PersonalBestsSize { size: Size },
     Act { action: Action },
@@ -134,6 +136,17 @@ pub enum Event {
     Hotkey { pressed: String },
     Press { control: PanelControl },
     ItemTooltip { reading: Option<ItemTooltipReading> },
+    /// A Deal Finder capture taken at `at_ms` read as `shop` (`None`: no Player Shop), or
+    /// the `same` as the reading before.
+    PlayerShop {
+        at_ms: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        shop: Option<ShopList>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        same: bool,
+    },
+    /// The player chose the Item Card's Market Line `line` as the Deal Line.
+    ChooseDealLine { line: String },
     PickItem { id: String },
     PickCardItem { id: String },
     /// The player clicked the Item Card's name at `at_ms`.
@@ -360,6 +373,8 @@ pub(crate) enum Region {
     /// The game's client area around the pointer, at an Item Card or Item Lookup press,
     /// with the pointer at (x, y) in it.
     ItemTooltip { pointer: (u32, u32) },
+    /// A Player Shop's item list, at a Deal Finder capture.
+    PlayerShop,
 }
 
 /// How far the crop of an Item Card or Item Lookup capture reaches from the pointer (px,
@@ -384,6 +399,37 @@ pub(crate) fn item_tooltip_crop(capture: &ItemCapture) -> Option<(Region, Frame)
     }
     let crop = Frame { width: x1 - x0, height: y1 - y0, rgba, at_ms: frame.at_ms };
     Some((Region::ItemTooltip { pointer: (px - x0, py - y0) }, crop))
+}
+
+/// How far the crop of a Deal Finder capture reaches around the shop's list (px): enough
+/// for the reader to find the list in it again, with the scroll bar, and none of the
+/// shop's title, its seller's name or its chat.
+const PLAYER_SHOP_MARGIN: u32 = 10;
+/// ...and how far right of the list's picture column: past the scroll bar.
+const PLAYER_SHOP_WIDTH: u32 = 352;
+
+/// The Player Shop's item list in a Deal Finder capture, for a Bug Report: the listings the
+/// reader read, or should have, as `samples/player-shop` keeps them. `None` with no shop.
+pub(crate) fn player_shop_crop(capture: &ShopCapture, shop: Option<&ShopList>) -> Option<(Region, Frame)> {
+    let frame = &capture.frame;
+    let list = shop?.area;
+    if frame.rgba.len() < (frame.width * frame.height * 4) as usize {
+        return None;
+    }
+    let at = |screen: i32, origin: i32, size: u32| (screen - origin).clamp(0, size as i32) as u32;
+    let x0 = at(list.x - PLAYER_SHOP_MARGIN as i32, capture.origin.x, frame.width);
+    let y0 = at(list.y - PLAYER_SHOP_MARGIN as i32, capture.origin.y, frame.height);
+    let x1 = at(list.x + PLAYER_SHOP_WIDTH as i32, capture.origin.x, frame.width);
+    let y1 = at(list.y + (list.height + PLAYER_SHOP_MARGIN) as i32, capture.origin.y, frame.height);
+    if x1 <= x0 || y1 <= y0 {
+        return None;
+    }
+    let mut rgba = Vec::with_capacity(((x1 - x0) * (y1 - y0) * 4) as usize);
+    for y in y0..y1 {
+        let row = ((y * frame.width + x0) * 4) as usize;
+        rgba.extend_from_slice(&frame.rgba[row..row + ((x1 - x0) * 4) as usize]);
+    }
+    Some((Region::PlayerShop, Frame { width: x1 - x0, height: y1 - y0, rgba, at_ms: frame.at_ms }))
 }
 
 /// A crop of a captured region, as a PNG.
@@ -429,11 +475,13 @@ struct Last {
     panel_sizes: Option<PanelSizes>,
     item_lookup_size: Option<Size>,
     item_card_size: Option<Size>,
+    deal_badges_size: Option<Size>,
     grind_tracker_size: Option<Size>,
     personal_bests_size: Option<Size>,
     foreground: Option<Foreground>,
     unavailable_hotkeys: Option<(Vec<String>, Vec<String>)>,
     title_lines: Option<Option<TitleLines>>,
+    shop: Option<Option<ShopList>>,
     exp_bar_rgba: Vec<u8>,
 }
 
@@ -483,11 +531,13 @@ impl Recorder {
                 panel_sizes: None,
                 item_lookup_size: None,
                 item_card_size: None,
+                deal_badges_size: None,
                 grind_tracker_size: None,
                 personal_bests_size: None,
                 foreground: None,
                 unavailable_hotkeys: None,
                 title_lines: None,
+                shop: None,
                 exp_bar_rgba: Vec::new(),
             },
             crops: VecDeque::new(),
@@ -513,6 +563,7 @@ impl Recorder {
             Event::PanelSizes { sizes } => changes(&mut last.panel_sizes, sizes),
             Event::ItemLookupSize { size } => changes(&mut last.item_lookup_size, size),
             Event::ItemCardSize { size } => changes(&mut last.item_card_size, size),
+            Event::DealBadgesSize { size } => changes(&mut last.deal_badges_size, size),
             Event::GrindTrackerSize { size } => changes(&mut last.grind_tracker_size, size),
             Event::PersonalBestsSize { size } => changes(&mut last.personal_bests_size, size),
             Event::Foreground { foreground } => changes(&mut last.foreground, foreground),
@@ -533,6 +584,14 @@ impl Recorder {
                 *lines = None;
             } else {
                 self.last.title_lines = Some(lines.clone());
+            }
+        }
+        if let Event::PlayerShop { shop, same, .. } = &mut event {
+            if self.last.shop.as_ref() == Some(shop) {
+                *same = true;
+                *shop = None;
+            } else {
+                self.last.shop = Some(shop.clone());
             }
         }
         let line = match (&event, at_ms) {
@@ -629,6 +688,18 @@ impl Recorder {
                 });
                 (true, unread || no_such)
             }
+            // One that changed; for the run, one with a listing that couldn't be read whole,
+            // as it may have been misread.
+            Region::PlayerShop => {
+                let same = matches!(line.event, Event::PlayerShop { same: true, .. });
+                let unread = match &line.event {
+                    Event::PlayerShop { shop: Some(shop), .. } => {
+                        shop.rows.iter().any(|row| row.name.is_none() || row.price.is_none())
+                    }
+                    _ => false,
+                };
+                (!same, !same && unread)
+            }
         };
         if changed || kept {
             let name = match region {
@@ -636,6 +707,7 @@ impl Recorder {
                 Region::ExpBar => format!("crops/exp-bar-{:010}.png", frame.at_ms),
                 // Named as `samples/item-tooltip` names its frames: the pointer's spot in it.
                 Region::ItemTooltip { pointer: (x, y) } => format!("crops/item-tooltip-{:010}@{x},{y}.png", frame.at_ms),
+                Region::PlayerShop => format!("crops/player-shop-{:010}.png", frame.at_ms),
             };
             if let Some(png) = png(&frame) {
                 line.crop = Some(name.clone());
@@ -1104,6 +1176,7 @@ pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
     // core it with every tick.
     let mut wall_clock: Option<(u64, u64)> = None;
     let mut title_lines: Option<TitleLines> = None;
+    let mut shop: Option<ShopList> = None;
     for line in &recording.lines {
         if let Some((unix_ms, at)) = wall_clock {
             minerva.wall_clock = Some(unix_ms + line.t.saturating_sub(at));
@@ -1168,6 +1241,17 @@ pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
             }
             Event::ItemTooltip { reading } => {
                 minerva.on_item_tooltip_reading(reading);
+            }
+            Event::PlayerShop { at_ms, shop: read, same } => {
+                let read = if same { shop.clone() } else { read };
+                shop.clone_from(&read);
+                minerva.on_player_shop_reading(ShopReading { shop: read, at_ms });
+            }
+            Event::ChooseDealLine { line } => {
+                minerva.choose_deal_line(&line);
+            }
+            Event::DealBadgesSize { size } => {
+                minerva.set_deal_badges_size(size);
             }
             Event::PickItem { id } => {
                 minerva.pick_item(&id);
@@ -1275,6 +1359,7 @@ impl Recording {
                     | Event::EnterCardMarket { .. }
                     | Event::EditCardMarketLine { .. }
                     | Event::EnterCardMarketLine { .. }
+                    | Event::ChooseDealLine { .. }
                     | Event::Restore { .. }
                     | Event::RestoreBests { .. }
                     | Event::RemoveVisit { .. }
@@ -1282,7 +1367,8 @@ impl Recording {
                     | Event::BugReport {}
             );
             let notable = acted || !line.notes.is_empty() || line.map.is_some() || line.answers.iter().any(Answer::is_set);
-            let quiet = consequences.is_empty() && matches!(line.event, Event::Tick {} | Event::Title { same: true, .. });
+            let quiet = consequences.is_empty()
+                && matches!(line.event, Event::Tick {} | Event::Title { same: true, .. } | Event::PlayerShop { same: true, .. });
             if notable || (line.t >= from_ms && !quiet) {
                 let mut text = format!("{}  {}", clock(line.event.at_ms().unwrap_or(line.t)), line.event.describe(title));
                 if !consequences.is_empty() {
@@ -1372,7 +1458,10 @@ impl Event {
     /// When a reading's frame was captured.
     fn at_ms(&self) -> Option<u64> {
         match self {
-            Event::Title { at_ms, .. } | Event::ExpBar { at_ms, .. } | Event::OpenCardMeowdbPage { at_ms } => Some(*at_ms),
+            Event::Title { at_ms, .. }
+            | Event::ExpBar { at_ms, .. }
+            | Event::PlayerShop { at_ms, .. }
+            | Event::OpenCardMeowdbPage { at_ms } => Some(*at_ms),
             _ => None,
         }
     }
@@ -1401,6 +1490,7 @@ impl Event {
             }
             Event::ItemLookupSize { size } => format!("Item Lookup alert size {}x{}", size.width, size.height),
             Event::ItemCardSize { size } => format!("Item Card size {}x{}", size.width, size.height),
+            Event::DealBadgesSize { size } => format!("Deal Badges size {}x{}", size.width, size.height),
             Event::GrindTrackerSize { size } => format!("Grind Tracker size {}x{}", size.width, size.height),
             Event::PersonalBestsSize { size } => format!("Personal Bests window size {}x{}", size.width, size.height),
             Event::RebindKey { press } => format!("key pressed in the settings view {}", json(press)),
@@ -1434,6 +1524,21 @@ impl Event {
             Event::Hotkey { pressed } => format!("hotkey {pressed}"),
             Event::SearchQuery { query } => format!("search typed {query:?}"),
             Event::ItemTooltip { reading } => format!("Item Tooltip read {}", json(reading)),
+            Event::PlayerShop { same: true, .. } => "Player Shop read as before".to_string(),
+            Event::PlayerShop { shop: None, .. } => "no Player Shop".to_string(),
+            Event::PlayerShop { shop: Some(shop), .. } => {
+                let rows: Vec<String> = shop
+                    .rows
+                    .iter()
+                    .map(|row| {
+                        let name = row.name.as_deref().map_or("?".to_string(), |name| format!("{name:?}"));
+                        let price = row.price.map_or("?".to_string(), |p| format!("{} for {}", p.quantity, thousands(p.mesos)));
+                        format!("{name} {price}")
+                    })
+                    .collect();
+                format!("Player Shop read: {}", if rows.is_empty() { "no listings".into() } else { rows.join(", ") })
+            }
+            Event::ChooseDealLine { line } => format!("Item Card's market line {line} chosen as the Deal Line"),
             Event::Restore { .. } => "settings restored".to_string(),
             Event::RestoreBests { bests } => format!("Personal Bests restored ({} maps)", bests.maps.len()),
             Event::RemoveVisit { map, visit } => {

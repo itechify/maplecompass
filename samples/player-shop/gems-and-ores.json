@@ -1,0 +1,7 @@
+[
+  { "name": "Garnet", "quantity": 1, "mesos": 999 },
+  { "name": "Garnet Ore", "quantity": 1, "mesos": 899 },
+  { "name": "Topaz", "quantity": 1, "mesos": 799 },
+  { "name": "Emerald", "quantity": 1, "mesos": 799 },
+  { "name": "Gold Ore", "quantity": 1, "mesos": 249 }
+]

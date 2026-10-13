@@ -189,6 +189,14 @@ pub enum Action {
     ResetHotkeys,
     /// Undo, after Restore defaults: the hotkeys from before it are back.
     UndoResetHotkeys,
+    /// Turn the Deal Finder on or off (its hotkey, or the panel's Deal Finder line).
+    ToggleDealFinder,
+    /// The settings view's Deal Margin: how far below the Deal Line, in percent, a price must
+    /// be to be a deal; at most 99.
+    SetDealMargin { percent: u32 },
+    /// A click on a Deal Badge: the card of the item its listing sells shows beside it.
+    /// `row` counts the listings not sold out from the top, as [`crate::DealBadge::row`].
+    OpenDealItem { row: u32 },
 }
 
 /// A section of the normal view that the player can collapse to its heading.

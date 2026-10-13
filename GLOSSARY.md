@@ -196,6 +196,26 @@ _Avoid_: column, field, price type
 A file of prices a tool of the player's own leaves in the `market-imports` folder beside `market-prices.json`, for their Market Lines. Minerva takes each in within a couple of seconds, at launch if it was closed, onto the lines of the same IDs, the newest price winning, and deletes it. It adds a line it names, but removes nothing. Minerva fetches no market prices itself.
 _Avoid_: sync, feed (the tool's business, not Minerva's)
 
+**Player Shop**:
+The shop window another player opens in the game to sell their items, with a listing per item: its name, and "1 for 999 mesos" (how many for how much). The game's, not ours. A sold-out listing is greyed.
+_Avoid_: store, Hired Merchant (a shop the game keeps open without its player, which the Deal Finder doesn't read yet)
+
+**Deal Finder**:
+What the hotkey (Ctrl+Shift+D by default) turns on and off: while it is on, Minerva reads the open Player Shop's listings a few times a second and puts a Deal Badge beside each. Off at every launch.
+_Avoid_: scanner, price check
+
+**Deal Line**:
+The one Market Line the Deal Finder compares listings with, marked on every Item Card's market section, where the player chooses it. The first line until they choose one.
+_Avoid_: target price, reference price
+
+**Deal Margin**:
+How far below the Deal Line, in percent, the price of one item in a listing must be for it to be a deal. Set in Settings; 0 by default, so any price below the line is a deal.
+_Avoid_: threshold, discount
+
+**Deal Badge**:
+The mark beside a Player Shop listing while the Deal Finder is on: how far below the Deal Line its price is and the line's price ("−32% · 1,470") for a deal, how far off it is ("+12%") for none, "no price" when the Deal Line has none for the item, and "?" when the listing can't be read for sure. A click on it opens the item's Item Card.
+_Avoid_: tag, label, highlight
+
 **Item Lookup**:
 The hotkey (Ctrl+Shift+U by default) that reads the Item Tooltip nearest the pointer and opens the item's MeowDB page. An alert at the top centre of the game window says what came of it, and when several items share the name, lists them for the player to pick. The same alert says what kept an Item Card from showing.
 _Avoid_: item search (Search is the search view's)

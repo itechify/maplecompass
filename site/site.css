@@ -658,6 +658,15 @@ strong {
   padding: 0;
   background: none;
 }
+/* The Deal Finder's owl, its 42-pixel drawing at four times its size, pixel for pixel, on
+   the stage the panel's crops stand on. */
+.stage.deal-owl img {
+  width: 168px;
+  height: 168px;
+  border: none;
+  background: none;
+  image-rendering: pixelated;
+}
 
 /* ---- Questions: each folded to its question, as the panel folds a section to its
    heading, set into the body as the settings view sets its rows ---- */

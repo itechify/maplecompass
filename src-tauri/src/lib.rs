@@ -12,6 +12,7 @@ pub mod gamewin;
 mod bests;
 mod bests_window;
 mod bug_reports;
+mod deal_badges;
 mod errors;
 mod files;
 mod grind_tracker;
@@ -35,15 +36,16 @@ mod tray;
 mod view;
 
 use minerva_core::{
-    Action, Minerva, ExpBarReader, ExpBarReading, Frame, GameWindow, ItemCapture, ItemTooltipReader,
-    ItemTooltipReading, KeyPress, Layer, MIN_PANEL_WIDTH, PanelControl, PanelSizes, PlacementMode, PanelState, Request,
-    ScreenPoint, ScreenRect, Size, TitleReader, TitleReading, VisitBest, default_title_region,
+    Action, DEAL_FINDER_CAPTURE_MS, Minerva, ExpBarReader, ExpBarReading, Frame, GameWindow, ItemCapture, ItemTooltipReader,
+    ItemTooltipReading, KeyPress, Layer, MIN_PANEL_WIDTH, PanelControl, PanelSizes, PlacementMode, PanelState, PlayerShopReader,
+    Request, ScreenPoint, ScreenRect, ShopCapture, ShopReading, Size, TitleReader, TitleReading, VisitBest, default_title_region,
 };
 use source::WebSource;
 use bests_window::{BestsWindow, PersonalBestsView};
+use deal_badges::{DealBadgesView, DealBadgesWindow};
 use errors::error;
 use grind_tracker::{GrindTrackerView, GrindTrackerWindow};
-use item_card::{ItemCardView, ItemCardWindow};
+use item_card::{ItemCardView, ItemCardWindow, OFF_SCREEN_SETTLE};
 use item_lookup::{ItemLookupView, ItemLookupWindow};
 use setup::{Bridge, SetupPageView, SetupWindows};
 use sizemove::{Gesture, SizeMove};
@@ -59,6 +61,8 @@ use tauri_plugin_opener::OpenerExt;
 const TICK: Duration = Duration::from_millis(333);
 /// EXP bar capture rate: EXP tracking needs the figures about once a second.
 const EXP_BAR_TICK: Duration = Duration::from_millis(1000);
+/// Deal Finder capture rate, while it is on (the core's pace).
+const DEAL_FINDER_TICK: Duration = Duration::from_millis(DEAL_FINDER_CAPTURE_MS);
 /// Game window and foreground check rate: a docked panel follows a moving game window,
 /// and our windows show within ~50 ms of the game coming to the front, and are out of
 /// sight within ~50 ms of another app doing so (their watchers check at this rate too).
@@ -156,6 +160,8 @@ pub(crate) enum Command {
     EditCardMarketLine(String),
     /// The player pressed Enter in the Item Card's line name field, holding this.
     EnterCardMarketLine(String),
+    /// The player chose the Item Card's Market Line with this ID as the Deal Line.
+    ChooseDealLine(String),
     /// Windows told of a drag of the Item Card's window.
     ItemCardSizeMove(SizeMove),
     /// The player chose Quit in the tray icon's menu: save the settings and exit.
@@ -179,6 +185,9 @@ pub(crate) enum Command {
     /// The reader is done with an Item Card's or Item Lookup's capture: the capture, and
     /// what it read.
     ReadItemTooltip { capture: Box<ItemCapture>, reading: ItemTooltipReading },
+    /// The reader is done with a Deal Finder capture of `region` (the game's client area):
+    /// the capture and what it read, or `None` if the capture failed.
+    ReadShop { region: ScreenRect, reading: Option<(Box<ShopCapture>, ShopReading)> },
 }
 
 /// The overlay's drags and resizes, as the core loop hears them.
@@ -234,6 +243,7 @@ pub fn run() {
         .manage(PersonalBestsView::default())
         .manage(ItemLookupView::default())
         .manage(ItemCardView::default())
+        .manage(DealBadgesView::default())
         // OSMS's pictures, such as the Mob Cards' animations, from our saved copies.
         .register_uri_scheme_protocol(pictures::SCHEME, |ctx, request| match cache_dir(ctx.app_handle()) {
             Ok(dir) => pictures::serve(&dir, &request),
@@ -303,6 +313,7 @@ pub fn run() {
             let _ = std::fs::remove_file(app.path().app_config_dir()?.join("personal-bests.html"));
             let item_lookup = ItemLookupWindow::new(app.handle(), commands.clone());
             let item_card = ItemCardWindow::new(app.handle(), commands.clone());
+            let deal_badges = DealBadgesWindow::new(app.handle(), commands.clone());
             let overlay_window = OverlayWindow::new(overlay.clone(), commands.clone());
             overlay.on_window_event(move |event| match event {
                 // Only moves during a drag the overlay started are the player's.
@@ -336,6 +347,7 @@ pub fn run() {
                 personal_bests,
                 item_lookup,
                 item_card,
+                deal_badges,
                 hotkeys,
             };
             std::thread::Builder::new().name("core-loop".into()).spawn(move || {
@@ -405,13 +417,18 @@ pub fn run() {
             item_card::item_card_add_market_line,
             item_card::item_card_ask_remove_market_line,
             item_card::item_card_remove_market_line,
+            item_card::item_card_choose_deal_line,
+            deal_badges::deal_badges_view,
+            deal_badges::deal_badge_open,
+            deal_badges::deal_margin_set,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
 /// Our windows: the overlay (with Search in it), setup (with its region window), the
-/// Grind Tracker's, the Personal Bests window, the Item Lookup alert's and the Item Card's.
+/// Grind Tracker's, the Personal Bests window, the Item Lookup alert's, the Item Card's and
+/// the Deal Badges'.
 struct Windows {
     overlay: OverlayWindow,
     setup: SetupWindows,
@@ -419,6 +436,7 @@ struct Windows {
     personal_bests: BestsWindow,
     item_lookup: ItemLookupWindow,
     item_card: ItemCardWindow,
+    deal_badges: DealBadgesWindow,
     /// Not a window, but registered and released as the foreground changes.
     hotkeys: hotkeys::GlobalHotkeys,
 }
@@ -481,10 +499,13 @@ enum Capture {
     Title(ScreenRect),
     ExpBar(ScreenRect),
     Item(Box<ItemCapture>),
+    /// The game's client area, for the Deal Finder.
+    Shop(ScreenRect),
 }
 
-/// Captures and reads the Title Region and the EXP Bar Region on its own thread, and reads
-/// Item Lookup's captures (taken at the press, while the Item Tooltip shows). Reading
+/// Captures and reads the Title Region, the EXP Bar Region and the Deal Finder's client area
+/// on its own thread, and reads Item Lookup's captures (taken at the press, while the Item
+/// Tooltip shows). Reading
 /// takes tens of ms (far more in a debug build), so the core loop never waits for it:
 /// it keeps following the game window at its own pace and takes each reading when it
 /// arrives.
@@ -496,6 +517,8 @@ struct ReaderThread {
     title_busy: bool,
     /// Likewise for the EXP Bar Region.
     exp_bar_busy: bool,
+    /// Likewise for the Deal Finder's capture.
+    shop_busy: bool,
 }
 
 impl ReaderThread {
@@ -507,6 +530,8 @@ impl ReaderThread {
             let title_reader = TitleReader::bundled();
             let exp_bar_reader = ExpBarReader::bundled();
             let item_reader = ItemTooltipReader::bundled();
+            // It remembers the lines it read, so a shop left open costs no recognition.
+            let mut shop_reader = PlayerShopReader::bundled();
             let grab = |r: ScreenRect| match capture::capture_rgba(r.x, r.y, r.width as i32, r.height as i32) {
                 Ok(rgba) => {
                     let at_ms = start.elapsed().as_millis() as u64;
@@ -537,13 +562,21 @@ impl ReaderThread {
                         let reading = item_reader.read(&capture);
                         Command::ReadItemTooltip { capture, reading }
                     }
+                    Capture::Shop(region) => {
+                        let reading = grab(region).map(|frame| {
+                            let capture = ShopCapture { frame, origin: ScreenPoint { x: region.x, y: region.y } };
+                            let read = shop_reader.read(&capture);
+                            (Box::new(capture), read)
+                        });
+                        Command::ReadShop { region, reading }
+                    }
                 };
                 if commands.send(command).is_err() {
                     return;
                 }
             }
         })?;
-        Ok(Self { captures, start, title_busy: false, exp_bar_busy: false })
+        Ok(Self { captures, start, title_busy: false, exp_bar_busy: false, shop_busy: false })
     }
 
     /// Capture and read the Title Region `region`, unless the last capture of it is
@@ -558,6 +591,13 @@ impl ReaderThread {
     fn read_exp_bar(&mut self, region: ScreenRect) {
         if !self.exp_bar_busy {
             self.exp_bar_busy = self.captures.send(Capture::ExpBar(region)).is_ok();
+        }
+    }
+
+    /// Likewise for the Deal Finder's capture of the game's client area `region`.
+    fn read_shop(&mut self, region: ScreenRect) {
+        if !self.shop_busy {
+            self.shop_busy = self.captures.send(Capture::Shop(region)).is_ok();
         }
     }
 
@@ -597,6 +637,7 @@ fn core_loop(
         mut personal_bests,
         mut item_lookup,
         mut item_card,
+        mut deal_badges,
         mut hotkeys,
     } = windows;
     let mut saved = minerva.settings();
@@ -606,6 +647,7 @@ fn core_loop(
     let mut expanded_height = EXPANDED_HEIGHT;
     let mut next_capture = Instant::now();
     let mut next_exp_bar_capture = Instant::now();
+    let mut next_shop_capture = Instant::now();
     let mut next_window_check = Instant::now();
     let mut next_import_check = Instant::now();
     loop {
@@ -617,11 +659,11 @@ fn core_loop(
             }
             Ok(Command::Hotkey(pressed)) => {
                 let request = minerva.on_hotkey(&pressed);
-                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut minerva, request);
+                carry_out(&app, &window.overlay, &mut item_card, &mut deal_badges, &reader, &mut minerva, request);
             }
             Ok(Command::Press(control)) => {
                 let request = minerva.press(control);
-                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut minerva, request);
+                carry_out(&app, &window.overlay, &mut item_card, &mut deal_badges, &reader, &mut minerva, request);
             }
             Ok(Command::SearchQuery(query)) => {
                 minerva.search_query(&query);
@@ -640,18 +682,18 @@ fn core_loop(
             }
             Ok(Command::OpenMobPage(id)) => {
                 let request = minerva.open_mob_page(&id);
-                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut minerva, request);
+                carry_out(&app, &window.overlay, &mut item_card, &mut deal_badges, &reader, &mut minerva, request);
             }
             Ok(Command::OpenBestsMapPage(id)) => {
                 let request = minerva.open_bests_map_page(&id);
-                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut minerva, request);
+                carry_out(&app, &window.overlay, &mut item_card, &mut deal_badges, &reader, &mut minerva, request);
             }
             Ok(Command::RemoveVisit { map, visit }) => {
                 minerva.remove_visit(&map, visit);
             }
             Ok(Command::PickItem(id)) => {
                 let request = minerva.pick_item(&id);
-                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut minerva, request);
+                carry_out(&app, &window.overlay, &mut item_card, &mut deal_badges, &reader, &mut minerva, request);
             }
             Ok(Command::CloseItemCard) => {
                 minerva.close_item_card();
@@ -675,9 +717,12 @@ fn core_loop(
             Ok(Command::EnterCardMarketLine(typed)) => {
                 minerva.enter_card_market_line(&typed);
             }
+            Ok(Command::ChooseDealLine(line)) => {
+                minerva.choose_deal_line(&line);
+            }
             Ok(Command::OpenCardMesowatch) => {
                 let request = minerva.open_card_mesowatch();
-                carry_out(&app, &window.overlay, &mut item_card, &reader, &mut minerva, request);
+                carry_out(&app, &window.overlay, &mut item_card, &mut deal_badges, &reader, &mut minerva, request);
             }
             Ok(Command::PanelHeight(height)) => {
                 expanded_height = height.clamp(MIN_EXPANDED_HEIGHT, MAX_EXPANDED_HEIGHT);
@@ -782,6 +827,13 @@ fn core_loop(
                 // With the capture, whose part around the pointer a Bug Report keeps.
                 minerva.on_item_capture_read(*capture, reading);
             }
+            Ok(Command::ReadShop { region, reading }) => {
+                reader.shop_busy = false;
+                // Not once the Deal Finder is off, or the game window moved.
+                if let (Some((capture, reading)), true) = (reading, minerva.panel_state().deal_finder_capture == Some(region)) {
+                    minerva.on_player_shop_read(*capture, reading);
+                }
+            }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
         }
@@ -807,6 +859,9 @@ fn core_loop(
             if let Some(size) = item_card.size() {
                 minerva.set_item_card_size(size);
             }
+            if let Some(size) = deal_badges.size() {
+                minerva.set_deal_badges_size(size);
+            }
             // The hotkeys are live, and our windows show, only while the game or one of our
             // windows is in front.
             minerva.on_foreground(gamewin::foreground(game.map(|g| g.handle)));
@@ -824,7 +879,7 @@ fn core_loop(
         minerva.tick(reader.now_ms());
         // An Item Lookup's page, once MeowDB has answered.
         while let Some(request) = minerva.take_request() {
-            carry_out(&app, &window.overlay, &mut item_card, &reader, &mut minerva, Some(request));
+            carry_out(&app, &window.overlay, &mut item_card, &mut deal_badges, &reader, &mut minerva, Some(request));
         }
         // Prices a tool of the player's own left (ADR 0013), saved below like those typed.
         // Left waiting while the prices can't be saved, rather than taken in and lost.
@@ -849,6 +904,13 @@ fn core_loop(
                 reader.read_exp_bar(region);
             }
         }
+        if Instant::now() >= next_shop_capture {
+            next_shop_capture = Instant::now() + DEAL_FINDER_TICK;
+            // None while the Deal Finder is off.
+            if let Some(region) = minerva.panel_state().deal_finder_capture {
+                reader.read_shop(region);
+            }
+        }
         let state = minerva.panel_state();
         if state.quit {
             save_bests(&minerva, &files.bests, &mut bests_saved);
@@ -868,6 +930,7 @@ fn core_loop(
         personal_bests.sync(state);
         item_lookup.sync(state);
         item_card.sync(state);
+        deal_badges.sync(state);
 
         // Save once the settings settle, not on every move of a drag.
         let current = minerva.settings();
@@ -915,6 +978,7 @@ fn carry_out(
     app: &AppHandle,
     overlay: &WebviewWindow,
     item_card: &mut ItemCardWindow,
+    deal_badges: &mut DealBadgesWindow,
     reader: &ReaderThread,
     minerva: &mut Minerva,
     request: Option<Request>,
@@ -923,9 +987,13 @@ fn carry_out(
         Some(Request::OpenInBrowser { url }) => open_in_browser(app, &url),
         Some(Request::RaiseOverlay) => search::take_focus(overlay),
         Some(Request::CaptureItemTooltip) => {
-            // The Item Card shows in our captures: it would be read in place of the Item
-            // Tooltip it covers.
-            item_card.out_of_the_capture();
+            // The Item Card and the Deal Badges show in our captures: they would be read in
+            // place of the Item Tooltip they cover. The capture waits for the screen to be
+            // drawn without them.
+            let card_moved = item_card.out_of_the_capture();
+            if deal_badges.out_of_the_capture() || card_moved {
+                std::thread::sleep(OFF_SCREEN_SETTLE);
+            }
             if let Err(e) = reader.read_item_tooltip() {
                 error!("Item Lookup: {e}");
                 minerva.on_item_tooltip_reading(None);

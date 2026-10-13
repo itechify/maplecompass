@@ -51,6 +51,16 @@
         </div>
         <p class="note" id="recovery" role="status" hidden></p>
         <p class="note problem" id="hotkey-problem" role="status" hidden></p>
+        <!-- The Deal Finder, while it is on: the line it compares Player Shop listings with,
+             and a way to turn it off. -->
+        <div class="deal-finder" id="deal-finder" role="status" hidden>
+          <img class="deal-owl" src="/assets/deal-finder-owl-32.png" width="32" height="32" alt="" draggable="false" />
+          <div class="deal-lines">
+            <p class="deal-title">Deal Finder <span class="deal-state" id="deal-state"></span></p>
+            <p class="deal-detail" id="deal-detail"></p>
+          </div>
+          <button type="button" class="text-button" id="deal-off" data-control="toggleDealFinder">Turn off</button>
+        </div>
         <section class="candidates" id="candidates" hidden>
           <p class="note" id="candidates-note"></p>
           <ol id="candidate-rows"></ol>
@@ -203,6 +213,17 @@
           <button type="button" class="text-button" id="hotkeys-undo" data-focus="undo" aria-label="Undo Restore defaults" hidden>Undo</button>
           <button type="button" class="text-button" id="hotkeys-reset" data-focus="reset">Restore defaults</button>
         </div>
+        <div class="settings-head">
+          <h3 class="settings-heading" id="deal-heading">Deal Finder</h3>
+          <p class="settings-intro" id="deal-intro">A listing is a deal when one item costs at least this much less than its price on the Deal Line. Choose the Deal Line on any Item Card.</p>
+        </div>
+        <div class="deal-margin" role="group" aria-labelledby="deal-heading" aria-describedby="deal-intro">
+          <label class="action" for="deal-margin">Deal Margin</label>
+          <span class="deal-margin-field">
+            <input type="number" id="deal-margin" min="0" max="99" step="1" inputmode="numeric" data-focus="deal-margin" />
+            <span aria-hidden="true">% below</span>
+          </span>
+        </div>
         <!-- What changed, for screen readers: the rows are drawn anew on every change. -->
         <p class="sr-only" id="settings-announce" aria-live="polite"></p>
       </section>
@@ -213,7 +234,7 @@
       <div class="mark-card" id="mark-card" role="tooltip" hidden></div>
     </main>
     <div class="icon" id="icon" title="Click to expand" draggable="false">
-      <img class="art" src="/assets/icon.png" alt="Minerva" draggable="false" />
+      <img class="art" id="icon-art" src="/assets/icon.png" alt="Minerva" draggable="false" />
       <span class="count" id="icon-count"></span>
       <span class="alert" id="icon-alert" hidden></span>
     </div>

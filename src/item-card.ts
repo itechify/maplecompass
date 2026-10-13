@@ -12,8 +12,8 @@ type ShopPrice = { status: "sells"; mesos: number } | { status: "notSold" } | { 
 type MarketPrice = { mesos: number; setAtUnixMs?: number };
 
 /** Mirror of `minerva_core::MarketLine`: one of the player's Market Lines, with the item's
- * price on it. */
-type MarketLine = { id: string; name: string; price: MarketPrice | null };
+ * price on it, and whether it is the Deal Line the Deal Finder compares listings with. */
+type MarketLine = { id: string; name: string; price: MarketPrice | null; dealLine: boolean };
 
 /** Mirror of `minerva_core::NameProblem`. */
 type NameProblem = { kind: "empty" } | { kind: "taken"; name: string };
@@ -166,9 +166,26 @@ function hint(problem: string | null, otherwise: string): HTMLParagraphElement {
 
 const quoted = (name: string) => `“${name}”`;
 
-/** A line: its name at the left (a link that opens its name field) and the item's price on
- * it right-aligned (a link that opens its price field, the day it was set in its tooltip),
- * or "Not set". */
+/** The Deal Line's mark before a line's name: filled on the one the Deal Finder compares
+ * listings with, hollow on the others, where a click makes it the Deal Line. */
+function dealMark(line: MarketLine): HTMLButtonElement {
+  const mark = document.createElement("button");
+  mark.type = "button";
+  mark.className = "deal-mark";
+  mark.setAttribute("role", "radio");
+  mark.setAttribute("aria-checked", String(line.dealLine));
+  const label = line.dealLine
+    ? `${quoted(line.name)} is the Deal Line: the Deal Finder compares Player Shop listings with it`
+    : `Make ${quoted(line.name)} the Deal Line, which the Deal Finder compares Player Shop listings with`;
+  mark.title = label;
+  mark.setAttribute("aria-label", label);
+  if (!line.dealLine) mark.addEventListener("click", () => invoke("item_card_choose_deal_line", { line: line.id }));
+  return mark;
+}
+
+/** A line: the Deal Line's mark and its name at the left (a link that opens its name field)
+ * and the item's price on it right-aligned (a link that opens its price field, the day it
+ * was set in its tooltip), or "Not set". */
 function lineRow(line: MarketLine): HTMLElement {
   const row = document.createElement("div");
   row.className = "item-card-line";
@@ -187,7 +204,7 @@ function lineRow(line: MarketLine): HTMLElement {
     : link("Not set", `Set your price on ${quoted(line.name)}`, editPrice);
   value.classList.toggle("quiet", !line.price);
   value.classList.add("value");
-  row.append(name, value);
+  row.append(dealMark(line), name, value);
   return row;
 }
 

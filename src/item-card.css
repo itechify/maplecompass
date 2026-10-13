@@ -151,6 +151,52 @@
   min-width: 0;
 }
 
+/* The Deal Line's mark, a radio before each line's name: a ring, filled in the Deal Finder's
+   green on the Deal Line. Centred on the name's line; the ring itself is small, but the
+   button around it is the line's height to aim at. */
+.deal-mark {
+  all: unset;
+  flex: none;
+  align-self: center;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: 13px;
+  height: 17px;
+  margin-right: -6px;
+  cursor: pointer;
+}
+
+.deal-mark::before {
+  content: "";
+  box-sizing: border-box;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--ink-3);
+  border-radius: 50%;
+  background: #fff;
+}
+
+.deal-mark:hover::before {
+  border-color: var(--teleport);
+}
+
+.deal-mark[aria-checked="true"] {
+  cursor: default;
+}
+
+.deal-mark[aria-checked="true"]::before {
+  border-color: #146b28;
+  background: var(--teleport);
+  box-shadow: inset 0 0 0 1.5px #fff;
+}
+
+.deal-mark:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
 /* The name gives way to the price: cut short first. */
 .item-card-line .name {
   flex: 0 1 auto;

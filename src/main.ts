@@ -155,6 +155,8 @@ type PanelState = {
   /** Mirror of `minerva_core::GrindTrackerWindow`: the player wants it open. */
   grindTracker: { open: boolean };
   search: SearchState;
+  /** Mirror of `minerva_core::DealFinderView`. */
+  dealFinder: { on: boolean; dealLine: string | null; marginPercent: number; shopFound: boolean };
 };
 
 const panelEl = byId("panel");
@@ -221,6 +223,11 @@ const settingsNotice = byId("settings-notice");
 const settingsAnnounce = byId("settings-announce");
 const hotkeysUndo = byId("hotkeys-undo") as HTMLButtonElement;
 const hotkeysReset = byId("hotkeys-reset") as HTMLButtonElement;
+const dealFinderEl = byId("deal-finder");
+const dealState = byId("deal-state");
+const dealDetail = byId("deal-detail");
+const dealMargin = byId("deal-margin") as HTMLInputElement;
+const iconArt = byId("icon-art") as HTMLImageElement;
 const resultsHeader = resultsHead();
 resultsTable.append(resultsHeader);
 let draggable = false;
@@ -762,6 +769,8 @@ function renderSettingsView(panel: PanelState) {
   if (redrawn) {
     hotkeyRows.replaceChildren(...HOTKEY_NAMES.map(([hotkey, name]) => hotkeyRow(hotkey, name, panel, view)));
   }
+  // The Deal Margin as saved, unless the player is typing one.
+  if (document.activeElement !== dealMargin) dealMargin.value = String(panel.dealFinder.marginPercent);
   settingsNotice.textContent = view.notice ? settingsNoticeText(view.notice, hotkeys) : "";
   hotkeysUndo.hidden = view.notice?.kind !== "restored";
   // Nothing to restore, or a row waiting: one change at a time.
@@ -1097,8 +1106,31 @@ mobRows.addEventListener("click", (e) => {
   hoverMob(null);
 });
 
-/** The collapsed icon: the shown map's Hidden Portal count, and a dot when something needs a look. */
+/**
+ * The Deal Finder's line, while it is on: whether it has found a Player Shop, the Deal Line
+ * it compares listings with, and the Deal Margin when there is one.
+ */
+function renderDealFinder(panel: PanelState) {
+  const deal = panel.dealFinder;
+  dealFinderEl.hidden = !deal.on;
+  if (!deal.on) return;
+  dealState.textContent = deal.shopFound ? "· reading the shop" : "· open a Player Shop";
+  const line = deal.dealLine ? `Comparing with ${deal.dealLine}` : "No Market Line to compare with";
+  dealDetail.textContent = deal.marginPercent > 0 ? `${line}, ${deal.marginPercent}% below` : line;
+  const key = panel.hotkeys.dealFinder;
+  const off = byId("deal-off");
+  off.title = key && hotkeyAvailable(key, panel.unavailableHotkeys) ? `Turn off (${keyLabel(key)})` : "Turn off";
+}
+
+/** The collapsed icon: the owl (with its magnifier while the Deal Finder is on), the shown
+ * map's Hidden Portal count, and a dot when something needs a look. */
 function renderIcon(panel: PanelState) {
+  const detective = panel.dealFinder.on;
+  if (iconArt.classList.contains("detective") !== detective) {
+    iconArt.classList.toggle("detective", detective);
+    iconArt.src = detective ? "/assets/deal-finder-owl.png" : "/assets/icon.png";
+    iconArt.alt = detective ? "Minerva, Deal Finder on" : "Minerva";
+  }
   const data = panel.data.status === "ready" || panel.data.status === "savedCopy" ? panel.data : null;
   iconCount.textContent = panel.map && data ? String(data.hiddenPortals.length) : "";
   iconAlert.hidden = !(
@@ -1179,6 +1211,7 @@ function render(panel: PanelState) {
   hotkeyProblem.textContent = causes &&
     `${causes} ${taken ? "Close the other app, or change" : "Change"} ${them} in Settings (the gear at the top of the panel).`;
   hotkeyProblem.hidden = hotkeyProblem.textContent === "";
+  renderDealFinder(panel);
   renderData(panel);
   renderNavigation(panel);
   renderCredit(panel);
@@ -1284,6 +1317,11 @@ toolbar.addEventListener("click", (e) => {
   const button = e.target instanceof Element ? e.target.closest<HTMLButtonElement>("button[data-control]") : null;
   if (button) invoke("panel_press", { control: button.dataset.control });
 });
+// The Deal Finder's Turn off, like its hotkey.
+dealFinderEl.addEventListener("click", (e) => {
+  const button = e.target instanceof Element ? e.target.closest<HTMLButtonElement>("button[data-control]") : null;
+  if (button) invoke("panel_press", { control: button.dataset.control });
+});
 searchBack.addEventListener("click", () => invoke("search_escape"));
 huntingReopen.addEventListener("click", () => invoke("hunting_reopen"));
 huntingClear.addEventListener("click", () => invoke("hunting_clear"));
@@ -1354,6 +1392,19 @@ window.addEventListener("focus", () => {
 });
 
 settingsBack.addEventListener("click", () => invoke("settings_close"));
+// The Deal Margin is saved once the player is done with it (Enter, or leaving the field): a
+// whole percent from 0 to 99. What isn't one goes back to the margin saved.
+dealMargin.addEventListener("change", () => {
+  const percent = Math.round(Number(dealMargin.value));
+  if (dealMargin.value.trim() !== "" && Number.isFinite(percent) && percent >= 0) {
+    invoke("deal_margin_set", { percent: Math.min(percent, 99) });
+  } else if (shownPanel) {
+    dealMargin.value = String(shownPanel.dealFinder.marginPercent);
+  }
+});
+dealMargin.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") dealMargin.blur();
+});
 hotkeysReset.addEventListener("click", () => invoke("hotkeys_reset"));
 hotkeysUndo.addEventListener("click", () => invoke("hotkeys_undo_reset"));
 // A row's Change button waits for its new combination; while it waits, it cancels.

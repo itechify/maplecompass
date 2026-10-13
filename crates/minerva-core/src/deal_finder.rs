@@ -1,0 +1,239 @@
+//! The Deal Finder (ADR 0014): while the player has it on (Ctrl+Shift+D by default), the
+//! shell captures the game's client area a few times a second, the Player Shop reader reads
+//! the open Player Shop's listings, and a Deal Badge beside each one says whether its price
+//! is a deal against the Deal Line: the one Market Line (ADR 0011) the player chose on the
+//! Item Card. A listing is a deal when the price of one item is at least the Deal Margin
+//! (a percentage, 0 by default) below the item's price on the Deal Line.
+//!
+//! Only what the reader is sure of is judged: a name that isn't one item's (unreadable, or
+//! cut short and shared by several), or a price not in the game's shape, gets a "?" badge,
+//! never another item's verdict. Equipment is judged by its name alone: Market Lines keep
+//! one price per item, whatever its stats.
+
+use crate::item_card::item_id;
+use crate::market_prices::MarketPrices;
+use crate::osms_items::{ItemFacts, ItemSet};
+use crate::panel::{GameWindow, ScreenRect, Size, clear_of};
+use crate::player_shop::{ListedPrice, ShopList, ShopReading};
+use serde::Serialize;
+
+/// The Deal Finder, as the panel shows it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DealFinderView {
+    /// The player has it on.
+    pub on: bool,
+    /// The Deal Line's name; `None` with no Market Line at all.
+    pub deal_line: Option<String>,
+    /// How far below the Deal Line a price must be to be a deal, in percent.
+    pub margin_percent: u32,
+    /// A Player Shop's listings were found in the latest capture.
+    pub shop_found: bool,
+}
+
+/// One listing's Deal Badge, level with it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DealBadge {
+    /// Which listing it is, counted from the top of those not sold out: what a click on it
+    /// names ([`crate::Minerva::open_deal_item`]).
+    pub row: u32,
+    /// Its listing's top, from the top of the badges' window, and its height (physical px).
+    pub top: u32,
+    pub height: u32,
+    #[serde(flatten)]
+    pub verdict: Verdict,
+}
+
+/// What a Deal Badge says.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "verdict", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum Verdict {
+    /// One item costs at least the Deal Margin less than the Deal Line's price for it:
+    /// `percent` off it (negative: below), rounded, and the line's price.
+    Deal { item: DealItem, listed: ListedPrice, percent: i32, line_mesos: u64 },
+    /// It doesn't: at or above the Deal Line's price, or below it by less than the Deal
+    /// Margin.
+    NoDeal { item: DealItem, listed: ListedPrice, percent: i32, line_mesos: u64 },
+    /// The Deal Line has no price for the item.
+    NoPrice { item: DealItem, listed: ListedPrice },
+    /// The listing's name or price couldn't be read, or the name isn't one item's.
+    Unknown,
+}
+
+/// The item a listing sells, as OSMS's item files have it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DealItem {
+    /// The game's item ID, 8 digits.
+    pub id: String,
+    pub name: String,
+}
+
+/// The Deal Badges' window, while it shows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DealBadges {
+    pub placement: ScreenRect,
+    pub badges: Vec<DealBadge>,
+}
+
+/// The Deal Finder: whether it is on, and the latest shop read.
+#[derive(Default)]
+pub(crate) struct DealFinder {
+    pub on: bool,
+    /// The listings in the latest capture; `None` while no shop was found, or it is off.
+    shop: Option<ShopList>,
+    /// The items each listing in `shop` is, as they were last judged: what a click on its
+    /// badge opens.
+    items: Vec<Option<Vec<u32>>>,
+}
+
+/// The badges sit this far left of the shop's window (physical px).
+const SHOP_GAP: i32 = 6;
+/// The shop's window reaches this far left of its item list's picture column, and this far
+/// right of it (physical px): the game draws it at a fixed size.
+const SHOP_LEFT_OF_LIST: i32 = 8;
+const SHOP_RIGHT_OF_LIST: i32 = 809;
+
+impl DealFinder {
+    /// Turn it on or off. Off, it forgets the shop it read.
+    pub fn toggle(&mut self) {
+        self.on = !self.on;
+        if !self.on {
+            self.shop = None;
+            self.items.clear();
+        }
+    }
+
+    /// What a capture read as; ignored while it is off (a capture taken before it was
+    /// turned off).
+    pub fn read(&mut self, reading: ShopReading) {
+        if self.on {
+            self.shop = reading.shop;
+        }
+    }
+
+    pub fn shop(&self) -> Option<&ShopList> {
+        self.shop.as_ref()
+    }
+
+    /// Where the shop's window is on screen, across, and its list's listings, down; `None`
+    /// while no shop was found.
+    pub fn shop_window(&self) -> Option<ScreenRect> {
+        let list = self.shop.as_ref()?.area;
+        let x = list.x - SHOP_LEFT_OF_LIST;
+        Some(ScreenRect { x, width: (SHOP_RIGHT_OF_LIST + SHOP_LEFT_OF_LIST) as u32, ..list })
+    }
+
+    /// The items the listing `row`'s badge is about, if it names one.
+    pub fn row_items(&self, row: u32) -> Option<Vec<u32>> {
+        self.items.get(row as usize).cloned().flatten()
+    }
+
+    /// Each listing's badge, judged against `market`'s Deal Line with the Deal Margin
+    /// `margin_percent`, its items from `items` (none yet: every badge is "?"); tops from
+    /// `top`, the badges' window's top on screen.
+    pub fn badges(&mut self, items: Option<&ItemSet>, market: &MarketPrices, margin_percent: u32, top: i32) -> Vec<DealBadge> {
+        let Some(shop) = &self.shop else {
+            self.items.clear();
+            return Vec::new();
+        };
+        let line = market.deal_line();
+        let mut judged = Vec::with_capacity(shop.rows.len());
+        let badges = shop
+            .rows
+            .iter()
+            .enumerate()
+            .map(|(row, listing)| {
+                let named = items.zip(listing.name.as_deref()).and_then(|(items, name)| item_named(items, name));
+                judged.push(named.as_ref().map(|(_, ids)| ids.clone()));
+                let verdict = match (named, listing.price) {
+                    (Some((item, ids)), Some(listed)) => {
+                        let item = DealItem { id: item_id(ids[0]), name: item.name.clone() };
+                        match line.and_then(|line| line.prices.get(&item.id)) {
+                            Some(price) => judge(item, listed, price.mesos, margin_percent),
+                            None => Verdict::NoPrice { item, listed },
+                        }
+                    }
+                    _ => Verdict::Unknown,
+                };
+                DealBadge {
+                    row: row as u32,
+                    top: (listing.area.y - top).max(0) as u32,
+                    height: listing.area.height,
+                    verdict,
+                }
+            })
+            .collect();
+        self.items = judged;
+        badges
+    }
+
+    /// Where the badges' window goes over `game`: `width` wide, as tall as the shop's list,
+    /// just left of the shop's window, or right of it with no room on the left; kept inside
+    /// the client area and off `avoid` (the captured regions). `None` while no shop was
+    /// found.
+    pub fn placement(&self, game: &GameWindow, size: Size, avoid: &[ScreenRect]) -> Option<ScreenRect> {
+        let list = self.shop.as_ref()?.area;
+        let client = game.client;
+        let width = size.width.min(client.width);
+        let left = list.x - SHOP_LEFT_OF_LIST - SHOP_GAP - width as i32;
+        let x = if left >= client.x { left } else { list.x + SHOP_RIGHT_OF_LIST + SHOP_GAP };
+        let strip = ScreenRect { x, y: list.y, width, height: list.height.min(client.height) };
+        Some(clear_of(strip, avoid, client))
+    }
+}
+
+/// The verdict on `listed` for `item`, against `line_mesos` on the Deal Line.
+fn judge(item: DealItem, listed: ListedPrice, line_mesos: u64, margin_percent: u32) -> Verdict {
+    let each = listed.mesos as f64 / listed.quantity as f64;
+    let line = line_mesos as f64;
+    let percent = if line > 0.0 { ((each - line) / line * 100.0).round() as i32 } else { 0 };
+    let deal = each < line && each <= line * (1.0 - f64::from(margin_percent) / 100.0);
+    if deal {
+        Verdict::Deal { item, listed, percent, line_mesos }
+    } else {
+        Verdict::NoDeal { item, listed, percent, line_mesos }
+    }
+}
+
+/// The item a listing's name read as `read` is, with the items that look alike (its name,
+/// kind and shop price; the first keeps the market prices): the item of that name, but for
+/// the letters the recogniser confuses; or, for a name cut short ("Pet Equip Speed Scroll:
+/// L..."), the one item whose name starts so. `None` when no item, or several that don't
+/// look alike, have it.
+fn item_named<'a>(items: &'a ItemSet, read: &str) -> Option<(&'a ItemFacts, Vec<u32>)> {
+    let trimmed = read.trim_end_matches(['.', '…', ' ']);
+    let found = if trimmed.len() < read.trim_end().len() { items.starting_with(trimmed) } else { items.named(read) };
+    let first = *found.first()?;
+    let alike = found.iter().all(|item| item.kind == first.kind && item.shop == first.shop);
+    alike.then(|| (first, found.iter().map(|item| item.id).collect()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn item() -> DealItem {
+        DealItem { id: "04020000".into(), name: "Garnet Ore".into() }
+    }
+
+    fn verdict(quantity: u64, mesos: u64, line: u64, margin: u32) -> (bool, i32) {
+        match judge(item(), ListedPrice { quantity, mesos }, line, margin) {
+            Verdict::Deal { percent, .. } => (true, percent),
+            Verdict::NoDeal { percent, .. } => (false, percent),
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn a_deal_is_one_item_below_the_line_by_the_margin() {
+        assert_eq!(verdict(1, 999, 1_000, 0), (true, 0));
+        assert_eq!(verdict(1, 1_000, 1_000, 0), (false, 0));
+        assert_eq!(verdict(10, 6_800, 1_000, 0), (true, -32));
+        assert_eq!(verdict(1, 950, 1_000, 10), (false, -5));
+        assert_eq!(verdict(1, 900, 1_000, 10), (true, -10));
+        assert_eq!(verdict(1, 1_120, 1_000, 0), (false, 12));
+    }
+}

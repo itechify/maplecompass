@@ -101,6 +101,20 @@ impl ItemSet {
             .map(|name| self.names[name].1.iter().map(|&item| &self.items[item]).collect())
             .unwrap_or_default()
     }
+
+    /// The items with the one name that starts as `start` does (a name the game cut short),
+    /// as [`ItemSet::named`] compares them. Empty when no name does, or several do.
+    pub(crate) fn starting_with(&self, start: &str) -> Vec<&ItemFacts> {
+        let start = item_key(start);
+        if start.is_empty() {
+            return Vec::new();
+        }
+        let mut starting = self.names.iter().filter(|(name, _)| name.starts_with(&start));
+        match (starting.next(), starting.next()) {
+            (Some((_, items)), None) => items.iter().map(|&item| &self.items[item]).collect(),
+            _ => Vec::new(),
+        }
+    }
 }
 
 /// Read OSMS's item files. All or nothing: a file that isn't JSON, or isn't shaped as the

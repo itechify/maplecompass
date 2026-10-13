@@ -48,11 +48,15 @@ pub struct SavedMarketLine {
 pub struct SavedMarketPrices {
     pub version: u32,
     pub lines: Vec<SavedMarketLine>,
+    /// The Deal Line: the line the Deal Finder compares listings with (ADR 0014), by its ID;
+    /// `None` (files from before it) for the first line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deal_line: Option<String>,
 }
 
 impl Default for SavedMarketPrices {
     fn default() -> Self {
-        Self { version: MARKET_PRICES_VERSION, lines: vec![first_line(BTreeMap::new())] }
+        Self { version: MARKET_PRICES_VERSION, lines: vec![first_line(BTreeMap::new())], deal_line: None }
     }
 }
 
@@ -67,11 +71,12 @@ struct SavedShape {
     version: u32,
     items: BTreeMap<String, MarketPrice>,
     lines: Option<Vec<SavedMarketLine>>,
+    deal_line: Option<String>,
 }
 
 impl Default for SavedShape {
     fn default() -> Self {
-        Self { version: MARKET_PRICES_VERSION, items: BTreeMap::new(), lines: None }
+        Self { version: MARKET_PRICES_VERSION, items: BTreeMap::new(), lines: None, deal_line: None }
     }
 }
 
@@ -80,10 +85,10 @@ impl From<SavedShape> for SavedMarketPrices {
     /// can tell one it doesn't know.
     fn from(saved: SavedShape) -> Self {
         if saved.version <= 1 {
-            return Self { version: MARKET_PRICES_VERSION, lines: vec![first_line(saved.items)] };
+            return Self { version: MARKET_PRICES_VERSION, lines: vec![first_line(saved.items)], deal_line: None };
         }
         let lines = saved.lines.unwrap_or_else(|| Self::default().lines);
-        Self { version: saved.version, lines }
+        Self { version: saved.version, lines, deal_line: saved.deal_line }
     }
 }
 
@@ -126,6 +131,23 @@ impl MarketPrices {
         self.saved.lines.iter().find(|known| known.id == line)
     }
 
+    /// The Deal Line: the line the player chose, or the first while they chose none or
+    /// removed the one they chose. `None` with no line at all.
+    pub fn deal_line(&self) -> Option<&SavedMarketLine> {
+        let chosen = self.saved.deal_line.as_deref().and_then(|line| self.line(line));
+        chosen.or_else(|| self.saved.lines.first())
+    }
+
+    /// The player chose `line` as the Deal Line; nothing changes for a line not held.
+    pub fn choose_deal_line(&mut self, line: &str) {
+        if self.line(line).is_none() {
+            return;
+        }
+        let changed = self.deal_line().is_none_or(|deal_line| deal_line.id != line);
+        self.saved.deal_line = Some(line.to_string());
+        self.changed(changed);
+    }
+
     /// Keep `price` for item `id` (8 digits) on `line`, or forget its price there (`None`).
     pub fn set(&mut self, line: &str, id: &str, price: Option<MarketPrice>) {
         let Some(line) = self.saved.lines.iter_mut().find(|known| known.id == line) else { return };
@@ -158,10 +180,14 @@ impl MarketPrices {
         self.changed(changed);
     }
 
-    /// Remove `line`, and its prices on every item.
+    /// Remove `line`, and its prices on every item. The Deal Line, if it was, goes back to
+    /// the first: a line added later may be numbered as this one was.
     pub fn remove(&mut self, line: &str) {
         let before = self.saved.lines.len();
         self.saved.lines.retain(|known| known.id != line);
+        if self.saved.deal_line.as_deref() == Some(line) {
+            self.saved.deal_line = None;
+        }
         self.changed(self.saved.lines.len() != before);
     }
 

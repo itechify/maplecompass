@@ -52,6 +52,8 @@ pub struct MarketLine {
     pub name: String,
     /// The price the player keeps on it for the item; `None` until they set one.
     pub price: Option<MarketPrice>,
+    /// It is the Deal Line, which the Deal Finder compares listings with (ADR 0014).
+    pub deal_line: bool,
 }
 
 /// What the card's market section has open: a field for the player to type in, or the
@@ -184,11 +186,13 @@ pub(crate) enum Editing {
 }
 
 /// Where a card opened: at the pointer, where the hotkey was pressed over the item's
-/// tooltip; or beside the panel, picked from Search.
+/// tooltip; beside the panel, picked from Search; or beside a Deal Badge (`badge`, on
+/// screen) the player clicked, off the Player Shop (`shop`).
 #[derive(Clone, Copy)]
 enum Opened {
     AtPointer(ScreenPoint),
     BesidePanel,
+    BesideBadge { badge: ScreenRect, shop: ScreenRect },
 }
 
 /// What the card showing shows.
@@ -247,6 +251,13 @@ impl ItemCards {
     /// beside the panel, in place of any card showing.
     pub fn show(&mut self, ids: Vec<u32>) {
         self.open(Opened::BesidePanel, Showing::Card(ids));
+    }
+
+    /// The player clicked the Deal Badge at `badge` (on screen) of a listing of the items
+    /// `ids`, which look alike, in the Player Shop at `shop`: their card shows beside the
+    /// badge, off the shop, in place of any card showing.
+    pub fn show_beside_badge(&mut self, ids: Vec<u32>, badge: ScreenRect, shop: ScreenRect) {
+        self.open(Opened::BesideBadge { badge, shop }, Showing::Card(ids));
     }
 
     fn open(&mut self, opened: Opened, showing: Showing) {
@@ -352,6 +363,10 @@ impl ItemCards {
                 let avoid: Vec<ScreenRect> = avoid.iter().chain(others).chain([&panel]).copied().collect();
                 beside_panel(game, panel, size, &avoid)
             }
+            (None, Opened::BesideBadge { badge, shop }) => {
+                let avoid: Vec<ScreenRect> = avoid.iter().chain([&badge, &shop]).copied().collect();
+                beside_badge(game, badge, shop, size, &avoid)
+            }
         })
     }
 
@@ -371,10 +386,16 @@ impl ItemCards {
         let view = match &shown.showing {
             Showing::Card(ids) => {
                 let card = card(ids, items, &picture)?;
+                let deal_line = market.deal_line().map(|line| line.id.as_str());
                 let lines = market
                     .lines()
                     .iter()
-                    .map(|line| MarketLine { id: line.id.clone(), name: line.name.clone(), price: line.prices.get(&card.id).copied() })
+                    .map(|line| MarketLine {
+                        id: line.id.clone(),
+                        name: line.name.clone(),
+                        price: line.prices.get(&card.id).copied(),
+                        deal_line: deal_line == Some(line.id.as_str()),
+                    })
                     .collect();
                 ItemCardView::Card(ItemCard {
                     market: lines,
@@ -480,6 +501,19 @@ fn beside_panel(game: &GameWindow, panel: ScreenRect, size: Size, avoid: &[Scree
     let middle = |r: ScreenRect| 2 * i64::from(r.x) + i64::from(r.width);
     let spots = if middle(panel) >= middle(client) { [left, right] } else { [right, left] };
     first_clear(&spots, client, avoid)
+}
+
+/// Where a card of `size` opened from the Deal Badge at `badge` goes: left of it, the tops
+/// level, or else right of the Player Shop at `shop`; whichever first stays inside the game's
+/// client area and off `avoid` (the captured regions, the badge and the shop, whose
+/// listings the Deal Finder reads). With neither clear, left of the badge, moved inside the
+/// client area and below (or above) what it would cover.
+fn beside_badge(game: &GameWindow, badge: ScreenRect, shop: ScreenRect, size: Size, avoid: &[ScreenRect]) -> ScreenRect {
+    let client = game.client;
+    let (width, height) = (size.width.min(client.width), size.height.min(client.height));
+    let left = ScreenRect { x: badge.x - PANEL_GAP - width as i32, y: badge.y, width, height };
+    let right = ScreenRect { x: shop.x + shop.width as i32 + PANEL_GAP, ..left };
+    first_clear(&[left, right], client, avoid)
 }
 
 /// The first of `spots` (all the same size) wholly inside `client` and off `avoid`. With

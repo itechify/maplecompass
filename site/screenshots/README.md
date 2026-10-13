@@ -27,3 +27,5 @@ The pictures on the Minerva site, taken by hand in the game. The site's build fa
 ## Retake
 
 When a change alters something a shot shows, the PR that makes it lists the shot here, with what changed. At release, the smoke test retakes every shot listed (`docs/releasing.md`) and empties the list.
+
+- `item-card.png`: each line under Market now has the Deal Line's ring before its name, filled on the Deal Line (Your price). Update its alt text in `site/index.html` to say so.

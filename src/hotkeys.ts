@@ -9,6 +9,7 @@ export type Hotkeys = {
   grindTracker: string;
   itemCard: string;
   itemLookup: string;
+  dealFinder: string;
 };
 
 /** Mirror of `minerva_core::Hotkey`: one of the hotkeys, named as in `Hotkeys`. */
@@ -26,12 +27,14 @@ export const HOTKEY_NAMES: [Hotkey, string][] = [
   ["search", "Search"],
   ["itemCard", "Show the hovered item's card"],
   ["itemLookup", "Open the hovered item's MeowDB page"],
+  ["dealFinder", "Turn the Deal Finder on / off"],
   ["grindTracker", "Show / hide the Grind Tracker"],
   ["setup", "Help & Setup"],
 ];
 
-/** The hotkeys whose actions have no button: turned off, they can't be used at all. */
-export const KEY_ONLY: Hotkey[] = ["itemCard", "itemLookup"];
+/** The hotkeys whose actions have no button: turned off, they can't be used at all. (The
+ * Deal Finder's line in the panel turns it off, but nothing turns it on.) */
+export const KEY_ONLY: Hotkey[] = ["itemCard", "itemLookup", "dealFinder"];
 
 /** Mirror of `minerva_core::RebindProblem`. */
 export type RebindProblem =

@@ -11,8 +11,10 @@ use serde::{Deserialize, Serialize};
 /// versions 2 and 3 had Win+Alt hotkeys (3 was written by the EXP tracking branch);
 /// [`crate::Minerva::restore`] replaces all of them with the defaults. Version 4's Item
 /// Lookup key is the Item Card's from version 5 on ([`Hotkeys::give_item_lookup_to_card`]).
-/// Files without an EXP Bar Region (all before version 3) start with EXP tracking off.
-pub(crate) const VERSION: u32 = 5;
+/// Version 6 brought the Deal Finder's hotkey, off for an older file whose hotkeys have its
+/// default ([`Hotkeys::free_deal_finder`]). Files without an EXP Bar Region (all before
+/// version 3) start with EXP tracking off.
+pub(crate) const VERSION: u32 = 6;
 
 /// The player's settings. Missing fields (an older or empty file) take their defaults.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -57,6 +59,9 @@ pub struct Settings {
     /// Where the player dragged the Personal Bests window, relative to the game client;
     /// `None` for centred over the game.
     pub personal_bests_at: Option<ClientOffset>,
+    /// The Deal Margin (ADR 0014): how far below the Deal Line, in percent, a listing's
+    /// price must be for the Deal Finder to call it a deal. 0: any price below it.
+    pub deal_margin_percent: u32,
 }
 
 impl Default for Settings {
@@ -77,6 +82,7 @@ impl Default for Settings {
             grind_tracker_open: true,
             grind_tracker_at: None,
             personal_bests_at: None,
+            deal_margin_percent: 0,
         }
     }
 }
@@ -113,6 +119,9 @@ pub struct Hotkeys {
     /// Item Lookup: open the MeowDB page of the item whose Item Tooltip shows by the
     /// pointer. Files from before it get the default.
     pub item_lookup: String,
+    /// Turn the Deal Finder on or off. Files from before it get the default, unless
+    /// another hotkey has it ([`Hotkeys::free_deal_finder`]).
+    pub deal_finder: String,
 }
 
 impl Hotkeys {
@@ -134,6 +143,18 @@ impl Hotkeys {
         }
     }
 
+    /// A file's hotkeys from before the Deal Finder (version 5 and earlier), which gave it
+    /// its default: off, if another hotkey has that.
+    pub(crate) fn free_deal_finder(&mut self) {
+        let taken = Hotkey::ALL
+            .into_iter()
+            .filter(|&hotkey| hotkey != Hotkey::DealFinder)
+            .any(|hotkey| crate::same_hotkey(self.get(hotkey), &self.deal_finder));
+        if taken {
+            self.deal_finder.clear();
+        }
+    }
+
     /// Every hotkey that is on, for the shell to register: one list, so none is forgotten.
     pub fn all(&self) -> Vec<&str> {
         Hotkey::ALL.into_iter().map(|hotkey| self.get(hotkey)).filter(|combination| !combination.is_empty()).collect()
@@ -151,6 +172,7 @@ impl Hotkeys {
             Hotkey::ItemCard => &self.item_card,
             Hotkey::ItemLookup => &self.item_lookup,
             Hotkey::Search => &self.search,
+            Hotkey::DealFinder => &self.deal_finder,
         }
     }
 
@@ -166,6 +188,7 @@ impl Hotkeys {
             Hotkey::ItemCard => &mut self.item_card,
             Hotkey::ItemLookup => &mut self.item_lookup,
             Hotkey::Search => &mut self.search,
+            Hotkey::DealFinder => &mut self.deal_finder,
         };
         *bound = combination;
     }
@@ -184,11 +207,12 @@ pub enum Hotkey {
     ItemCard,
     ItemLookup,
     Search,
+    DealFinder,
 }
 
 impl Hotkey {
     /// Every hotkey, in the order [`Hotkeys::all`] lists them.
-    pub const ALL: [Hotkey; 9] = [
+    pub const ALL: [Hotkey; 10] = [
         Hotkey::TogglePanel,
         Hotkey::CyclePlacement,
         Hotkey::OpenMeowdbPage,
@@ -198,6 +222,7 @@ impl Hotkey {
         Hotkey::ItemCard,
         Hotkey::ItemLookup,
         Hotkey::Search,
+        Hotkey::DealFinder,
     ];
 }
 
@@ -213,6 +238,7 @@ impl Default for Hotkeys {
             grind_tracker: "ctrl+shift+g".into(),
             item_card: "ctrl+shift+i".into(),
             item_lookup: "ctrl+shift+u".into(),
+            deal_finder: "ctrl+shift+d".into(),
         }
     }
 }
