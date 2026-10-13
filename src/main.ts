@@ -174,6 +174,7 @@ const footer = byId("footer");
 const credit = byId("credit");
 const hotkeyProblem = byId("hotkey-problem");
 const grindTracker = byId("grind-tracker");
+const dealFinderButton = byId("deal-finder-button");
 const badge = byId("badge");
 const mapMobs = byId("map-mobs");
 const noMobs = byId("no-mobs");
@@ -451,6 +452,7 @@ const CONTROL_HOTKEYS: Record<string, keyof Hotkeys> = {
   setup: "setup",
   togglePanel: "togglePanel",
   toggleGrindTracker: "grindTracker",
+  toggleDealFinder: "dealFinder",
 };
 
 /**
@@ -482,6 +484,14 @@ function renderToolbar(panel: PanelState) {
   grindTracker.title = hotkeyAvailable(trackerKey, panel.unavailableHotkeys)
     ? `${grindTracker.getAttribute("aria-label")} (${keyLabel(trackerKey)})`
     : grindTracker.getAttribute("aria-label") ?? "";
+  // Pressed while the Deal Finder is on, as the Grind Tracker's is while its window shows.
+  const dealing = panel.dealFinder.on;
+  dealFinderButton.setAttribute("aria-pressed", String(dealing));
+  dealFinderButton.setAttribute("aria-label", dealing ? "Turn the Deal Finder off" : "Turn the Deal Finder on");
+  const dealKey = panel.hotkeys.dealFinder;
+  dealFinderButton.title = hotkeyAvailable(dealKey, panel.unavailableHotkeys)
+    ? `${dealFinderButton.getAttribute("aria-label")} (${keyLabel(dealKey)})`
+    : dealFinderButton.getAttribute("aria-label") ?? "";
   icon.title = hotkeyAvailable(panel.hotkeys.togglePanel, panel.unavailableHotkeys)
     ? `Click to expand (${keyLabel(panel.hotkeys.togglePanel)})` : "Click to expand";
 }

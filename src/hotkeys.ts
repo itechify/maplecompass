@@ -32,9 +32,8 @@ export const HOTKEY_NAMES: [Hotkey, string][] = [
   ["setup", "Help & Setup"],
 ];
 
-/** The hotkeys whose actions have no button: turned off, they can't be used at all. (The
- * Deal Finder's line in the panel turns it off, but nothing turns it on.) */
-export const KEY_ONLY: Hotkey[] = ["itemCard", "itemLookup", "dealFinder"];
+/** The hotkeys whose actions have no button: turned off, they can't be used at all. */
+export const KEY_ONLY: Hotkey[] = ["itemCard", "itemLookup"];
 
 /** Mirror of `minerva_core::RebindProblem`. */
 export type RebindProblem =
