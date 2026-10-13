@@ -135,8 +135,15 @@ const SELECTED_RULE_RGB: [f32; 3] = [255.0, 195.0, 96.0];
 /// rule-to-black line, and is no brighter than the rule (the pointer's white is).
 const RULE_TOL: f32 = 16.0;
 const RULE_BRIGHTEST: f32 = 1.04;
-/// A slot is covered when at least this many of its pixels are none the shop draws...
+/// A slot is covered when at least this many of its pixels are the pointer's or its tooltip's...
 const COVERED_MIN: usize = 15;
+/// The pointer's glove: whiter than anything the shop draws in a listing (its lightest, the
+/// rule between a listing's lines and a sold-out band, are ~223), as screenshots show it.
+const GLOVE_WHITE: f32 = 242.0;
+/// The tooltip's fill: dark, and bluer than red by this much, as no ink in a listing is
+/// (black text is neutral).
+const TOOLTIP_DARK: f32 = 120.0;
+const TOOLTIP_BLUE: f32 = 20.0;
 /// ...unless at least this share of it is a sold-out listing's greyed band, as screenshots
 /// show it...
 const SOLD_OUT_RGB: [f32; 3] = [219.0, 221.0, 224.0];
@@ -513,16 +520,17 @@ fn on_grid(anchor: u32, top: u32) -> u32 {
     (anchor as f32 + (slots * SLOT_PITCH).round()).max(0.0) as u32
 }
 
-/// Whether the slot whose band starts at `top` is covered: it holds pixels the shop never
-/// draws (neither band nor its text, nor a sold-out listing's light greys, nor the light rule
-/// between a listing's lines), and isn't a sold-out listing (mostly its greyed band) or an
-/// empty slot (mostly band, with no text), whatever stray pixels a capture holds there.
+/// Whether the slot whose band starts at `top` is covered: it holds what covers a listing,
+/// the game's pointer (its white glove) or the game's tooltip by it (its dark slate fill),
+/// neither of which the shop draws in a listing, whatever a capture does to its greys; and it
+/// isn't a sold-out listing (mostly its greyed band) or an empty slot (mostly band, with no
+/// text), which no covering then matters for.
 fn covered(img: &RgbImage, list: &List, top: u32) -> bool {
     let (w, h) = img.dimensions();
     let (x0, x1) = (list.x0 + EDGE, (list.x0 + BAND_W - EDGE).min(w));
-    let (listing, selected) = (Band::Listing.rgb(list.scale), Band::Selected.rgb(list.scale));
+    let listing = Band::Listing.rgb(list.scale);
     let sold_out = SOLD_OUT_RGB.map(|c| c * list.scale);
-    let (mut foreign, mut band, mut greyed, mut inked, mut all) = (0, 0, 0, 0, 0);
+    let (mut covering, mut band, mut greyed, mut inked, mut all) = (0, 0, 0, 0, 0);
     for y in top..(top + BAND_H).min(h) {
         for x in x0..x1 {
             let p = img.get_pixel(x, y).0;
@@ -536,23 +544,18 @@ fn covered(img: &RgbImage, list: &List, top: u32) -> bool {
             if (0..3).all(|i| (p[i] as f32 - sold_out[i]).abs() <= BAND_TOL) {
                 greyed += 1;
             }
-            let light_grey = {
-                let (lo, hi) = (*p.iter().min().unwrap_or(&0), *p.iter().max().unwrap_or(&0));
-                hi - lo <= 8 && (150.0 * list.scale..=235.0 * list.scale).contains(&f32::from(hi))
-            };
-            let shops = light_grey
-                || off <= FOREIGN
-                || ink_of(p, selected).1 <= SELECTED_FOREIGN
-                || Band::Selected.rule(p, list.scale);
-            if !shops {
-                foreign += 1;
+            let [r, g, b] = p.map(f32::from);
+            let glove = r.min(g).min(b) >= GLOVE_WHITE * list.scale;
+            let tooltip = 0.299 * r + 0.587 * g + 0.114 * b <= TOOLTIP_DARK * list.scale && b - r >= TOOLTIP_BLUE;
+            if glove || tooltip {
+                covering += 1;
             }
         }
     }
     let share = |n: usize| n as f32 / all.max(1) as f32;
     let sold_out = share(greyed) >= SOLD_OUT_SHARE;
     let empty = share(band) >= EMPTY_SHARE && inked < TEXT_MIN;
-    foreign >= COVERED_MIN && !sold_out && !empty
+    covering >= COVERED_MIN && !sold_out && !empty
 }
 
 /// `line`'s ink, black on white.
