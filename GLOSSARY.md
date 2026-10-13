@@ -62,7 +62,7 @@ A hidden portal that only works while the player meets a quest condition.
 _Avoid_: script portal
 
 **Map Preview**:
-A picture of the whole of the shown map, with every portal marked where it is and its hidden portals set apart.
+A picture of the whole of the shown map, with every portal marked where it is, its hidden portals set apart, and every Spawn Point dotted.
 _Avoid_: minimap (the game's own), map image
 
 ### Hunting
@@ -75,8 +75,12 @@ _Avoid_: monster, enemy, creature
 The card that appears when the player hovers a mob's name in the panel: its image and the figures the row doesn't show. Clicking the name opens the mob's MeowDB page.
 _Avoid_: tooltip, popup, mob info
 
+**Spawn Point**:
+A spot on a map where one of its mobs appears, again and again once killed. The Map Preview dots each one in the minimap's red.
+_Avoid_: spawn, spawner
+
 **Spawn Count**:
-How many of a given mob a map holds at once.
+How many of a given mob a map holds at once: its spawn points there.
 
 **Spawn Share**:
 A mob's spawn count as a fraction of all mob spawns on the map.

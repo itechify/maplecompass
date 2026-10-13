@@ -58,7 +58,7 @@ pub use map_data::{
 };
 pub use map_index::{Fetched, MapDataSource, MapEntry, SourceError};
 pub use map_mark::MapMark;
-pub use map_preview::{Landing, Leads, MapPreview, PicturePoint, PortalMark, PreviewImage};
+pub use map_preview::{Landing, Leads, MapPreview, PicturePoint, PortalMark, PreviewImage, SpawnMark};
 pub use mob_card::{DamageRange, Elements, HpPerExp, MobCard, MobDetails};
 pub use portal_overrides::{PORTAL_OVERRIDES, PortalOverride};
 pub use panel::{

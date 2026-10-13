@@ -2,7 +2,7 @@
 //! map list and every map's data.
 
 use super::FakeSource;
-use super::osms::{self, Spawn};
+use super::osms::{self, Spawn, SpawnAt};
 use minerva_core::{Action, Minerva, Mob, PanelState, PortalKind, SearchResult};
 
 /// The search hotkey (the default).
@@ -21,7 +21,12 @@ pub fn map(id: &str, name: &str, mob_rate_percent: u32, mobs: Vec<Mob>) -> World
     let mut map = osms::map(id.parse().expect("a map ID"), "Victoria Road", name).mob_rate(f64::from(mob_rate_percent) / 100.0);
     map.spawns = mobs
         .iter()
-        .map(|mob| Spawn { mob: mob.id.parse().expect("a mob ID"), points: mob.spawn_count, timer: None })
+        .map(|mob| Spawn {
+            mob: mob.id.parse().expect("a mob ID"),
+            points: mob.spawn_count,
+            timer: None,
+            at: SpawnAt::Spread,
+        })
         .collect();
     let mobs = mobs
         .into_iter()

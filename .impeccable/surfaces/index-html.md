@@ -45,3 +45,23 @@ Assumed in this pass (no one to ask in the session; correct here if wrong):
 - **Quest tag.** Not amber: cream and amber tags already mean a state to notice ("paused", "Taken", "Invalid") and the Orange Means Doubt Rule keeps the game's orange for problems. Quest moves to a violet no other meaning holds.
 - **Loading.** A 140 px placeholder in the same frame and paper, "Loading map…" centred in 12px Panel Ink Steel; then the box takes the picture's own fitted height. **Failure** is the panel's problem note, "Couldn't load the map picture", in the preview's place.
 - **Cursor and focus.** Marks keep the default cursor (a click does nothing) and take no focus; the preview is one image to assistive tech, named with the map and its portal count, and the rows carry the Hidden Portals as text.
+
+## Portal close-up (overdrive, 12 Oct 2026)
+
+Chosen by the user from three directions (close-up, labelled map at zoom, prefetched pictures), with motion allowed in the windows: DESIGN.md's Motion section replaces the old ban, and supersedes "No motion: the panel has none" above.
+
+- **What.** The Mark Card opens on a close-up of the spot: OSMS's picture around the portal, which OSMS draws at the game's own size (mobs in it), at half that, 104px tall across a card at least 272px wide that grows with its words, as the old card did. A player sees the ledge, the fence or the signpost a hidden portal stands by, not a 9px ring on a map shrunk 4 to 15 times. Every ring in view is drawn in it, the card's own lit; the portal sits 62% of the way down, and the view stays on the picture at its edges.
+- **Rows too.** Resting on a Hidden Portal's row shows the same card, below the row (above when there's no room), as the Mob Card sits by its row.
+- **The one motion.** A new spot dives from the map at the preview's scale to the close-up in 360ms, on an exponential ease-out interpolated in log scale, the first frame drawn at once. The same spot lit again holds; reduced motion, or a preview already as close, opens on the spot.
+- **How.** A canvas at the screen's resolution, drawn from the preview's own decoded `<img>`, so no picture is fetched twice and no layer is ever larger than the card. On a screen at twice the scale, the settled close-up is the picture's own pixels.
+- **Checked** headless at 1× and 2× on a real OSMS picture (3-Way Road-Split's two hidden portals, and its exits at either end), filmed at a twentieth of the speed, and with reduced motion forced.
+
+## Spawns on the map (overdrive, 12 Oct 2026)
+
+Chosen by the user over a map that moves like a map and a labelled map at zoom. OSMS's `maps.json` gives every spawn point's `x` and `y` in the same picture pixels as the portals, and the core already read the points to count them; it now passes them to the overlay in `MapPreview.spawns`, each with its mob's ID.
+
+- **The map.** Every spawn point is the minimap's red mob dot, under the arrows and rings, on a white halo a pixel wider so it holds on dark art. A busy map wears dozens, as its minimap does: 3-Way Road-Split has 68.
+- **Lit together.** Resting on a mob's row (or its name taking focus) rings that mob's dots in the same red and fades the others to 30%. Resting on a dot does the same for its mob and lights its row in Selection Periwinkle, the row's own red dot ringed as the map's. The Mobs table is set out 5px at each side, its text where it was, so the lit tint clears it as a Hidden Portal row's does.
+- **A dot's card.** The Mark Card, with its close-up and dive, for a spawn point: OSMS draws the mobs into its pictures, so the close-up shows the mob standing on its spot, and the words name it after the table's red dot, with "Lv 8 · 9 spawn points". Every close-up draws the dots in view, the lit mob's ringed.
+- **No new motion.** Lighting is at once, as a ring's is.
+- **Checked** headless at 2× on 3-Way Road-Split's real picture with its real 68 spawn points (its seven mobs stood in for by the made-up world's), at rest, with a row lit, a dot's card, a ring's card, and the narrow card layout with a row lit.

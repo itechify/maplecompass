@@ -30,4 +30,6 @@ When a change alters something a shot shows, the PR that makes it lists the shot
 
 - `item-card.png`: the card's credit line at its foot is now an info icon, its words in its tooltip.
 - `grind-tracker.png`: the Pace Trace under the rates (take it back on a map with a Best, ahead of it, so its line and the lead over it show), and the forecast under the EXP gauge.
-- `mobs.png`: cut from `hero.png` for now; take it on its own, with the pointer on a mob's name and its Mob Card showing.
+- `mobs.png`: cut from `hero.png` for now; take it on its own, with the pointer on a mob's name and its Mob Card showing. Its row is lit then too, since the Mobs feature now says pointing at a mob lights its spawn points.
+- `map.png`: the ring's card now opens on a close-up of the portal's spot, and shows from a Hidden Portal's row too, and the Map Preview dots every spawn point. Retake it with the pointer resting on the dashed ring once the close-up has settled, and update its alt text in `site/index.html`.
+- `hero.png`, `game-window.png` and `navigation.png`: the Map Preview now dots every spawn point in red. Retaking `game-window.png` or `hero.png` means checking the titles' places at the top of `site/reel.ts`, as their row above says.
