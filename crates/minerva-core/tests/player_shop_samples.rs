@@ -252,3 +252,33 @@ fn listings_read_before_the_pointer_and_its_tooltip_came_over_them_keep_their_ba
         "none for the sold-out listings, and none between the listings"
     );
 }
+
+#[test]
+fn a_sold_out_listing_gets_no_badge_whatever_stray_pixels_a_capture_holds_on_it() {
+    let samples = samples();
+    let sample = |file: &str| samples.iter().find(|s| s.file == file).unwrap_or_else(|| panic!("no {file}"));
+    let mut minerva = started(&samples);
+    let capture = |frame: Frame| ShopCapture { frame, origin: ScreenPoint { x: 0, y: 0 } };
+    // Every slot holds a listing here, so every slot is known.
+    minerva.on_player_shop_capture(capture(frame(sample("ores-and-bundles-of-800.png"), 0.935)));
+
+    // Another shop where the same window was, its third and fifth listings sold out, with a
+    // row of the rule between listings' colour through each, as a capture a few px off
+    // might hold.
+    let rule = |_: u32, _: u32| Some([171, 190, 212]);
+    let frame = frame(sample("scroll-equips-mats-two-sold-out.png"), 0.935);
+    let frame = painted(painted(frame, (70, 140, 240, 2), rule), (70, 265, 240, 2), rule);
+    let state = minerva.on_player_shop_capture(capture(frame));
+
+    let shown: Vec<(bool, Option<String>)> = badges(state).iter().map(|b| (b.covered, read(b).map(|(name, _)| name))).collect();
+    let name = |name: &str| Some(name.to_string());
+    assert_eq!(
+        shown,
+        [
+            (false, name("Blue Axe")),
+            (false, Some(item_name("Claw Attack Scroll: Interm..."))),
+            (false, name("Brown Bamboo Hat")),
+            (false, name("Evil Eye Tail")),
+        ]
+    );
+}

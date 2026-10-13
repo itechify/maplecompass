@@ -135,8 +135,16 @@ const SELECTED_RULE_RGB: [f32; 3] = [255.0, 195.0, 96.0];
 /// rule-to-black line, and is no brighter than the rule (the pointer's white is).
 const RULE_TOL: f32 = 16.0;
 const RULE_BRIGHTEST: f32 = 1.04;
-/// A slot is covered when at least this many of its pixels are none the shop draws.
+/// A slot is covered when at least this many of its pixels are none the shop draws...
 const COVERED_MIN: usize = 15;
+/// ...unless at least this share of it is a sold-out listing's greyed band, as screenshots
+/// show it...
+const SOLD_OUT_RGB: [f32; 3] = [219.0, 221.0, 224.0];
+const SOLD_OUT_SHARE: f32 = 0.3;
+/// ...or it is an empty slot: at least this share band, with fewer than this many pixels of
+/// text (a listing's two lines have hundreds).
+const EMPTY_SHARE: f32 = 0.5;
+const TEXT_MIN: usize = 40;
 /// Two slots' tops this close are one slot's.
 const SAME_SLOT: u32 = 3;
 /// The slots' tops are this far apart on average: 63 and 62 px in turn.
@@ -505,25 +513,46 @@ fn on_grid(anchor: u32, top: u32) -> u32 {
     (anchor as f32 + (slots * SLOT_PITCH).round()).max(0.0) as u32
 }
 
-/// Whether the slot whose band starts at `top` holds pixels the shop never draws: neither
-/// band nor its text, nor a sold-out listing's light greys, nor the light rule between a
-/// listing's lines. Its listing, if it has one, is covered.
+/// Whether the slot whose band starts at `top` is covered: it holds pixels the shop never
+/// draws (neither band nor its text, nor a sold-out listing's light greys, nor the light rule
+/// between a listing's lines), and isn't a sold-out listing (mostly its greyed band) or an
+/// empty slot (mostly band, with no text), whatever stray pixels a capture holds there.
 fn covered(img: &RgbImage, list: &List, top: u32) -> bool {
     let (w, h) = img.dimensions();
     let (x0, x1) = (list.x0 + EDGE, (list.x0 + BAND_W - EDGE).min(w));
     let (listing, selected) = (Band::Listing.rgb(list.scale), Band::Selected.rgb(list.scale));
-    let shops = |p: [u8; 3]| {
-        let light_grey = {
-            let (lo, hi) = (*p.iter().min().unwrap_or(&0), *p.iter().max().unwrap_or(&0));
-            hi - lo <= 8 && (150.0 * list.scale..=235.0 * list.scale).contains(&f32::from(hi))
-        };
-        light_grey
-            || ink_of(p, listing).1 <= FOREIGN
-            || ink_of(p, selected).1 <= SELECTED_FOREIGN
-            || Band::Selected.rule(p, list.scale)
-    };
-    let foreign = (top..(top + BAND_H).min(h)).flat_map(|y| (x0..x1).map(move |x| (x, y)));
-    foreign.filter(|&(x, y)| !shops(img.get_pixel(x, y).0)).nth(COVERED_MIN - 1).is_some()
+    let sold_out = SOLD_OUT_RGB.map(|c| c * list.scale);
+    let (mut foreign, mut band, mut greyed, mut inked, mut all) = (0, 0, 0, 0, 0);
+    for y in top..(top + BAND_H).min(h) {
+        for x in x0..x1 {
+            let p = img.get_pixel(x, y).0;
+            all += 1;
+            let (ink, off) = ink_of(p, listing);
+            if band_scale(p).is_some() {
+                band += 1;
+            } else if off <= FOREIGN && ink >= INK_MIN {
+                inked += 1;
+            }
+            if (0..3).all(|i| (p[i] as f32 - sold_out[i]).abs() <= BAND_TOL) {
+                greyed += 1;
+            }
+            let light_grey = {
+                let (lo, hi) = (*p.iter().min().unwrap_or(&0), *p.iter().max().unwrap_or(&0));
+                hi - lo <= 8 && (150.0 * list.scale..=235.0 * list.scale).contains(&f32::from(hi))
+            };
+            let shops = light_grey
+                || off <= FOREIGN
+                || ink_of(p, selected).1 <= SELECTED_FOREIGN
+                || Band::Selected.rule(p, list.scale);
+            if !shops {
+                foreign += 1;
+            }
+        }
+    }
+    let share = |n: usize| n as f32 / all.max(1) as f32;
+    let sold_out = share(greyed) >= SOLD_OUT_SHARE;
+    let empty = share(band) >= EMPTY_SHARE && inked < TEXT_MIN;
+    foreign >= COVERED_MIN && !sold_out && !empty
 }
 
 /// `line`'s ink, black on white.

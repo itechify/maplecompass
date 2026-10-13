@@ -1,0 +1,8 @@
+[
+  { "name": "Iron Ore", "quantity": 1, "mesos": 699 },
+  { "name": "Garnet Ore", "quantity": 1, "mesos": 799 },
+  { "name": "Leather", "quantity": 1, "mesos": 599 },
+  { "name": "Diamond Ore", "quantity": 1, "mesos": 1999 },
+  { "name": "Wooden Top", "quantity": 800, "mesos": 999999 },
+  { "name": "Wooden Top", "quantity": 800, "mesos": 1999999 }
+]
