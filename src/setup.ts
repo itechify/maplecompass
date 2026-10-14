@@ -273,6 +273,14 @@ $("site-open").addEventListener("click", () => {
   $("action-error").hidden = true;
   invoke("open_site").catch(actionError);
 });
+$("github-open").addEventListener("click", () => {
+  $("action-error").hidden = true;
+  invoke("open_github").catch(actionError);
+});
+$("discord-open").addEventListener("click", () => {
+  $("action-error").hidden = true;
+  invoke("open_discord").catch(actionError);
+});
 getVersion().then((version) => ($("app-version").textContent = version));
 
 function actionError(error: unknown) {

@@ -7,7 +7,7 @@ default-members = ["crates/minerva-core"]
 [workspace.package]
 edition = "2024"
 rust-version = "1.85"
-license = "UNLICENSED"
+license = "MIT"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }

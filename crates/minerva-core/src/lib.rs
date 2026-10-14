@@ -174,6 +174,12 @@ pub const OSMS_AND_MEOWDB_CREDIT: &str =
 /// The Minerva site, the player manual, which Help & Setup's About & Credits opens.
 pub const SITE_URL: &str = "https://owlofminerva.app/";
 
+/// Minerva's source and releases, which About & Credits opens.
+pub const GITHUB_URL: &str = "https://github.com/itechify/minerva";
+
+/// Minerva's Discord server, which About & Credits opens: an invite that never expires.
+pub const DISCORD_URL: &str = "https://discord.gg/NnbnVWkRrF";
+
 /// Whether minimap titles can be recognised as real maps.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
@@ -372,6 +378,10 @@ pub enum PanelControl {
     ClosePersonalBests,
     /// About & Credits' link in Help & Setup: open the Minerva site in the browser.
     OpenSite,
+    /// About & Credits' GitHub link: open Minerva's source in the browser.
+    OpenGithub,
+    /// About & Credits' Discord link: open Minerva's Discord in the browser.
+    OpenDiscord,
     /// Turn the Deal Finder on or off.
     ToggleDealFinder,
 }
@@ -1143,6 +1153,8 @@ impl Minerva {
                 return self.state.map.as_ref().map(|map| Request::OpenInBrowser { url: map.url.clone() });
             }
             PanelControl::OpenSite => return Some(Request::OpenInBrowser { url: SITE_URL.into() }),
+            PanelControl::OpenGithub => return Some(Request::OpenInBrowser { url: GITHUB_URL.into() }),
+            PanelControl::OpenDiscord => return Some(Request::OpenInBrowser { url: DISCORD_URL.into() }),
         };
         self.apply(action);
         None

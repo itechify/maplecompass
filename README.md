@@ -2,7 +2,7 @@
 
 Your guide for MapleStory Classic World: a helper overlay that reads the minimap title by ordinary screen capture and shows which map you are on. It never touches the game's memory, files or input ([ADR 0001](docs/adr/0001-observe-game-from-outside-only.md)).
 
-**[The Minerva site](https://owlofminerva.app/)** explains what it does and how to use it: setup, the panel, hunting, the Grind Tracker, the Item Card, Item Lookup, the Deal Finder and the hotkeys. This README is the developer's side.
+**[The Minerva site](https://owlofminerva.app/)** explains what it does and how to use it: setup, the panel, hunting, the Grind Tracker, the Item Card, Item Lookup, the Deal Finder and the hotkeys. This README is the developer's side. Players and developers talk about Minerva on [its Discord](https://discord.gg/NnbnVWkRrF).
 
 Its map and mob data come from the files [OSMS Data Explorer](https://osmsdataexplorer.com) publishes, and its links open [NiaMeowDB](https://meowdb.com)'s pages ([ADR 0008](docs/adr/0008-map-and-mob-data-from-osms-data-explorer.md)).
 
@@ -51,3 +51,15 @@ The windows are set in NEXON's Maplestory typeface; see `assets/fonts/NOTICE.md`
 Title recognition uses [ocrs](https://github.com/robertknight/ocrs). Its recognition model is CC BY-SA 4.0; see `crates/minerva-core/models/NOTICE.md`.
 
 Created in [T3 Code](https://t3.codes).
+
+## Licence
+
+Minerva's code and docs are under the [MIT licence](LICENSE), copyright Jeffrey Davis. The licence doesn't cover:
+
+- The name Minerva and the owl's art (`assets/icon*.png`, `assets/logo.png`, `assets/deal-finder-owl*.png` and `src-tauri/icons/`). A fork can reuse the code, under a name and art of its own.
+- `samples/`: frames of the game, whose pictures are NEXON's.
+- `crates/minerva-core/tests/fixtures/osms-map-names.json`: the game's map names, from OSMS Data Explorer ([ADR 0008](docs/adr/0008-map-and-mob-data-from-osms-data-explorer.md)).
+- `assets/fonts/` and `site/fonts/`: NEXON's Maplestory typeface; see `assets/fonts/NOTICE.md`.
+- `crates/minerva-core/models/`: ocrs's text-recognition model, under CC BY-SA 4.0; see `crates/minerva-core/models/NOTICE.md`.
+
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) lists everything else the app bundles, each under its own licence.
