@@ -365,6 +365,11 @@ h3 {
   gap: 2px 12px;
 }
 
+/* About & Credits opens with who made Minerva, in bold Ink. */
+.made-by {
+  font-weight: 700;
+}
+
 /* About & Credits: what each credit is for, then who and on what terms. */
 .credits {
   margin: 0 0 12px;
@@ -381,9 +386,9 @@ h3 {
   overflow-wrap: anywhere;
 }
 
-/* About & Credits' link to the Minerva site, the window's one link: Ink with a 1px
-   Selection Edge underline at rest, Portal Blue under the pointer, Frame Navy while
-   pressed, as the site draws its links. */
+/* About & Credits' links to GitHub, the Minerva site and its Discord, the window's only
+   links: Ink with a 1px Selection Edge underline at rest, Portal Blue under the pointer,
+   Frame Navy while pressed, as the site draws its links. */
 button.link {
   all: unset;
   cursor: pointer;

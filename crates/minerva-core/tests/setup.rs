@@ -369,6 +369,23 @@ fn about_and_credits_opens_the_minerva_site_in_the_browser_and_changes_nothing_e
     assert_eq!(minerva.panel_state(), &before);
 }
 
+#[test]
+fn about_and_credits_opens_minervas_github_and_discord_in_the_browser_and_changes_nothing_else() {
+    let mut minerva = Minerva::new(FakeSource::osms());
+    minerva.on_game_window(window(game(KERNING)));
+    let before = minerva.panel_state().clone();
+
+    assert_eq!(
+        minerva.press(PanelControl::OpenGithub),
+        Some(Request::OpenInBrowser { url: "https://github.com/itechify/minerva".into() })
+    );
+    assert_eq!(
+        minerva.press(PanelControl::OpenDiscord),
+        Some(Request::OpenInBrowser { url: "https://discord.gg/NnbnVWkRrF".into() })
+    );
+    assert_eq!(minerva.panel_state(), &before);
+}
+
 /// The width of the region the core captures after marking `MARK` and reading one frame
 /// (which loads the map list).
 fn region_width(source: FakeSource) -> u32 {

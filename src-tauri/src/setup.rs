@@ -286,6 +286,18 @@ pub async fn open_site(bridge: State<'_, Bridge>) -> Result<(), String> {
     bridge.commands.send(Command::Press(PanelControl::OpenSite)).map_err(|e| e.to_string())
 }
 
+/// About & Credits' GitHub link: open Minerva's source in the browser.
+#[tauri::command]
+pub async fn open_github(bridge: State<'_, Bridge>) -> Result<(), String> {
+    bridge.commands.send(Command::Press(PanelControl::OpenGithub)).map_err(|e| e.to_string())
+}
+
+/// About & Credits' Discord link: open Minerva's Discord in the browser.
+#[tauri::command]
+pub async fn open_discord(bridge: State<'_, Bridge>) -> Result<(), String> {
+    bridge.commands.send(Command::Press(PanelControl::OpenDiscord)).map_err(|e| e.to_string())
+}
+
 /// Finish setup (the core only does once the test reads of what was marked succeeded).
 #[tauri::command]
 pub async fn finish_setup(bridge: State<'_, Bridge>) -> Result<(), String> {

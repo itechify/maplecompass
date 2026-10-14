@@ -239,6 +239,14 @@ a:active {
   font-size: 13px;
   line-height: 18px;
 }
+/* An icon-only button, the window bar's GitHub and Discord: as tall as a small button, its
+   mark in Ink at the line's height. */
+.button.icon {
+  padding-inline: 8px;
+}
+.button.icon svg {
+  display: block;
+}
 
 /* ---- The hero: the home page's opening ---- */
 
@@ -1208,6 +1216,13 @@ code.path {
   margin: 0 0 14px;
   font-size: 19px;
   line-height: 26px;
+}
+/* Who made Minerva, heading the credits in bold Ink. */
+.made-by {
+  margin: 0 0 18px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 22px;
 }
 .credits {
   columns: 2;

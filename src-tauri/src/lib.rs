@@ -395,6 +395,8 @@ pub fn run() {
             hotkey_settings::hotkeys_undo_reset,
             setup::open_hotkey_settings,
             setup::open_site,
+            setup::open_github,
+            setup::open_discord,
             grind_tracker::grind_tracker_height,
             grind_tracker::grind_tracker_view,
             bests_window::personal_bests_height,
