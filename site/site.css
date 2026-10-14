@@ -247,6 +247,18 @@ a:active {
 .button.icon svg {
   display: block;
 }
+/* On a phone or a touch screen, each of the window bar's buttons takes a thumb's tap, 44px
+   tall, past its edge: the 10px between them is shared, so no tap lands on two. */
+@media (max-width: 640px), (hover: none) and (pointer: coarse) {
+  .window-bar .button {
+    position: relative;
+  }
+  .window-bar .button::after {
+    content: "";
+    position: absolute;
+    inset: -7px -5px;
+  }
+}
 
 /* ---- The hero: the home page's opening ---- */
 
