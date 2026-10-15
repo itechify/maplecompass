@@ -11,6 +11,90 @@
 }
 
 .panel .count {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-2);
+}
+
+/* The picker: one Character's bests at a time, or the Unassigned ones. Each choice is a
+   light button; the one shown takes Selection Periwinkle, as a selected row does, and the
+   Character playing carries You Yellow's dot after their name. */
+.whose {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.whose[hidden] {
+  display: none;
+}
+
+.pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 21px;
+  padding: 0 8px;
+  border: 1px solid var(--window-edge);
+  border-radius: 3px;
+  background: var(--button-light);
+  box-shadow: inset 0 1px 0 #fff;
+  color: var(--ink-2);
+  font: 700 12px/19px var(--font);
+  text-shadow: none;
+  cursor: default;
+}
+
+.pick:hover {
+  background: var(--button-light-hover);
+}
+
+.pick[aria-pressed="true"] {
+  border-color: var(--select-edge);
+  background: var(--select);
+  box-shadow: none;
+  color: var(--ink);
+}
+
+.playing-dot {
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--you-edge);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, var(--you-light) 0 30%, var(--you) 45%);
+}
+
+/* The count, with the shown Character's Remove and Merge at its end; and while Merge is
+   open, the Characters to merge into under it. */
+.count-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 19px;
+}
+
+.character-actions,
+.merge-line,
+.move-to {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.panel .merge-line {
+  margin: 0;
+  justify-content: flex-end;
+}
+
+.merge-line[hidden] {
+  display: none;
+}
+
+.move-label {
+  margin-right: 2px;
   font-size: 12px;
   line-height: 16px;
   color: var(--ink-2);
@@ -459,6 +543,29 @@ tbody tr.visit.last td {
   font-size: 11px;
   font-weight: 700;
   line-height: 15px;
+}
+
+/* The level and job that set a Visit, where the map's name goes on its row. */
+.visit-level {
+  display: block;
+  font-size: 12px;
+  line-height: 19px;
+  color: var(--ink-2);
+}
+
+/* An Unassigned Visit's Move before its ×, and the Characters to move it to on a line of
+   their own under it, at the table's right. */
+.controls .move {
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+tbody tr.move-row td {
+  padding: 0 10px 4px 24px;
+}
+
+.move-to {
+  justify-content: flex-end;
 }
 
 /* The × at the line's end, and "Remove?" in its place once clicked. */

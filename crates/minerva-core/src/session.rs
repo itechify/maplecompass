@@ -52,7 +52,10 @@
 //!   towards the Visit's Personal Best on the map (see [`crate::personal_best`]), unless
 //!   the bar can't be read. The core says which map that is, if any: one it is certain
 //!   of, with a Map Summary. Maps that share a title but would show the same count as the
-//!   first of them, the one the panel shows. Bests outlast Sessions, as Visits do.
+//!   first of them, the one the panel shows. Bests outlast Sessions, as Visits do. Each
+//!   is stamped with the Character the Session is for, and the level and job the Status
+//!   Bar showed, and the Best row races that Character's (the Unassigned one while none
+//!   is named).
 
 use crate::ExpBar;
 use crate::bug_report::{Level, Note};

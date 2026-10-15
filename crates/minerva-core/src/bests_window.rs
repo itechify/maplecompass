@@ -6,18 +6,23 @@
 //! - Live: the bests as saved now, the Visit under way's included, as closing Minerva
 //!   would keep them. So a map's row may be higher than the Best row there, which shows
 //!   only the earlier Visits'.
+//! - One Character's bests at a time: the core gives each Character's with a best, and the
+//!   one playing's (with none, if they have none), by name, then the Unassigned ones while
+//!   there are any or no Character is named. The page's picker shows the one playing until
+//!   the player picks another, and keeps which they picked; the core never knows.
 //! - One row a map, its Personal Best, highest EXP/h first. The window re-sorts as the
 //!   player likes; the core gives the figures, never text.
 //! - Each map's names, region, mob levels and solo EXP/h ceiling (its Map Summary, worked
-//!   out as NiaMeowDB does) from OSMS's file set (ADR 0008), the same for every map. Bests
-//!   are shared by all the player's characters and record no level, so the levels and the
-//!   share of the ceiling say what a best was worth. A best on a map not in the map list
-//!   is kept, with none of these, and a map without mobs has no levels or ceiling.
+//!   out as NiaMeowDB does) from OSMS's file set (ADR 0008), the same for every map: the
+//!   levels and the share of the ceiling say what a best was worth. A best on a map not in
+//!   the map list is kept, with none of these, and a map without mobs has no levels or
+//!   ceiling.
 //! - The map the player is on is marked: only while the panel is certain of it.
 //! - Each map's row holds its Visit History, highest first, for the player to open: each
-//!   Visit's EXP/h, its share of the ceiling and its date. The Visit under way's best is
-//!   among them, marked, where it makes the map's 10, but it isn't in the history yet, so
-//!   it can't be removed. The page keeps which maps are open; the core never knows.
+//!   Visit's EXP/h, its share of the ceiling, its date, and the level and job that set it.
+//!   The Visit under way's best is among them, marked, where the history would keep it, but
+//!   it isn't in the history yet, so it can't be removed. The page keeps which maps are
+//!   open; the core never knows.
 //! - Where it goes: centred over the game's client area until the player drags it, then
 //!   where they left it relative to the client area, until they drag it back to the
 //!   middle. As wide as its page lays it out, unless the client area is narrower, and no

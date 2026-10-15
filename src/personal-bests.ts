@@ -11,6 +11,9 @@ import { mapMark, type MapMarks } from "./map-marks";
 type BestsVisit = {
   expPerHour: number;
   setAtUnixMs: number | null;
+  /** The level and job that set it, as the Status Bar showed them; `null`: not read. */
+  level: number | null;
+  job: string | null;
   ceilingShareHundredths: number | null;
   /** The Visit under way's best: not in the Visit History until the Visit ends, so it
    *  can't be removed yet. */
@@ -36,16 +39,29 @@ type BestsMap = {
   visits: BestsVisit[];
 };
 
-/** What the shell sends: whether the window shows at all, the core's rows, highest EXP/h
- *  first, and every Map Mark, which each row's map names its own by. */
-type BestsView = { shown: boolean; maps: BestsMap[]; credit: string; mapMarks: MapMarks };
+/** Mirror of `minerva_core::PersonalBestsCharacter`: one of the picker's choices. */
+type BestsCharacter = {
+  /** The Character's name; `null` for the Unassigned bests. */
+  name: string | null;
+  /** The Character playing (or Unassigned, while no name is read): the picker's default. */
+  current: boolean;
+  /** Their rows, highest EXP/h first. */
+  maps: BestsMap[];
+};
+
+/** What the shell sends: whether the window shows at all, whose bests it can show, each
+ *  with the core's rows, and every Map Mark, which each row's map names its own by. */
+type BestsView = { shown: boolean; characters: BestsCharacter[]; credit: string; mapMarks: MapMarks };
 
 type Column = "map" | "levels" | "exp" | "share" | "set";
 type Way = "ascending" | "descending";
 type Key = string | number | [number, number] | null;
 
 const panelEl = byId("panel");
+const whose = byId("whose");
 const count = byId("count");
+const characterActions = byId("character-actions");
+const mergeLine = byId("merge-line");
 const rows = byId("rows");
 const noteMissing = byId("note-missing");
 const noteDot = byId("note-dot");
@@ -306,7 +322,7 @@ function row(m: BestsMap, best: BestsMap | null, marks: MapMarks) {
 
   // Its Visit History opens under the row, and the count says how many it holds.
   const controls = cell(null, "controls");
-  const open = opened.has(m.id);
+  const open = opened.has(`${shownKey()} ${m.id}`);
   const toggle = document.createElement("button");
   toggle.type = "button";
   toggle.className = "visits-toggle";
@@ -333,28 +349,36 @@ function chevron() {
   return svg;
 }
 
-/** Each of a map's Visits by a key of its own: its map, its best and, for Visits whose
- *  bests are the same, which of them it is. `null` for the Visit under way's, which has no
- *  ×. */
+/** Each of a map's Visits by a key of its own: whose it is, its map, its best (with the
+ *  level and job that set it) and, for Visits whose bests are the same, which of them it
+ *  is. `null` for the Visit under way's, which has no ×. */
 function visitKeys(m: BestsMap): (string | null)[] {
   const seen = new Map<string, number>();
   return m.visits.map((v) => {
     if (v.thisVisit) return null;
-    const best = `${m.id} ${v.expPerHour} ${v.setAtUnixMs ?? "-"}`;
+    const best = [shownKey(), m.id, v.expPerHour, v.setAtUnixMs ?? "-", v.level ?? "-", v.job ?? "-"].join(" ");
     const n = seen.get(best) ?? 0;
     seen.set(best, n + 1);
     return `${best} ${n}`;
   });
 }
 
-/** One of an opened map's Visits, under its row: its best's EXP/h, share and date under
- *  the row's, then its × (or, for the Visit under way's, "This visit"). */
+/** The level and job a Visit was set at: "Lv 23 Magician", or as much as was read. */
+function setBy(v: BestsVisit) {
+  return [v.level === null ? null : `Lv ${v.level}`, v.job].filter(Boolean).join(" ");
+}
+
+/** One of an opened map's Visits, under its row: the level that set it, its best's EXP/h,
+ *  share and date under the row's, then its × (or, for the Visit under way's, "This
+ *  visit"), and for an Unassigned one, its Move. */
 function visitRow(m: BestsMap, v: BestsVisit, key: string | null, place: number, last: boolean) {
   const tr = document.createElement("tr");
   tr.className = last ? "visit last" : "visit";
 
   const first = cell(null, "text blank");
   first.append(span("sr-only", `${mapName(m)}, visit ${place} of ${m.visits.length}`));
+  const level = setBy(v);
+  if (level) first.append(span("visit-level", level));
   tr.append(first, cell(null, "blank"));
 
   const exp = cell(null, "visit-exp");
@@ -372,45 +396,129 @@ function visitRow(m: BestsMap, v: BestsVisit, key: string | null, place: number,
   tr.append(date);
 
   const controls = cell(null, "controls");
-  if (key === null) controls.append(span("this-visit", "This visit"));
-  else controls.append(removeButton(m, v, key));
+  if (key === null) {
+    controls.append(span("this-visit", "This visit"));
+  } else {
+    listed.set(key, { map: m.id, visit: v });
+    if (shownKey() === UNASSIGNED && names().length > 0) controls.append(moveButton(key));
+    controls.append(removeButton(key));
+  }
   tr.append(controls);
   return tr;
 }
 
-/** A Visit's ×, as the Grind Tracker's Best row has; once clicked, "Remove?", which
- *  removes it with a second click. */
-function removeButton(m: BestsMap, v: BestsVisit, key: string) {
+/** A button that arms `arm` when clicked; if it is `final`, a second click once armed does
+ *  what it says. */
+function armButton(arm: string, final: boolean) {
   const button = document.createElement("button");
   button.type = "button";
-  button.dataset.visit = key;
-  button.dataset.id = m.id;
-  button.dataset.exp = String(v.expPerHour);
-  if (v.setAtUnixMs !== null) button.dataset.set = String(v.setAtUnixMs);
-  if (armed === key) {
-    button.className = "text-button remove armed";
-    button.textContent = "Remove?";
-    button.title = "Click again to remove this visit from your history";
-  } else {
-    button.className = "icon-button light remove";
-    button.setAttribute("aria-label", "Remove this visit from your history");
-    button.title = "Remove this visit from your history";
-    button.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>';
-  }
+  button.dataset.arm = arm;
+  if (final) button.dataset.final = "";
   return button;
 }
 
-/** The rows as last sent, and how the player sorted them: kept until Minerva closes,
+/** A light text button that arms `arm`: `words`, or `armedWords` once armed. */
+function textButton(arm: string, final: boolean, words: string, armedWords: string, title: string) {
+  const button = armButton(arm, final);
+  const on = armed === arm;
+  button.className = on ? "text-button armed" : "text-button";
+  button.textContent = on ? armedWords : words;
+  button.title = title;
+  return button;
+}
+
+/** A Visit's ×, as the Grind Tracker's Best row has; once clicked, "Remove?", which
+ *  removes it with a second click. */
+function removeButton(key: string) {
+  const arm = `remove:${key}`;
+  if (armed === arm) {
+    const button = textButton(arm, true, "Remove?", "Remove?", "Click again to remove this visit from your history");
+    button.classList.add("remove");
+    return button;
+  }
+  const button = armButton(arm, true);
+  button.className = "icon-button light remove";
+  button.setAttribute("aria-label", "Remove this visit from your history");
+  button.title = "Remove this visit from your history";
+  button.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>';
+  return button;
+}
+
+/** An Unassigned Visit's Move, which lists the Characters to move it to under its line. */
+function moveButton(key: string) {
+  const button = textButton(`move:${key}`, false, "Move", "Move", "Move this visit to one of your characters");
+  button.classList.add("move");
+  button.setAttribute("aria-expanded", String(picking("move", key)));
+  return button;
+}
+
+/** Whether the list of `what`'s targets (a Visit's Move, or a Character's Merge) is open,
+ *  for `key`: its button, or one of the targets, is armed. */
+function picking(what: "move" | "merge", key: string) {
+  return armed === `${what}:${key}` || !!armed?.startsWith(`${what}:${key}>`);
+}
+
+/** Under an Unassigned Visit whose Move is open: a button for each Character to move it to,
+ *  each asking again once clicked. */
+function moveRow(key: string) {
+  const tr = document.createElement("tr");
+  tr.className = "visit move-row";
+  const td = cell(null, "text");
+  td.colSpan = 7;
+  const to = document.createElement("div");
+  to.className = "move-to";
+  to.append(span("move-label", "Move this visit to"));
+  for (const name of names()) {
+    const arm = `move:${key}>${name}`;
+    to.append(textButton(arm, true, name, `Move to ${name}?`, `Move this visit to ${name}'s bests`));
+  }
+  td.append(to);
+  tr.append(td);
+  return tr;
+}
+
+/** The choices as last sent, and how the player sorted them: kept until Minerva closes,
  *  so the window opens again as they left it. */
+let characters: BestsCharacter[] = [];
+/** The shown choice's rows. */
 let maps: BestsMap[] = [];
 let marks: MapMarks = {};
 let sort: { column: Column; way: Way } = { column: "exp", way: "descending" };
 let scale: Scale = { top: 1, lines: [] };
-/** The maps opened to their Visit History, by ID, kept as the sort is. */
+/** The maps opened to their Visit History, by whose they are and their ID, kept as the sort
+ *  is. */
 const opened = new Set<string>();
-/** The × clicked once, by its Visit's key, until the second click removes it, a click
- *  anywhere else, the window hiding or the Visit going: one at a time. */
+/** The choice the player picked, by its key; `null` until they pick one, and after it goes:
+ *  the picker shows the Character playing. */
+let picked: string | null = null;
+/** What a click armed, until a second click does it, a click anywhere else, the window
+ *  hiding or its button going: one at a time. A Visit's × (`remove:<visit>`), its Move
+ *  (`move:<visit>`, and `move:<visit>><name>` once a Character is clicked), and a
+ *  Character's Remove (`remove-character:<name>`) and Merge (`merge:<name>`, and
+ *  `merge:<name>><into>`). */
 let armed: string | null = null;
+/** The Visits listed with a × now, by their keys: what their buttons act on. */
+const listed = new Map<string, { map: string; visit: BestsVisit }>();
+
+/** The Unassigned choice's key; a Character's is their name, which is never empty. */
+const UNASSIGNED = "";
+const keyOf = (c: BestsCharacter) => c.name ?? UNASSIGNED;
+const nameOf = (c: BestsCharacter) => c.name ?? "Unassigned";
+
+/** The choice shown: the one picked, or else the Character playing. */
+function shown(): BestsCharacter | null {
+  return characters.find((c) => keyOf(c) === picked) ?? characters.find((c) => c.current) ?? characters[0] ?? null;
+}
+
+function shownKey() {
+  const c = shown();
+  return c ? keyOf(c) : UNASSIGNED;
+}
+
+/** Every Character's name, the one shown included: what a Visit can be moved to. */
+function names() {
+  return characters.flatMap((c) => (c.name === null ? [] : [c.name]));
+}
 
 function renderRows() {
   // The best of all maps, which the star marks; none with only one map to compare.
@@ -418,12 +526,16 @@ function renderRows() {
   const keys = new Map(maps.map((m) => [m.id, visitKeys(m)]));
   scale = scaleOf(maps);
   renderScale();
-  if (armed !== null && ![...keys.values()].some((k) => k.includes(armed))) armed = null;
+  listed.clear();
   rows.replaceChildren(
     ...sorted(maps, sort).flatMap((m) => {
-      if (!opened.has(m.id)) return [row(m, best, marks)];
+      if (!opened.has(`${shownKey()} ${m.id}`)) return [row(m, best, marks)];
       const mapKeys = keys.get(m.id)!;
-      const visits = m.visits.map((v, i) => visitRow(m, v, mapKeys[i], i + 1, i === m.visits.length - 1));
+      const visits = m.visits.flatMap((v, i) => {
+        const key = mapKeys[i];
+        const line = visitRow(m, v, key, i + 1, i === m.visits.length - 1);
+        return key !== null && picking("move", key) ? [line, moveRow(key)] : [line];
+      });
       return [row(m, best, marks), ...visits];
     }),
   );
@@ -433,25 +545,90 @@ function renderRows() {
   }
 }
 
+/** The picker, with a button for each choice, the shown one pressed and the Character
+ *  playing marked; none with only one choice. Then the shown one's count, with its Remove
+ *  and Merge, and the Characters to merge it into while its Merge is open. */
+function renderWhose() {
+  const current = shown();
+  whose.hidden = characters.length < 2;
+  whose.replaceChildren(
+    ...characters.map((c) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "pick";
+      button.dataset.pick = keyOf(c);
+      button.setAttribute("aria-pressed", String(c === current));
+      button.append(nameOf(c));
+      if (c.current && c.name !== null) {
+        const dot = span("playing-dot", "");
+        dot.title = "Playing now";
+        button.append(dot, span("sr-only", " (playing now)"));
+      }
+      return button;
+    }),
+  );
+  const n = maps.length === 1 ? "1 map" : `${maps.length} maps`;
+  const unassigned = current?.name === null ? " · set before Minerva read your characters' names, or while it couldn't" : "";
+  count.textContent = maps.length === 0 ? `No bests yet for ${current ? nameOf(current) : "you"}` : `${n}${unassigned}`;
+
+  const name = current?.name ?? null;
+  const into = names().filter((other) => other !== name);
+  characterActions.replaceChildren();
+  mergeLine.hidden = true;
+  if (name === null || maps.length === 0) return;
+  if (into.length > 0) {
+    const merge = textButton(`merge:${name}`, false, "Merge into…", "Merge into…", `Move ${name}'s bests to another character`);
+    merge.setAttribute("aria-expanded", String(picking("merge", name)));
+    characterActions.append(merge);
+  }
+  characterActions.append(
+    textButton(`remove-character:${name}`, true, "Remove", `Remove ${name} and all their bests?`, `Remove ${name}, with all their bests`),
+  );
+  if (picking("merge", name)) {
+    mergeLine.hidden = false;
+    mergeLine.replaceChildren(
+      span("move-label", `Merge ${name}'s bests into`),
+      ...into.map((other) =>
+        textButton(`merge:${name}>${other}`, true, other, `Merge ${name} into ${other}?`, `Move ${name}'s bests to ${other}`),
+      ),
+    );
+  }
+}
+
+/** Draw the shown choice, and disarm whatever went with its button. */
+function renderAll() {
+  const c = shown();
+  maps = c?.maps ?? [];
+  noteMissing.hidden = maps.every((m) => m.mobLevels !== null && m.ceilingShareHundredths !== null);
+  noteDot.hidden = !maps.some((m) => m.visits.some((v) => v.thisVisit));
+  renderWhose();
+  renderRows();
+  if (armed !== null && !document.querySelector(`[data-arm="${CSS.escape(armed)}"]`)) {
+    armed = null;
+    renderWhose();
+    renderRows();
+  }
+}
+
 function render(view: BestsView) {
   // Not showing, the window draws nothing (the shell lets clicks through it).
   document.body.classList.toggle("hidden", !view.shown);
-  maps = view.maps;
+  characters = view.characters;
   marks = view.mapMarks;
   // Hidden, nothing stays armed. Closed, the window has no rows, and the maps opened stay
-  // opened for when it opens again; open, a map whose row went is no longer opened.
+  // opened for when it opens again; open, a map whose row went is no longer opened, and a
+  // choice that went is no longer picked.
   if (!view.shown) armed = null;
-  if (maps.length > 0) {
-    for (const id of opened) if (!maps.some((m) => m.id === id)) opened.delete(id);
+  if (characters.length > 0) {
+    if (!characters.some((c) => keyOf(c) === picked)) picked = null;
+    const rowsNow = new Set(characters.flatMap((c) => c.maps.map((m) => `${keyOf(c)} ${m.id}`)));
+    for (const key of opened) if (!rowsNow.has(key)) opened.delete(key);
   }
-  count.textContent = `${maps.length === 1 ? "1 map" : `${maps.length} maps`} · shared by all your characters`;
   // The credit as the main window's info icon, its words in its tooltip.
   footer.hidden = !view.credit;
   credit.title = view.credit;
   credit.setAttribute("aria-label", view.credit);
-  noteMissing.hidden = maps.every((m) => m.mobLevels !== null && m.ceilingShareHundredths !== null);
-  noteDot.hidden = !maps.some((m) => m.visits.some((v) => v.thisVisit));
-  renderRows();
+  renderAll();
   reportHeight();
 }
 
@@ -499,9 +676,44 @@ document.addEventListener("mousedown", (e) => {
   if (e.button === 0 && onHeader) getCurrentWindow().startDragging();
 });
 
+/** A Visit as the shell takes it back: by its best, with the level and job that set it. */
+function visitArgs(v: BestsVisit) {
+  return { expPerHour: v.expPerHour, setAtUnixMs: v.setAtUnixMs, level: v.level, job: v.job };
+}
+
+/** Do what the armed button `arm` says, through the core, once clicked again. */
+function act(arm: string) {
+  const [what, rest] = [arm.slice(0, arm.indexOf(":")), arm.slice(arm.indexOf(":") + 1)];
+  const [key, target] = rest.split(">");
+  const c = shown();
+  if (what === "remove") {
+    const visit = listed.get(key);
+    if (visit && c) {
+      invoke("personal_bests_remove_visit", { character: c.name, map: visit.map, visit: visitArgs(visit.visit) });
+    }
+  } else if (what === "move") {
+    const visit = listed.get(key);
+    if (visit && target) invoke("personal_bests_move_visit", { map: visit.map, visit: visitArgs(visit.visit), to: target });
+  } else if (what === "remove-character") {
+    invoke("personal_bests_remove_character", { name: key });
+  } else if (what === "merge" && target) {
+    invoke("personal_bests_merge_characters", { from: key, into: target });
+  }
+}
+
+/** What a second click on an armed button does, for screen readers. */
+function armedWords(arm: string) {
+  if (arm.startsWith("remove:")) return "Click Remove? again to remove this visit from your history.";
+  if (arm.startsWith("remove-character:")) return "Click again to remove this character and all their bests.";
+  if (arm.startsWith("move:") && arm.includes(">")) return "Click again to move this visit.";
+  if (arm.startsWith("merge:") && arm.includes(">")) return "Click again to merge these characters.";
+  return "";
+}
+
 // Its ×, through the core like the panel's icons; a map's name, to its MeowDB page; a
-// map's count, opening or closing its Visit History; a Visit's ×, arming it, and again,
-// removing it through the core. Any other click disarms it.
+// map's count, opening or closing its Visit History; a choice in the picker, showing it.
+// A Visit's × or Move, or a Character's Remove or Merge, arms it, and its button asks
+// again: a second click does it through the core. Any other click disarms it.
 document.addEventListener("click", (e) => {
   const target = e.target instanceof Element ? e.target : null;
   const control = target?.closest<HTMLButtonElement>("button[data-control]");
@@ -509,26 +721,26 @@ document.addEventListener("click", (e) => {
   const map = target?.closest<HTMLButtonElement>("button.row-map");
   if (map) invoke("personal_bests_open_map", { id: map.dataset.id });
   const toggle = target?.closest<HTMLButtonElement>("button.visits-toggle");
-  const remove = target?.closest<HTMLButtonElement>("button.remove");
+  const pick = target?.closest<HTMLButtonElement>("button[data-pick]");
+  const arm = target?.closest<HTMLButtonElement>("button[data-arm]");
   const before = armed;
   armed = null;
-  if (remove && remove.dataset.visit === before) {
-    const set = remove.dataset.set;
-    invoke("personal_bests_remove_visit", {
-      map: remove.dataset.id,
-      expPerHour: Number(remove.dataset.exp),
-      setAtUnixMs: set === undefined ? null : Number(set),
-    });
-  } else if (remove) {
-    armed = remove.dataset.visit ?? null;
-    announce.textContent = "Click Remove? again to remove this visit from your history.";
+  if (arm) {
+    const key = arm.dataset.arm!;
+    if (key !== before) {
+      armed = key;
+      announce.textContent = armedWords(key);
+    } else if (arm.dataset.final !== undefined) {
+      act(key);
+    }
   }
+  if (pick) picked = pick.dataset.pick!;
   if (toggle) {
-    const id = toggle.dataset.id!;
+    const id = `${shownKey()} ${toggle.dataset.id!}`;
     if (!opened.delete(id)) opened.add(id);
   }
-  if (toggle || armed !== before) {
-    renderRows();
+  if (toggle || pick || armed !== before) {
+    renderAll();
     reportHeight();
   }
 });

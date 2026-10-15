@@ -185,7 +185,8 @@
                       hotkeys) in <code class="path">%APPDATA%\<wbr />com.<wbr />itechify.<wbr />minerva\<wbr />settings.json</code>.
                     </li>
                     <li>
-                      Beside them: your Personal Bests, each map's 10 best visits, in <code>personal-bests.json</code>; the
+                      Beside them: your Personal Bests, each character's best visits on each map, in
+                      <code>personal-bests.json</code>; the
                       market prices you keep, in <code>market-prices.json</code>; and the 10 newest
                       <a href="#bug-reports">Bug Reports</a> you save, in <code>Bug Reports</code>.
                     </li>
@@ -748,9 +749,9 @@
                 <details class="qa" id="personal-bests">
                   <summary>What's a Personal Best?</summary>
                   <p>
-                    On a map with mobs, the best EXP per hour you've had over 5 minutes of play there. Come back to the map
-                    and a Best row shows it from the moment you arrive. Once you've played 5 minutes, a yellow star marks
-                    your last 5 minutes while they beat it.
+                    On a map with mobs, the best EXP per hour the character you're playing has had over 5 minutes of play
+                    there. Come back to the map and a Best row shows it from the moment you arrive. Once you've played 5
+                    minutes, a yellow star marks your last 5 minutes while they beat it.
                   </p>
                 </details>
                 <details class="qa" id="pace-trace">
@@ -770,15 +771,29 @@
                 <details class="qa" id="best-characters">
                   <summary>Are bests kept for each character?</summary>
                   <p>
-                    No: all your characters share them, so the mob levels say what each best was worth. A best on a map
-                    that has left the map list stays, marked "Not in the map list".
+                    Yes. Minerva reads your character's name, level and job from the game's status bar, keeps each
+                    character's bests apart, and notes the level and job you had when you set each one. The Grind
+                    Tracker races the best of the character you're playing.
+                  </p>
+                  <p>
+                    Bests from before Minerva knew your characters, or set while it couldn't read the name, are
+                    <strong>Unassigned</strong>. The Grind Tracker races those while no name is read. In your Personal
+                    Bests, pick Unassigned, then a visit's <strong>Move</strong> and a character, and click again to
+                    confirm.
+                  </p>
+                  <p>
+                    Renamed a character? The new name shows as a new character: pick it, choose
+                    <strong>Merge into…</strong> and the old name, and click again to confirm. Its bests move across. To
+                    remove a character with all their bests, pick them and click <strong>Remove</strong> twice. Neither
+                    can be undone. A best on a map that has left the map list stays, marked "Not in the map list".
                   </p>
                 </details>
                 <details class="qa" id="every-best">
                   <summary>Where can I see my best on every map?</summary>
                   <p>
-                    The star on the Grind Tracker's bar opens your Personal Bests over the game: every map's best, highest
-                    first, with its mob levels, how close it came to the map's solo EXP/h ceiling, and when you set it.
+                    The star on the Grind Tracker's bar opens your Personal Bests over the game: every map's best for the
+                    character you're playing, highest first, with its mob levels, how close it came to the map's solo EXP/h
+                    ceiling, and when you set it. Pick another of your characters, or Unassigned, at the top.
                     Each best is a bar on one scale, so your best map's is the longest. A notch in a bar is another of your
                     visits there, and the dot is the visit you're on, moving as you play. Click a column to sort by it, or a
                     map to open it on MeowDB.
@@ -787,9 +802,11 @@
                 <details class="qa" id="visits">
                   <summary>Can I see each of my visits to a map?</summary>
                   <p>
-                    A map keeps your 10 best visits. In your Personal Bests, click its count ("3 visits") to list them, best
-                    first, each with its EXP per hour and its own bar, its share of the ceiling and its date. The visit
-                    you're on is marked "This visit", and joins your history when you leave the map.
+                    A map keeps each character's 10 best visits, and their best in each
+                    <a href="#level-bands">Level Band</a> even if it isn't among them, so levelling up never loses your
+                    best at lower levels. In your Personal Bests, click its count ("3 visits") to list them, best first,
+                    each with the level you set it at, its EXP per hour and its own bar, its share of the ceiling and its
+                    date. The visit you're on is marked "This visit", and joins your history when you leave the map.
                   </p>
                 </details>
                 <details class="qa" id="remove-best">

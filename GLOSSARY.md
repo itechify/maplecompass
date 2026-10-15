@@ -156,11 +156,19 @@ The last 5 minutes of active play drawn kill by kill on the Grind Tracker, raced
 _Avoid_: graph, chart, sparkline
 
 **Personal Best**:
-The highest Rolling Rate, in EXP/h, the player has had over a full 5 minutes of active play on one map, shared by all their characters: the best in the map's Visit History. The Grind Tracker shows it and marks the Rolling Rate while it beats it.
+The highest Rolling Rate, in EXP/h, a Character has had over a full 5 minutes of active play on one map: the best in their Visit History of the map. Each is stamped with the Character, level and job the Status Bar showed at the refresh that set it. The Grind Tracker shows the Character playing's (the Unassigned one while no name is read) and marks the Rolling Rate while it beats it.
 _Avoid_: record, high score, PB, max
 
+**Level Band**:
+Ten levels, 1–9, 10–19, 20–29 and so on, that a Visit's best is counted in by the level that set it. A Visit History keeps the best Visit in each, and a Map Leaderboard ranks each on its own.
+_Avoid_: bracket, tier, level range
+
+**Unassigned**:
+The Personal Bests no Character is known for: those saved before Minerva read Characters, and any set while the Status Bar's name couldn't be read. They stand apart in the Personal Bests window, the Grind Tracker races them while no name is read, and the player can move each to a Character. They are never uploaded.
+_Avoid_: unknown character, shared bests
+
 **Personal Bests window**:
-Every map's Personal Best side by side, in a window over the game that the Grind Tracker opens and closes, to compare maps: each with its mob levels and how close the best came to the map's solo EXP/h ceiling, since the bests don't say which character or level set them. Each map opens to its Visit History, the Visit under way's best among them. It shows the bests as they stand, the Visit under way's included, and keeps up with them while it is open.
+Every map's Personal Best side by side for one Character at a time, in a window over the game that the Grind Tracker opens and closes, to compare maps: each with its mob levels and how close the best came to the map's solo EXP/h ceiling. Its picker shows the Character playing until the player picks another, or Unassigned. Each map opens to its Visit History, the Visit under way's best among them, each Visit with the level that set it. It shows the bests as they stand, the Visit under way's included, and keeps up with them while it is open. In it the player moves an Unassigned Visit to a Character, removes a Character with their bests, and merges one Character into another (a name changed in the game shows as a new Character), each after confirming.
 _Avoid_: leaderboard (the site's are Map Leaderboards), records, best list, Personal Bests page
 
 **Visit**:
@@ -168,7 +176,7 @@ The stretch from the panel confirming a map until it confirms another. Losing th
 _Avoid_: stay, trip
 
 **Visit History**:
-A map's best Visits that have ended, up to 10, highest first: the first is its Personal Best. The Visit under way's best joins it when the Visit ends. The player can remove any Visit in it that came from a bug.
+A Character's best Visits on a map that have ended (or the Unassigned ones), highest first: the first is its Personal Best. It keeps the 10 best, and the best in each Level Band even if it isn't among them, so a Character that levels up keeps their lower bands' bests. The Visit under way's best joins it when the Visit ends, or when another Character is named. The player can remove any Visit in it that came from a bug.
 _Avoid_: runs, attempts, records
 
 **Map Leaderboard**:
