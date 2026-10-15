@@ -206,6 +206,9 @@ async function switchTo(to: Link, href: string | null, animate: boolean) {
     if (moving !== transition) return;
     moving = null;
     root.classList.remove("lb-morph");
+    // Done growing: kept, the lanes a resize shows (under the figure, or in their column)
+    // would grow again.
+    rows.classList.remove("lb-grow");
     nameRows(null);
   });
 }
