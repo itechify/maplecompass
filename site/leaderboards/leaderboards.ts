@@ -220,7 +220,7 @@ export function mapPage(link: Link, names: MapNames, answer: MapAnswer): MapPage
     place: placeOf(names, answer.map),
     bands,
     open,
-    empty: open === null ? "No one has put a best on this map's leaderboard yet." : null,
+    empty: open === null ? "No one has a best on this Map Leaderboard yet." : null,
   };
 }
 
@@ -303,7 +303,7 @@ export function reportOutcome(status: number | null): { taken: boolean; said: st
     case 201:
       return { taken: true, said: "Reported. Thank you: Minerva's maker will look at it." };
     case 404:
-      return { taken: false, said: "This entry isn't on the leaderboard any more." };
+      return { taken: false, said: "This entry isn't on the Map Leaderboard any more." };
     case 429:
       return { taken: false, said: "That's a lot of reports from you. Try again in a few minutes." };
     default:

@@ -49,6 +49,6 @@ describe("a map's page", () => {
 
     expect(page.open).toBe(null);
     expect(page.bands).toEqual([]);
-    expect(page.empty).toBe("No one has put a best on this map's leaderboard yet.");
+    expect(page.empty).toBe("No one has a best on this Map Leaderboard yet.");
   });
 });

@@ -70,10 +70,10 @@ export function fillFaqPage(html: string, faq: Faq): string {
 export function fillQuestionLists(html: string, faq: Faq, root = "./"): string {
   return html.replace(LIST, (_, ids: string, groupId: string) => {
     const group = faq.groups.get(groupId);
-    if (!group) throw new Error(`site: the home page names a FAQ group there isn't: "${groupId}"`);
+    if (!group) throw new Error(`site: a page names a FAQ group there isn't: "${groupId}"`);
     const shown = ids.trim().split(/\s+/).map((id) => {
       const question = faq.questions.get(id);
-      if (!question) throw new Error(`site: the home page names a FAQ question there isn't: "${id}"`);
+      if (!question) throw new Error(`site: a page names a FAQ question there isn't: "${id}"`);
       return render(question, "/faq/", root);
     });
     const count = group.ids.length;

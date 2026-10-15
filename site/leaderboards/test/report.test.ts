@@ -8,7 +8,7 @@ describe("a report", () => {
   });
 
   it("says when the entry has gone already", () => {
-    expect(reportOutcome(404)).toEqual({ taken: false, said: "This entry isn't on the leaderboard any more." });
+    expect(reportOutcome(404)).toEqual({ taken: false, said: "This entry isn't on the Map Leaderboard any more." });
   });
 
   it("asks the player to wait after too many reports", () => {
