@@ -638,7 +638,8 @@ function renderWhose() {
   let words: string;
   if (maps.length === 0) words = `No bests yet for ${current ? nameOf(current) : "you"}`;
   else if (current?.name === null) words = `${n} · set before Minerva read your characters' names, or while it couldn't`;
-  else words = t?.on ? `${n} · shown on the Map Leaderboards` : n;
+  // Shown there only while it isn't a problem: a problem says so in its own note.
+  else words = t?.on && !t.problem ? `${n} · shown on the Map Leaderboards` : n;
   count.textContent = words;
 
   countActions.replaceChildren();
