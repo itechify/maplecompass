@@ -606,7 +606,7 @@ impl Session {
             } else {
                 // More EXP than before, as the level before could hold: what came about
                 // can't be told, so it isn't counted, and the level is learned afresh.
-                self.notes.push(Note::Unseen);
+                self.notes.push(Note::LevelUpUncounted);
                 self.accept(allowed, bar);
             }
             return;
@@ -668,7 +668,7 @@ impl Session {
         self.lost_from = None;
         self.level_ups += 1;
         let Some(doubled_total) = total.doubled_midpoint() else {
-            self.notes.push(Note::Unseen);
+            self.notes.push(Note::LevelUpUncounted);
             return;
         };
         let gain = (doubled_total as i64 - 2 * last.exp as i64 + 1) / 2 + bar.exp as i64;

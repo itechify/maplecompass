@@ -108,6 +108,9 @@ pub enum Note {
     NameMisread { name: String },
     /// The Status Bar showed the next level, `level`: the next EXP bar reading is in it.
     LevelShown { level: u32 },
+    /// The level-up the Status Bar showed couldn't be counted (the level before's total wasn't
+    /// known, or the reading had more EXP than the last): the new level is learned afresh.
+    LevelUpUncounted,
     /// The Status Bar showed level `to`, not `from` or the next: the level's total is learned
     /// afresh from the next EXP bar reading.
     LevelChanged { from: u32, to: u32 },
@@ -1544,6 +1547,7 @@ impl Note {
             }
             Note::NameMisread { name } => format!("the Status Bar's name misread as {name:?} while in sight: set aside"),
             Note::LevelShown { level } => format!("the Status Bar shows level {level}: the next reading is in it"),
+            Note::LevelUpUncounted => "the Status Bar's level-up couldn't be counted: the new level is learned afresh".to_string(),
             Note::LevelChanged { from, to } => {
                 format!("the Status Bar shows level {to}, not {from}: the level is learned afresh")
             }
