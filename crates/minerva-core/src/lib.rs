@@ -39,6 +39,7 @@ mod session;
 mod settings;
 mod setup;
 mod shown_map;
+mod status_bar;
 mod tracker;
 mod travel_links;
 mod world;
@@ -75,13 +76,14 @@ pub use search::{
     DensityTier, Destination, HuntingTarget, ItemMatch, ItemsMissing, MapMatch, Matches, MobChoice, MobMatch, RouteStop,
     SearchResult, SearchState, SearchView, Trip,
 };
-pub use session::{Deaths, ExpRate, ExpTracking, Forecast, PacePoint, PaceTrace, TrackingState};
+pub use session::{Character, Deaths, ExpRate, ExpTracking, Forecast, PacePoint, PaceTrace, TrackingState};
 pub use settings::{Hotkey, Hotkeys, Settings};
 pub use setup::{
     ExpBarRegion, ExpBarTestRead, MarkTarget, SelectionDirection, SetupReason, SetupState, TestRead,
     TitleRegion,
 };
 pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
+pub use status_bar::{JOBS, MAX_LEVEL, STATUS_BAR_STRIP, StatusBar, StatusBarCapture, StatusBarReader, StatusBarReading};
 pub use world::{Distance, Step, Travel};
 
 use bests_window::BestsWindow;
@@ -266,6 +268,15 @@ pub struct PanelState {
     pub exp_bar: Option<ExpBar>,
     /// EXP tracking: the Session's state, Time to Level, rates and deaths.
     pub exp_tracking: ExpTracking,
+    /// Where on screen to capture for the Status Bar (physical px): a strip of
+    /// [`STATUS_BAR_STRIP`] rows across the bottom of the game's client area, while there is a
+    /// game window and the overlay can show (see [`Layer`]); `None` otherwise.
+    pub status_bar_capture: Option<ScreenRect>,
+    /// What the Status Bar showed in the last capture of it; `None` while it isn't found.
+    pub status_bar: Option<StatusBar>,
+    /// The Character playing, as the Status Bar names them, whom the Session is for; `None`
+    /// until a name is read, and after a switch to a Character whose name can't be read.
+    pub character: Option<Character>,
     /// The Grind Tracker's window, which shows `exp_tracking`.
     pub grind_tracker: GrindTrackerWindow,
     /// The Personal Bests window, with its rows: sent to that window alone, not with the
@@ -485,6 +496,11 @@ pub struct Minerva {
     /// The Deal Badges' window's size, in physical px for the current display: its width
     /// counts, as its height follows the shop's list.
     deal_badges_size: Size,
+    /// Reads captures fed to [`Minerva::on_status_bar_capture`]; loaded on the first one.
+    status_bar_reader: Option<StatusBarReader>,
+    /// Where the Status Bar's level, job and name were last found, and the game's client
+    /// area then: our windows keep clear of them while the client area stays where it was.
+    status_bar_area: Option<(ScreenRect, ScreenRect)>,
     /// What the shell must do that came of time passing (a page MeowDB's answer settled),
     /// for [`Minerva::take_request`].
     requests: VecDeque<Request>,
@@ -539,6 +555,8 @@ impl Minerva {
             deal_finder: DealFinder::default(),
             shop_reader: None,
             deal_badges_size: Size { width: 0, height: 0 },
+            status_bar_reader: None,
+            status_bar_area: None,
             requests: VecDeque::new(),
             panel: Panel::default(),
             setup: Setup::default(),
@@ -1270,6 +1288,42 @@ impl Minerva {
         self.sync_panel()
     }
 
+    /// Read a capture of [`PanelState::status_bar_capture`] and update the panel state: the
+    /// same as [`Minerva::on_status_bar_read`] with what a [`StatusBarReader`] reads in it,
+    /// here.
+    pub fn on_status_bar_capture(&mut self, capture: StatusBarCapture) -> &PanelState {
+        let reading = self.status_bar_reader.get_or_insert_with(StatusBarReader::bundled).read(&capture);
+        self.on_status_bar_read(capture, reading)
+    }
+
+    /// As [`Minerva::on_status_bar_reading`], with the capture it was read from (by a
+    /// [`StatusBarReader`], possibly on another thread), whose level, job and name a Bug
+    /// Report keeps (ADR 0009).
+    pub fn on_status_bar_read(&mut self, capture: StatusBarCapture, reading: StatusBarReading) -> &PanelState {
+        let crop = bug_report::status_bar_crop(&capture, reading.bar.as_ref());
+        let event = Event::StatusBar { at_ms: reading.at_ms, bar: reading.bar.clone(), same: false };
+        self.record_input(event, Some(reading.at_ms), crop);
+        self.take_status_bar_reading(reading)
+    }
+
+    /// Take what a Status Bar capture read as (read by a [`StatusBarReader`], possibly on
+    /// another thread): the Character playing, their level and job. Another Character's
+    /// name starts a new Session, and another level is the one the Session learns.
+    pub fn on_status_bar_reading(&mut self, reading: StatusBarReading) -> &PanelState {
+        let event = Event::StatusBar { at_ms: reading.at_ms, bar: reading.bar.clone(), same: false };
+        self.record_input(event, Some(reading.at_ms), None);
+        self.take_status_bar_reading(reading)
+    }
+
+    fn take_status_bar_reading(&mut self, reading: StatusBarReading) -> &PanelState {
+        self.session.on_status_bar(reading.bar.as_ref(), reading.at_ms);
+        if let (Some(bar), Some(game)) = (&reading.bar, &self.panel.game) {
+            self.status_bar_area = Some((game.client, bar.area));
+        }
+        self.state.status_bar = reading.bar;
+        self.sync_panel()
+    }
+
     /// The player chose the Item Card's Market Line `line` (its ID) as the Deal Line, which
     /// the Deal Finder compares listings with. Saved with the market prices.
     pub fn choose_deal_line(&mut self, line: &str) -> &PanelState {
@@ -1709,8 +1763,12 @@ impl Minerva {
             };
         }
         self.sync_setup();
-        // Never over a captured region: the capture would read the panel.
-        self.panel.avoid = [self.state.title_region, self.state.exp_bar_region].into_iter().flatten().collect();
+        self.sync_status_bar();
+        // Never over a captured region, nor the Status Bar's Character: the capture would read
+        // the panel.
+        let client = self.panel.game.as_ref().map(|game| game.client);
+        let status_bar = self.status_bar_area.filter(|&(at, _)| Some(at) == client).map(|(_, area)| area);
+        self.panel.avoid = [self.state.title_region, self.state.exp_bar_region, status_bar].into_iter().flatten().collect();
         self.state.expanded = self.panel.expanded;
         self.state.collapsed_sections = self.settings.collapsed_sections;
         self.state.game_found = self.panel.game.is_some();
@@ -1802,6 +1860,18 @@ impl Minerva {
             margin_percent: self.settings.deal_margin_percent,
             shop_found: self.deal_finder.shop().is_some(),
         };
+    }
+
+    /// The Status Bar's strip to capture, always while the overlay can show (see [`Layer`]):
+    /// another app's pixels are never read. And the Character the Session is for.
+    fn sync_status_bar(&mut self) {
+        let shows = self.panel.layer() != Layer::Hidden;
+        self.state.status_bar_capture = self.panel.game.as_ref().filter(|_| shows).map(|game| {
+            let client = game.client;
+            let height = STATUS_BAR_STRIP.min(client.height);
+            ScreenRect { x: client.x, y: client.y + (client.height - height) as i32, width: client.width, height }
+        });
+        self.state.character = self.session.character().cloned();
     }
 
     fn sync_setup(&mut self) {
