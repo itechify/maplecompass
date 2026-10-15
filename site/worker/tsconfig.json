@@ -1,0 +1,21 @@
+// The Worker and its tests, type-checked on their own (`pnpm site:test`): the root
+// tsconfig checks the site's pages against the DOM, which the Worker doesn't have.
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "lib": ["ES2022"],
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"]
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["vitest.config.ts"]
+}

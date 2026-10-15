@@ -1,12 +1,28 @@
-// The Minerva site on Cloudflare: a Worker that only serves the site's build (site/dist)
-// at owlofminerva.app and www.owlofminerva.app. Cloudflare makes both names' DNS records
-// and certificates when it attaches them. The Site workflow (.github/workflows/site.yml)
-// deploys it.
+// The Minerva site on Cloudflare: a Worker that serves the site's build (site/dist) at
+// owlofminerva.app and www.owlofminerva.app, and answers the Map Leaderboards API under
+// /api/ (site/worker, ADR 0015) from a D1 database. Cloudflare makes both names' DNS
+// records and certificates when it attaches them. The Site workflow
+// (.github/workflows/site.yml) applies the database's migrations (site/migrations), then
+// deploys it. Setting it up on the Cloudflare account takes a few steps by hand, once:
+// docs/map-leaderboards-setup.md.
 {
   "name": "minerva-site",
   "account_id": "ff78159c349b59f85a720c24b017de82",
   "compatibility_date": "2026-10-12",
-  "assets": { "directory": "./dist" },
+  "main": "./worker/index.ts",
+  // The Worker runs first for /api/ only. Every other path is the site's own file, or,
+  // with none, reaches the Worker, which hands it back to the assets for their plain 404.
+  "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "minerva-leaderboards",
+      // Until `wrangler d1 create` gives the real ID (docs/map-leaderboards-setup.md),
+      // this placeholder works locally and in the tests, but not to deploy.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "./migrations"
+    }
+  ],
   "routes": [
     { "pattern": "owlofminerva.app", "custom_domain": true },
     { "pattern": "www.owlofminerva.app", "custom_domain": true }

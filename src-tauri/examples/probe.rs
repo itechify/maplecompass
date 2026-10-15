@@ -30,6 +30,13 @@
 //! hold, or what didn't read. Run it by hand when OSMS changes and before a release. No
 //! game window is needed.
 //!
+//! `cargo run -p minerva --example probe ceilings <out.json> [--osms <osms-set.json>]`
+//! Ceilings mode, for the Map Leaderboards' cap (ADR 0015): fetch OSMS Data Explorer's
+//! live file set (or read the `osms-set.json` given), read it with the core's reader, and
+//! write each map's solo EXP/h ceiling, by its 9-digit ID, to `out.json`: the table the
+//! site's Worker loads (`site/worker/osms-ceilings.json`). A map with no Map Summary, or a
+//! ceiling of 0, is left out. No game window is needed.
+//!
 //! `cargo run -p minerva --example probe replay <report.zip> [--all] [--osms <osms-set.json>] [--items <osms-items.json>]`
 //! Replay mode, for a Bug Report (ADR 0009): print what it holds and its timeline (from 10
 //! minutes before it was saved, every line the core made something of before that; with
@@ -61,6 +68,14 @@ fn main() {
         if let Err(e) = osms() {
             eprintln!("{e}");
             std::process::exit(1);
+        }
+        return;
+    }
+    if args.first().map(String::as_str) == Some("ceilings") {
+        if let Err(e) = ceilings(&args[1..]) {
+            eprintln!("{e}");
+            eprintln!("usage: probe ceilings <out.json> [--osms <osms-set.json>]");
+            std::process::exit(2);
         }
         return;
     }
@@ -187,6 +202,33 @@ fn osms() -> Result<(), String> {
         "Items: {} ({} with a shop price, {} a shop won't buy, {} Cash items)",
         counts.items, counts.shop_priced, counts.not_sold, counts.cash
     );
+    Ok(())
+}
+
+/// `<out.json> [--osms <osms-set.json>]`: write each map's solo EXP/h ceiling, by its
+/// 9-digit ID, one map to a line.
+fn ceilings(args: &[String]) -> Result<(), String> {
+    let mut rest = args.iter();
+    let out = rest.next().ok_or("no file to write")?;
+    let mut set_file = None;
+    while let Some(arg) = rest.next() {
+        match arg.as_str() {
+            "--osms" => set_file = Some(rest.next().ok_or("--osms needs a file")?),
+            other => return Err(format!("unknown argument {other:?}")),
+        }
+    }
+    let files = match set_file {
+        Some(file) => {
+            let json = std::fs::read(file).map_err(|e| format!("{file}: {e}"))?;
+            serde_json::from_slice::<minerva_core::osms::OsmsFiles>(&json).map_err(|e| format!("{file}: {e}"))?
+        }
+        None => minerva_lib::osms::fetch_live()?,
+    };
+    let set = minerva_core::osms::read(&files).map_err(|e| format!("OSMS's set doesn't read: {e}"))?;
+    let ceilings = set.solo_ceilings();
+    let rows: Vec<String> = ceilings.iter().map(|(id, solo)| format!("  \"{id}\": {solo}")).collect();
+    std::fs::write(out, format!("{{\n{}\n}}\n", rows.join(",\n"))).map_err(|e| format!("{out}: {e}"))?;
+    println!("Wrote the solo ceilings of {} maps (of {} in the map list) to {out}", ceilings.len(), set.maps().count());
     Ok(())
 }
 

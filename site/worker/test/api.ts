@@ -1,0 +1,93 @@
+// Calls to the Map Leaderboards API, as the app and the site's pages make them, on
+// made-up maps: 100000000 (solo ceiling 100,000) and 100000001 (2,000,000), from the test
+// config's TEST_CEILINGS, and 100000002, with none.
+import { exports } from "cloudflare:workers";
+
+export const FIELD = "100000000";
+export const RICH_FIELD = "100000001";
+export const NO_CEILING = "100000002";
+
+export const ADMIN = "made-up-maintainer-token";
+
+/// A made-up Leaderboard Key, a different one for each `seed`.
+export function key(seed: string): string {
+  return `test-key-${seed}`.padEnd(40, "x");
+}
+
+export interface Entry {
+  map: string;
+  level: number;
+  job: string;
+  expPerHour: number;
+  setAt: number;
+}
+
+/// An entry on `map` at `level`, with `expPerHour`, set at `setAt`.
+export function entry(map: string, level: number, expPerHour: number, setAt = 1_760_000_000_000): Entry {
+  return { map, level, job: "Magician", expPerHour, setAt };
+}
+
+export function call(path: string, init: RequestInit = {}): Promise<Response> {
+  return exports.default.fetch(new Request(`https://owlofminerva.app${path}`, init));
+}
+
+function bearer(token: string): Record<string, string> {
+  return { authorization: `Bearer ${token}` };
+}
+
+/// The app uploading `name`'s whole set of entries with its key.
+export function upload(name: string, withKey: string, entries: Entry[]): Promise<Response> {
+  return call(`/api/characters/${encodeURIComponent(name)}/entries`, {
+    method: "PUT",
+    headers: { ...bearer(withKey), "content-type": "application/json" },
+    body: JSON.stringify({ entries }),
+  });
+}
+
+/// The app opting `name` out: all its entries go.
+export function optOut(name: string, withKey: string): Promise<Response> {
+  return call(`/api/characters/${encodeURIComponent(name)}/entries`, { method: "DELETE", headers: bearer(withKey) });
+}
+
+export interface Ranked {
+  rank: number;
+  name: string;
+  job: string;
+  level: number;
+  expPerHour: number;
+  setAt: number;
+}
+
+export interface BandAnswer {
+  map: string;
+  band: number;
+  levels: [number, number];
+  total: number;
+  entries: Ranked[];
+  character: Ranked | null;
+}
+
+/// A map's Level Band, as the site's page reads it, with `name`'s entry if given.
+export async function band(map: string, first: number, name?: string): Promise<BandAnswer> {
+  const query = name === undefined ? "" : `?name=${encodeURIComponent(name)}`;
+  const response = await call(`/api/maps/${map}/bands/${first}${query}`);
+  if (response.status !== 200) throw new Error(`band read: ${response.status} ${await response.text()}`);
+  return response.json();
+}
+
+/// The names in a band, best first.
+export async function names(map: string, first: number): Promise<string[]> {
+  return (await band(map, first)).entries.map((e) => e.name);
+}
+
+export function report(body: unknown, from = "203.0.113.7"): Promise<Response> {
+  return call("/api/reports", {
+    method: "POST",
+    headers: { "content-type": "application/json", "cf-connecting-ip": from },
+    body: JSON.stringify(body),
+  });
+}
+
+export function admin(path: string, init: RequestInit = {}, token = ADMIN): Promise<Response> {
+  return call(`/api/admin${path}`, { ...init, headers: { ...bearer(token), ...(init.headers ?? {}) } });
+}
