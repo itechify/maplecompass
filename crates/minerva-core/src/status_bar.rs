@@ -369,11 +369,13 @@ fn level_ink(img: &RgbImage, found: &Found) -> Option<(GrayImage, Vec<bool>)> {
 }
 
 /// Whether `p` is the bar's slate, the text on it, or the anti-aliasing between them, at the
-/// bar's brightness `scale`: bluish grey, never brighter than the text or darker than the slate.
+/// bar's brightness `scale`: bluish grey, never darker than the slate. The text can be near
+/// white (236 on a live capture whose tiles were the screenshots' orange), so nothing grey is
+/// too bright: the pointer and the game's tooltip give themselves away by their black.
 fn slate_or_text(p: [u8; 3], scale: f32) -> bool {
     let [r, g, b] = p.map(i32::from);
     let luma = 0.299 * r as f32 + 0.587 * g as f32 + 0.114 * b as f32;
-    (40.0 * scale..=232.0 * scale).contains(&luma) && (-8..=24).contains(&(b - r)) && g >= r - 8 && g <= b + 8
+    (40.0 * scale..=255.0).contains(&luma) && (-8..=24).contains(&(b - r)) && g >= r - 8 && g <= b + 8
 }
 
 /// How much `p` is the text's light grey, 0.0 (the slate) ..= 1.0.
