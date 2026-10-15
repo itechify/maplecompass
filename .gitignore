@@ -9,6 +9,9 @@ dist/
 *.local
 # The site's screenshots as WebP, made from the PNGs at build (site/vite.config.ts)
 site/screenshots/webp/
+# The site Worker's local state (D1) from wrangler, and its local secrets
+site/.wrangler/
+site/.dev.vars
 
 # impeccable-ignore-start
 # Ephemeral output, runtime state, and per-dev overrides.

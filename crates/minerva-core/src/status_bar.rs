@@ -1,4 +1,4 @@
-//! The Status Bar reader (ADR 0015): finds the game's Status Bar at the bottom of the client
+//! The Status Bar reader (ADR 0016): finds the game's Status Bar at the bottom of the client
 //! area and reads the Character's level, job and name from it.
 //!
 //! The game draws its UI at a fixed pixel size, and pins the Status Bar to the bottom of the
