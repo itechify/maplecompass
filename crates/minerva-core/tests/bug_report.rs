@@ -7,12 +7,12 @@ mod common;
 
 use common::items::{ItemWorld, equip, etc, item_world};
 use common::osms;
-use common::{FakeSource, SUNSET_SKY_ID, frame};
+use common::{CONSTRUCTION_SITE_ID, FakeSource, SUNSET_SKY_ID, frame};
 use minerva_core::bug_report::{self, Answer, Event, Note, Recording, ReplayData, MAX_REPORT_BYTES};
 use minerva_core::{
     ListedPrice, ShopCapture, ShopList, ShopReading, ShopRow, StatusBar, StatusBarCapture, StatusBarReading,
     Action, BESTS_VERSION, Minerva, ExpBar, ExpBarReading, ExpBarRegion, Foreground, Frame, GameWindow, ItemCapture, ItemTooltip,
-    ItemTooltipReading, MapBests, Rect, ReportAbout, SavedBests, ScreenPoint, ScreenRect, Settings, Size, TitleLines,
+    CharacterBests, ItemTooltipReading, MapBests, Rect, ReportAbout, SavedBests, ScreenPoint, ScreenRect, Settings, Size, TitleLines,
     TitleReading, TitleRegion, TrackingState, VisitBest,
 };
 
@@ -152,6 +152,62 @@ fn a_visit_removed_in_the_personal_bests_window_replays_and_reads_in_the_timelin
         WALL_AT_START - HOUR
     );
     assert!(recording.timeline(0).iter().any(|line| line.ends_with(&said)), "{:#?}", recording.timeline(0));
+}
+
+#[test]
+fn a_visit_moved_and_characters_removed_and_merged_replay_and_read_in_the_timeline() {
+    // An Unassigned Visit on Sunset Sky; Egbert's, Egbert2's and Bob's on the Construction
+    // Site.
+    let mut shell = Shell::new(FakeSource::osms());
+    let unassigned = VisitBest { exp_per_hour: 7200, set_at_unix_ms: Some(WALL_AT_START - HOUR), ..VisitBest::default() };
+    let at = |exp_per_hour, level: u32| VisitBest {
+        exp_per_hour,
+        set_at_unix_ms: None,
+        level: Some(level),
+        job: Some("Magician".to_string()),
+    };
+    let on_the_site = |visit: VisitBest| vec![MapBests { id: CONSTRUCTION_SITE_ID.into(), visits: vec![visit] }];
+    let characters = vec![
+        CharacterBests { name: "Egbert".into(), maps: on_the_site(at(5000, 13)) },
+        CharacterBests { name: "Egbert2".into(), maps: on_the_site(at(6000, 14)) },
+        CharacterBests { name: "Bob".into(), maps: on_the_site(at(3000, 40)) },
+    ];
+    let unassigned_maps = vec![MapBests { id: SUNSET_SKY_ID.into(), visits: vec![unassigned.clone()] }];
+    shell.minerva.restore_bests(SavedBests { version: BESTS_VERSION, unassigned: unassigned_maps, characters });
+    shell.play(MIN, CONSTRUCTION_SITE, grind);
+
+    shell.minerva.move_visit(SUNSET_SKY_ID, &unassigned, "Egbert");
+    shell.play(MIN + 20 * S, CONSTRUCTION_SITE, grind);
+    shell.minerva.remove_character("Bob");
+    shell.play(MIN + 40 * S, CONSTRUCTION_SITE, grind);
+    shell.minerva.merge_characters("Egbert2", "Egbert");
+    shell.play(2 * MIN, CONSTRUCTION_SITE, grind);
+
+    let bests = shell.minerva.bests();
+    let names: Vec<&str> = bests.characters.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, ["Egbert"]);
+    assert!(bests.unassigned.is_empty());
+    let (_, recording) = shell.report();
+    assert_eq!(bug_report::replay(&recording, Some(osms::game().files())).divergence, None);
+    let timeline = recording.timeline(0);
+    for said in [
+        format!("Unassigned Visit on {SUNSET_SKY_ID} moved to \"Egbert\": 7,200 EXP/h, set at {}", WALL_AT_START - HOUR),
+        "Character \"Bob\" removed, with their bests".to_string(),
+        "Character \"Egbert2\" merged into \"Egbert\"".to_string(),
+    ] {
+        assert!(timeline.iter().any(|line| line.contains(&said)), "{said} in {timeline:#?}");
+    }
+}
+
+#[test]
+fn a_visit_removed_in_a_report_from_before_characters_replays_as_an_unassigned_one() {
+    // A line as a report from before Characters wrote it: no Character, no level or job.
+    let line = format!(
+        r#"{{"removeVisit": {{"map": "{SUNSET_SKY_ID}", "visit": {{"expPerHour": 7200, "setAtUnixMs": null}}}}}}"#
+    );
+    let event: bug_report::Event = serde_json::from_str(&line).unwrap();
+    let visit = VisitBest { exp_per_hour: 7200, ..VisitBest::default() };
+    assert_eq!(event, bug_report::Event::RemoveVisit { map: SUNSET_SKY_ID.into(), visit, character: None });
 }
 
 #[test]

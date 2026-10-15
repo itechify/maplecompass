@@ -172,3 +172,176 @@ fn a_best_set_while_no_character_is_named_is_unassigned_and_the_player_can_move_
     let names: Vec<Option<&str>> = moved.personal_bests.characters.iter().map(|c| c.name.as_deref()).collect();
     assert_eq!(names, [Some("Egbert")]);
 }
+
+#[test]
+fn a_character_that_levels_up_keeps_its_best_in_each_lower_level_band_past_the_10_best() {
+    // Egbert at level 19: a Visit to Sunset Sky at 3,600 EXP/h.
+    let mut player = Player::saved_by_the_shell(tracking());
+    player.status(Some("Egbert"), 19);
+    player.arrive(SUNSET);
+    player.hunt(5 * MIN, 10);
+    // Level 20, the next Level Band: 10 Visits there at 3,960 to 7,200 EXP/h, then one at
+    // 3,600, each ended by stepping onto the Construction Site. (The level-up's reading isn't
+    // counted: the Status Bar showed it before the EXP bar did.)
+    player.status(Some("Egbert"), 20);
+    player.hunt(MIN, 10);
+    for gain in [15, 11, 20, 18, 12, 19, 13, 17, 14, 16, 10] {
+        player.arrive(CONSTRUCTION_SITE);
+        player.arrive(SUNSET);
+        player.hunt(5 * MIN, gain);
+    }
+    player.arrive(CONSTRUCTION_SITE);
+
+    // The 10 best, all at level 20, and the best at 10 to 19 under them. The last Visit at
+    // level 20 is neither, and isn't kept.
+    let mut expected: Vec<(u64, Option<u32>)> = (11..=20).rev().map(|gain| (gain * 360, Some(20))).collect();
+    expected.push((3600, Some(19)));
+    assert_eq!(kept(&player.minerva, Some("Egbert"), SUNSET_SKY_ID), expected);
+
+    // The window lists them all, each with its level.
+    let window = player.press(PanelControl::TogglePersonalBests).personal_bests;
+    let listed: Vec<(u64, Option<u32>)> =
+        window.characters[0].maps[0].visits.iter().map(|v| (v.exp_per_hour, v.level)).collect();
+    assert_eq!(listed, expected);
+
+    // His best in each band on the map, as the Map Leaderboards would rank them.
+    let bands: Vec<(String, u32, u32, u64, Option<u32>)> = player
+        .minerva
+        .bests()
+        .band_bests("Egbert")
+        .into_iter()
+        .map(|b| (b.map, b.band.lowest(), b.band.highest(), b.visit.exp_per_hour, b.visit.level))
+        .collect();
+    assert_eq!(
+        bands,
+        [(SUNSET_SKY_ID.to_string(), 10, 19, 3600, Some(19)), (SUNSET_SKY_ID.to_string(), 20, 29, 7200, Some(20))]
+    );
+}
+
+/// A Magician's Visit best of `exp_per_hour` at `level`, with no date.
+fn at_level(exp_per_hour: u64, level: u32) -> serde_json::Value {
+    serde_json::json!({ "expPerHour": exp_per_hour, "setAtUnixMs": null, "level": level, "job": "Magician" })
+}
+
+/// Bests saved at an earlier launch: each Character's Visits on each map.
+fn saved(characters: serde_json::Value) -> SavedBests {
+    serde_json::from_value(serde_json::json!({ "version": 2, "unassigned": [], "characters": characters })).unwrap()
+}
+
+/// The Personal Bests window's choices, as (name, current, how many maps).
+fn choices(state: &PanelState) -> Vec<(Option<&str>, bool, usize)> {
+    state.personal_bests.characters.iter().map(|c| (c.name.as_deref(), c.current, c.maps.len())).collect()
+}
+
+/// The player hunting as `name`, with `bests` restored at launch, the Personal Bests window
+/// open on Sunset Sky.
+fn playing_with(name: &str, bests: SavedBests) -> (Player, PanelState) {
+    let mut minerva = tracking();
+    minerva.restore_bests(bests);
+    let mut player = Player::saved_by_the_shell(minerva);
+    player.status(Some(name), 41);
+    player.hunt(10 * S, 10);
+    player.arrive(SUNSET);
+    let state = player.press(PanelControl::TogglePersonalBests);
+    (player, state)
+}
+
+#[test]
+fn removing_a_character_removes_their_bests_and_the_one_playing_stays_a_choice() {
+    let (mut player, open) = playing_with(
+        "Bob",
+        saved(serde_json::json!([
+            { "name": "Egbert", "maps": [{ "id": SUNSET_SKY_ID, "visits": [at_level(7200, 13)] }] },
+            { "name": "Bob", "maps": [
+                { "id": SUNSET_SKY_ID, "visits": [at_level(3600, 40)] },
+                { "id": CONSTRUCTION_SITE_ID, "visits": [at_level(5000, 41)] }
+            ]}
+        ])),
+    );
+    assert_eq!(best_row(&open), Some(3600));
+    assert_eq!(choices(&open), [(Some("Bob"), true, 2), (Some("Egbert"), false, 1)]);
+
+    // Bob removed: his bests go, at once, and he stays a choice, with none, while he plays.
+    let removed = player.remove_character("Bob");
+    assert_eq!(best_row(&removed), None);
+    assert_eq!(choices(&removed), [(Some("Bob"), true, 0), (Some("Egbert"), false, 1)]);
+    let names: Vec<String> = player.minerva.bests().characters.into_iter().map(|c| c.name).collect();
+    assert_eq!(names, ["Egbert"]);
+
+    // Egbert removed too: no best is left anywhere, and the window closes.
+    let none = player.remove_character("Egbert");
+    assert!(!none.personal_bests.open);
+    assert!(!none.grind_tracker.personal_bests);
+}
+
+#[test]
+fn merging_a_character_into_another_moves_its_bests_keeping_the_10_best_and_the_best_in_each_band() {
+    // Egbert's 10 Visits to Sunset Sky at level 30; Egbert2, his new name, with two at level
+    // 25, one at 31, and a Visit to the Construction Site.
+    let egbert: Vec<serde_json::Value> = (10..20).rev().map(|k| at_level(k * 1000, 30)).collect();
+    let (mut player, open) = playing_with(
+        "Egbert2",
+        saved(serde_json::json!([
+            { "name": "Egbert", "maps": [{ "id": SUNSET_SKY_ID, "visits": egbert }] },
+            { "name": "Egbert2", "maps": [
+                { "id": SUNSET_SKY_ID, "visits": [at_level(9000, 31), at_level(5000, 25), at_level(4000, 25)] },
+                { "id": CONSTRUCTION_SITE_ID, "visits": [at_level(6000, 31)] }
+            ]}
+        ])),
+    );
+    assert_eq!(best_row(&open), Some(9000));
+
+    let merged = player.merge_characters("Egbert2", "Egbert");
+    // On Sunset Sky the 10 best are Egbert's, and the best at levels 20 to 29 joins them; the
+    // others aren't kept. The Construction Site's moves across.
+    let mut sunset: Vec<(u64, Option<u32>)> = (10..20).rev().map(|k| (k * 1000, Some(30))).collect();
+    sunset.push((5000, Some(25)));
+    assert_eq!(kept(&player.minerva, Some("Egbert"), SUNSET_SKY_ID), sunset);
+    assert_eq!(kept(&player.minerva, Some("Egbert"), CONSTRUCTION_SITE_ID), [(6000, Some(31))]);
+    // Egbert2 has none left: playing, he is a choice with none, and the Best row has none.
+    assert_eq!(choices(&merged), [(Some("Egbert"), false, 2), (Some("Egbert2"), true, 0)]);
+    assert_eq!(best_row(&merged), None);
+}
+
+#[test]
+fn an_unassigned_visit_moved_to_a_character_is_kept_only_if_their_history_keeps_it() {
+    // Egbert's 10 Visits to Sunset Sky at level 30, and an Unassigned one from before
+    // Characters, with no level, slower than all of them.
+    let egbert: Vec<serde_json::Value> = (10..20).rev().map(|k| at_level(k * 1000, 30)).collect();
+    let mut bests = saved(serde_json::json!([{ "name": "Egbert", "maps": [{ "id": SUNSET_SKY_ID, "visits": egbert }] }]));
+    let before = VisitBest { exp_per_hour: 3600, ..VisitBest::default() };
+    bests.unassigned = serde_json::from_value(serde_json::json!([{ "id": SUNSET_SKY_ID, "visits": [before] }])).unwrap();
+    let (mut player, _) = playing_with("Egbert", bests);
+
+    // Moved, it is neither among his 10 best nor the best in a band: it isn't kept.
+    let moved = player.move_visit(SUNSET_SKY_ID, before, "Egbert");
+    let rates: Vec<u64> = kept(&player.minerva, Some("Egbert"), SUNSET_SKY_ID).into_iter().map(|(rate, _)| rate).collect();
+    assert_eq!(rates, (10..20).rev().map(|k| k * 1000).collect::<Vec<u64>>());
+    assert_eq!(kept(&player.minerva, None, SUNSET_SKY_ID), []);
+    assert_eq!(choices(&moved), [(Some("Egbert"), true, 1)]);
+}
+
+#[test]
+fn a_visit_is_removed_by_its_character_map_best_level_and_job_all() {
+    let (mut player, _) = playing_with(
+        "Egbert",
+        saved(serde_json::json!([
+            { "name": "Egbert", "maps": [{ "id": SUNSET_SKY_ID, "visits": [at_level(7200, 14), at_level(7200, 13)] }] }
+        ])),
+    );
+    let visit = |level, job: &str| VisitBest {
+        exp_per_hour: 7200,
+        set_at_unix_ms: None,
+        level: Some(level),
+        job: Some(job.to_string()),
+    };
+    // Another job, the Unassigned bests, or another Character's: nothing is removed.
+    player.remove_visit_of(Some("Egbert"), SUNSET_SKY_ID, visit(13, "Wizard (F/P)"));
+    player.remove_visit_of(None, SUNSET_SKY_ID, visit(13, "Magician"));
+    player.remove_visit_of(Some("Bob"), SUNSET_SKY_ID, visit(13, "Magician"));
+    assert_eq!(kept(&player.minerva, Some("Egbert"), SUNSET_SKY_ID), [(7200, Some(14)), (7200, Some(13))]);
+
+    // The one at level 13 goes, and only it.
+    player.remove_visit_of(Some("Egbert"), SUNSET_SKY_ID, visit(13, "Magician"));
+    assert_eq!(kept(&player.minerva, Some("Egbert"), SUNSET_SKY_ID), [(7200, Some(14))]);
+}
