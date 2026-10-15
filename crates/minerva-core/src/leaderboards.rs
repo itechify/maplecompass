@@ -23,6 +23,12 @@
 //!   to a key it refused; rate-limited waits as long as the site says; anything else (offline,
 //!   say) is tried again quietly, later each time.
 //! - **Removing a Character**, or merging one into another, takes the one gone off the site.
+//! - **Bests lost**: a launch whose bests file didn't read starts with none, and sending what is
+//!   here then would take every shown Character's entries off the site. So each Character
+//!   shown then is held: nothing of theirs goes up, at that launch or any after (the file saved
+//!   from then on holds only the bests set since), and the toggle says why, until the player
+//!   turns them off (which deletes their entries) and on again. One shown after isn't held:
+//!   turning it on asks with the count.
 
 use crate::personal_best::{LevelBand, SavedBests};
 use crate::SITE_URL;
@@ -193,6 +199,10 @@ pub struct LeaderboardCharacter {
     /// When an upload of theirs last went through, by the wall clock (ms since the Unix epoch).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uploaded_at_unix_ms: Option<u64>,
+    /// Their uploads are held: the bests file didn't read at a launch since they were shown, so
+    /// what is here may be far less than the site holds. Until the player turns them off and on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub held: bool,
 }
 
 /// The Personal Bests window's "Show on the Map Leaderboards" for a Character.
@@ -226,6 +236,9 @@ pub enum LeaderboardStatus {
     Retrying,
     /// Another Leaderboard Key holds the name: the player asks on Discord.
     Claimed,
+    /// Nothing is sent: the bests file didn't read at a launch since they were shown, so the
+    /// site may hold more of theirs than is here. Turning it off and on sends what is here.
+    Held,
 }
 
 /// A Character's standing with the site, this launch.
@@ -282,6 +295,8 @@ impl Leaderboards {
         match self.sites.iter_mut().find(|site| site.saved.name == name) {
             Some(site) if site.saved.shown != on => {
                 site.saved.shown = on;
+                // Off and on again, the player sends what is here.
+                site.saved.held = false;
                 // Shown again, the site may have deleted them meanwhile; taken off, nothing
                 // held stands.
                 site.confirmed = None;
@@ -293,8 +308,17 @@ impl Leaderboards {
                 name: name.to_string(),
                 shown: true,
                 uploaded_at_unix_ms: None,
+                held: false,
             })),
             None => {}
+        }
+    }
+
+    /// The Personal Bests saved at earlier launches couldn't be read at this one: hold the
+    /// uploads of every Character shown.
+    pub fn bests_lost(&mut self) {
+        for site in self.sites.iter_mut().filter(|site| site.saved.shown) {
+            site.saved.held = true;
         }
     }
 
@@ -304,7 +328,8 @@ impl Leaderboards {
         self.now_ms = self.now_ms.max(at_ms);
         let Some(now_unix_ms) = wall_clock else { return };
         for site in &mut self.sites {
-            if site.in_flight.is_some() {
+            // Held, nothing goes but the deletion the player asks for by turning them off.
+            if site.in_flight.is_some() || (site.saved.shown && site.saved.held) {
                 continue;
             }
             let wanted = site.saved.shown.then(|| entries(history, &site.saved.name, now_unix_ms));
@@ -387,6 +412,7 @@ impl Leaderboards {
         let site = self.sites.iter().find(|site| site.saved.name == name);
         let status = match site {
             None => LeaderboardStatus::Off,
+            Some(site) if site.saved.shown && site.saved.held => LeaderboardStatus::Held,
             Some(site) if site.claimed => LeaderboardStatus::Claimed,
             Some(site) if site.failures > 0 => LeaderboardStatus::Retrying,
             Some(site) if site.in_flight.is_some() || !site.saved.shown || site.confirmed.is_none() => {

@@ -424,7 +424,7 @@ fn an_upload_taken_says_when_and_nothing_more_goes_up_until_something_changes() 
 
     // Kept with the settings, and at the next launch uploaded once again.
     let saved = minerva.settings().map_leaderboards;
-    let kept = LeaderboardCharacter { name: "Egbert".to_string(), shown: true, uploaded_at_unix_ms: Some(WALL + 2 * S) };
+    let kept = LeaderboardCharacter { name: "Egbert".to_string(), shown: true, uploaded_at_unix_ms: Some(WALL + 2 * S), held: false };
     assert_eq!(saved, [kept]);
     let mut again = tracking();
     again.restore(Settings { map_leaderboards: saved, ..minerva.settings() });
@@ -438,4 +438,97 @@ fn an_upload_taken_says_when_and_nothing_more_goes_up_until_something_changes() 
     assert_eq!(sent, [Some(egberts_entries())]);
     let up = toggle(&state, "Egbert");
     assert_eq!((up.status, up.uploaded_at_unix_ms), (LeaderboardStatus::Sending, Some(WALL + 2 * S)));
+}
+
+/// A launch whose bests file didn't read, with the Characters `shown` shown on the Map
+/// Leaderboards at an earlier one: it starts with no bests, and the shell says so. Egbert plays,
+/// at level 13.
+fn lost_bests(shown: &[&str]) -> Player {
+    let mut minerva = tracking();
+    let shown = shown
+        .iter()
+        .map(|name| LeaderboardCharacter { name: name.to_string(), shown: true, uploaded_at_unix_ms: Some(WALL - DAY), held: false })
+        .collect();
+    minerva.restore(Settings { map_leaderboards: shown, ..minerva.settings() });
+    minerva.restore_bests(SavedBests::default());
+    minerva.bests_lost();
+    let mut player = Player::clocked(minerva);
+    player.status(Some("Egbert"), 13);
+    player
+}
+
+/// As [`lost_bests`], then Egbert sets a best on Sunset Sky, and the Visit ends: his only best,
+/// and the Personal Bests window open. The capture time then.
+fn a_best_after_the_bests_were_lost(shown: &[&str]) -> (Player, u64) {
+    let mut player = lost_bests(shown);
+    player.arrive(SUNSET);
+    let at = player.at;
+    // An empty set would delete every entry they have on the site.
+    assert_eq!(sent(player.minerva.tick(at)), []);
+    player.hunt(6 * MIN, 20);
+    player.arrive(CONSTRUCTION_SITE);
+    player.press(PanelControl::TogglePersonalBests);
+    let at = player.at;
+    (player, at)
+}
+
+/// Egbert's one entry, as [`a_best_after_the_bests_were_lost`] sets it.
+fn egberts_new_entry(player: &Player) -> LeaderboardEntry {
+    let set_at = player.minerva.bests().maps_of(Some("Egbert"))[0].visits[0].set_at_unix_ms.unwrap();
+    LeaderboardEntry { map: SUNSET_SKY_ID.to_string(), level: 13, job: "Magician".to_string(), exp_per_hour: 7200, set_at }
+}
+
+#[test]
+fn bests_that_couldnt_be_read_hold_every_shown_characters_uploads_and_the_toggle_says_why() {
+    let (mut player, at) = a_best_after_the_bests_were_lost(&["Egbert", "Bob"]);
+    // His new best is all the bests there are: sent, the rest of his entries would go.
+    let state = player.minerva.tick(at).clone();
+    assert_eq!(sent(&state), []);
+    let held = toggle(&state, "Egbert");
+    assert_eq!((held.on, held.status), (true, LeaderboardStatus::Held));
+    assert_eq!(sent(player.minerva.tick(at + 60 * MIN)), []);
+}
+
+#[test]
+fn held_uploads_stay_held_at_the_next_launch() {
+    let player = lost_bests(&["Egbert", "Bob"]);
+    // The bests file the shell saves from now on reads at the next launch, but holds only
+    // this launch's bests.
+    let mut again = tracking();
+    again.restore(Settings { map_leaderboards: player.minerva.settings().map_leaderboards, ..again.settings() });
+    again.restore_bests(saved_bests());
+    again.on_wall_clock(WALL + DAY);
+    again.press(PanelControl::TogglePersonalBests);
+    let state = again.tick(0).clone();
+    assert_eq!(sent(&state), []);
+    assert_eq!((toggle(&state, "Egbert").status, toggle(&state, "Bob").status), (LeaderboardStatus::Held, LeaderboardStatus::Held));
+}
+
+#[test]
+fn turning_a_held_character_off_and_on_sends_what_is_here_now() {
+    let (mut player, at) = a_best_after_the_bests_were_lost(&["Egbert", "Bob"]);
+    player.minerva.show_on_leaderboards("Egbert", false);
+    assert_eq!(sent(player.minerva.tick(at)), [("Egbert".to_string(), None)]);
+    all_taken(&mut player.minerva, at);
+    player.minerva.show_on_leaderboards("Egbert", true);
+    let state = player.minerva.tick(at + S).clone();
+    assert_eq!(sent(&state), [egbert(vec![egberts_new_entry(&player)])]);
+    assert_eq!(toggle(&state, "Egbert").status, LeaderboardStatus::Sending);
+    // Bob's are still held.
+    let held: Vec<(String, bool)> = player.minerva.settings().map_leaderboards.into_iter().map(|c| (c.name, c.held)).collect();
+    assert_eq!(held, [("Bob".to_string(), true), ("Egbert".to_string(), false)]);
+}
+
+#[test]
+fn a_character_shown_after_the_bests_were_lost_is_not_held() {
+    let (mut player, at) = a_best_after_the_bests_were_lost(&["Bob"]);
+    player.minerva.show_on_leaderboards("Egbert", true);
+    assert_eq!(sent(player.minerva.tick(at)), [egbert(vec![egberts_new_entry(&player)])]);
+}
+
+#[test]
+fn removing_every_visit_of_a_shown_character_sends_their_empty_set() {
+    let mut minerva = both_up();
+    minerva.remove_visit(Some("Bob"), SUNSET_SKY_ID, &visit(4000, Some(5), 40));
+    assert_eq!(sent(minerva.tick(2 * S)), [("Bob".to_string(), Some(Vec::new()))]);
 }

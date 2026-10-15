@@ -12,7 +12,7 @@ use minerva_core::bug_report::{self, Answer, Event, Note, Recording, ReplayData,
 use minerva_core::{
     ListedPrice, ShopCapture, ShopList, ShopReading, ShopRow, StatusBar, StatusBarCapture, StatusBarReading,
     Action, BESTS_VERSION, Minerva, ExpBar, ExpBarReading, ExpBarRegion, Foreground, Frame, GameWindow, ItemCapture, ItemTooltip,
-    CharacterBests, ItemTooltipReading, LeaderboardAnswer, MapBests, RejectedEntry, RejectedReason, Rect, ReportAbout, SavedBests, ScreenPoint, ScreenRect, Settings, Size, TitleLines,
+    CharacterBests, ItemTooltipReading, LeaderboardAnswer, LeaderboardCharacter, MapBests, RejectedEntry, RejectedReason, Rect, ReportAbout, SavedBests, ScreenPoint, ScreenRect, Settings, Size, TitleLines,
     TitleReading, TitleRegion, TrackingState, VisitBest,
 };
 
@@ -253,6 +253,28 @@ fn showing_a_character_on_the_map_leaderboards_and_each_answer_replay_and_read_i
     ] {
         assert!(timeline.iter().any(|line| line.contains(said)), "{said} in {timeline:#?}");
     }
+}
+
+#[test]
+fn bests_lost_at_launch_replay_holding_the_uploads_and_read_in_the_timeline() {
+    // Egbert shown on the Map Leaderboards at an earlier launch, and this one's bests file
+    // unreadable.
+    let mut shell = Shell::new(FakeSource::osms());
+    let egbert = LeaderboardCharacter { name: "Egbert".into(), shown: true, uploaded_at_unix_ms: None, held: false };
+    let settings = Settings { map_leaderboards: vec![egbert], ..shell.minerva.settings() };
+    shell.minerva.restore(settings);
+    shell.minerva.restore_bests(SavedBests::default());
+    shell.minerva.bests_lost();
+    shell.play(20 * S, CONSTRUCTION_SITE, grind);
+    assert_eq!(shell.minerva.panel_state().leaderboard_uploads, []);
+
+    let (_, recording) = shell.report();
+    let replay = bug_report::replay(&recording, Some(osms::game().files()));
+    assert_eq!(replay.divergence, None);
+    assert_eq!(replay.lines, recording.lines.len());
+    let said = "Personal Bests file unreadable: uploads to the Map Leaderboards held";
+    let timeline = recording.timeline(0);
+    assert!(timeline.iter().any(|line| line.contains(said)), "{said} in {timeline:#?}");
 }
 
 #[test]

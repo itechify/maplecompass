@@ -54,7 +54,7 @@ type Toggle = {
   on: boolean;
   /** How many maps they have an entry for: what turning it on asks about. */
   maps: number;
-  status: "off" | "sending" | "upToDate" | "retrying" | "claimed";
+  status: "off" | "sending" | "upToDate" | "retrying" | "claimed" | "held";
   uploadedAtUnixMs: number | null;
   rejected: Rejected[];
 };
@@ -644,6 +644,11 @@ function standing(name: string, t: Toggle): (string | HTMLElement)[] {
       return [`Up to date: uploaded ${when(t.uploadedAtUnixMs ?? Date.now())}.`];
     case "retrying":
       return [t.on ? `Couldn't upload: trying again.${last}` : "Couldn't take them off yet: trying again."];
+    case "held":
+      return [
+        `Your bests file couldn't be read, so the site may have more of ${name}'s than this, and nothing is sent. ` +
+          "Turn this off and on to send what's here now.",
+      ];
     case "claimed": {
       // To the panel's Discord link, as About & Credits' is.
       const discord = document.createElement("button");

@@ -1665,6 +1665,18 @@ impl Minerva {
         self.sync_panel()
     }
 
+    /// The Personal Bests earlier launches saved were there but didn't read, so the shell
+    /// restored none ([`Minerva::restore_bests`] with [`SavedBests::default`]). After
+    /// [`Minerva::restore`]: every Character shown on the Map Leaderboards then has their uploads
+    /// held, at this launch and the ones after, since sending what is here would take what the
+    /// site holds of theirs off it. Turning one off and on in the Personal Bests window sends
+    /// what is here then.
+    pub fn bests_lost(&mut self) -> &PanelState {
+        self.record(Event::BestsLost {});
+        self.leaderboards.bests_lost();
+        self.sync_panel()
+    }
+
     /// Every map's Personal Bests, for the shell to save: the Visit under way's included,
     /// since closing Minerva ends it.
     pub fn bests(&self) -> SavedBests {

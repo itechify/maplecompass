@@ -17,6 +17,8 @@ pub fn path(app: &AppHandle) -> tauri::Result<PathBuf> {
 /// The bests file, as this launch found it.
 pub struct BestsFile {
     path: PathBuf,
+    /// It was there but didn't read: there are no bests this launch.
+    lost: bool,
     /// It was there but didn't read, and couldn't be set aside: it is left as it was, and
     /// the bests aren't saved this launch.
     left: bool,
@@ -32,10 +34,10 @@ impl BestsFile {
     /// [`BestsFile::save`] never writes over it.
     pub fn load(path: PathBuf) -> (Self, SavedBests) {
         let why = match fs::read(&path) {
-            Err(e) if e.kind() == ErrorKind::NotFound => return (Self { path, left: false }, SavedBests::default()),
+            Err(e) if e.kind() == ErrorKind::NotFound => return (Self { path, lost: false, left: false }, SavedBests::default()),
             Err(e) => format!("unreadable ({e})"),
             Ok(bytes) => match serde_json::from_slice::<SavedBests>(&bytes) {
-                Ok(bests) if bests.in_a_known_shape() => return (Self { path, left: false }, bests),
+                Ok(bests) if bests.in_a_known_shape() => return (Self { path, lost: false, left: false }, bests),
                 Ok(bests) => format!("saved in shape {}", bests.version),
                 Err(e) => format!("unreadable ({e})"),
             },
@@ -50,7 +52,13 @@ impl BestsFile {
                 true
             }
         };
-        (Self { path, left }, SavedBests::default())
+        (Self { path, lost: true, left }, SavedBests::default())
+    }
+
+    /// Whether the bests file was there but didn't read, so this launch started with none:
+    /// what the core is told ([`minerva_core::Minerva::bests_lost`]).
+    pub fn lost(&self) -> bool {
+        self.lost
     }
 
     /// Write the bests atomically: a temp file renamed over the old one. Nothing, if the
@@ -180,6 +188,33 @@ mod tests {
         // The core hands them back in the new shape, which the launch saves over it.
         launch.save(&sunset_sky_bests()).unwrap();
         assert_eq!(load(&path), sunset_sky_bests());
+    }
+
+    /// Whether a launch that finds `path` as it is now says its bests were lost.
+    fn lost(path: &Path) -> bool {
+        BestsFile::load(path.to_path_buf()).0.lost()
+    }
+
+    #[test]
+    fn a_file_that_was_there_but_did_not_read_says_the_bests_were_lost() {
+        // No file yet, a file that reads, and one from before Characters: nothing lost.
+        let path = file("lost");
+        assert!(!lost(&path));
+        save(&path, &sunset_sky_bests()).unwrap();
+        assert!(!lost(&path));
+        fs::write(&path, r#"{ "version": 1, "maps": [] }"#).unwrap();
+        assert!(!lost(&path));
+
+        // Unreadable, set aside or not, or saved in a later shape: lost.
+        fs::write(&path, r#"{ "version": 1, "maps": ["#).unwrap();
+        assert!(lost(&path));
+        let path = file("lost-kept");
+        fs::write(&path, r#"{ "version": 1, "maps": ["#).unwrap();
+        fs::create_dir(path.with_extension("json.bad")).unwrap();
+        assert!(lost(&path));
+        let path = file("lost-later-shape");
+        save(&path, &SavedBests { version: BESTS_VERSION + 1, ..sunset_sky_bests() }).unwrap();
+        assert!(lost(&path));
     }
 
     #[test]

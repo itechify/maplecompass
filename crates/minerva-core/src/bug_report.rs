@@ -194,6 +194,8 @@ pub enum Event {
     PickGameWindow { title: String },
     WallClock { unix_ms: u64 },
     RestoreBests { bests: SavedBests },
+    /// The Personal Bests file was there but didn't read: the shell restored none.
+    BestsLost {},
     RestoreMarketPrices { prices: SavedMarketPrices },
     /// A tool of the player's own left `import` for their Market Lines (ADR 0013).
     ImportMarketPrices { import: MarketImport },
@@ -882,7 +884,11 @@ impl Recorder {
             }
         }
         let Ok(json) = serde_json::to_string(&line) else { return };
-        if matches!(line.event, Event::Restore { .. } | Event::RestoreBests { .. } | Event::RestoreMarketPrices { .. }) {
+        let launch = matches!(
+            line.event,
+            Event::Restore { .. } | Event::RestoreBests { .. } | Event::BestsLost {} | Event::RestoreMarketPrices { .. }
+        );
+        if launch {
             self.launch.push_str(&json);
             self.launch.push('\n');
         }
@@ -1434,6 +1440,9 @@ pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
             Event::RestoreBests { bests } => {
                 minerva.restore_bests(bests);
             }
+            Event::BestsLost {} => {
+                minerva.bests_lost();
+            }
             Event::RemoveVisit { map, visit, character } => {
                 minerva.remove_visit(character.as_deref(), &map, &visit);
             }
@@ -1509,6 +1518,7 @@ impl Recording {
                     | Event::ChooseDealLine { .. }
                     | Event::Restore { .. }
                     | Event::RestoreBests { .. }
+                    | Event::BestsLost {}
                     | Event::RemoveVisit { .. }
                     | Event::MoveVisit { .. }
                     | Event::RemoveCharacter { .. }
@@ -1733,6 +1743,7 @@ impl Event {
                 let maps = bests.unassigned.len() + bests.characters.iter().map(|c| c.maps.len()).sum::<usize>();
                 format!("Personal Bests restored ({maps} maps, {} Characters)", bests.characters.len())
             }
+            Event::BestsLost {} => "Personal Bests file unreadable: uploads to the Map Leaderboards held".to_string(),
             Event::RemoveVisit { map, visit, character } => {
                 let whose = character.as_ref().map_or("the Unassigned".to_string(), |name| format!("{name:?}'s"));
                 format!("Visit removed from {whose} Visit History of {map}: {}", visit_words(visit))
