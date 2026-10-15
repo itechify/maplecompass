@@ -44,11 +44,14 @@ describe("a map's page", () => {
     ]);
   });
 
-  it("says so when no one has a best on the map", () => {
+  it("says so when no one has a best on the map, and how to put yours there from Minerva", () => {
     const page = mapPage(readLink(`?map=${FIELD}`), names, { map: FIELD, bands: [] });
 
     expect(page.open).toBe(null);
     expect(page.bands).toEqual([]);
-    expect(page.empty).toBe("No one has a best on this Map Leaderboard yet.");
+    expect(page.empty).toEqual({
+      text: "No one has a best on this Map Leaderboard yet.",
+      link: { text: "How to put yours here from Minerva", href: "/faq/#leaderboard-appear" },
+    });
   });
 });

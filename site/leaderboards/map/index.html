@@ -64,7 +64,7 @@
         <div class="part" data-street="Map Leaderboard">
           <header class="lb-head stop" id="top" data-mini="The map">
             <p class="lb-back"><a href="/leaderboards/">All Map Leaderboards</a></p>
-            <p class="lb-street" id="map-street">Map Leaderboard</p>
+            <p class="lb-street" id="map-street" hidden></p>
             <h1 id="map-name">Map Leaderboard</h1>
             <nav class="lb-bands" id="bands" aria-label="Level Bands" hidden></nav>
           </header>
@@ -74,20 +74,25 @@
             <p class="lb-said" id="said" aria-live="polite">Loading the Map Leaderboard…</p>
             <noscript><p class="lb-said">The Map Leaderboards need JavaScript to load.</p></noscript>
             <p class="lb-note" id="note" hidden></p>
-            <table class="lb-table" id="table" aria-labelledby="band-title" hidden>
-              <thead>
-                <tr>
-                  <th scope="col" class="lb-rank">Rank</th>
-                  <th scope="col" class="lb-name">Character</th>
-                  <th scope="col" class="lb-job">Job</th>
-                  <th scope="col" class="lb-level">Level</th>
-                  <th scope="col" class="lb-exp">EXP/h</th>
-                  <th scope="col" class="lb-date">Set</th>
-                  <th scope="col" class="lb-report"><span class="visually-hidden">Report</span></th>
+            <!-- The roles keep the table a table to assistive tech on a phone, where its rows
+                 are cards (display: grid). The caption says where the top 50 stops; while a
+                 Report has focus it names the keys between them, one Tab stop for them all. -->
+            <table class="lb-table" id="table" role="table" hidden>
+              <caption class="lb-caption"><span id="caption"></span><span class="lb-keys" aria-hidden="true"> · ↑ and ↓ move between Reports</span></caption>
+              <thead role="rowgroup">
+                <tr role="row">
+                  <th scope="col" role="columnheader" class="lb-rank">Rank</th>
+                  <th scope="col" role="columnheader" class="lb-name">Character</th>
+                  <th scope="col" role="columnheader" class="lb-job">Job</th>
+                  <th scope="col" role="columnheader" class="lb-level">Level</th>
+                  <th scope="col" role="columnheader" class="lb-exp">EXP/h</th>
+                  <th scope="col" role="columnheader" class="lb-date">Date</th>
+                  <th scope="col" role="columnheader" class="lb-report"><span class="visually-hidden">Report</span></th>
                 </tr>
               </thead>
-              <tbody id="rows"></tbody>
+              <tbody id="rows" role="rowgroup"></tbody>
             </table>
+            <p id="report-keys" hidden>The up and down arrow keys move between the table's Report buttons.</p>
           </section>
 
           <section class="lb-questions stop" id="questions" data-mini="Questions" aria-labelledby="questions-title">

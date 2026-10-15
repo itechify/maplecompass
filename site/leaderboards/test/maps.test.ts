@@ -2,13 +2,13 @@
 // names them, and find a map by its Map Name as the panel's search does.
 import { describe, expect, it } from "vitest";
 import fixture from "../../../crates/minerva-core/tests/fixtures/osms-map-names.json";
-import { mapNames, placeOf, searchMaps, searchSaid } from "../leaderboards.ts";
+import { entryCounts, mapNames, placeOf, searchMaps, searchSaid } from "../leaderboards.ts";
 
 const names = mapNames(fixture);
 
 /** What a search shows, as "Map Name (ID)". */
 function found(query: string, shown?: number) {
-  const { maps, more } = searchMaps(names, query, shown);
+  const { maps, more } = searchMaps(names, query, { shown });
   return { maps: maps.map((m) => `${m.name} (${m.id})`), more };
 }
 
@@ -102,10 +102,40 @@ describe("map search", () => {
     expect(found("   ")).toEqual({ maps: [], more: 0 });
   });
 
-  it("says what it found", () => {
-    expect(searchSaid("", searchMaps(names, ""))).toBe("Type part of a map's name, as the game writes it.");
+  it("says what it found, and the map Enter opens", () => {
+    expect(searchSaid("", searchMaps(names, ""))).toBe("Type part of a map's name as the game writes it, like Ant Tunnel.");
     expect(searchSaid("Zakum", searchMaps(names, "Zakum"))).toBe("No map's name holds “Zakum”.");
-    expect(searchSaid("henesys hunting ground", searchMaps(names, "henesys hunting ground"))).toBe("3 maps");
-    expect(searchSaid("ant tunnel", searchMaps(names, "ant tunnel", 2))).toBe("2 maps, and 6 more: type more of the name.");
+    expect(searchSaid("henesys hunting ground", searchMaps(names, "henesys hunting ground"))).toBe(
+      "3 maps. Enter opens Henesys Hunting Ground I.",
+    );
+    expect(searchSaid("ant tunnel", searchMaps(names, "ant tunnel", { shown: 2 }))).toBe(
+      "2 maps, and 6 more: type more of the name. Enter opens Ant Tunnel For Bowman.",
+    );
+  });
+
+  it("says how many entries each map has, once the API has said, and lists the maps with entries first", () => {
+    const counts = entryCounts({
+      maps: [
+        { map: "010001012", characters: 9, entries: 12 },
+        { map: "010001011", characters: 1, entries: 1 },
+      ],
+    });
+    const { maps } = searchMaps(names, "henesys hunting ground", { counts });
+
+    expect(maps.map((m) => [m.name, m.entries])).toEqual([
+      ["Henesys Hunting Ground II", "1 entry"],
+      ["Henesys Hunting Ground III", "12 entries"],
+      ["Henesys Hunting Ground I", "No entries yet"],
+    ]);
+    expect(searchSaid("henesys hunting ground", { maps, more: 0 })).toBe("3 maps. Enter opens Henesys Hunting Ground II.");
+    // Before the API has said, or when it can't be reached, nothing is said of entries.
+    expect(searchMaps(names, "henesys hunting ground").maps.map((m) => m.entries)).toEqual([null, null, null]);
+  });
+
+  it("counts a map's entries among all it finds, not only the ones it shows", () => {
+    const counts = entryCounts({ maps: [{ map: "010005063", characters: 3, entries: 3 }] });
+
+    expect(found("ant tunnel", 2).maps).toEqual(["Ant Tunnel For Bowman (080001000)", "Ant Tunnel I (010005060)"]);
+    expect(searchMaps(names, "ant tunnel", { shown: 2, counts }).maps.map((m) => m.name)).toEqual(["Ant Tunnel IV", "Ant Tunnel For Bowman"]);
   });
 });

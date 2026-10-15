@@ -29,7 +29,7 @@ Every refusal is `{ "error": "<code>" }`: `bad-request` (with a `detail`), `no-k
 
 **The site's pages** (#111):
 
-- `GET /api/maps`: the most-uploaded maps, by Characters with entries there. `{ "maps": [{ "map": "010001010", "characters": 12, "entries": 15 }] }`, at most 50.
+- `GET /api/maps`: every map with entries, the most first (then by Characters with entries there). `{ "maps": [{ "map": "010001010", "characters": 12, "entries": 15 }] }`, at most 10,000, more than the game has maps: the page lists the first 50 as the most uploaded, and its search says how many entries each map it finds has, so a player isn't sent to an empty one.
 - `GET /api/maps/<map>`: the map's bands with entries. `{ "map": "010001010", "bands": [{ "band": 20, "levels": [20, 29], "entries": 7 }] }`.
 - `GET /api/maps/<map>/bands/<band>[?name=<name>]`: the band's top 50, and that Character's entry with its rank, even outside them (`null` with none there). `{ "map": "010001010", "band": 20, "levels": [20, 29], "total": 63, "entries": [{ "rank": 1, "name": "Egbert", "job": "Magician", "level": 23, "expPerHour": 153216, "setAt": 1760000000000 }], "character": { "rank": 57, ... } }`.
 - `POST /api/reports`: `{ "name": "Egbert", "map": "010001010", "band": 20, "reason": "..." }` (`reason` optional, cut to 500 characters). `201`, or `404 no-entry`.
