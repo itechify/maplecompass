@@ -60,7 +60,7 @@ pub use item_lookup::{ItemChoice, ItemHit, ItemLookup, ItemLookupLine, OurWindow
 pub use item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReader, ItemTooltipReading};
 pub use leaderboards::{
     LeaderboardAnswer, LeaderboardCharacter, LeaderboardEntry, LeaderboardStatus, LeaderboardToggle, LeaderboardUpload,
-    RejectedEntry, RejectedReason,
+    RejectedEntry, RejectedReason, read_leaderboard_answer,
 };
 pub use map_data::{
     HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty, Portal, PortalKind,

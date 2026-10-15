@@ -29,6 +29,8 @@ type BestsMap = {
   /** Its Map Mark, by OSMS's name for it. */
   mark: string | null;
   url: string;
+  /** Its Map Leaderboard on the site, at the band of the Character playing. */
+  leaderboardUrl: string;
   mobLevels: LevelRange | null;
   expPerHour: number;
   soloExpCeiling: number | null;
@@ -39,6 +41,24 @@ type BestsMap = {
   visits: BestsVisit[];
 };
 
+/** Mirror of `minerva_core::RejectedEntry`: an entry the Map Leaderboards kept off. */
+type Rejected = {
+  map: string;
+  /** The Level Band by its first level: 1, 10, 20… */
+  band: number;
+  reason: { overCap: { cap: number } } | { removed: Record<string, never> };
+};
+
+/** Mirror of `minerva_core::LeaderboardToggle`: a Character's "Show on the Map Leaderboards". */
+type Toggle = {
+  on: boolean;
+  /** How many maps they have an entry for: what turning it on asks about. */
+  maps: number;
+  status: "off" | "sending" | "upToDate" | "retrying" | "claimed";
+  uploadedAtUnixMs: number | null;
+  rejected: Rejected[];
+};
+
 /** Mirror of `minerva_core::PersonalBestsCharacter`: one of the picker's choices. */
 type BestsCharacter = {
   /** The Character's name; `null` for the Unassigned bests. */
@@ -47,6 +67,8 @@ type BestsCharacter = {
   current: boolean;
   /** Their rows, highest EXP/h first. */
   maps: BestsMap[];
+  /** Their "Show on the Map Leaderboards"; `null` for the Unassigned bests, never uploaded. */
+  leaderboard: Toggle | null;
 };
 
 /** What the shell sends: whether the window shows at all, whose bests it can show, each
@@ -62,6 +84,8 @@ const whose = byId("whose");
 const count = byId("count");
 const characterActions = byId("character-actions");
 const mergeLine = byId("merge-line");
+const leaderboardLine = byId("leaderboard-line");
+const rejectedLine = byId("rejected-line");
 const rows = byId("rows");
 const noteMissing = byId("note-missing");
 const noteDot = byId("note-dot");
@@ -292,6 +316,14 @@ function row(m: BestsMap, best: BestsMap | null, marks: MapMarks) {
   // The street and its region: "Victoria Road · Victoria Island".
   street.textContent = known ? [m.streetName, m.region].filter(Boolean).join(" · ") : NOT_LISTED;
   mapCell.append(street);
+  // Its Map Leaderboard on the site, at the band of the Character playing.
+  const board = document.createElement("button");
+  board.type = "button";
+  board.className = "row-leaderboard";
+  board.dataset.id = m.id;
+  board.title = "Open its Map Leaderboard on owlofminerva.app";
+  board.append("Map Leaderboard", span("sr-only", ` of ${mapName(m)} (opens in your browser)`));
+  mapCell.append(board);
   tr.append(mapCell);
 
   const lv = cell("Mob levels");
@@ -595,6 +627,74 @@ function renderWhose() {
   }
 }
 
+/** A day and time in the player's local time: "3 Oct, 14:02". */
+function when(unixMs: number) {
+  const date = new Date(unixMs);
+  const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return `${day(unixMs)}, ${time}`;
+}
+
+/** What the toggle says of where the Character stands with the Map Leaderboards. */
+function standing(name: string, t: Toggle): (string | HTMLElement)[] {
+  const last = t.uploadedAtUnixMs === null ? "" : ` Last uploaded ${when(t.uploadedAtUnixMs)}.`;
+  switch (t.status) {
+    case "sending":
+      return [t.on ? "Uploading…" : "Taking them off…"];
+    case "upToDate":
+      return [`Up to date: uploaded ${when(t.uploadedAtUnixMs ?? Date.now())}.`];
+    case "retrying":
+      return [t.on ? `Couldn't upload: trying again.${last}` : "Couldn't take them off yet: trying again."];
+    case "claimed": {
+      // To the panel's Discord link, as About & Credits' is.
+      const discord = document.createElement("button");
+      discord.type = "button";
+      discord.className = "text-link";
+      discord.dataset.control = "openDiscord";
+      discord.textContent = "ask on Minerva's Discord";
+      return [`Another Minerva holds the name ${name} there. If it's yours (a new PC, say), `, discord, "."];
+    }
+    default:
+      return [];
+  }
+}
+
+/** An entry the site kept off, in words: "Sunset Sky, Lv 20–29: over 5× its solo EXP/h". */
+function rejectedWords(r: Rejected) {
+  const map = maps.find((m) => m.id === r.map);
+  const levels = `Lv ${r.band}–${r.band === 1 ? 9 : r.band + 9}`;
+  const why = "overCap" in r.reason ? `above ${whole(r.reason.overCap.cap)} EXP/h, 5× its solo EXP/h` : "taken down by the site";
+  return `${map ? mapName(map) : `Map ${r.map}`}, ${levels}: ${why}`;
+}
+
+/** The shown Character's "Show on the Map Leaderboards": a switch, which asks first with the
+ *  count of maps when turned on, then where they stand there; and any bests the site kept
+ *  off. None for the Unassigned bests, which are never uploaded. */
+function renderLeaderboard() {
+  const c = shown();
+  const t = c?.leaderboard ?? null;
+  leaderboardLine.hidden = !c || c.name === null || !t;
+  rejectedLine.hidden = true;
+  if (!c || c.name === null || !t) return;
+  const name = c.name;
+  const arm = `leaderboard:${name}`;
+  // Turning it on asks first; off, it goes at once.
+  const button = t.on ? document.createElement("button") : armButton(arm, true);
+  button.type = "button";
+  if (t.on) button.dataset.leaderboardOff = name;
+  button.setAttribute("role", "switch");
+  button.setAttribute("aria-checked", String(t.on));
+  button.className = armed === arm ? "switch armed" : "switch";
+  const maps = t.maps === 1 ? "1 map" : `${t.maps} maps`;
+  button.title = t.on ? `Take ${name}'s bests off the Map Leaderboards` : `Show ${name}'s bests on the Map Leaderboards`;
+  button.append(span("knob", ""), armed === arm ? `Upload ${name}'s bests on ${maps}?` : "Show on the Map Leaderboards");
+  leaderboardLine.replaceChildren(button, span("leaderboard-status", ""));
+  leaderboardLine.lastElementChild!.append(...standing(name, t));
+  if (t.on && t.rejected.length > 0) {
+    rejectedLine.hidden = false;
+    rejectedLine.textContent = `Not on the site: ${t.rejected.map(rejectedWords).join("; ")}.`;
+  }
+}
+
 /** Draw the shown choice, and disarm whatever went with its button. */
 function renderAll() {
   const c = shown();
@@ -602,10 +702,12 @@ function renderAll() {
   noteMissing.hidden = maps.every((m) => m.mobLevels !== null && m.ceilingShareHundredths !== null);
   noteDot.hidden = !maps.some((m) => m.visits.some((v) => v.thisVisit));
   renderWhose();
+  renderLeaderboard();
   renderRows();
   if (armed !== null && !document.querySelector(`[data-arm="${CSS.escape(armed)}"]`)) {
     armed = null;
     renderWhose();
+    renderLeaderboard();
     renderRows();
   }
 }
@@ -698,6 +800,8 @@ function act(arm: string) {
     invoke("personal_bests_remove_character", { name: key });
   } else if (what === "merge" && target) {
     invoke("personal_bests_merge_characters", { from: key, into: target });
+  } else if (what === "leaderboard") {
+    invoke("personal_bests_show_on_leaderboards", { name: key, on: true });
   }
 }
 
@@ -707,6 +811,7 @@ function armedWords(arm: string) {
   if (arm.startsWith("remove-character:")) return "Click again to remove this character and all their bests.";
   if (arm.startsWith("move:") && arm.includes(">")) return "Click again to move this visit.";
   if (arm.startsWith("merge:") && arm.includes(">")) return "Click again to merge these characters.";
+  if (arm.startsWith("leaderboard:")) return "Click again to upload these bests to the Map Leaderboards.";
   return "";
 }
 
@@ -720,6 +825,10 @@ document.addEventListener("click", (e) => {
   if (control) invoke("panel_press", { control: control.dataset.control });
   const map = target?.closest<HTMLButtonElement>("button.row-map");
   if (map) invoke("personal_bests_open_map", { id: map.dataset.id });
+  const board = target?.closest<HTMLButtonElement>("button.row-leaderboard");
+  if (board) invoke("personal_bests_open_leaderboard", { character: shown()?.name ?? null, id: board.dataset.id });
+  const off = target?.closest<HTMLButtonElement>("button[data-leaderboard-off]");
+  if (off) invoke("personal_bests_show_on_leaderboards", { name: off.dataset.leaderboardOff, on: false });
   const toggle = target?.closest<HTMLButtonElement>("button.visits-toggle");
   const pick = target?.closest<HTMLButtonElement>("button[data-pick]");
   const arm = target?.closest<HTMLButtonElement>("button[data-arm]");

@@ -31,6 +31,8 @@ serde_json = { workspace = true }
 # OS TLS (SChannel on Windows): reqwest's default rustls
 # backend builds aws-lc, which needs NASM/CMake.
 reqwest = { version = "0.13", default-features = false, features = ["native-tls", "http2", "charset", "system-proxy", "gzip"] }
+# The Leaderboard Key, made from the OS's random numbers.
+getrandom = "0.3"
 
 [dev-dependencies]
 image = { workspace = true, features = ["png"] }

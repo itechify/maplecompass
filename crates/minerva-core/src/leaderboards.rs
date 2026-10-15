@@ -68,6 +68,83 @@ pub struct LeaderboardUpload {
     pub entries: Option<Vec<LeaderboardEntry>>,
 }
 
+impl LeaderboardUpload {
+    /// Where on the site it goes, from [`SITE_URL`]: the API's path for the Character's entries.
+    pub fn path(&self) -> String {
+        format!("api/characters/{}/entries", encoded(&self.name))
+    }
+
+    /// What to `PUT` there: the API's body. `None` for a `DELETE`.
+    pub fn body(&self) -> Option<String> {
+        #[derive(Serialize)]
+        struct Body<'a> {
+            entries: &'a [LeaderboardEntry],
+        }
+        let entries = self.entries.as_deref()?;
+        Some(serde_json::to_string(&Body { entries }).unwrap_or_default())
+    }
+}
+
+/// What the Map Leaderboards' answer to an upload means, from its HTTP `status`, its
+/// `Retry-After` header and its `body` (ADR 0015).
+pub fn read_leaderboard_answer(status: u16, retry_after: Option<&str>, body: &str) -> LeaderboardAnswer {
+    #[derive(Deserialize)]
+    struct Taken {
+        #[serde(default)]
+        rejected: Vec<Rejection>,
+    }
+    #[derive(Deserialize)]
+    struct Rejection {
+        map: String,
+        band: u32,
+        reason: String,
+        cap: Option<u64>,
+    }
+    #[derive(Deserialize, Default)]
+    struct Refusal {
+        #[serde(default)]
+        error: String,
+        detail: Option<String>,
+    }
+    match status {
+        // Taken: it went through, whatever the body says of what was kept off.
+        200 => {
+            let rejected = serde_json::from_str::<Taken>(body).map_or_else(|_| Vec::new(), |taken| taken.rejected);
+            let rejected = rejected
+                .into_iter()
+                .filter_map(|r| {
+                    let reason = match r.reason.as_str() {
+                        "over-cap" => RejectedReason::OverCap { cap: r.cap.unwrap_or(0) },
+                        "removed" => RejectedReason::Removed {},
+                        _ => return None,
+                    };
+                    Some(RejectedEntry { map: r.map, band: r.band, reason })
+                })
+                .collect();
+            LeaderboardAnswer::Accepted { rejected }
+        }
+        204 => LeaderboardAnswer::Deleted {},
+        429 => {
+            let retry_after_secs = retry_after.and_then(|s| s.trim().parse().ok()).unwrap_or(60);
+            LeaderboardAnswer::RateLimited { retry_after_secs }
+        }
+        _ => {
+            let refusal: Refusal = serde_json::from_str(body).unwrap_or_default();
+            if status == 409 && refusal.error == "claimed" {
+                return LeaderboardAnswer::Claimed {};
+            }
+            let mut why = format!("HTTP {status}");
+            if !refusal.error.is_empty() {
+                why += &format!(": {}", refusal.error);
+            }
+            if let Some(detail) = refusal.detail {
+                why += &format!(" ({detail})");
+            }
+            LeaderboardAnswer::Failed { why }
+        }
+    }
+}
+
 /// What the Map Leaderboards answered an upload, as the shell tells it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
@@ -341,16 +418,22 @@ pub(crate) fn map_url(map: &str, band: Option<LevelBand>, name: Option<&str>) ->
         url += &format!("&band={}", band.lowest());
     }
     if let Some(name) = name {
-        url += "&name=";
-        for byte in name.bytes() {
-            if byte.is_ascii_alphanumeric() {
-                url.push(char::from(byte));
-            } else {
-                url += &format!("%{byte:02X}");
-            }
-        }
+        url += &format!("&name={}", encoded(name));
     }
     url
+}
+
+/// `name` for a URL: its letters and digits as they are, any other byte percent-encoded.
+fn encoded(name: &str) -> String {
+    let mut out = String::new();
+    for byte in name.bytes() {
+        if byte.is_ascii_alphanumeric() {
+            out.push(char::from(byte));
+        } else {
+            out += &format!("%{byte:02X}");
+        }
+    }
+    out
 }
 
 /// The entries of the Character named `name` in `history`, the bests of ended Visits: their best

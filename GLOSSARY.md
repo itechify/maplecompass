@@ -168,7 +168,7 @@ The Personal Bests no Character is known for: those saved before Minerva read Ch
 _Avoid_: unknown character, shared bests
 
 **Personal Bests window**:
-Every map's Personal Best side by side for one Character at a time, in a window over the game that the Grind Tracker opens and closes, to compare maps: each with its mob levels and how close the best came to the map's solo EXP/h ceiling. Its picker shows the Character playing until the player picks another, or Unassigned. Each map opens to its Visit History, the Visit under way's best among them, each Visit with the level that set it. It shows the bests as they stand, the Visit under way's included, and keeps up with them while it is open. In it the player moves an Unassigned Visit to a Character, removes a Character with their bests, and merges one Character into another (a name changed in the game shows as a new Character), each after confirming.
+Every map's Personal Best side by side for one Character at a time, in a window over the game that the Grind Tracker opens and closes, to compare maps: each with its mob levels and how close the best came to the map's solo EXP/h ceiling. Its picker shows the Character playing until the player picks another, or Unassigned. Each map opens to its Visit History, the Visit under way's best among them, each Visit with the level that set it. It shows the bests as they stand, the Visit under way's included, and keeps up with them while it is open. In it the player moves an Unassigned Visit to a Character, removes a Character with their bests, and merges one Character into another (a name changed in the game shows as a new Character), each after confirming. Its switch "Show on the Map Leaderboards" uploads a Character's bests there (after confirming with the count of maps) and takes them off again, and each map links to its Map Leaderboard.
 _Avoid_: leaderboard (the site's are Map Leaderboards), records, best list, Personal Bests page
 
 **Visit**:
@@ -184,7 +184,7 @@ A map's page on owlofminerva.app where players' Personal Bests stand side by sid
 _Avoid_: leaderboard (alone), ranking, high scores, hiscores
 
 **Leaderboard Key**:
-The secret each install of Minerva makes and keeps in its settings file, sent with every upload to the Map Leaderboards. A Character's first upload ties its name to the key; later uploads for the name must carry it, and another key's are refused as claimed. Never shown to the player; the site keeps only its hash. A lost one is replaced by the maintainer reassigning the name.
+The secret each install of Minerva makes on its first upload to the Map Leaderboards and keeps in a file of its own beside the settings (`leaderboard-key`), sent with every upload. The shell keeps it, never the core, so no Bug Report holds it. A Character's first upload ties its name to the key; later uploads for the name must carry it, and another key's are refused as claimed. Never shown to the player; the site keeps only its hash. A lost one is replaced by the maintainer reassigning the name.
 _Avoid_: password, token, account
 
 **Time to Level**:

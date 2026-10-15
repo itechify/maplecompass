@@ -134,7 +134,11 @@
                 </details>
                 <details class="qa" id="free">
                   <summary>Is Minerva free? Does it need an account?</summary>
-                  <p>It's free, and needs no account. There's no analytics and no update check.</p>
+                  <p>
+                    It's free, and you never sign up. There's no analytics and no update check. Putting a character on the
+                    Map Leaderboards needs no account either: a secret key Minerva makes on your PC ties the name to it
+                    (<a href="#leaderboard-public">see what the site shows</a>).
+                  </p>
                 </details>
                 <details class="qa" id="maker">
                   <summary>Who makes Minerva?</summary>
@@ -145,7 +149,7 @@
                   </p>
                 </details>
                 <details class="qa" id="data">
-                  <summary>What does Minerva download?</summary>
+                  <summary>What does Minerva download, and what does it send?</summary>
                   <dl class="facts">
                     <dt>Map and mob data</dt>
                     <dd>
@@ -161,12 +165,18 @@
                     </dd>
                   </dl>
                   <p>Item Lookup also asks MeowDB's search for an item's name: <a href="#meowdb">see below</a>.</p>
+                  <p>
+                    It sends nothing, unless you put a character on the
+                    <a href="#leaderboard-appear">Map Leaderboards</a>: then their bests go to this site, with their name,
+                    job, level and dates, and your Leaderboard Key, which the site keeps only as a hash.
+                  </p>
                 </details>
                 <details class="qa" id="offline">
                   <summary>Does Minerva work offline?</summary>
                   <p>
                     Yes, once it has the data: its first launch needs a connection. If OSMS Data Explorer can't be reached
-                    for over a week, the panel says it's showing a saved copy, with its date.
+                    for over a week, the panel says it's showing a saved copy, with its date. Uploads to the
+                    <a href="#leaderboard-appear">Map Leaderboards</a> wait until you're back online.
                   </p>
                 </details>
                 <details class="qa" id="meowdb">
@@ -189,6 +199,11 @@
                       <code>personal-bests.json</code>; the
                       market prices you keep, in <code>market-prices.json</code>; and the 10 newest
                       <a href="#bug-reports">Bug Reports</a> you save, in <code>Bug Reports</code>.
+                    </li>
+                    <li>
+                      Once you put a character on the <a href="#leaderboard-appear">Map Leaderboards</a>, also beside them:
+                      the secret Leaderboard Key that ties their name to you, in <code>leaderboard-key</code>. Copy it
+                      across when you move to a new PC, and keep it to yourself.
                     </li>
                     <li>
                       The map and item data, pictures and animations in
@@ -831,7 +846,10 @@
           <section class="faq-group stop" id="leaderboards" data-about="the Map Leaderboards" aria-labelledby="leaderboards-title">
             <div class="faq-group-head">
               <h2 id="leaderboards-title">Map Leaderboards</h2>
-              <p>Players' Personal Bests side by side on this site: what they rank, Level Bands, and reporting an entry.</p>
+              <p>
+                Players' Personal Bests side by side on this site: what they rank, Level Bands, putting your character
+                there or taking them off, and reporting an entry.
+              </p>
             </div>
             <div class="faq-group-body">
               <div class="qa-list">
@@ -863,12 +881,58 @@
                     one no map gives.
                   </p>
                 </details>
+                <details class="qa" id="leaderboard-appear">
+                  <summary>How do I put my character on the Map Leaderboards?</summary>
+                  <p>
+                    Open your <a href="#every-best">Personal Bests</a>, pick the character, and click
+                    <strong>Show on the Map Leaderboards</strong>. It asks once, with how many maps ("Upload Egbert's bests
+                    on 14 maps?"): click again to say yes. Minerva uploads the character's best visit on each map in each
+                    <a href="#level-bands">Level Band</a>, then each new best when its visit ends. Removing a visit,
+                    moving one to the character or merging another into them updates the site too.
+                  </p>
+                  <p>
+                    It's for one character at a time, and only the ones you turn it on for. Unassigned bests are never
+                    uploaded, and nor is a best set before Minerva knew the date or a character's level and job. Offline,
+                    Minerva tries again quietly; beside the switch it says when the last upload went through.
+                  </p>
+                </details>
+                <details class="qa" id="leaderboard-public">
+                  <summary>What does the site show of me?</summary>
+                  <p>
+                    For each entry: your character's name and job, the exact level they set it at, the EXP per hour, and
+                    the date, for everyone to see. Nothing else about you or your PC goes, and there's no account. Instead Minerva makes a secret <strong>Leaderboard Key</strong> on your PC the
+                    first time it uploads, which ties your character's name to it, so no one else can upload under that
+                    name. The site keeps only a scrambled form (a hash) of the key, and you never need to see it.
+                  </p>
+                </details>
+                <details class="qa" id="leaderboard-remove">
+                  <summary>How do I take my character off the Map Leaderboards?</summary>
+                  <p>
+                    Click <strong>Show on the Map Leaderboards</strong> again to turn it off: every entry of the
+                    character is deleted from the site. Removing the character from your Personal Bests, or merging them
+                    into another, takes them off too. The name stays yours, so you can put them back any time. A single
+                    best that came from a bug goes when you remove that visit.
+                  </p>
+                </details>
+                <details class="qa" id="leaderboard-claimed">
+                  <summary>It says another Minerva holds my character's name. What now?</summary>
+                  <p>
+                    A name belongs to the Leaderboard Key that uploaded it first. If that was you, on a PC you've since
+                    reinstalled or replaced, your old key went with it. Ask on
+                    <a href="https://discord.gg/NnbnVWkRrF">Minerva's Discord</a>, with the character's name: once Minerva
+                    has tried to upload from your new PC, the maintainer can hand the name to its key, and your uploads go
+                    through again. To keep your key when you move PCs, copy <code>leaderboard-key</code> across
+                    (<a href="#kept">where Minerva keeps its files</a>).
+                  </p>
+                </details>
                 <details class="qa" id="leaderboard-link">
                   <summary>Where's my character's entry?</summary>
                   <p>
-                    A map's page opened from Minerva opens at your character's Level Band, marks its entry and says its
-                    rank, even outside the top 50. If it says your character has no entry there any more, the entry has
-                    gone: taken off the Map Leaderboards, or removed after a report.
+                    In your Personal Bests, each map has a <strong>Map Leaderboard</strong> link. It opens the map's page
+                    at the Level Band of the character you're playing, marks your entry and says its rank, even outside the
+                    top 50. If it says your character has no entry there any more, the entry has gone: taken off the Map
+                    Leaderboards, or removed after a report. If the site kept one of your bests off, as over 5 times the
+                    map's solo EXP/h or removed after a report, your Personal Bests say so under the switch.
                   </p>
                 </details>
                 <details class="qa" id="report-entry">
@@ -1163,8 +1227,9 @@
                     </li>
                     <li>What you did in Minerva: its buttons, hotkeys and searches.</li>
                     <li>
-                      Your settings and Personal Bests, Minerva's version, your Windows version and display scaling, and any
-                      errors it ran into.
+                      Your settings and Personal Bests, which characters you show on the Map Leaderboards and what the site
+                      answered (never your Leaderboard Key), Minerva's version, your Windows version and display scaling,
+                      and any errors it ran into.
                     </li>
                   </ul>
                 </details>

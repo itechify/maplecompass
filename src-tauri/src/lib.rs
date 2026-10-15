@@ -21,6 +21,7 @@ mod hotkeys;
 mod http;
 mod item_card;
 mod item_lookup;
+mod leaderboards;
 mod market_prices;
 mod meowdb;
 mod old_caches;
@@ -37,7 +38,7 @@ mod view;
 
 use minerva_core::{
     Action, DEAL_FINDER_CAPTURE_MS, Minerva, ExpBarReader, ExpBarReading, Frame, GameWindow, ItemCapture, ItemTooltipReader,
-    ItemTooltipReading, KeyPress, Layer, MIN_PANEL_WIDTH, PanelControl, PanelSizes, PlacementMode, PanelState, PlayerShopReader,
+    ItemTooltipReading, KeyPress, Layer, LeaderboardAnswer, MIN_PANEL_WIDTH, PanelControl, PanelSizes, PlacementMode, PanelState, PlayerShopReader,
     Request, ScreenPoint, ScreenRect, ShopCapture, ShopReading, Size, StatusBarCapture, StatusBarReader, StatusBarReading,
     TitleReader, TitleReading, VisitBest, default_title_region,
 };
@@ -121,6 +122,15 @@ pub(crate) enum Command {
     /// The player merged the Character named `from` into the one named `into`, in the
     /// Personal Bests window.
     MergeCharacters { from: String, into: String },
+    /// The player turned "Show on the Map Leaderboards" on (`on`) or off for the Character
+    /// named `name`, in the Personal Bests window.
+    ShowOnLeaderboards { name: String, on: bool },
+    /// The player clicked the Map Leaderboard link of the map with ID `id` among the bests of
+    /// the Character named `character` (`None`: the Unassigned ones), in the Personal Bests
+    /// window.
+    OpenBestsLeaderboard { character: Option<String>, id: String },
+    /// The Map Leaderboards answered the core's upload `id` (or it couldn't be made).
+    LeaderboardAnswer { id: u64, answer: LeaderboardAnswer },
     /// The player picked the item with this MeowDB ID from the ones an Item Lookup found
     /// sharing the name it read.
     PickItem(String),
@@ -362,9 +372,17 @@ pub fn run() {
                 deal_badges,
                 hotkeys,
             };
+            // The uploads to the Map Leaderboards, with the Leaderboard Key, which the core never has.
+            let key = leaderboards::KeyFile::new(leaderboards::key_path(app.handle())?);
+            let uploader = leaderboards::Uploader::new(key, app.state::<Sender<Command>>().inner().clone());
             std::thread::Builder::new().name("core-loop".into()).spawn(move || {
-                let files =
-                    Files { settings: settings_path, bests: bests_file, market_prices: prices_file, market_imports };
+                let files = Files {
+                    settings: settings_path,
+                    bests: bests_file,
+                    market_prices: prices_file,
+                    market_imports,
+                    uploader,
+                };
                 core_loop(handle, windows, minerva, reader, channels, files)
             })?;
             Ok(())
@@ -418,6 +436,8 @@ pub fn run() {
             bests_window::personal_bests_move_visit,
             bests_window::personal_bests_remove_character,
             bests_window::personal_bests_merge_characters,
+            bests_window::personal_bests_show_on_leaderboards,
+            bests_window::personal_bests_open_leaderboard,
             item_lookup::item_lookup_height,
             item_lookup::item_lookup_view,
             item_card::item_card_height,
@@ -459,12 +479,14 @@ struct Windows {
 }
 
 /// Where the core loop saves the settings, the Personal Bests and the market prices, and
-/// the folder it takes Market Imports from.
+/// the folder it takes Market Imports from; and what makes its uploads to the Map
+/// Leaderboards, with the Leaderboard Key's file.
 struct Files {
     settings: PathBuf,
     bests: bests::BestsFile,
     market_prices: market_prices::MarketPricesFile,
     market_imports: PathBuf,
+    uploader: leaderboards::Uploader,
 }
 
 /// Save the Personal Bests if the core's bests revision moved on from `saved` (the one
@@ -664,6 +686,7 @@ fn core_loop(
     files: Files,
 ) {
     let settings_path = files.settings;
+    let mut uploader = files.uploader;
     // Restored at startup: saved already.
     let mut bests_saved = minerva.bests_revision();
     let mut prices_saved = minerva.market_prices_revision();
@@ -736,6 +759,16 @@ fn core_loop(
             }
             Ok(Command::MergeCharacters { from, into }) => {
                 minerva.merge_characters(&from, &into);
+            }
+            Ok(Command::ShowOnLeaderboards { name, on }) => {
+                minerva.show_on_leaderboards(&name, on);
+            }
+            Ok(Command::OpenBestsLeaderboard { character, id }) => {
+                let request = minerva.open_bests_leaderboard(character.as_deref(), &id);
+                carry_out(&app, &window.overlay, &mut item_card, &mut deal_badges, &reader, &mut minerva, request);
+            }
+            Ok(Command::LeaderboardAnswer { id, answer }) => {
+                minerva.on_leaderboard_answer(id, answer);
             }
             Ok(Command::PickItem(id)) => {
                 let request = minerva.pick_item(&id);
@@ -934,6 +967,8 @@ fn core_loop(
         while let Some(request) = minerva.take_request() {
             carry_out(&app, &window.overlay, &mut item_card, &mut deal_badges, &reader, &mut minerva, Some(request));
         }
+        // The core asks for uploads to the Map Leaderboards on a tick: each is made once.
+        uploader.sync(&minerva.panel_state().leaderboard_uploads);
         // Prices a tool of the player's own left (ADR 0013), saved below like those typed.
         // Left waiting while the prices can't be saved, rather than taken in and lost.
         if Instant::now() >= next_import_check && files.market_prices.saves() {

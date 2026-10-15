@@ -359,6 +359,46 @@ fn each_map_links_to_its_map_leaderboard_at_the_band_of_the_character_playing() 
     assert_eq!(link(&state, None, CONSTRUCTION_SITE_ID), format!("{site}?map={CONSTRUCTION_SITE_ID}&band=20"));
 }
 
+#[test]
+fn an_upload_is_the_apis_put_of_the_whole_set_or_its_delete() {
+    let put = LeaderboardUpload { id: 1, name: "Egbert".to_string(), entries: Some(vec![entry(SUNSET_SKY_ID, 23, 9000, 3)]) };
+    assert_eq!(put.path(), "api/characters/Egbert/entries");
+    let body: serde_json::Value = serde_json::from_str(&put.body().unwrap()).unwrap();
+    let expected = serde_json::json!({ "entries": [
+        { "map": SUNSET_SKY_ID, "level": 23, "job": "Magician", "expPerHour": 9000, "setAt": WALL - 3 * DAY }
+    ]});
+    assert_eq!(body, expected);
+    let delete = LeaderboardUpload { entries: None, ..put };
+    assert_eq!(delete.body(), None);
+}
+
+#[test]
+fn the_sites_answers_read_as_what_they_mean() {
+    let read = minerva_core::read_leaderboard_answer;
+    let body = r#"{ "accepted": 1, "rejected": [
+        { "map": "010003070", "band": 20, "reason": "over-cap", "cap": 766080 },
+        { "map": "010003080", "band": 30, "reason": "removed" }
+    ] }"#;
+    let rejected = vec![
+        RejectedEntry { map: SUNSET_SKY_ID.to_string(), band: 20, reason: RejectedReason::OverCap { cap: 766_080 } },
+        RejectedEntry { map: CONSTRUCTION_SITE_ID.to_string(), band: 30, reason: RejectedReason::Removed {} },
+    ];
+    assert_eq!(read(200, None, body), LeaderboardAnswer::Accepted { rejected });
+    assert_eq!(read(200, None, r#"{ "accepted": 3, "rejected": [] }"#), taken());
+    assert_eq!(read(204, None, ""), LeaderboardAnswer::Deleted {});
+    assert_eq!(read(409, None, r#"{ "error": "claimed" }"#), LeaderboardAnswer::Claimed {});
+    assert_eq!(read(429, Some("37"), r#"{ "error": "rate-limited" }"#), LeaderboardAnswer::RateLimited { retry_after_secs: 37 });
+    // With no time given, a minute.
+    assert_eq!(read(429, None, ""), LeaderboardAnswer::RateLimited { retry_after_secs: 60 });
+    let why = |answer| match answer {
+        LeaderboardAnswer::Failed { why } => why,
+        other => panic!("{other:?} is no failure"),
+    };
+    let bad = r#"{ "error": "bad-request", "detail": "an entry's level isn't 1 to 200" }"#;
+    assert_eq!(why(read(400, None, bad)), "HTTP 400: bad-request (an entry's level isn't 1 to 200)");
+    assert_eq!(why(read(502, None, "<html>")), "HTTP 502");
+}
+
 /// Egbert opted in at launch and his first upload asked for, at 50 ms: its id.
 fn egbert_uploading() -> (Minerva, u64) {
     let mut minerva = launched();

@@ -224,6 +224,20 @@ pub fn personal_bests_merge_characters(from: String, into: String, commands: Sta
     let _ = commands.send(Command::MergeCharacters { from, into });
 }
 
+/// The player turned "Show on the Map Leaderboards" on (`on`, having confirmed) or off for the
+/// Character named `name`.
+#[tauri::command]
+pub fn personal_bests_show_on_leaderboards(name: String, on: bool, commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::ShowOnLeaderboards { name, on });
+}
+
+/// A click on a map's Map Leaderboard link (its ID), among the bests of the Character named
+/// `character` (`None`: the Unassigned ones): open it.
+#[tauri::command]
+pub fn personal_bests_open_leaderboard(character: Option<String>, id: String, commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::OpenBestsLeaderboard { character, id });
+}
+
 /// What the Personal Bests page renders, as last sent (`None` before the first).
 #[tauri::command]
 pub async fn personal_bests_view(view: State<'_, PersonalBestsView>) -> Result<Option<serde_json::Value>, String> {
