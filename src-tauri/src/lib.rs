@@ -110,9 +110,17 @@ pub(crate) enum Command {
     OpenMobPage(String),
     /// The player clicked the name of the map with this ID in the Personal Bests window.
     OpenBestsMapPage(String),
-    /// The player removed the Visit whose best was `visit` from `map`'s Visit History, in
-    /// the Personal Bests window.
-    RemoveVisit { map: String, visit: VisitBest },
+    /// The player removed the Visit whose best was `visit` from `map`'s Visit History, the
+    /// Character's named `character` (`None`: the Unassigned one), in the Personal Bests window.
+    RemoveVisit { character: Option<String>, map: String, visit: VisitBest },
+    /// The player moved the Unassigned Visit whose best was `visit` on `map` to the Character
+    /// named `to`, in the Personal Bests window.
+    MoveVisit { map: String, visit: VisitBest, to: String },
+    /// The player removed the Character with this name, in the Personal Bests window.
+    RemoveCharacter(String),
+    /// The player merged the Character named `from` into the one named `into`, in the
+    /// Personal Bests window.
+    MergeCharacters { from: String, into: String },
     /// The player picked the item with this MeowDB ID from the ones an Item Lookup found
     /// sharing the name it read.
     PickItem(String),
@@ -407,6 +415,9 @@ pub fn run() {
             bests_window::personal_bests_view,
             bests_window::personal_bests_open_map,
             bests_window::personal_bests_remove_visit,
+            bests_window::personal_bests_move_visit,
+            bests_window::personal_bests_remove_character,
+            bests_window::personal_bests_merge_characters,
             item_lookup::item_lookup_height,
             item_lookup::item_lookup_view,
             item_card::item_card_height,
@@ -714,8 +725,17 @@ fn core_loop(
                 let request = minerva.open_bests_map_page(&id);
                 carry_out(&app, &window.overlay, &mut item_card, &mut deal_badges, &reader, &mut minerva, request);
             }
-            Ok(Command::RemoveVisit { map, visit }) => {
-                minerva.remove_visit(&map, visit);
+            Ok(Command::RemoveVisit { character, map, visit }) => {
+                minerva.remove_visit(character.as_deref(), &map, &visit);
+            }
+            Ok(Command::MoveVisit { map, visit, to }) => {
+                minerva.move_visit(&map, &visit, &to);
+            }
+            Ok(Command::RemoveCharacter(name)) => {
+                minerva.remove_character(&name);
+            }
+            Ok(Command::MergeCharacters { from, into }) => {
+                minerva.merge_characters(&from, &into);
             }
             Ok(Command::PickItem(id)) => {
                 let request = minerva.pick_item(&id);

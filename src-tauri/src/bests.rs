@@ -4,7 +4,7 @@
 //! never over a file that was there and didn't read.
 
 use crate::errors::error;
-use minerva_core::{BESTS_VERSION, SavedBests};
+use minerva_core::SavedBests;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
@@ -23,17 +23,19 @@ pub struct BestsFile {
 }
 
 impl BestsFile {
-    /// The bests saved at `path`, or none when there is no file yet. A file that is there
-    /// but doesn't read (reading it fails, it isn't UTF-8 JSON as the core saves it, or
-    /// it was saved in another shape, by a later version) is logged and set aside as
-    /// `personal-bests.json.bad` for diagnosis, and there are none. If it can't be set
-    /// aside, it is left as it was: [`BestsFile::save`] never writes over it.
+    /// The bests saved at `path`, or none when there is no file yet. A file saved in an
+    /// earlier shape reads as the core takes it (version 1's bests are Unassigned), and is
+    /// saved over in this one. A file that is there but doesn't read (reading it fails, it
+    /// isn't UTF-8 JSON as the core saves it, or it was saved in a shape this version doesn't
+    /// read, by a later one) is logged and set aside as `personal-bests.json.bad` for
+    /// diagnosis, and there are none. If it can't be set aside, it is left as it was:
+    /// [`BestsFile::save`] never writes over it.
     pub fn load(path: PathBuf) -> (Self, SavedBests) {
         let why = match fs::read(&path) {
             Err(e) if e.kind() == ErrorKind::NotFound => return (Self { path, left: false }, SavedBests::default()),
             Err(e) => format!("unreadable ({e})"),
             Ok(bytes) => match serde_json::from_slice::<SavedBests>(&bytes) {
-                Ok(bests) if bests.version == BESTS_VERSION => return (Self { path, left: false }, bests),
+                Ok(bests) if bests.in_a_known_shape() => return (Self { path, left: false }, bests),
                 Ok(bests) => format!("saved in shape {}", bests.version),
                 Err(e) => format!("unreadable ({e})"),
             },
@@ -64,6 +66,7 @@ impl BestsFile {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use minerva_core::BESTS_VERSION;
     use minerva_core::{MapBests, VisitBest};
     use std::path::Path;
 
@@ -89,10 +92,10 @@ mod tests {
     /// Sunset Sky's two best Visits, one set before the shell told the wall clock.
     fn sunset_sky_bests() -> SavedBests {
         let visits = vec![
-            VisitBest { exp_per_hour: 7200, set_at_unix_ms: Some(1_791_547_200_000) },
-            VisitBest { exp_per_hour: 3600, set_at_unix_ms: None },
+            VisitBest { exp_per_hour: 7200, set_at_unix_ms: Some(1_791_547_200_000), ..VisitBest::default() },
+            VisitBest { exp_per_hour: 3600, set_at_unix_ms: None, ..VisitBest::default() },
         ];
-        SavedBests { maps: vec![MapBests { id: "010003070".into(), visits }], ..SavedBests::default() }
+        SavedBests { unassigned: vec![MapBests { id: "010003070".into(), visits }], ..SavedBests::default() }
     }
 
     #[test]
@@ -155,6 +158,28 @@ mod tests {
         // The launch's bests aren't saved over it.
         launch.save(&sunset_sky_bests()).unwrap();
         assert_eq!(fs::read_to_string(&path).unwrap(), unreadable);
+    }
+
+    #[test]
+    fn a_file_saved_before_characters_loads_with_every_visit_unassigned_and_is_saved_over_in_the_new_shape() {
+        let path = file("version-1");
+        let version_1 = r#"{
+  "version": 1,
+  "maps": [
+    { "id": "010003070", "visits": [
+      { "expPerHour": 7200, "setAtUnixMs": 1791547200000 },
+      { "expPerHour": 3600, "setAtUnixMs": null }
+    ] }
+  ]
+}"#;
+        fs::write(&path, version_1).unwrap();
+        let (launch, bests) = BestsFile::load(path.clone());
+        assert_eq!(bests, SavedBests { version: 1, ..sunset_sky_bests() });
+        assert!(!path.with_extension("json.bad").exists());
+
+        // The core hands them back in the new shape, which the launch saves over it.
+        launch.save(&sunset_sky_bests()).unwrap();
+        assert_eq!(load(&path), sunset_sky_bests());
     }
 
     #[test]

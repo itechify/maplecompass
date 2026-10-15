@@ -12,8 +12,8 @@ use crate::grind_tracker::GRIND_TRACKER;
 use crate::sizemove::{self, Gesture, SizeMove};
 use crate::view::{LastView, ViewSender};
 use crate::{Command, LOOP_START_GRACE, keep_on_top, physical, place};
-use minerva_core::{MapMark, PanelState, PersonalBestsMap, Size, VisitBest};
-use serde::Serialize;
+use minerva_core::{MapMark, PanelState, PersonalBestsCharacter, Size, VisitBest};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -42,7 +42,8 @@ pub struct PersonalBestsView(pub LastView);
 struct BestsView<'a> {
     /// The window shows: otherwise the page draws nothing.
     shown: bool,
-    maps: &'a [PersonalBestsMap],
+    /// Whose bests it can show, one at a time, as its picker offers them.
+    characters: &'a [PersonalBestsCharacter],
     credit: &'a str,
     /// Every Map Mark, which each map names its own by.
     map_marks: &'a BTreeMap<String, MapMark>,
@@ -141,7 +142,7 @@ impl BestsWindow {
         let placement = bests.placement;
         let view = BestsView {
             shown: placement.is_some(),
-            maps: &bests.maps,
+            characters: &bests.characters,
             credit: bests.credit,
             map_marks: &state.map_marks,
         };
@@ -175,16 +176,52 @@ pub fn personal_bests_open_map(id: String, commands: State<'_, Sender<Command>>)
     let _ = commands.send(Command::OpenBestsMapPage(id));
 }
 
-/// A second click on a Visit's × in the window: remove it from the map's (its ID) Visit
-/// History, by its best as the window lists it.
-#[tauri::command]
-pub fn personal_bests_remove_visit(
-    map: String,
+/// A Visit as the window lists it: what the player removes, or moves, it by.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListedVisit {
     exp_per_hour: u64,
     set_at_unix_ms: Option<u64>,
+    level: Option<u32>,
+    job: Option<String>,
+}
+
+impl From<ListedVisit> for VisitBest {
+    fn from(v: ListedVisit) -> Self {
+        VisitBest { exp_per_hour: v.exp_per_hour, set_at_unix_ms: v.set_at_unix_ms, level: v.level, job: v.job }
+    }
+}
+
+/// A second click on a Visit's × in the window: remove it from the Visit History of the map
+/// (its ID) of the Character named `character` (`None`: the Unassigned one), by its best as
+/// the window lists it.
+#[tauri::command]
+pub fn personal_bests_remove_visit(
+    character: Option<String>,
+    map: String,
+    visit: ListedVisit,
     commands: State<'_, Sender<Command>>,
 ) {
-    let _ = commands.send(Command::RemoveVisit { map, visit: VisitBest { exp_per_hour, set_at_unix_ms } });
+    let _ = commands.send(Command::RemoveVisit { character, map, visit: visit.into() });
+}
+
+/// The player confirmed moving an Unassigned Visit on the map (its ID), by its best as the
+/// window lists it, to the Character named `to`.
+#[tauri::command]
+pub fn personal_bests_move_visit(map: String, visit: ListedVisit, to: String, commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::MoveVisit { map, visit: visit.into(), to });
+}
+
+/// The player confirmed removing the Character named `name`, with their bests.
+#[tauri::command]
+pub fn personal_bests_remove_character(name: String, commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::RemoveCharacter(name));
+}
+
+/// The player confirmed merging the Character named `from` into the one named `into`.
+#[tauri::command]
+pub fn personal_bests_merge_characters(from: String, into: String, commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::MergeCharacters { from, into });
 }
 
 /// What the Personal Bests page renders, as last sent (`None` before the first).
