@@ -1856,6 +1856,129 @@ button.icon-button:active {
 .lb-table .lb-date {
   white-space: nowrap;
 }
+/* Each entry's lane, the Personal Bests window's: its EXP/h drawn as the game's EXP gauge
+   draws the bar, lime in its grey frame, from 0 to the band's #1, whose lane runs full.
+   Read down the page, the table is a chart. The ruler's lines run down every lane behind
+   the bars, and the linked Character's lane is on the same scale as everyone's. */
+.lb-table .lb-lane {
+  --lane-inset: 14px;
+  --lane-end: 20px;
+  position: relative;
+  width: 24%;
+  padding-left: var(--lane-inset);
+  padding-right: var(--lane-end);
+}
+.lb-grid {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--lane-inset) + var(--at) * (100% - var(--lane-inset) - var(--lane-end)));
+  width: 1px;
+  background: rgba(30, 45, 90, 0.09);
+}
+.lb-lane-track {
+  position: relative;
+  display: block;
+  height: 10px;
+}
+.lb-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  width: calc(var(--at) * 100%);
+  min-width: 3px;
+  height: 100%;
+  border: 1px solid var(--exp-frame);
+  border-radius: 2px;
+  background: var(--exp-fill);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+/* The lane under the figure, for a page too narrow for the lanes' column: shown there
+   only. */
+.lb-under {
+  display: none;
+}
+@media (min-width: 641px) and (max-width: 899px) {
+  .lb-table .lb-lane {
+    display: none;
+  }
+  .lb-table .lb-under {
+    display: block;
+    height: 6px;
+    margin-top: 5px;
+  }
+}
+/* The ruler over the lanes: each round step's figure over a notch that hangs to the rows,
+   as the Personal Bests window's ruler does. */
+.lb-ruler {
+  position: relative;
+  display: block;
+  height: 18px;
+}
+.lb-step {
+  position: absolute;
+  top: 0;
+  left: calc(var(--at) * 100%);
+  transform: translateX(-50%);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.lb-step::after {
+  content: "";
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 50%;
+  width: 1px;
+  height: 6px;
+  background: var(--exp-frame);
+}
+.lb-step-zero {
+  transform: none;
+}
+.lb-step-zero::after {
+  left: 0;
+}
+/* A step whose figure would crowd its neighbours' keeps its notch alone. */
+.lb-step.lb-quiet {
+  color: transparent;
+}
+/* A Level Band switched by a click: the lanes regrow from the left, as the rows that stay
+   slide to their new rank (the view transition below). */
+.lb-grow .lb-bar {
+  transform-origin: left;
+  animation: lb-grow 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes lb-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+/* The band switch: one exponential ease-out, 300ms, the page's only motion a click makes.
+   The rows of Characters in both bands slide to their new rank; the rest cross-fade. The
+   head that sticks at the top stays over the rows going by under it. */
+html.lb-morph::view-transition-group(*),
+html.lb-morph::view-transition-old(*),
+html.lb-morph::view-transition-new(*) {
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+html.lb-morph .window-head {
+  view-transition-name: lb-head;
+}
+html.lb-morph::view-transition-group(lb-head) {
+  z-index: 1;
+}
+/* With reduced motion the switch is at once: script doesn't start it, and nothing here
+   would move if it did. */
+@media (prefers-reduced-motion: reduce) {
+  .lb-grow .lb-bar,
+  html.lb-morph::view-transition-group(*),
+  html.lb-morph::view-transition-old(*),
+  html.lb-morph::view-transition-new(*) {
+    animation: none;
+  }
+}
 /* Under the rows, where the table stops: "Top 50 of 63 at Lv 20–29". */
 .lb-caption {
   caption-side: bottom;
@@ -2263,7 +2386,8 @@ button.button {
     grid-template-columns: 2.6em minmax(0, max-content) max-content minmax(max-content, 1fr) auto;
     grid-template-areas:
       "rank name name name exp"
-      "rank job level date report";
+      "rank job level date report"
+      "lane lane lane lane lane";
     column-gap: 10px;
     padding: 8px 12px;
   }
@@ -2326,6 +2450,29 @@ button.button {
   .lb-table .lb-report {
     grid-area: report;
     width: auto;
+  }
+  /* The lane under the figures, the card's whole width, still on the band's one scale. */
+  .lb-table .lb-lane {
+    --lane-inset: 0px;
+    --lane-end: 0px;
+    grid-area: lane;
+    width: auto;
+  }
+  .lb-table tbody tr > .lb-lane {
+    padding-top: 6px;
+  }
+  .lb-grid {
+    display: none;
+  }
+  .lb-lane-track {
+    height: 6px;
+  }
+  /* Only the tabs stick here, so they're what stays over the rows in a switch. */
+  html.lb-morph .window-head {
+    view-transition-name: none;
+  }
+  html.lb-morph .tabs {
+    view-transition-name: lb-head;
   }
   /* Report takes a thumb's tap, past its edge. */
   .lb-report-button::after {

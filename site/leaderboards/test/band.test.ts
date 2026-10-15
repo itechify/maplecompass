@@ -31,8 +31,8 @@ describe("a Level Band", () => {
     );
 
     expect(table.rows).toEqual([
-      { rank: "1", name: "Egbert", job: "Magician", level: "23", expPerHour: "153,000", date: "3 Oct", you: false },
-      { rank: "2", name: "Ada", job: "Bowman", level: "29", expPerHour: "66,600", date: "30 Dec 2025", you: false },
+      { rank: "1", name: "Egbert", job: "Magician", level: "23", expPerHour: "153,000", date: "3 Oct", you: false, lane: expect.any(Number) },
+      { rank: "2", name: "Ada", job: "Bowman", level: "29", expPerHour: "66,600", date: "30 Dec 2025", you: false, lane: expect.any(Number) },
     ]);
     expect(table.yours).toBe(null);
     expect(table.gap).toBe(null);
@@ -89,6 +89,7 @@ describe("a Level Band", () => {
       expPerHour: "1,230",
       date: "3 Oct",
       you: true,
+      lane: expect.any(Number),
     });
     expect(table.note).toBe("Egbert is #57 of 63 at Lv 20–29.");
     expect(table.atYours).toBe("Egbert is #57 of 63. #1 gets 157,000 EXP/h, and #50 gets 73,400.");
@@ -124,6 +125,7 @@ describe("a Level Band", () => {
         text: "No one at Lv 20–29 has put a best on this map yet.",
         link: { text: "How to put yours here from Minerva", href: "/faq/#leaderboard-appear" },
       },
+      ruler: [],
     });
     expect(bandTable(answer([]), "Egbert", NOW).note).toBe("Egbert has no entry here at Lv 20–29 any more.");
   });

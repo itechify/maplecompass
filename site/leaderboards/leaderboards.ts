@@ -306,6 +306,8 @@ export interface Row {
   date: string;
   /** Whether it's the linked Character's. */
   you: boolean;
+  /** How far along its lane the EXP/h runs, from 0 to 1: the band's #1 runs it full. */
+  lane: number;
 }
 
 /** A band's table: its rows, the linked Character's under them when it's outside them (after
@@ -324,12 +326,46 @@ export interface BandTable {
   /** "Top 50 of 63 at Lv 20–29", so the table doesn't stop at 50 silently. */
   caption: string | null;
   empty: Said | null;
+  /** The lanes' ruler: 0, then each round step up to #1's EXP/h; none with no rows. */
+  ruler: RulerStep[];
+}
+
+/** A step on a band's ruler: how far along the lanes it falls, and its figure ("50k"). */
+export interface RulerStep {
+  at: number;
+  text: string;
+}
+
+/** The ruler for lanes running from 0 to `top`, at round steps as the Personal Bests
+ *  window rules its lanes: 0, then every step up to `top`, the step the smallest of 1, 2,
+ *  2.5 and 5 to a power of ten that leaves at most five under `top`. Each round step is at
+ *  most twice the one before, so that leaves three to five (fewer only under a `top` of 3). */
+function rulerTo(top: number): RulerStep[] {
+  let step = 1;
+  for (let power = Math.max(1, 10 ** Math.floor(Math.log10(top / 5))); ; power *= 10) {
+    const fits = [1, 2, 2.5, 5].map((n) => n * power).find((n) => Math.floor(top / n) <= 5);
+    if (fits !== undefined) {
+      step = fits;
+      break;
+    }
+  }
+  const steps = [0];
+  for (let n = step; n <= top; n += step) steps.push(n);
+  return steps.map((n) => ({ at: n / top, text: short(n) }));
+}
+
+/** A step on a ruler as the Personal Bests window writes it: 0, 500, 20k, 1.25M. */
+function short(n: number): string {
+  if (n >= 1_000_000) return `${Number((n / 1_000_000).toFixed(2))}M`;
+  if (n >= 1_000) return `${Number((n / 1_000).toFixed(1))}k`;
+  return String(n);
 }
 
 /** A band's table from the API's answer, for the Character `name` the link names (if
  *  any), with dates written as of `now`. */
 export function bandTable(answer: BandAnswer, name: string | null, now: Date): BandTable {
   const yours = answer.character;
+  const top = Math.max(1, answer.entries[0]?.expPerHour ?? 1);
   const row = (entry: Ranked): Row => {
     const set = new Date(entry.setAt);
     return {
@@ -340,6 +376,7 @@ export function bandTable(answer: BandAnswer, name: string | null, now: Date): B
       expPerHour: rate(entry.expPerHour),
       date: dayText(set, set.getFullYear() !== now.getFullYear()),
       you: entry.rank === yours?.rank,
+      lane: Math.min(1, entry.expPerHour / top),
     };
   };
   const rows = answer.entries.map(row);
@@ -360,7 +397,27 @@ export function bandTable(answer: BandAnswer, name: string | null, now: Date): B
     atYours: yours === null ? null : atRank(yours, answer),
     caption,
     empty: rows.length === 0 ? { text: `No one at ${at} has put a best on this map yet.`, link: PUT_YOURS } : null,
+    ruler: rows.length === 0 ? [] : rulerTo(top),
   };
+}
+
+/** The rows that slide to their new rank when the page switches from one Level Band's
+ *  `before` to another's `after`: the Characters with an entry in both (names are one
+ *  Character's whatever their case), each by its name as either band writes it, with the
+ *  `view-transition-name` both its rows take. Each is its name in lower case, anything
+ *  but a letter or digit written as its code (`_2d_`), after "lb-row-", so no two meet. */
+export function morphNames(before: Row[], after: Row[]): Map<string, string> {
+  const key = (name: string) => name.toLowerCase();
+  const was = new Set(before.map((r) => key(r.name)));
+  const both = new Set(after.map((r) => key(r.name)).filter((k) => was.has(k)));
+  const names = new Map<string, string>();
+  for (const row of [...before, ...after]) {
+    const k = key(row.name);
+    if (!both.has(k)) continue;
+    const safe = [...k].map((c) => (/[a-z0-9]/.test(c) ? c : `_${c.codePointAt(0)!.toString(16)}_`)).join("");
+    names.set(row.name, `lb-row-${safe}`);
+  }
+  return names;
 }
 
 /** What the linked Character's row says of where they stand: "Egbert is #57 of 63. #1 gets

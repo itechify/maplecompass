@@ -1,6 +1,6 @@
 <!doctype html>
 <!-- A map's Map Leaderboard: its Level Bands, and one band's top 50 by EXP per hour, each
-     entry with a report link. Its address names the map, and may name the band and a
+     entry with its lane and a report link; a click on a band switches to it in place. Its address names the map, and may name the band and a
      Character, whose entry it marks with its rank even outside the top 50, as Minerva's
      Personal Bests window links it (ADR 0015, "Deep links"):
      /leaderboards/map/?map=010001010&band=20&name=Egbert. It reads the site's API from the
@@ -76,7 +76,9 @@
             <p class="lb-note" id="note" hidden></p>
             <!-- The roles keep the table a table to assistive tech on a phone, where its rows
                  are cards (display: grid). The caption says where the top 50 stops; while a
-                 Report has focus it names the keys between them, one Tab stop for them all. -->
+                 Report has focus it names the keys between them, one Tab stop for them all.
+                 Each entry's lane draws its EXP/h again, so it's hidden from assistive tech,
+                 header and cells alike. -->
             <table class="lb-table" id="table" role="table" hidden>
               <caption class="lb-caption"><span id="caption"></span><span class="lb-keys" aria-hidden="true"> · ↑ and ↓ move between Reports</span></caption>
               <thead role="rowgroup">
@@ -86,6 +88,7 @@
                   <th scope="col" role="columnheader" class="lb-job">Job</th>
                   <th scope="col" role="columnheader" class="lb-level">Level</th>
                   <th scope="col" role="columnheader" class="lb-exp">EXP/h</th>
+                  <th scope="col" class="lb-lane" aria-hidden="true"><span class="lb-ruler" id="ruler"></span></th>
                   <th scope="col" role="columnheader" class="lb-date">Date</th>
                   <th scope="col" role="columnheader" class="lb-report"><span class="visually-hidden">Report</span></th>
                 </tr>
@@ -93,6 +96,8 @@
               <tbody id="rows" role="rowgroup"></tbody>
             </table>
             <p id="report-keys" hidden>The up and down arrow keys move between the table's Report buttons.</p>
+            <!-- Says which band a click on a Level Band opened, as the page doesn't reload. -->
+            <p class="visually-hidden" id="switched" aria-live="polite"></p>
           </section>
 
           <section class="lb-questions stop" id="questions" data-mini="Questions" aria-labelledby="questions-title">

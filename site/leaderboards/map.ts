@@ -1,22 +1,38 @@
-// A map's page (leaderboards/map/index.html): its Level Bands, one band's top 50, the
-// linked Character's entry marked with the You Yellow star and its rank, and a report link on
-// each other entry. Where it opens and what it shows are worked out in leaderboards.ts.
+// A map's page (leaderboards/map/index.html): its Level Bands, one band's top 50, each
+// entry's EXP/h on its lane, the linked Character's entry marked with the You Yellow star
+// and its rank, and a report link on each other entry. A click on a Level Band switches the
+// page to it in place, the Characters in both bands sliding to their new rank. Where it
+// opens and what it shows are worked out in leaderboards.ts.
 import { byId, make, names, read, said as saidWith, UNREACHABLE } from "./api.ts";
 import {
   type BandAnswer,
   bandTable,
+  type Link,
+  linkTo,
   type MapAnswer,
   type MapPlace,
   mapPage,
+  morphNames,
   placeOf,
   readLink,
   reportOutcome,
   type Row,
+  type RulerStep,
   type Said,
 } from "./leaderboards.ts";
 
-const link = readLink(location.search);
+/** What the page's address names: the map, the band, the Character. */
+let link = readLink(location.search);
 const said = byId("said");
+const rows = byId<HTMLTableSectionElement>("rows");
+const ruler = byId("ruler");
+/** The map's answer, once read: its bands. */
+let mapAnswer: MapAnswer | null = null;
+/** The rows the table shows, the linked Character's outside the top 50 among them, so a
+ *  switch knows which Characters stay. */
+let shown: Row[] = [];
+/** The band the page shows, or is switching to. */
+let wanted: number | null = null;
 
 /** What the page says in place of the leaderboard: why there isn't one, or what's loading. */
 function say(text: Said | string) {
@@ -24,31 +40,51 @@ function say(text: Said | string) {
   said.hidden = false;
 }
 
+const place = link.map === null ? null : placeOf(names, link.map);
+
+/** The page as its address opens it: the map, then its band, at once, scrolled to the
+ *  linked Character's entry. Arriving never moves anything. */
 async function open() {
-  if (link.map === null) {
+  if (place === null) {
     say({ text: "This link doesn't name a map.", link: { text: "Find a map on the Map Leaderboards.", href: "/leaderboards/" } });
     return;
   }
-  const map = link.map;
-  const place = placeOf(names, map);
   byId("map-name").textContent = place.name;
   const street = byId("map-street");
   street.textContent = place.region ? `${place.street} · ${place.region}` : place.street;
   street.hidden = false;
   document.title = `${place.name} · Map Leaderboard · Minerva`;
 
-  const answer = await read<MapAnswer>(`/api/maps/${map}`);
-  if (answer === null) return say(UNREACHABLE);
-  const page = mapPage(link, names, answer);
+  mapAnswer = await read<MapAnswer>(`/api/maps/${place.id}`);
+  if (mapAnswer === null) return say(UNREACHABLE);
+  const page = mapPage(link, names, mapAnswer);
   drawBands(page.bands);
   if (page.open === null) return say(page.empty!);
+  wanted = page.open;
 
-  const query = link.name === null ? "" : `?name=${encodeURIComponent(link.name)}`;
-  const band = await read<BandAnswer>(`/api/maps/${map}/bands/${page.open}${query}`);
+  const band = await readBand(page.open, link.name);
   if (band === null) return say(UNREACHABLE);
-  const table = bandTable(band, link.name, new Date());
-  const choice = page.bands.find((b) => b.open)!;
+  drawBand(band, null, false);
+  // The linked Character's entry is what the player came to see.
+  rows.querySelector<HTMLElement>(".lb-you")?.scrollIntoView({ block: "center" });
+}
 
+/** The bands read so far, by their address, so Back and Forward don't wait on the API. */
+const bandsRead = new Map<string, BandAnswer>();
+
+async function readBand(band: number, name: string | null): Promise<BandAnswer | null> {
+  const query = name === null ? "" : `?name=${encodeURIComponent(name)}`;
+  const path = `/api/maps/${place!.id}/bands/${band}${query}`;
+  const answer = bandsRead.get(path) ?? (await read<BandAnswer>(path));
+  if (answer !== null) bandsRead.set(path, answer);
+  return answer;
+}
+
+/** The band a page shows, its title, the line about the linked Character, and its table,
+ *  each row named by `morph` if it's to slide; `grow` regrows the lanes from the left. */
+function drawBand(band: BandAnswer, morph: Map<string, string> | null, grow: boolean) {
+  const table = bandTable(band, link.name, new Date());
+  const choice = mapPage(link, names, mapAnswer!).bands.find((b) => b.open)!;
   const title = byId("band-title");
   title.textContent = choice.levels;
   title.hidden = false;
@@ -57,36 +93,154 @@ async function open() {
   note.hidden = table.note === null;
   note.classList.toggle("gone", band.character === null);
 
-  if (table.empty !== null) return say(table.empty);
+  shown = table.yours === null ? table.rows : [...table.rows, table.yours];
+  if (table.empty !== null) {
+    byId("table").hidden = true;
+    rows.replaceChildren();
+    return say(table.empty);
+  }
   said.hidden = true;
   byId("caption").textContent = table.caption ?? "";
-  const rows = byId<HTMLTableSectionElement>("rows");
+  drawRuler(table.ruler);
+  const at = { place: place!, band: band.band, atYours: table.atYours, ruler: table.ruler, morph };
   rows.replaceChildren();
-  for (const row of table.rows) rows.append(...drawRow(row, place, page.open, table.atYours));
+  for (const row of table.rows) rows.append(...drawRow(row, at));
   if (table.yours !== null) {
     if (table.gap !== null) rows.append(lineRow("lb-gap", table.gap));
-    rows.append(...drawRow(table.yours, place, page.open, table.atYours));
+    rows.append(...drawRow(table.yours, at));
   }
+  rows.classList.toggle("lb-grow", grow);
   rovingReports(rows);
   byId("table").hidden = false;
-  // The linked Character's entry is what the player came to see.
-  rows.querySelector<HTMLElement>(".lb-you")?.scrollIntoView({ block: "center" });
 }
 
-/** The band choices, each a link to its band on the page, the open one marked. */
+/** The band choices, each a link to its band on the page, the open one marked. The links
+ *  stay when the same bands are drawn again, so the one clicked keeps the focus. */
 function drawBands(bands: ReturnType<typeof mapPage>["bands"]) {
   const nav = byId("bands");
+  const had = [...nav.querySelectorAll<HTMLAnchorElement>("a.lb-band")];
+  const same = had.length === bands.length && had.every((a, i) => a.dataset.band === String(bands[i].band));
+  if (same) {
+    had.forEach((a, i) => (bands[i].open ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
+    return;
+  }
+  const focused = nav.contains(document.activeElement);
   nav.replaceChildren(
     ...bands.map((band) => {
       const choice = make("a", "lb-band");
       choice.href = band.href;
+      choice.dataset.band = String(band.band);
       if (band.open) choice.setAttribute("aria-current", "page");
       choice.append(make("span", "lb-band-levels", band.levels), make("span", "lb-band-entries", band.entries));
       return choice;
     }),
   );
   nav.hidden = bands.length === 0;
+  if (focused) nav.querySelector<HTMLElement>("[aria-current]")?.focus();
 }
+
+/** Clicking a Level Band switches the page to it in place, and the address with it, so
+ *  the link still shares and Back comes back. A click meant for a new tab or window, or
+ *  with script off, is the link it always was. */
+byId("bands").addEventListener("click", (event) => {
+  const choice = (event.target as Element).closest<HTMLAnchorElement>("a.lb-band");
+  if (choice === null || event.defaultPrevented || event.button !== 0) return;
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  const to = readLink(new URL(choice.href).search);
+  if (to.band === wanted) return;
+  switchTo(to, choice.href, true);
+});
+
+/** Back and Forward between bands switch in place too, sliding as a click does, unless
+ *  the browser draws its own (a swipe back). */
+addEventListener("popstate", (event) => {
+  const to = readLink(location.search);
+  if (place === null || mapAnswer === null || to.map !== link.map) return location.reload();
+  switchTo(to, null, !(event as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition);
+});
+
+/** Reduced motion, where a switch is at once. */
+const still = matchMedia("(prefers-reduced-motion: reduce)");
+/** Which switch is the latest, so a slower answer to an earlier click is dropped. */
+let switches = 0;
+/** The switch moving now, cut short by another click. */
+let moving: ViewTransition | null = null;
+
+/** Switch the page to the band `to` names, pushing `href` to the history when a click asked
+ *  for it, sliding the rows when `animate` and the browser can, and motion is welcome. */
+async function switchTo(to: Link, href: string | null, animate: boolean) {
+  const turn = ++switches;
+  const open = mapPage(to, names, mapAnswer!).open;
+  if (open === null) return;
+  wanted = open;
+  byId("board").setAttribute("aria-busy", "true");
+  const band = await readBand(open, to.name);
+  if (turn !== switches) return;
+  byId("board").removeAttribute("aria-busy");
+  // The API not answering: the link, loaded as a page, says so.
+  if (band === null) return href === null ? location.reload() : location.assign(href);
+  const before = shown;
+  // The address changes with what the page shows, never ahead of it. A switch cut short by
+  // a later one still runs its update, maybe after the later one's: only the latest draws.
+  const update = (morph: Map<string, string> | null, grow: boolean) => {
+    if (turn !== switches) return;
+    const address = linkTo(to);
+    if (href !== null && address !== location.pathname + location.search) history.pushState(null, "", address);
+    link = to;
+    drawBands(mapPage(link, names, mapAnswer!).bands);
+    drawBand(band, morph, grow);
+    byId("switched").textContent = byId("caption").textContent || said.textContent || "";
+  };
+  moving?.skipTransition();
+  if (!animate || still.matches || !document.startViewTransition) return update(null, false);
+
+  const next = bandTable(band, to.name, new Date());
+  const morph = morphNames(before, next.yours === null ? next.rows : [...next.rows, next.yours]);
+  nameRows(morph);
+  const root = document.documentElement;
+  root.classList.add("lb-morph");
+  const transition = document.startViewTransition(() => update(morph, true));
+  moving = transition;
+  transition.finished.finally(() => {
+    if (moving !== transition) return;
+    moving = null;
+    root.classList.remove("lb-morph");
+    nameRows(null);
+  });
+}
+
+/** Name the shown rows of the Characters in `morph` for the switch, or no row (`null`). */
+function nameRows(morph: Map<string, string> | null) {
+  for (const tr of rows.querySelectorAll<HTMLTableRowElement>("tr[data-name]")) {
+    const name = morph?.get(tr.dataset.name!) ?? "";
+    tr.style.viewTransitionName = name && tr.dataset.says !== undefined ? `${name}-says` : name;
+  }
+}
+
+/** The ruler over the lanes: each step's figure over a notch, at its place along them. */
+function drawRuler(steps: RulerStep[]) {
+  ruler.replaceChildren(
+    ...steps.map((step, i) => {
+      const mark = make("span", i === 0 ? "lb-step lb-step-zero" : "lb-step", step.text);
+      mark.style.setProperty("--at", String(step.at));
+      return mark;
+    }),
+  );
+  spaceRuler();
+}
+
+/** The ruler's figures far enough apart to read: where the lanes are too short for every
+ *  step's, every other one keeps its notch alone, as the Personal Bests window's do. */
+function spaceRuler() {
+  const steps = [...ruler.children] as HTMLElement[];
+  if (steps.length < 2) return;
+  const apart = ruler.clientWidth * Number(steps[1].style.getPropertyValue("--at"));
+  const widest = Math.max(0, ...steps.map((el) => el.offsetWidth));
+  const every = apart > 0 ? Math.ceil((widest + 8) / apart) : 1;
+  for (const [i, el] of steps.entries()) el.classList.toggle("lb-quiet", i % every !== 0);
+}
+new ResizeObserver(spaceRuler).observe(ruler);
 
 /** A row of one cell across the table, holding a line: how many entries are between the top
  *  50 and the linked Character's, or where the linked Character stands. */
@@ -95,9 +249,34 @@ function lineRow(className: string, text: string): HTMLTableRowElement {
   tr.setAttribute("role", "row");
   const cell = make("td", "", text);
   cell.setAttribute("role", "cell");
-  cell.colSpan = 7;
+  cell.colSpan = 8;
   tr.append(cell);
   return tr;
+}
+
+/** An entry's lane: its EXP/h as the game's EXP gauge draws the bar, lime in its grey
+ *  frame, on the band's one scale, over the ruler's lines. It draws the figure beside it
+ *  again, so it's hidden from assistive tech. */
+function laneCell(row: Row, steps: RulerStep[]): HTMLTableCellElement {
+  const td = make("td", "lb-lane");
+  td.setAttribute("aria-hidden", "true");
+  for (const step of steps.slice(1)) {
+    const line = make("span", "lb-grid");
+    line.style.setProperty("--at", String(step.at));
+    td.append(line);
+  }
+  td.append(lane(row, "lb-lane-track"));
+  return td;
+}
+
+/** The lane itself: the track, and the bar as far along it as the entry's EXP/h. */
+function lane(row: Row, className: string): HTMLSpanElement {
+  const track = make("span", className);
+  track.setAttribute("aria-hidden", "true");
+  const bar = make("span", "lb-bar");
+  bar.style.setProperty("--at", String(row.lane));
+  track.append(bar);
+  return track;
 }
 
 /** The You Yellow star, the Personal Bests window's mark for a best of the player's. */
@@ -112,12 +291,25 @@ function star(): SVGSVGElement {
   return svg;
 }
 
-/** An entry's rows: its rank, name, job, level, EXP/h, date and report link; or, for the
- *  linked Character's, the You Yellow star before the name, no report link (the player
- *  takes their own entries off from Minerva), and under it where they stand. */
-function drawRow(row: Row, place: MapPlace, band: number, atYours: string | null): HTMLTableRowElement[] {
+/** Where an entry's rows are drawn: the map and band (for its report), what the linked
+ *  Character's row says, the band's ruler, and the rows that slide in a switch. */
+interface RowsAt {
+  place: MapPlace;
+  band: number;
+  atYours: string | null;
+  ruler: RulerStep[];
+  morph: Map<string, string> | null;
+}
+
+/** An entry's rows: its rank, name, job, level, EXP/h, lane, date and report link; or, for
+ *  the linked Character's, the You Yellow star before the name, no report link (the player
+ *  takes their own entries off from Minerva), and under it where they stand. A row that
+ *  slides in a switch takes its Character's name for it, and so does the line under it. */
+function drawRow(row: Row, { place, band, atYours, ruler, morph }: RowsAt): HTMLTableRowElement[] {
   const tr = make("tr", row.you ? "lb-you" : "");
   tr.setAttribute("role", "row");
+  tr.dataset.name = row.name;
+  tr.style.viewTransitionName = morph?.get(row.name) ?? "";
   if (row.you) tr.setAttribute("aria-current", "true");
   const name = make("th", "lb-name");
   name.scope = "row";
@@ -134,10 +326,18 @@ function drawRow(row: Row, place: MapPlace, band: number, atYours: string | null
     reportCell.append(report);
   }
   const cells = [make("td", "lb-rank", row.rank), make("td", "lb-job", row.job), make("td", "lb-level", row.level)];
-  const figures = [make("td", "lb-exp", row.expPerHour), make("td", "lb-date", row.date), reportCell];
+  const exp = make("td", "lb-exp", row.expPerHour);
+  // Its lane again under the figure, for a page too narrow for the lanes' own column.
+  exp.append(lane(row, "lb-lane-track lb-under"));
+  const figures = [exp, make("td", "lb-date", row.date), reportCell];
   for (const cell of [...cells, ...figures]) cell.setAttribute("role", "cell");
-  tr.append(cells[0], name, cells[1], cells[2], ...figures);
-  return row.you && atYours !== null ? [tr, lineRow("lb-you lb-you-says", atYours)] : [tr];
+  tr.append(cells[0], name, cells[1], cells[2], figures[0], laneCell(row, ruler), figures[1], figures[2]);
+  if (!row.you || atYours === null) return [tr];
+  const says = lineRow("lb-you lb-you-says", atYours);
+  says.dataset.name = row.name;
+  says.dataset.says = "";
+  says.style.viewTransitionName = tr.style.viewTransitionName && `${tr.style.viewTransitionName}-says`;
+  return [tr, says];
 }
 
 /** The table's Report buttons as one Tab stop: the up and down arrows (Home and End too)
