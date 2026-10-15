@@ -771,6 +771,11 @@ impl Session {
         self.character.as_ref()
     }
 
+    /// The name of who the Session is for: whose bests are raced (`None`: the Unassigned ones).
+    fn character_name(&self) -> Option<&str> {
+        self.character.as_ref().map(|c| c.name.as_str())
+    }
+
     /// Who a best set now is stamped with: the Character the Status Bar named, and the level
     /// and job it showed. With no Character named, it is Unassigned, with the level if one
     /// was read.
@@ -901,7 +906,7 @@ impl Session {
     /// The player removed `map`'s Personal Best from its history: what is shown is
     /// measured afresh against the next best, at once.
     pub fn remove_best(&mut self, map: &str) {
-        let character = self.character.as_ref().map(|c| c.name.clone());
+        let character = self.character_name().map(String::from);
         self.bests.remove(character.as_deref(), map);
         self.shown = None;
     }
@@ -1016,7 +1021,7 @@ impl Session {
         // they were, unless the player arrives on another map or the share would be of
         // another ceiling or best (the map's page come, or another Candidate chosen).
         let unreadable = fresh.state == TrackingState::Unreadable;
-        let character = self.character.as_ref().map(|c| c.name.clone());
+        let character = self.character_name().map(String::from);
         let against = Against { visit: self.visit.id, ceiling, map: map.map(String::from), character };
         let holds = self.shown.as_ref().is_some_and(|shown| {
             shown.against == against
@@ -1045,7 +1050,7 @@ impl Session {
                     self.bests.on_shown(map, counted, now_unix_ms, &self.stamp());
                     // Over a full 5 minutes here, the Rolling Rate shown is the one counted,
                     // against the Character's best (the Unassigned one while none is named).
-                    let character = self.character.as_ref().map(|c| c.name.as_str());
+                    let character = self.character_name();
                     let best = self.bests.history_best(character, map).map(|best| best.exp_per_hour);
                     fresh.personal_best = best;
                     fresh.new_best = counted

@@ -6,7 +6,7 @@ import { mapNames, placeOf, searchMaps, searchSaid } from "../leaderboards.ts";
 
 const names = mapNames(fixture);
 
-/// What a search shows, as "Map Name (ID)".
+/** What a search shows, as "Map Name (ID)". */
 function found(query: string, shown?: number) {
   const { maps, more } = searchMaps(names, query, shown);
   return { maps: maps.map((m) => `${m.name} (${m.id})`), more };

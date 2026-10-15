@@ -12,8 +12,8 @@
 //!   site too. An entry is the Character's best Visit on a map in a Level Band, of those
 //!   that have ended (the Visit under way's best goes up when it ends), with the level and
 //!   job that set it and its date. A Visit with no level, job or date can't be an entry: the
-//!   next best dated one in its band stands in. Nor can one dated over a day ahead of the
-//!   wall clock (the site refuses those), until it isn't.
+//!   next best dated one in its band stands in. Nor can one dated over 23 hours ahead of the
+//!   wall clock (the site refuses one over a day ahead of its own: see [`AHEAD_MS`]), until it isn't.
 //! - **When**: once per shown Character at each launch (what the site holds may have changed
 //!   since), then whenever their set changes, one upload at a time each. Only on a tick, so
 //!   the bests are back and the wall clock known first.
@@ -42,7 +42,9 @@ const MOST_RETRY_MS: u64 = 30 * 60_000;
 /// How long a Character whose name another key holds waits to try again, unless their set
 /// changes first.
 const CLAIMED_RETRY_MS: u64 = 30 * 60_000;
-/// How far ahead of the wall clock an entry's date may be: the site takes a day.
+/// How far ahead of the wall clock an entry's date may be: 23 hours. The site takes up to a day
+/// ahead of its own clock (ADR 0015) and refuses the whole set for one later, so an hour less
+/// here keeps a set from a PC whose clock runs up to an hour ahead of the site's from that.
 const AHEAD_MS: u64 = 23 * 60 * 60_000;
 /// The longest job name the site takes.
 const MOST_JOB_CHARS: usize = 32;
@@ -266,9 +268,9 @@ pub enum LeaderboardStatus {
     Held,
 }
 
-/// A Character's standing with the site, this launch.
+/// One Character's upload standing: where they stand with the Map Leaderboards, this launch.
 #[derive(Debug, Clone)]
-struct Site {
+struct UploadStanding {
     saved: LeaderboardCharacter,
     /// What the site was last told to hold of theirs and took; `None` until it has this launch.
     confirmed: Option<Vec<LeaderboardEntry>>,
@@ -296,7 +298,7 @@ struct Wait {
 /// Every Character shown on the Map Leaderboards, or being taken off.
 #[derive(Debug, Default)]
 pub(crate) struct Leaderboards {
-    sites: Vec<Site>,
+    standings: Vec<UploadStanding>,
     /// The id of the last upload asked for.
     last_id: u64,
     /// The latest capture time seen in a tick.
@@ -306,30 +308,30 @@ pub(crate) struct Leaderboards {
 impl Leaderboards {
     /// Take back the Characters an earlier launch kept, in place of any: nothing is under way.
     pub fn restore(&mut self, saved: Vec<LeaderboardCharacter>) {
-        self.sites = saved.into_iter().map(Site::new).collect();
+        self.standings = saved.into_iter().map(UploadStanding::new).collect();
     }
 
     /// The Characters to keep with the settings.
     pub fn saved(&self) -> Vec<LeaderboardCharacter> {
-        self.sites.iter().map(|site| site.saved.clone()).collect()
+        self.standings.iter().map(|standing| standing.saved.clone()).collect()
     }
 
     /// The player showed the Character named `name` on the Map Leaderboards (`on`), or took them
     /// off.
     pub fn show(&mut self, name: &str, on: bool) {
-        match self.sites.iter_mut().find(|site| site.saved.name == name) {
-            Some(site) if site.saved.shown != on => {
-                site.saved.shown = on;
+        match self.standings.iter_mut().find(|standing| standing.saved.name == name) {
+            Some(standing) if standing.saved.shown != on => {
+                standing.saved.shown = on;
                 // Off and on again, the player sends what is here.
-                site.saved.held = false;
+                standing.saved.held = false;
                 // Shown again, the site may have deleted them meanwhile; taken off, nothing
                 // held stands.
-                site.confirmed = None;
-                site.wait = None;
-                site.failures = 0;
+                standing.confirmed = None;
+                standing.wait = None;
+                standing.failures = 0;
             }
             Some(_) => {}
-            None if on => self.sites.push(Site::new(LeaderboardCharacter {
+            None if on => self.standings.push(UploadStanding::new(LeaderboardCharacter {
                 name: name.to_string(),
                 shown: true,
                 uploaded_at_unix_ms: None,
@@ -342,8 +344,8 @@ impl Leaderboards {
     /// The Personal Bests saved at earlier launches couldn't be read at this one: hold the
     /// uploads of every Character shown.
     pub fn bests_lost(&mut self) {
-        for site in self.sites.iter_mut().filter(|site| site.saved.shown) {
-            site.saved.held = true;
+        for standing in self.standings.iter_mut().filter(|standing| standing.saved.shown) {
+            standing.saved.held = true;
         }
     }
 
@@ -352,78 +354,78 @@ impl Leaderboards {
     pub fn tick(&mut self, at_ms: u64, history: &SavedBests, wall_clock: Option<u64>) {
         self.now_ms = self.now_ms.max(at_ms);
         let Some(now_unix_ms) = wall_clock else { return };
-        for site in &mut self.sites {
+        for standing in &mut self.standings {
             // Held, nothing goes but the deletion the player asks for by turning them off.
-            if site.in_flight.is_some() || (site.saved.shown && site.saved.held) {
+            if standing.in_flight.is_some() || (standing.saved.shown && standing.saved.held) {
                 continue;
             }
-            let wanted = site.saved.shown.then(|| entries(history, &site.saved.name, now_unix_ms));
+            let wanted = standing.saved.shown.then(|| entries(history, &standing.saved.name, now_unix_ms));
             let due = match &wanted {
-                Some(entries) => site.confirmed.as_ref() != Some(entries),
+                Some(entries) => standing.confirmed.as_ref() != Some(entries),
                 None => true,
             };
-            let waiting = site.wait.as_ref().is_some_and(|wait| {
+            let waiting = standing.wait.as_ref().is_some_and(|wait| {
                 self.now_ms < wait.until_ms && (wait.rate_limited || wait.wanted == wanted)
             });
             if due && !waiting {
                 self.last_id += 1;
-                site.in_flight = Some(LeaderboardUpload { id: self.last_id, name: site.saved.name.clone(), entries: wanted });
+                standing.in_flight = Some(LeaderboardUpload { id: self.last_id, name: standing.saved.name.clone(), entries: wanted });
             }
         }
     }
 
     /// The site answered upload `id` with `answer`, the wall clock at `wall_clock`.
     pub fn answer(&mut self, id: u64, answer: LeaderboardAnswer, wall_clock: Option<u64>) {
-        let Some(at) = self.sites.iter().position(|site| site.in_flight.as_ref().is_some_and(|u| u.id == id)) else {
+        let Some(at) = self.standings.iter().position(|standing| standing.in_flight.as_ref().is_some_and(|u| u.id == id)) else {
             return;
         };
-        let site = &mut self.sites[at];
-        let Some(upload) = site.in_flight.take() else { return };
+        let standing = &mut self.standings[at];
+        let Some(upload) = standing.in_flight.take() else { return };
         match (answer, upload.entries) {
             (LeaderboardAnswer::Accepted { rejected }, Some(entries)) => {
-                site.confirmed = Some(entries);
-                site.saved.uploaded_at_unix_ms = wall_clock.or(site.saved.uploaded_at_unix_ms);
-                site.rejected = rejected;
-                site.wait = None;
-                site.failures = 0;
-                site.claimed = false;
+                standing.confirmed = Some(entries);
+                standing.saved.uploaded_at_unix_ms = wall_clock.or(standing.saved.uploaded_at_unix_ms);
+                standing.rejected = rejected;
+                standing.wait = None;
+                standing.failures = 0;
+                standing.claimed = false;
             }
             // Deleted: nothing of theirs is left there. Shown again meanwhile, their set goes up
             // at the next tick.
             (LeaderboardAnswer::Deleted {}, None) => {
-                if site.saved.shown {
-                    site.confirmed = None;
+                if standing.saved.shown {
+                    standing.confirmed = None;
                 } else {
-                    self.sites.remove(at);
+                    self.standings.remove(at);
                 }
             }
             // Another key holds the name, so nothing of theirs is there to delete.
-            (LeaderboardAnswer::Claimed {}, None) if !site.saved.shown => {
-                self.sites.remove(at);
+            (LeaderboardAnswer::Claimed {}, None) if !standing.saved.shown => {
+                self.standings.remove(at);
             }
             (LeaderboardAnswer::Claimed {}, wanted) => {
-                site.confirmed = None;
-                site.claimed = true;
-                site.failures = 0;
-                site.wait = Some(Wait { until_ms: self.now_ms + CLAIMED_RETRY_MS, wanted, rate_limited: false });
+                standing.confirmed = None;
+                standing.claimed = true;
+                standing.failures = 0;
+                standing.wait = Some(Wait { until_ms: self.now_ms + CLAIMED_RETRY_MS, wanted, rate_limited: false });
             }
             (LeaderboardAnswer::RateLimited { retry_after_secs }, wanted) => {
-                site.failures += 1;
+                standing.failures += 1;
                 let until_ms = self.now_ms + retry_after_secs.max(1).saturating_mul(1000);
-                site.wait = Some(Wait { until_ms, wanted, rate_limited: true });
+                standing.wait = Some(Wait { until_ms, wanted, rate_limited: true });
             }
             // Failed, or an answer that doesn't fit the upload: tried again, later each time.
             (_, wanted) => {
-                site.failures += 1;
-                let backoff = FIRST_RETRY_MS.saturating_mul(1 << (site.failures - 1).min(16)).min(MOST_RETRY_MS);
-                site.wait = Some(Wait { until_ms: self.now_ms + backoff, wanted, rate_limited: false });
+                standing.failures += 1;
+                let backoff = FIRST_RETRY_MS.saturating_mul(1 << (standing.failures - 1).min(16)).min(MOST_RETRY_MS);
+                standing.wait = Some(Wait { until_ms: self.now_ms + backoff, wanted, rate_limited: false });
             }
         }
     }
 
     /// The uploads under way, for the shell to make.
     pub fn uploads(&self) -> Vec<LeaderboardUpload> {
-        self.sites.iter().filter_map(|site| site.in_flight.clone()).collect()
+        self.standings.iter().filter_map(|standing| standing.in_flight.clone()).collect()
     }
 
     /// The toggle for the Character named `name`, with `history` the bests of ended Visits.
@@ -434,28 +436,28 @@ impl Leaderboards {
                 maps.push(entry.map);
             }
         }
-        let site = self.sites.iter().find(|site| site.saved.name == name);
-        let status = match site {
+        let standing = self.standings.iter().find(|standing| standing.saved.name == name);
+        let status = match standing {
             None => LeaderboardStatus::Off,
-            Some(site) if site.saved.shown && site.saved.held => LeaderboardStatus::Held,
-            Some(site) if site.claimed => LeaderboardStatus::Claimed,
-            Some(site) if site.failures > 0 => LeaderboardStatus::Retrying,
-            Some(site) if site.in_flight.is_some() || !site.saved.shown || site.confirmed.is_none() => {
+            Some(standing) if standing.saved.shown && standing.saved.held => LeaderboardStatus::Held,
+            Some(standing) if standing.claimed => LeaderboardStatus::Claimed,
+            Some(standing) if standing.failures > 0 => LeaderboardStatus::Retrying,
+            Some(standing) if standing.in_flight.is_some() || !standing.saved.shown || standing.confirmed.is_none() => {
                 LeaderboardStatus::Sending
             }
             Some(_) => LeaderboardStatus::UpToDate,
         };
         LeaderboardToggle {
-            on: site.is_some_and(|site| site.saved.shown),
+            on: standing.is_some_and(|standing| standing.saved.shown),
             maps: maps.len(),
             status,
-            uploaded_at_unix_ms: site.and_then(|site| site.saved.uploaded_at_unix_ms),
-            rejected: site.map_or_else(Vec::new, |site| site.rejected.iter().map(RejectedListing::from).collect()),
+            uploaded_at_unix_ms: standing.and_then(|standing| standing.saved.uploaded_at_unix_ms),
+            rejected: standing.map_or_else(Vec::new, |standing| standing.rejected.iter().map(RejectedListing::from).collect()),
         }
     }
 }
 
-impl Site {
+impl UploadStanding {
     fn new(saved: LeaderboardCharacter) -> Self {
         Self { saved, confirmed: None, in_flight: None, wait: None, failures: 0, claimed: false, rejected: Vec::new() }
     }
@@ -489,7 +491,7 @@ fn encoded(name: &str) -> String {
 
 /// The entries of the Character named `name` in `history`, the bests of ended Visits: their best
 /// Visit on each map in each Level Band that has a level, a job and a date, and isn't dated over
-/// a day after `now_unix_ms`. By map in the order they are saved, then by band, lowest first.
+/// [`AHEAD_MS`] after `now_unix_ms`. By map in the order they are saved, then by band, lowest first.
 fn entries(history: &SavedBests, name: &str, now_unix_ms: u64) -> Vec<LeaderboardEntry> {
     let mut entries = Vec::new();
     for map in history.maps_of(Some(name)) {

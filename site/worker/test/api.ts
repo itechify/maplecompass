@@ -9,7 +9,7 @@ export const NO_CEILING = "100000002";
 
 export const ADMIN = "made-up-maintainer-token";
 
-/// A made-up Leaderboard Key, a different one for each `seed`.
+/** A made-up Leaderboard Key, a different one for each `seed`. */
 export function key(seed: string): string {
   return `test-key-${seed}`.padEnd(40, "x");
 }
@@ -22,7 +22,7 @@ export interface Entry {
   setAt: number;
 }
 
-/// An entry on `map` at `level`, with `expPerHour`, set at `setAt`.
+/** An entry on `map` at `level`, with `expPerHour`, set at `setAt`. */
 export function entry(map: string, level: number, expPerHour: number, setAt = 1_760_000_000_000): Entry {
   return { map, level, job: "Magician", expPerHour, setAt };
 }
@@ -35,7 +35,7 @@ function bearer(token: string): Record<string, string> {
   return { authorization: `Bearer ${token}` };
 }
 
-/// The app uploading `name`'s whole set of entries with its key.
+/** The app uploading `name`'s whole set of entries with its key. */
 export function upload(name: string, withKey: string, entries: Entry[]): Promise<Response> {
   return call(`/api/characters/${encodeURIComponent(name)}/entries`, {
     method: "PUT",
@@ -44,7 +44,7 @@ export function upload(name: string, withKey: string, entries: Entry[]): Promise
   });
 }
 
-/// The app opting `name` out: all its entries go.
+/** The app opting `name` out: all its entries go. */
 export function optOut(name: string, withKey: string): Promise<Response> {
   return call(`/api/characters/${encodeURIComponent(name)}/entries`, { method: "DELETE", headers: bearer(withKey) });
 }
@@ -67,7 +67,7 @@ export interface BandAnswer {
   character: Ranked | null;
 }
 
-/// A map's Level Band, as the site's page reads it, with `name`'s entry if given.
+/** A map's Level Band, as the site's page reads it, with `name`'s entry if given. */
 export async function band(map: string, first: number, name?: string): Promise<BandAnswer> {
   const query = name === undefined ? "" : `?name=${encodeURIComponent(name)}`;
   const response = await call(`/api/maps/${map}/bands/${first}${query}`);
@@ -75,7 +75,7 @@ export async function band(map: string, first: number, name?: string): Promise<B
   return response.json();
 }
 
-/// The names in a band, best first.
+/** The names in a band, best first. */
 export async function names(map: string, first: number): Promise<string[]> {
   return (await band(map, first)).entries.map((e) => e.name);
 }

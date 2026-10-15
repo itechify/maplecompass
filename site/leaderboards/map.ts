@@ -17,7 +17,7 @@ import {
 const link = readLink(location.search);
 const said = byId("said");
 
-/// What the page says in place of the leaderboard: why there isn't one, or what's loading.
+/** What the page says in place of the leaderboard: why there isn't one, or what's loading. */
 function say(text: string, more?: HTMLElement) {
   said.replaceChildren(text, ...(more ? [" ", more] : []));
   said.hidden = false;
@@ -72,7 +72,7 @@ async function open() {
   rows.querySelector<HTMLElement>(".lb-you")?.scrollIntoView({ block: "center" });
 }
 
-/// The band choices, each a link to its band on the page, the open one marked.
+/** The band choices, each a link to its band on the page, the open one marked. */
 function drawBands(bands: ReturnType<typeof mapPage>["bands"]) {
   const nav = byId("bands");
   nav.replaceChildren(
@@ -87,7 +87,7 @@ function drawBands(bands: ReturnType<typeof mapPage>["bands"]) {
   nav.hidden = bands.length === 0;
 }
 
-/// An entry's row: its rank, name, job, level, EXP/h, date, and its report link.
+/** An entry's row: its rank, name, job, level, EXP/h, date, and its report link. */
 function drawRow(row: Row, place: MapPlace, band: number): HTMLTableRowElement {
   const tr = make("tr", row.you ? "lb-you" : "");
   if (row.you) tr.setAttribute("aria-current", "true");
@@ -116,7 +116,7 @@ const reason = byId<HTMLTextAreaElement>("report-reason");
 const reportSaid = byId("report-said");
 const send = byId<HTMLButtonElement>("report-send");
 const cancel = byId<HTMLButtonElement>("report-cancel");
-/// The entry the report window is open for.
+/** The entry the report window is open for. */
 let reporting: { name: string; map: string; band: number } | null = null;
 
 function openReport(row: Row, place: MapPlace, band: number) {

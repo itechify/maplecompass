@@ -1,30 +1,26 @@
 // The Map Leaderboards: each Character's entries, mirrored whole from the app, and each
 // map's Level Bands ranked from them.
+import { bandOf, levelsOf } from "../level-bands";
 import { type Answer, badRequest, body } from "./http";
 import { bearer, hash } from "./keys";
 import { WRITES, limit } from "./rate-limits";
 import ceilings from "./osms-ceilings.json";
 
-/// How many entries a band's read lists.
+/** How many entries a band's read lists. */
 const TOP = 50;
 
-/// An entry may have up to this many times its map's solo EXP/h ceiling.
+/** An entry may have up to this many times its map's solo EXP/h ceiling. */
 const CEILINGS_OVER = 5;
 
-/// The cap on a map with no solo ceiling (no mobs, or a map OSMS's set didn't have when the
-/// table was written). Above 5× the highest ceiling in the table (4,393,656 EXP/h in
-/// October 2026), so no map's entries are held to less than their own cap would allow.
+/** The cap on a map with no solo ceiling (no mobs, or a map OSMS's set didn't have when the
+ *  table was written). Above 5× the highest ceiling in the table (4,393,656 EXP/h in
+ *  October 2026), so no map's entries are held to less than their own cap would allow. */
 const ABSOLUTE_CAP = 25_000_000;
 
-/// The most EXP/h an entry on `map` may have.
+/** The most EXP/h an entry on `map` may have. */
 function capOn(env: Env, map: string): number {
   const ceiling = (env.TEST_CEILINGS ?? (ceilings as Record<string, number>))[map];
   return ceiling === undefined ? ABSOLUTE_CAP : ceiling * CEILINGS_OVER;
-}
-
-/// The Level Band holding `level`, by its first level: 1 (1-9), 10 (10-19), 20 (20-29)...
-function bandOf(level: number): number {
-  return level < 10 ? 1 : Math.floor(level / 10) * 10;
 }
 
 interface Upload {
@@ -36,19 +32,19 @@ interface Upload {
   setAt: number;
 }
 
-/// The most entries one upload may hold: far more than a Character has (a map's Visit
-/// History keeps one per Level Band at most, on some 200 maps with mobs).
+/** The most entries one upload may hold: far more than a Character has (a map's Visit
+ *  History keeps one per Level Band at most, on some 200 maps with mobs). */
 const MOST_ENTRIES = 2_000;
 
-/// How far ahead of the Worker's clock an entry's date may be, for a PC's clock that's a
-/// little ahead. The date breaks ties, so it can't be set far ahead to win them.
+/** How far ahead of the Worker's clock an entry's date may be, for a PC's clock that's a
+ *  little ahead. The date breaks ties, so it can't be set far ahead to win them. */
 const CLOCK_SLACK_MS = 24 * 3_600_000;
 
 function isWhole(value: unknown, least: number, most = Number.MAX_SAFE_INTEGER): value is number {
   return Number.isSafeInteger(value) && (value as number) >= least && (value as number) <= most;
 }
 
-/// The entries of an upload's body, or why they can't be taken.
+/** The entries of an upload's body, or why they can't be taken. */
 function entriesOf(body: unknown, now: number): Upload[] | string {
   const given = (body as { entries?: unknown } | null)?.entries;
   if (!Array.isArray(given)) return "the body is { entries: [...] }";
@@ -71,31 +67,31 @@ function entriesOf(body: unknown, now: number): Upload[] | string {
   return entries;
 }
 
-/// Whether `name` can be a Character's: 1 to 16 letters and digits.
+/** Whether `name` can be a Character's: 1 to 16 letters and digits. */
 function isName(name: string): boolean {
   return /^[A-Za-z0-9]{1,16}$/.test(name);
 }
 
-/// An entry an upload held that isn't on the Map Leaderboards, and why.
+/** An entry an upload held that isn't on the Map Leaderboards, and why. */
 interface Rejected {
   map: string;
   band: number;
   reason: "over-cap" | "removed";
-  /// For "over-cap": the most EXP/h an entry on the map may have.
+  /** For "over-cap": the most EXP/h an entry on the map may have. */
   cap?: number;
 }
 
-/// A write for `name` that may go ahead: the name in lower case, and the hash of the key
-/// that holds it.
+/** A write for `name` that may go ahead: the name in lower case, and the hash of the key
+ *  that holds it. */
 interface Claim {
   nameKey: string;
   keyHash: string;
 }
 
-/// Claim `name` for the request's Leaderboard Key, if no key holds it yet, and say whether
-/// the write may go ahead: only with the key that holds the name. Another key is refused
-/// as "claimed", and kept as the one the maintainer would reassign the name to.
-/// With `unclaimed: "leave"`, a name no key holds is left so, and the answer is `null`.
+/** Claim `name` for the request's Leaderboard Key, if no key holds it yet, and say whether
+ *  the write may go ahead: only with the key that holds the name. Another key is refused
+ *  as "claimed", and kept as the one the maintainer would reassign the name to.
+ *  With `unclaimed: "leave"`, a name no key holds is left so, and the answer is `null`. */
 async function claim(
   env: Env,
   request: Request,
@@ -129,7 +125,7 @@ async function claim(
   return { nameKey, keyHash };
 }
 
-/// Each statement of a write runs only while the key still holds the name.
+/** Each statement of a write runs only while the key still holds the name. */
 const HELD = "EXISTS (SELECT 1 FROM characters WHERE name_key = ?1 AND key_hash = ?2)";
 
 export async function upload(env: Env, request: Request, name: string): Promise<Answer> {
@@ -176,12 +172,7 @@ export async function optOut(env: Env, request: Request, name: string): Promise<
   return { status: 204 };
 }
 
-/// The first and last levels of the Level Band starting at `band`.
-function levelsOf(band: number): [number, number] {
-  return [band, band === 1 ? 9 : band + 9];
-}
-
-/// Whether `map` is a 9-digit map ID.
+/** Whether `map` is a 9-digit map ID. */
 function isMap(map: string): boolean {
   return /^\d{9}$/.test(map);
 }
@@ -197,8 +188,8 @@ interface Row {
   total: number;
 }
 
-/// Map `map`'s Level Band starting at level `first`: its top 50, and `name`'s entry there
-/// with its rank, if given and it has one.
+/** Map `map`'s Level Band starting at level `first`: its top 50, and `name`'s entry there
+ *  with its rank, if given and it has one. */
 export async function readBand(env: Env, map: string, first: string, name: string | null): Promise<Answer> {
   const band = Number(first);
   if (!isMap(map)) return badRequest("a map is its 9-digit ID");
@@ -230,7 +221,7 @@ export async function readBand(env: Env, map: string, first: string, name: strin
   };
 }
 
-/// The maps with the most Characters on their Map Leaderboards, most first.
+/** The maps with the most Characters on their Map Leaderboards, most first. */
 export async function readMaps(env: Env): Promise<Answer> {
   const rows = await env.DB.prepare(
     `SELECT map_id AS map, COUNT(DISTINCT name_key) AS characters, COUNT(*) AS entries FROM entries
@@ -241,7 +232,7 @@ export async function readMaps(env: Env): Promise<Answer> {
   return { status: 200, body: { maps: rows.results } };
 }
 
-/// Map `map`'s Level Bands that have entries, lowest first, with how many each has.
+/** Map `map`'s Level Bands that have entries, lowest first, with how many each has. */
 export async function readMap(env: Env, map: string): Promise<Answer> {
   if (!isMap(map)) return badRequest("a map is its 9-digit ID");
   const rows = await env.DB.prepare("SELECT band, COUNT(*) AS entries FROM entries WHERE map_id = ? GROUP BY band ORDER BY band")

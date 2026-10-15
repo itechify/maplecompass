@@ -3,13 +3,13 @@
 import fixture from "../../crates/minerva-core/tests/fixtures/osms-map-names.json";
 import { mapNames, type MapNames } from "./leaderboards.ts";
 
-/// The maps the committed map names fixture names, as the panel names them.
+/** The maps the committed map names fixture names, as the panel names them. */
 export const names: MapNames = mapNames(fixture);
 
-/// What the pages say when the API can't be reached, or answers wrong.
+/** What the pages say when the API can't be reached, or answers wrong. */
 export const UNREACHABLE = "Can't reach the Map Leaderboards right now. Try again in a minute.";
 
-/// The API's answer to a GET of `path`, or `null` when it can't be had.
+/** The API's answer to a GET of `path`, or `null` when it can't be had. */
 export async function read<T>(path: string): Promise<T | null> {
   try {
     const response = await fetch(path, { headers: { accept: "application/json" } });
@@ -30,8 +30,8 @@ export function make<K extends keyof HTMLElementTagNameMap>(tag: K, className = 
   return node;
 }
 
-/// A map in a list of maps: its name in bold over its street, a link to its page, and
-/// what's beside it (how many Characters have entries there).
+/** A map in a list of maps: its name in bold over its street, a link to its page, and
+ *  what's beside it (how many Characters have entries there). */
 export function mapItem(map: { name: string; street: string; href: string; aside?: string }): HTMLLIElement {
   const item = make("li");
   const link = make("a", "lb-map");

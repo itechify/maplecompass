@@ -13,7 +13,7 @@ use crate::sizemove::{self, Gesture, SizeMove};
 use crate::view::{LastView, ViewSender};
 use crate::{Command, LOOP_START_GRACE, keep_on_top, physical, place};
 use minerva_core::{MapMark, PanelState, PersonalBestsCharacter, Size, VisitBest};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -176,22 +176,6 @@ pub fn personal_bests_open_map(id: String, commands: State<'_, Sender<Command>>)
     let _ = commands.send(Command::OpenBestsMapPage(id));
 }
 
-/// A Visit as the window lists it: what the player removes, or moves, it by.
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ListedVisit {
-    exp_per_hour: u64,
-    set_at_unix_ms: Option<u64>,
-    level: Option<u32>,
-    job: Option<String>,
-}
-
-impl From<ListedVisit> for VisitBest {
-    fn from(v: ListedVisit) -> Self {
-        VisitBest { exp_per_hour: v.exp_per_hour, set_at_unix_ms: v.set_at_unix_ms, level: v.level, job: v.job }
-    }
-}
-
 /// A second click on a Visit's × in the window: remove it from the Visit History of the map
 /// (its ID) of the Character named `character` (`None`: the Unassigned one), by its best as
 /// the window lists it.
@@ -199,17 +183,17 @@ impl From<ListedVisit> for VisitBest {
 pub fn personal_bests_remove_visit(
     character: Option<String>,
     map: String,
-    visit: ListedVisit,
+    visit: VisitBest,
     commands: State<'_, Sender<Command>>,
 ) {
-    let _ = commands.send(Command::RemoveVisit { character, map, visit: visit.into() });
+    let _ = commands.send(Command::RemoveVisit { character, map, visit });
 }
 
 /// The player confirmed moving an Unassigned Visit on the map (its ID), by its best as the
 /// window lists it, to the Character named `to`.
 #[tauri::command]
-pub fn personal_bests_move_visit(map: String, visit: ListedVisit, to: String, commands: State<'_, Sender<Command>>) {
-    let _ = commands.send(Command::MoveVisit { map, visit: visit.into(), to });
+pub fn personal_bests_move_visit(map: String, visit: VisitBest, to: String, commands: State<'_, Sender<Command>>) {
+    let _ = commands.send(Command::MoveVisit { map, visit, to });
 }
 
 /// The player confirmed removing the Character named `name`, with their bests.

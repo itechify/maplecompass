@@ -35,7 +35,7 @@ use crate::map_index::{Fetched, MapDataSource, SourceError};
 use crate::market_prices::{MarketImport, SavedMarketPrices};
 use crate::osms::{OsmsFiles, SavedFiles};
 use crate::osms_items::{ItemFiles, SavedItemFiles};
-use crate::panel::{Action, Foreground, GameWindow, PanelSizes, ScreenRect, Size};
+use crate::panel::{Action, Foreground, GameWindow, PanelSizes, ScreenPoint, ScreenRect, Size};
 use crate::personal_best::{SavedBests, VisitBest};
 use crate::player_shop::{ShopCapture, ShopList, ShopReading};
 use crate::recogniser::{TitleLines, TitleReading};
@@ -440,7 +440,7 @@ pub(crate) enum Region {
     ItemTooltip { pointer: (u32, u32) },
     /// A Player Shop's item list, at a Deal Finder capture.
     PlayerShop,
-    /// The Status Bar.s level, job and name, at a Status Bar capture.
+    /// The Status Bar's level, job and name, at a Status Bar capture.
     StatusBar,
 }
 
@@ -459,13 +459,29 @@ pub(crate) fn item_tooltip_crop(capture: &ItemCapture) -> Option<(Region, Frame)
     let (px, py) = (at(capture.pointer.x, capture.origin.x, frame.width), at(capture.pointer.y, capture.origin.y, frame.height));
     let (x0, y0) = (px.saturating_sub(ITEM_TOOLTIP_REACH), py.saturating_sub(ITEM_TOOLTIP_REACH));
     let (x1, y1) = ((px + ITEM_TOOLTIP_REACH).min(frame.width), (py + ITEM_TOOLTIP_REACH).min(frame.height));
+    Some((Region::ItemTooltip { pointer: (px - x0, py - y0) }, cut(frame, (x0, y0), (x1, y1))))
+}
+
+/// Columns `x0..x1` and rows `y0..y1` of `frame`, which holds them.
+fn cut(frame: &Frame, (x0, y0): (u32, u32), (x1, y1): (u32, u32)) -> Frame {
     let mut rgba = Vec::with_capacity(((x1 - x0) * (y1 - y0) * 4) as usize);
     for y in y0..y1 {
         let row = ((y * frame.width + x0) * 4) as usize;
         rgba.extend_from_slice(&frame.rgba[row..row + ((x1 - x0) * 4) as usize]);
     }
-    let crop = Frame { width: x1 - x0, height: y1 - y0, rgba, at_ms: frame.at_ms };
-    Some((Region::ItemTooltip { pointer: (px - x0, py - y0) }, crop))
+    Frame { width: x1 - x0, height: y1 - y0, rgba, at_ms: frame.at_ms }
+}
+
+/// What of `frame`, its top-left pixel at `origin` on screen, lies between the screen points
+/// `top_left` and `bottom_right`; `None` if nothing does, or the frame is short of pixels.
+fn cut_on_screen(frame: &Frame, origin: ScreenPoint, top_left: (i32, i32), bottom_right: (i32, i32)) -> Option<Frame> {
+    if frame.rgba.len() < (frame.width * frame.height * 4) as usize {
+        return None;
+    }
+    let at = |screen: i32, origin: i32, size: u32| (screen - origin).clamp(0, size as i32) as u32;
+    let (x0, y0) = (at(top_left.0, origin.x, frame.width), at(top_left.1, origin.y, frame.height));
+    let (x1, y1) = (at(bottom_right.0, origin.x, frame.width), at(bottom_right.1, origin.y, frame.height));
+    (x1 > x0 && y1 > y0).then(|| cut(frame, (x0, y0), (x1, y1)))
 }
 
 /// How far the crop of a Deal Finder capture reaches around the shop's list (px): enough
@@ -478,25 +494,11 @@ const PLAYER_SHOP_WIDTH: u32 = 352;
 /// The Player Shop's item list in a Deal Finder capture, for a Bug Report: the listings the
 /// reader read, or should have, as `samples/player-shop` keeps them. `None` with no shop.
 pub(crate) fn player_shop_crop(capture: &ShopCapture, shop: Option<&ShopList>) -> Option<(Region, Frame)> {
-    let frame = &capture.frame;
     let list = shop?.area;
-    if frame.rgba.len() < (frame.width * frame.height * 4) as usize {
-        return None;
-    }
-    let at = |screen: i32, origin: i32, size: u32| (screen - origin).clamp(0, size as i32) as u32;
-    let x0 = at(list.x - PLAYER_SHOP_MARGIN as i32, capture.origin.x, frame.width);
-    let y0 = at(list.y - PLAYER_SHOP_MARGIN as i32, capture.origin.y, frame.height);
-    let x1 = at(list.x + PLAYER_SHOP_WIDTH as i32, capture.origin.x, frame.width);
-    let y1 = at(list.y + (list.height + PLAYER_SHOP_MARGIN) as i32, capture.origin.y, frame.height);
-    if x1 <= x0 || y1 <= y0 {
-        return None;
-    }
-    let mut rgba = Vec::with_capacity(((x1 - x0) * (y1 - y0) * 4) as usize);
-    for y in y0..y1 {
-        let row = ((y * frame.width + x0) * 4) as usize;
-        rgba.extend_from_slice(&frame.rgba[row..row + ((x1 - x0) * 4) as usize]);
-    }
-    Some((Region::PlayerShop, Frame { width: x1 - x0, height: y1 - y0, rgba, at_ms: frame.at_ms }))
+    let margin = PLAYER_SHOP_MARGIN as i32;
+    let top_left = (list.x - margin, list.y - margin);
+    let bottom_right = (list.x + PLAYER_SHOP_WIDTH as i32, list.y + list.height as i32 + margin);
+    Some((Region::PlayerShop, cut_on_screen(&capture.frame, capture.origin, top_left, bottom_right)?))
 }
 
 /// How far the crop of a Status Bar capture reaches around the bar's level, job and name
@@ -507,26 +509,11 @@ const STATUS_BAR_MARGIN: u32 = 10;
 /// `samples/status-bar` keeps them: none of the rest of the bar, nor the game above it.
 /// `None` with no Status Bar.
 pub(crate) fn status_bar_crop(capture: &StatusBarCapture, bar: Option<&StatusBar>) -> Option<(Region, Frame)> {
-    let frame = &capture.frame;
     let area = bar?.area;
-    if frame.rgba.len() < (frame.width * frame.height * 4) as usize {
-        return None;
-    }
-    let at = |screen: i32, origin: i32, size: u32| (screen - origin).clamp(0, size as i32) as u32;
     let margin = STATUS_BAR_MARGIN as i32;
-    let x0 = at(area.x - margin, capture.origin.x, frame.width);
-    let y0 = at(area.y - margin, capture.origin.y, frame.height);
-    let x1 = at(area.x + area.width as i32 + margin, capture.origin.x, frame.width);
-    let y1 = at(area.y + area.height as i32 + margin, capture.origin.y, frame.height);
-    if x1 <= x0 || y1 <= y0 {
-        return None;
-    }
-    let mut rgba = Vec::with_capacity(((x1 - x0) * (y1 - y0) * 4) as usize);
-    for y in y0..y1 {
-        let row = ((y * frame.width + x0) * 4) as usize;
-        rgba.extend_from_slice(&frame.rgba[row..row + ((x1 - x0) * 4) as usize]);
-    }
-    Some((Region::StatusBar, Frame { width: x1 - x0, height: y1 - y0, rgba, at_ms: frame.at_ms }))
+    let top_left = (area.x - margin, area.y - margin);
+    let bottom_right = (area.x + area.width as i32 + margin, area.y + area.height as i32 + margin);
+    Some((Region::StatusBar, cut_on_screen(&capture.frame, capture.origin, top_left, bottom_right)?))
 }
 
 /// A crop of a captured region, as a PNG.

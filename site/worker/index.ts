@@ -46,7 +46,7 @@ async function route(request: Request, url: URL, env: Env): Promise<Answer> {
   }
 }
 
-/// The maintainer's routes, under /api/admin/.
+/** The maintainer's routes, under /api/admin/. */
 function routeAdmin(path: string[], method: string, env: Env): Promise<Answer> | Answer {
   switch (true) {
     case path.length === 1 && path[0] === "reports" && method === "GET":

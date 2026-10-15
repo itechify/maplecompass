@@ -438,40 +438,39 @@ fn keep(visits: &mut Vec<VisitBest>) {
 /// Unassigned one for `None`), dropping the map, and the Character, if none is left; whether
 /// it was there.
 fn take(bests: &mut SavedBests, character: Option<&str>, map: &str, visit: &VisitBest) -> bool {
-    let maps = match character {
-        None => &mut bests.unassigned,
-        Some(name) => match bests.characters.iter_mut().find(|c| c.name == name) {
-            Some(c) => &mut c.maps,
-            None => return false,
-        },
-    };
-    let Some(at) = maps.iter().position(|m| m.id == map) else { return false };
-    let Some(listed) = maps[at].visits.iter().position(|v| v == visit) else { return false };
-    maps[at].visits.remove(listed);
-    if maps[at].visits.is_empty() {
-        maps.remove(at);
-    }
+    let maps = maps_mut(bests, character);
+    let taken = maps.iter().position(|m| m.id == map).and_then(|at| {
+        let listed = maps[at].visits.iter().position(|v| v == visit)?;
+        maps[at].visits.remove(listed);
+        if maps[at].visits.is_empty() {
+            maps.remove(at);
+        }
+        Some(())
+    });
+    // A Character with none left goes (as does one only just made by looking).
     bests.characters.retain(|c| !c.maps.is_empty());
-    true
+    taken.is_some()
+}
+
+/// The maps' bests in the history of `character` (the Unassigned one for `None`), to change:
+/// a Character with none has an empty list made for them.
+fn maps_mut<'a>(bests: &'a mut SavedBests, character: Option<&str>) -> &'a mut Vec<MapBests> {
+    let Some(name) = character else { return &mut bests.unassigned };
+    let characters = &mut bests.characters;
+    let at = match characters.iter().position(|c| c.name == name) {
+        Some(at) => at,
+        None => {
+            characters.push(CharacterBests { name: name.to_string(), maps: Vec::new() });
+            characters.len() - 1
+        }
+    };
+    &mut characters[at].maps
 }
 
 /// `map`'s Visit bests in the history of `character` (the Unassigned one for `None`),
 /// highest first: none yet if it had none.
 fn visits_of<'a>(bests: &'a mut SavedBests, character: Option<&str>, map: String) -> &'a mut Vec<VisitBest> {
-    let maps = match character {
-        None => &mut bests.unassigned,
-        Some(name) => {
-            let characters = &mut bests.characters;
-            let at = match characters.iter().position(|c| c.name == name) {
-                Some(at) => at,
-                None => {
-                    characters.push(CharacterBests { name: name.to_string(), maps: Vec::new() });
-                    characters.len() - 1
-                }
-            };
-            &mut characters[at].maps
-        }
-    };
+    let maps = maps_mut(bests, character);
     let at = match maps.iter().position(|m| m.id == map) {
         Some(at) => at,
         None => {

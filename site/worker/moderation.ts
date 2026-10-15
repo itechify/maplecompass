@@ -4,10 +4,10 @@ import { type Answer, badRequest, body } from "./http";
 import { hash } from "./keys";
 import { REPORTS, limit } from "./rate-limits";
 
-/// A report's reason is cut to this many characters.
+/** A report's reason is cut to this many characters. */
 const REASON_LENGTH = 500;
 
-/// Record a report against the entry `{ name, map, band }`, with an optional `reason`.
+/** Record a report against the entry `{ name, map, band }`, with an optional `reason`. */
 export async function report(env: Env, request: Request): Promise<Answer> {
   const { name, map, band, reason } = ((await body(request)) ?? {}) as Record<string, unknown>;
   if (typeof name !== "string" || typeof map !== "string" || !Number.isInteger(band)) {
@@ -27,7 +27,7 @@ export async function report(env: Env, request: Request): Promise<Answer> {
   return { status: 201, body: {} };
 }
 
-/// Every report, newest first, with the reported entry's name as it is now.
+/** Every report, newest first, with the reported entry's name as it is now. */
 export async function readReports(env: Env): Promise<Answer> {
   const rows = await env.DB.prepare(
     `SELECT r.id, COALESCE(c.name, r.name_key) AS name, r.map_id AS map, r.band, r.exp_per_hour AS expPerHour,
@@ -37,8 +37,8 @@ export async function readReports(env: Env): Promise<Answer> {
   return { status: 200, body: { reports: rows.results } };
 }
 
-/// Delete `name`'s entry on `map` in the Level Band starting at `band`, and its reports.
-/// The same Visit (the same EXP/h there) uploaded again is rejected as "removed".
+/** Delete `name`'s entry on `map` in the Level Band starting at `band`, and its reports.
+ *  The same Visit (the same EXP/h there) uploaded again is rejected as "removed". */
 export async function deleteEntry(env: Env, name: string, map: string, band: string): Promise<Answer> {
   const at = [name.toLowerCase(), map, Number(band)];
   const [removed] = await env.DB.batch([
@@ -53,9 +53,9 @@ export async function deleteEntry(env: Env, name: string, map: string, band: str
   return { status: 204 };
 }
 
-/// Move `name`'s claim to the last key refused for it: the player's after they lost the
-/// key that claimed it (a reinstall, a new PC). The maintainer never sees either key; the
-/// answer says when that key was refused, to check with the player.
+/** Move `name`'s claim to the last key refused for it: the player's after they lost the
+ *  key that claimed it (a reinstall, a new PC). The maintainer never sees either key; the
+ *  answer says when that key was refused, to check with the player. */
 export async function reassign(env: Env, name: string): Promise<Answer> {
   const nameKey = name.toLowerCase();
   const character = await env.DB.prepare("SELECT name, refused_key_hash, refused_at FROM characters WHERE name_key = ?")

@@ -7,7 +7,7 @@ const query = byId<HTMLInputElement>("map-query");
 const said = byId("search-said");
 const found = byId<HTMLUListElement>("search-maps");
 
-/// The maps the query finds, under the field.
+/** The maps the query finds, under the field. */
 function search() {
   const result = searchMaps(names, query.value);
   said.textContent = searchSaid(query.value, result);

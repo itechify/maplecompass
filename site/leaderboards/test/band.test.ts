@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { bandTable, type BandAnswer, type Ranked } from "../leaderboards.ts";
 
 const FIELD = "100000000";
-/// Noon UTC, so the day is the same in any time zone the tests run in.
+/** Noon UTC, so the day is the same in any time zone the tests run in. */
 const OCT_3 = Date.UTC(2026, 9, 3, 12);
 const NOW = new Date(Date.UTC(2026, 9, 14, 12));
 

@@ -12,12 +12,12 @@ export function json(answer: Answer, cacheControl: string): Response {
   return Response.json(answer.body, { status: answer.status, headers });
 }
 
-/// A request the API can't take: `detail` says why.
+/** A request the API can't take: `detail` says why. */
 export function badRequest(detail: string): Answer {
   return { status: 400, body: { error: "bad-request", detail } };
 }
 
-/// The request's JSON body, or `undefined` if it isn't JSON.
+/** The request's JSON body, or `undefined` if it isn't JSON. */
 export async function body(request: Request): Promise<unknown> {
   try {
     return await request.json();
