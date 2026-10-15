@@ -149,12 +149,12 @@ function render(view: TrackerView) {
     // As the bar writes it: "8,435 [41.72%]".
     const reading = `${whole(t.bar.exp)} [${(t.bar.percentHundredths / 100).toFixed(2)}%]`;
     expFigures.textContent = reading;
-    // Who it is, as the game's Status Bar shows them beside its EXP bar.
+    // Who it is: the name and level the game's Status Bar shows beside its EXP bar. The job
+    // would rarely fit beside the reading, so it's left to the Personal Bests window.
     const c = view.character;
     expCharacter.hidden = !c;
     if (c) {
-      const about = [c.level === null ? "" : `Lv. ${c.level}`, c.job ?? ""].filter(Boolean).join(" ");
-      expCharacter.textContent = about ? `${c.name} · ${about}` : c.name;
+      expCharacter.textContent = c.level === null ? c.name : `${c.name} · Lv. ${c.level}`;
     }
     expGauge.setAttribute("aria-valuenow", String(t.bar.percentHundredths / 100));
     const lost = t.lostFromHundredths;
