@@ -920,10 +920,19 @@ impl Session {
         }
     }
 
-    /// The player moved the Unassigned Visit whose best was `visit` on `map` to the Character
-    /// named `to`: if it was there, what is shown is measured afresh, at once.
-    pub fn move_visit(&mut self, map: &str, visit: &VisitBest, to: &str) {
-        if self.bests.move_visit(map, visit, to) {
+    /// The player moved the Visit whose best was `visit` on `map`, of the Character named
+    /// `from` (the Unassigned one for `None`), to the Character named `to`: if it was there,
+    /// what is shown is measured afresh, at once.
+    pub fn move_visit(&mut self, from: Option<&str>, map: &str, visit: &VisitBest, to: &str) {
+        if self.bests.move_visit(from, map, visit, to) {
+            self.shown = None;
+        }
+    }
+
+    /// The player gave the Character named `to` every Unassigned Visit: if there was one,
+    /// what is shown is measured afresh, at once.
+    pub fn assign_unassigned(&mut self, to: &str) {
+        if self.bests.assign_unassigned(to) {
             self.shown = None;
         }
     }

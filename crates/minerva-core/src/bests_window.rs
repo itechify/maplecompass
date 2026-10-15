@@ -94,8 +94,12 @@ pub struct PersonalBestsMap {
     pub url: String,
     /// The map's Map Leaderboard on the site, opened at the Level Band of the Character playing
     /// (for another Character's row, the band of their best there) with this Character's entry
-    /// marked: no one's for the Unassigned bests.
-    pub leaderboard_url: String,
+    /// marked. `None` for the Unassigned bests, which are no one's on the site, and for a map
+    /// not in the map list, which has no page there.
+    pub leaderboard_url: Option<String>,
+    /// It is the Character's best of all maps, which the window stars: the first row, with
+    /// more than one to compare. Never one of the Unassigned bests, which aren't one player's.
+    pub best_of_all: bool,
     /// The lowest and highest of its mobs' levels; `None` if it isn't in the map list, or
     /// has no mobs.
     pub mob_levels: Option<LevelRange>,
@@ -208,16 +212,18 @@ pub(crate) fn characters<'a>(
             // The band of the Character playing, as the Status Bar shows it; another's, of their
             // best on the map.
             let playing = level.filter(|_| owner.is_none() || owner == current).map(LevelBand::of);
+            // None for the Unassigned bests: they are no one's on the site.
             let link = |bests: &MapBests| {
+                let name = owner?;
                 let band = playing.or_else(|| bests.visits.iter().find_map(|v| v.level).map(LevelBand::of));
-                leaderboards::map_url(&bests.id, band, owner)
+                Some(leaderboards::map_url(&bests.id, band, Some(name)))
             };
-            PersonalBestsCharacter {
-                name: owner.map(String::from),
-                current: owner == current,
-                maps: rows(saved.maps_of(owner), this_visit, map, here, link),
-                leaderboard: owner.map(&toggle),
+            let mut maps = rows(saved.maps_of(owner), this_visit, map, here, link);
+            // The star on a Character's best of all maps, with another to compare it with.
+            if owner.is_some() && maps.len() > 1 {
+                maps[0].best_of_all = true;
             }
+            PersonalBestsCharacter { name: owner.map(String::from), current: owner == current, maps, leaderboard: owner.map(&toggle) }
         })
         .collect()
 }
@@ -231,7 +237,7 @@ fn rows<'a>(
     this_visit: Option<(&str, usize)>,
     map: impl Fn(&str) -> Option<(&'a MapEntry, &'a MapData)>,
     here: Option<&str>,
-    link: impl Fn(&MapBests) -> String,
+    link: impl Fn(&MapBests) -> Option<String>,
 ) -> Vec<PersonalBestsMap> {
     let mut maps: Vec<PersonalBestsMap> = saved
         .iter()
@@ -259,7 +265,9 @@ fn rows<'a>(
                 region: entry.map_or_else(String::new, |e| e.region.clone()),
                 mark: entry.and_then(|e| e.mark.clone()),
                 url: meowdb::map_url(&bests.id),
-                leaderboard_url: link(bests),
+                // A map not in the map list has no page on the site.
+                leaderboard_url: entry.and_then(|_| link(bests)),
+                best_of_all: false,
                 mob_levels: data.and_then(mob_levels),
                 exp_per_hour: best.exp_per_hour,
                 solo_exp_ceiling: ceiling,

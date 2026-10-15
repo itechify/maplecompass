@@ -1208,13 +1208,24 @@ impl Minerva {
         self.sync_panel()
     }
 
-    /// The player moved an Unassigned Visit on `map`, named by its best as the window lists
-    /// it, to the Character named `to`, after confirming: it joins their Visits on the map,
-    /// as any Visit does. The Visit under way's best, or a Visit no longer there, changes
-    /// nothing.
-    pub fn move_visit(&mut self, map: &str, visit: &VisitBest, to: &str) -> &PanelState {
-        self.record(Event::MoveVisit { map: map.to_string(), visit: visit.clone(), to: to.to_string() });
-        self.session.move_visit(map, visit, to);
+    /// The player moved a Visit on `map` of the Character named `from` (`None`: an Unassigned
+    /// one), named by its best as the window lists it, to the Character named `to`, after
+    /// confirming: it joins their Visits on the map, as any Visit does, and a shown
+    /// Character's set goes up again. The Visit under way's best, a Visit no longer there, or
+    /// one moved to the Character it is with, changes nothing.
+    pub fn move_visit(&mut self, from: Option<&str>, map: &str, visit: &VisitBest, to: &str) -> &PanelState {
+        let event = Event::MoveVisit { map: map.to_string(), visit: visit.clone(), to: to.to_string(), from: from.map(String::from) };
+        self.record(event);
+        self.session.move_visit(from, map, visit, to);
+        self.sync_panel()
+    }
+
+    /// The player gave the Character named `to` every Unassigned Visit in the Personal Bests
+    /// window, after confirming: each joins their Visits on its map, as any Visit does, as if
+    /// moved one by one.
+    pub fn assign_unassigned(&mut self, to: &str) -> &PanelState {
+        self.record(Event::AssignUnassigned { to: to.to_string() });
+        self.session.assign_unassigned(to);
         self.sync_panel()
     }
 
@@ -1254,6 +1265,16 @@ impl Minerva {
         self.sync_panel()
     }
 
+    /// The player sent the Character named `name` to the Map Leaderboards again from the
+    /// Personal Bests window, where they stood with a problem: an upload tried again, a name
+    /// another key held, or uploads held since the bests file didn't read (having confirmed,
+    /// since what is here then replaces what the site holds). It goes up at the next tick.
+    pub fn send_to_leaderboards_again(&mut self, name: &str) -> &PanelState {
+        self.record(Event::SendToLeaderboardsAgain { name: name.to_string() });
+        self.leaderboards.send_again(name);
+        self.sync_panel()
+    }
+
     /// The shell made upload `id` of [`PanelState::leaderboard_uploads`], and the Map
     /// Leaderboards answered `answer` (or it couldn't be made: [`LeaderboardAnswer::Failed`]).
     /// An answer to an upload no longer under way changes nothing.
@@ -1274,12 +1295,12 @@ impl Minerva {
 
     /// The player clicked a map's Map Leaderboard link among the bests of the Character named
     /// `character` (`None`: the Unassigned ones) in the Personal Bests window: open it. `None`
-    /// for a map the window doesn't list for them.
+    /// for a map the window doesn't list for them, or lists with no Map Leaderboard.
     pub fn open_bests_leaderboard(&self, character: Option<&str>, id: &str) -> Option<Request> {
         let characters = &self.state.personal_bests.characters;
         let maps = &characters.iter().find(|c| c.name.as_deref() == character)?.maps;
         let map = maps.iter().find(|map| map.id == id)?;
-        Some(Request::OpenInBrowser { url: map.leaderboard_url.clone() })
+        Some(Request::OpenInBrowser { url: map.leaderboard_url.clone()? })
     }
 
     /// The player clicked a listed mob's name in the panel: open its MeowDB page. `None`

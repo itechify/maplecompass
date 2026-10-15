@@ -18,7 +18,7 @@ mod common;
 use common::player::Player;
 use common::{CONSTRUCTION_SITE_ID, FakeSource, SUNSET_SKY_ID, osms, sharing_a_title, tracking, tracking_with};
 use minerva_core::{
-    Action, BESTS_VERSION, ClientOffset, Minerva, ExpBarRegion, Foreground, GameWindow, LevelRange, MapBests,
+    Action, BESTS_VERSION, CharacterBests, ClientOffset, Minerva, ExpBarRegion, Foreground, GameWindow, LevelRange, MapBests,
     OSMS_AND_MEOWDB_CREDIT, PanelControl, PanelSizes, PanelState, PersonalBestsMap, PersonalBestsVisit,
     PersonalBestsWindow, Rect, Request, SavedBests, ScreenRect, Settings, Size, TitleRegion, VisitBest, meowdb,
 };
@@ -41,9 +41,10 @@ fn button(state: &PanelState) -> bool {
     state.grind_tracker.personal_bests
 }
 
-/// `map`'s Map Leaderboard, as the window links it with no Character or level read.
-fn leaderboard(map: &str) -> String {
-    format!("https://owlofminerva.app/leaderboards/map/?map={map}")
+/// `map`'s Map Leaderboard, as the window links it for the Character named `name` with no
+/// level read.
+fn leaderboard(map: &str, name: &str) -> Option<String> {
+    Some(format!("https://owlofminerva.app/leaderboards/map/?map={map}&name={name}"))
 }
 
 /// The window's rows of the Unassigned bests, which are all there are with no Character
@@ -143,8 +144,10 @@ fn a_first_visits_best_is_in_the_window_with_the_maps_names_levels_and_share_mar
             region: "Victoria Island".into(),
             mark: None,
             url: meowdb::map_url(SUNSET_SKY_ID),
-            // No one's, at no band: no Character or level was read.
-            leaderboard_url: leaderboard(SUNSET_SKY_ID),
+            // The Unassigned bests are no one's on the site: no Map Leaderboard. Nor a star,
+            // with only one map.
+            leaderboard_url: None,
+            best_of_all: false,
             mob_levels: Some(SUNSET_SKY_LEVELS),
             exp_per_hour: 7200,
             // Of its solo ceiling, 213,571 EXP/h: 3.37%.
@@ -211,7 +214,9 @@ fn a_best_on_a_map_the_player_has_not_been_on_has_its_names_region_levels_and_sh
                 region: "Victoria Island".into(),
                 mark: None,
                 url: meowdb::map_url(HENESYS_HUNTING_GROUND_I_ID),
-                leaderboard_url: leaderboard(HENESYS_HUNTING_GROUND_I_ID),
+                leaderboard_url: None,
+                // The Unassigned bests' best of all maps isn't the player's: no star.
+                best_of_all: false,
                 // Blue Snail and Shroom to Green Mushroom.
                 mob_levels: Some(LevelRange { lowest: 2, highest: 14 }),
                 exp_per_hour: 7661,
@@ -229,7 +234,8 @@ fn a_best_on_a_map_the_player_has_not_been_on_has_its_names_region_levels_and_sh
                 region: "Event".into(),
                 mark: None,
                 url: meowdb::map_url(MAPLE_HILL_ID),
-                leaderboard_url: leaderboard(MAPLE_HILL_ID),
+                leaderboard_url: None,
+                best_of_all: false,
                 mob_levels: Some(LevelRange { lowest: 2, highest: 2 }),
                 exp_per_hour: 2857,
                 // Of its solo ceiling, 4 Blue Snails' 5,714 EXP/h: 50%.
@@ -299,7 +305,8 @@ fn a_best_on_a_map_not_in_the_map_list_is_kept_and_goes_by_its_id() {
             region: String::new(),
             mark: None,
             url: meowdb::map_url(gone),
-            leaderboard_url: leaderboard(gone),
+            leaderboard_url: None,
+            best_of_all: false,
             mob_levels: None,
             exp_per_hour: 5000,
             solo_exp_ceiling: None,
@@ -308,6 +315,48 @@ fn a_best_on_a_map_not_in_the_map_list_is_kept_and_goes_by_its_id() {
             here: false,
             visits: vec![visit(5000, None, None, false)],
         }]
+    );
+}
+
+/// The window's rows of the Character named `name` as (map ID, starred, Map Leaderboard), in
+/// its order.
+fn starred_and_linked(window: &PersonalBestsWindow, name: Option<&str>) -> Vec<(String, bool, Option<String>)> {
+    let character = window.characters.iter().find(|c| c.name.as_deref() == name).unwrap();
+    character.maps.iter().map(|m| (m.id.clone(), m.best_of_all, m.leaderboard_url.clone())).collect()
+}
+
+#[test]
+fn a_characters_best_of_all_maps_is_starred_and_each_map_in_the_list_links_to_its_map_leaderboard() {
+    // Egbert's bests on Sunset Sky, the Construction Site and a map not in the map list; Bob's
+    // on Sunset Sky alone; and the same three as Egbert's Unassigned.
+    let gone = "999999999";
+    let mut bests = histories_of(&[(SUNSET_SKY_ID, vec![7200]), (CONSTRUCTION_SITE_ID, vec![10_800]), (gone, vec![5000])]);
+    let bob = histories_of(&[(SUNSET_SKY_ID, vec![3600])]).unassigned;
+    bests.characters = vec![
+        CharacterBests { name: "Egbert".into(), maps: bests.unassigned.clone() },
+        CharacterBests { name: "Bob".into(), maps: bob },
+    ];
+    let mut minerva = tracking();
+    minerva.restore_bests(bests);
+    let mut player = Player::clocked(minerva);
+    player.arrive(SUNSET);
+    let window = toggle(&mut player);
+
+    // Egbert's best of all maps has the star; a map not in the list has no Map Leaderboard.
+    assert_eq!(
+        starred_and_linked(&window, Some("Egbert")),
+        [
+            (CONSTRUCTION_SITE_ID.into(), true, leaderboard(CONSTRUCTION_SITE_ID, "Egbert")),
+            (SUNSET_SKY_ID.into(), false, leaderboard(SUNSET_SKY_ID, "Egbert")),
+            (gone.into(), false, None),
+        ]
+    );
+    // With one map, there is nothing to compare: no star.
+    assert_eq!(starred_and_linked(&window, Some("Bob")), [(SUNSET_SKY_ID.into(), false, leaderboard(SUNSET_SKY_ID, "Bob"))]);
+    // The Unassigned bests are no one's: no star, and nothing of theirs is on the site.
+    assert_eq!(
+        starred_and_linked(&window, None),
+        [(CONSTRUCTION_SITE_ID.into(), false, None), (SUNSET_SKY_ID.into(), false, None), (gone.into(), false, None)]
     );
 }
 

@@ -114,9 +114,12 @@ pub(crate) enum Command {
     /// The player removed the Visit whose best was `visit` from `map`'s Visit History, the
     /// Character's named `character` (`None`: the Unassigned one), in the Personal Bests window.
     RemoveVisit { character: Option<String>, map: String, visit: VisitBest },
-    /// The player moved the Unassigned Visit whose best was `visit` on `map` to the Character
-    /// named `to`, in the Personal Bests window.
-    MoveVisit { map: String, visit: VisitBest, to: String },
+    /// The player moved the Visit whose best was `visit` on `map`, the Character's named `from`
+    /// (`None`: an Unassigned one), to the Character named `to`, in the Personal Bests window.
+    MoveVisit { from: Option<String>, map: String, visit: VisitBest, to: String },
+    /// The player gave the Character with this name every Unassigned Visit, in the Personal
+    /// Bests window.
+    AssignUnassigned(String),
     /// The player removed the Character with this name, in the Personal Bests window.
     RemoveCharacter(String),
     /// The player merged the Character named `from` into the one named `into`, in the
@@ -125,6 +128,9 @@ pub(crate) enum Command {
     /// The player turned "Show on the Map Leaderboards" on (`on`) or off for the Character
     /// named `name`, in the Personal Bests window.
     ShowOnLeaderboards { name: String, on: bool },
+    /// The player sent the Character with this name to the Map Leaderboards again, in the
+    /// Personal Bests window.
+    SendToLeaderboardsAgain(String),
     /// The player clicked the Map Leaderboard link of the map with ID `id` among the bests of
     /// the Character named `character` (`None`: the Unassigned ones), in the Personal Bests
     /// window.
@@ -435,6 +441,8 @@ pub fn run() {
             bests_window::personal_bests_open_map,
             bests_window::personal_bests_remove_visit,
             bests_window::personal_bests_move_visit,
+            bests_window::personal_bests_assign_unassigned,
+            bests_window::personal_bests_send_again,
             bests_window::personal_bests_remove_character,
             bests_window::personal_bests_merge_characters,
             bests_window::personal_bests_show_on_leaderboards,
@@ -752,8 +760,11 @@ fn core_loop(
             Ok(Command::RemoveVisit { character, map, visit }) => {
                 minerva.remove_visit(character.as_deref(), &map, &visit);
             }
-            Ok(Command::MoveVisit { map, visit, to }) => {
-                minerva.move_visit(&map, &visit, &to);
+            Ok(Command::MoveVisit { from, map, visit, to }) => {
+                minerva.move_visit(from.as_deref(), &map, &visit, &to);
+            }
+            Ok(Command::AssignUnassigned(to)) => {
+                minerva.assign_unassigned(&to);
             }
             Ok(Command::RemoveCharacter(name)) => {
                 minerva.remove_character(&name);
@@ -763,6 +774,9 @@ fn core_loop(
             }
             Ok(Command::ShowOnLeaderboards { name, on }) => {
                 minerva.show_on_leaderboards(&name, on);
+            }
+            Ok(Command::SendToLeaderboardsAgain(name)) => {
+                minerva.send_to_leaderboards_again(&name);
             }
             Ok(Command::OpenBestsLeaderboard { character, id }) => {
                 let request = minerva.open_bests_leaderboard(character.as_deref(), &id);

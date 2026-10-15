@@ -171,12 +171,21 @@ fn a_visit_moved_and_characters_removed_and_merged_replay_and_read_in_the_timeli
         CharacterBests { name: "Egbert".into(), maps: on_the_site(at(5000, 13)) },
         CharacterBests { name: "Egbert2".into(), maps: on_the_site(at(6000, 14)) },
         CharacterBests { name: "Bob".into(), maps: on_the_site(at(3000, 40)) },
+        CharacterBests { name: "Carol".into(), maps: on_the_site(at(4000, 15)) },
     ];
-    let unassigned_maps = vec![MapBests { id: SUNSET_SKY_ID.into(), visits: vec![unassigned.clone()] }];
+    // And one more Unassigned, on the Construction Site.
+    let unassigned_maps = vec![
+        MapBests { id: SUNSET_SKY_ID.into(), visits: vec![unassigned.clone()] },
+        MapBests { id: CONSTRUCTION_SITE_ID.into(), visits: vec![at(2000, 12)] },
+    ];
     shell.minerva.restore_bests(SavedBests { version: BESTS_VERSION, unassigned: unassigned_maps, characters });
     shell.play(MIN, CONSTRUCTION_SITE, grind);
 
-    shell.minerva.move_visit(SUNSET_SKY_ID, &unassigned, "Egbert");
+    shell.minerva.move_visit(None, SUNSET_SKY_ID, &unassigned, "Egbert");
+    shell.play(MIN + 5 * S, CONSTRUCTION_SITE, grind);
+    shell.minerva.move_visit(Some("Carol"), CONSTRUCTION_SITE_ID, &at(4000, 15), "Egbert");
+    shell.play(MIN + 10 * S, CONSTRUCTION_SITE, grind);
+    shell.minerva.assign_unassigned("Egbert");
     shell.play(MIN + 20 * S, CONSTRUCTION_SITE, grind);
     shell.minerva.remove_character("Bob");
     shell.play(MIN + 40 * S, CONSTRUCTION_SITE, grind);
@@ -192,6 +201,8 @@ fn a_visit_moved_and_characters_removed_and_merged_replay_and_read_in_the_timeli
     let timeline = recording.timeline(0);
     for said in [
         format!("Unassigned Visit on {SUNSET_SKY_ID} moved to \"Egbert\": 7,200 EXP/h, set at {}", WALL_AT_START - HOUR),
+        format!("\"Carol\"'s Visit on {CONSTRUCTION_SITE_ID} moved to \"Egbert\": 4,000 EXP/h"),
+        "Every Unassigned Visit given to \"Egbert\"".to_string(),
         "Character \"Bob\" removed, with their bests".to_string(),
         "Character \"Egbert2\" merged into \"Egbert\"".to_string(),
     ] {
@@ -224,8 +235,10 @@ fn showing_a_character_on_the_map_leaderboards_and_each_answer_replay_and_read_i
     shell.play(20 * S, CONSTRUCTION_SITE, grind);
     let id = upload_for(&shell, "Egbert");
     shell.minerva.on_leaderboard_answer(id, LeaderboardAnswer::Failed { why: "offline".into() });
-    // Tried again 30 s on, and taken but for one the maintainer removed.
-    shell.play(55 * S, CONSTRUCTION_SITE, grind);
+    // Sent again 10 s on, rather than waiting, and taken but for one the maintainer removed.
+    shell.play(25 * S, CONSTRUCTION_SITE, grind);
+    shell.minerva.send_to_leaderboards_again("Egbert");
+    shell.play(35 * S, CONSTRUCTION_SITE, grind);
     let id = upload_for(&shell, "Egbert");
     let rejected = vec![RejectedEntry { map: CONSTRUCTION_SITE_ID.into(), band: 10, reason: RejectedReason::Removed {} }];
     shell.minerva.on_leaderboard_answer(id, LeaderboardAnswer::Accepted { rejected });
@@ -245,6 +258,7 @@ fn showing_a_character_on_the_map_leaderboards_and_each_answer_replay_and_read_i
         "\"Egbert\" shown on the Map Leaderboards",
         "Map Leaderboards upload 1 asked: \"Egbert\"'s 1 entries",
         "Map Leaderboards upload 1 for \"Egbert\": failed: offline",
+        "\"Egbert\" sent to the Map Leaderboards again",
         "Map Leaderboards upload 2 asked: \"Egbert\"'s 1 entries",
         "Map Leaderboards upload 2 for \"Egbert\": taken but for 010003080 band 10 removed",
         "\"Egbert\" taken off the Map Leaderboards",

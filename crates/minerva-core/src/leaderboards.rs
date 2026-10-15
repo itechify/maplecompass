@@ -26,9 +26,12 @@
 //! - **Bests lost**: a launch whose bests file didn't read starts with none, and sending what is
 //!   here then would take every shown Character's entries off the site. So each Character
 //!   shown then is held: nothing of theirs goes up, at that launch or any after (the file saved
-//!   from then on holds only the bests set since), and the toggle says why, until the player
-//!   turns them off (which deletes their entries) and on again. One shown after isn't held:
-//!   turning it on asks with the count.
+//!   from then on holds only the bests set since), and the toggle says why, as a problem, until
+//!   the player sends them again, having confirmed: what is here then replaces what the site
+//!   holds, with no deletion first. (Turning them off and on does too, deleting first.) One
+//!   shown after isn't held: turning it on asks with the count.
+//! - **Problems** (held, a name claimed, an upload tried again) the window says as problems,
+//!   and the player can send them again at once rather than wait.
 
 use crate::personal_best::{LevelBand, SavedBests, VisitBest, band_bests};
 use crate::SITE_URL;
@@ -227,7 +230,8 @@ pub struct LeaderboardCharacter {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uploaded_at_unix_ms: Option<u64>,
     /// Their uploads are held: the bests file didn't read at a launch since they were shown, so
-    /// what is here may be far less than the site holds. Until the player turns them off and on.
+    /// what is here may be far less than the site holds. Until the player sends them again, or
+    /// turns them off and on.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub held: bool,
 }
@@ -241,11 +245,19 @@ pub struct LeaderboardToggle {
     /// How many maps they have an entry for: what turning it on asks about ("Upload Egbert's
     /// bests on 14 maps?").
     pub maps: usize,
+    /// The window offers the switch: they're shown, so it can turn them off, or they have an
+    /// entry to upload. With none (bests with no level, job or date read), there is nothing to
+    /// show there yet.
+    pub offered: bool,
     pub status: LeaderboardStatus,
+    /// Where they stand is a problem, which the window says as one, and which the player can
+    /// send again: [`LeaderboardStatus::Retrying`], [`LeaderboardStatus::Claimed`] or
+    /// [`LeaderboardStatus::Held`].
+    pub problem: bool,
     /// When an upload of theirs last went through (ms since the Unix epoch); `None` if none
     /// has yet.
     pub uploaded_at_unix_ms: Option<u64>,
-    /// The entries the site didn't take at the last upload.
+    /// The entries the site didn't take at the last upload, while they're shown there.
     pub rejected: Vec<RejectedListing>,
 }
 
@@ -264,7 +276,7 @@ pub enum LeaderboardStatus {
     /// Another Leaderboard Key holds the name: the player asks on Discord.
     Claimed,
     /// Nothing is sent: the bests file didn't read at a launch since they were shown, so the
-    /// site may hold more of theirs than is here. Turning it off and on sends what is here.
+    /// site may hold more of theirs than is here. Sending them again sends what is here.
     Held,
 }
 
@@ -339,6 +351,23 @@ impl Leaderboards {
             })),
             None => {}
         }
+    }
+
+    /// The player sent the Character named `name` again: whatever stood in the way (a wait
+    /// after a failure, a name another key held, uploads held since bests were lost), what is
+    /// here goes up at the next tick, replacing what the site holds of them. Taken off, their
+    /// deletion goes again the same way. Nothing changes while an upload of theirs is under
+    /// way.
+    pub fn send_again(&mut self, name: &str) {
+        let Some(standing) = self.standings.iter_mut().find(|standing| standing.saved.name == name) else { return };
+        if standing.in_flight.is_some() {
+            return;
+        }
+        standing.saved.held = false;
+        standing.confirmed = None;
+        standing.wait = None;
+        standing.failures = 0;
+        standing.claimed = false;
     }
 
     /// The Personal Bests saved at earlier launches couldn't be read at this one: hold the
@@ -447,12 +476,16 @@ impl Leaderboards {
             }
             Some(_) => LeaderboardStatus::UpToDate,
         };
+        let on = standing.is_some_and(|standing| standing.saved.shown);
+        let rejected = standing.filter(|_| on).map_or_else(Vec::new, |standing| standing.rejected.iter().map(RejectedListing::from).collect());
         LeaderboardToggle {
-            on: standing.is_some_and(|standing| standing.saved.shown),
+            on,
             maps: maps.len(),
+            offered: on || !maps.is_empty(),
             status,
+            problem: matches!(status, LeaderboardStatus::Retrying | LeaderboardStatus::Claimed | LeaderboardStatus::Held),
             uploaded_at_unix_ms: standing.and_then(|standing| standing.saved.uploaded_at_unix_ms),
-            rejected: standing.map_or_else(Vec::new, |standing| standing.rejected.iter().map(RejectedListing::from).collect()),
+            rejected,
         }
     }
 }

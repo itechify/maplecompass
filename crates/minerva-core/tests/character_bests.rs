@@ -165,7 +165,7 @@ fn a_best_set_while_no_character_is_named_is_unassigned_and_the_player_can_move_
 
     // Moved to Egbert, it is his best at once, and Unassigned has none left to show.
     let visit = VisitBest { exp_per_hour: 7200, set_at_unix_ms: set, level: Some(13), job: None };
-    let moved = player.move_visit(SUNSET_SKY_ID, visit, "Egbert");
+    let moved = player.move_visit(None, SUNSET_SKY_ID, visit, "Egbert");
     assert_eq!(best_row(&moved), Some(7200));
     assert_eq!(kept(&player.minerva, Some("Egbert"), SUNSET_SKY_ID), [(7200, Some(13))]);
     assert_eq!(kept(&player.minerva, None, SUNSET_SKY_ID), []);
@@ -313,7 +313,7 @@ fn an_unassigned_visit_moved_to_a_character_is_kept_only_if_their_history_keeps_
     let (mut player, _) = playing_with("Egbert", bests);
 
     // Moved, it is neither among his 10 best nor the best in a band: it isn't kept.
-    let moved = player.move_visit(SUNSET_SKY_ID, before, "Egbert");
+    let moved = player.move_visit(None, SUNSET_SKY_ID, before, "Egbert");
     let rates: Vec<u64> = kept(&player.minerva, Some("Egbert"), SUNSET_SKY_ID).into_iter().map(|(rate, _)| rate).collect();
     assert_eq!(rates, (10..20).rev().map(|k| k * 1000).collect::<Vec<u64>>());
     assert_eq!(kept(&player.minerva, None, SUNSET_SKY_ID), []);
@@ -343,4 +343,57 @@ fn a_visit_is_removed_by_its_character_map_best_level_and_job_all() {
     // The one at level 13 goes, and only it.
     player.remove_visit_of(Some("Egbert"), SUNSET_SKY_ID, visit(13, "Magician"));
     assert_eq!(kept(&player.minerva, Some("Egbert"), SUNSET_SKY_ID), [(7200, Some(14))]);
+}
+
+/// A Magician's Visit best of `exp_per_hour` at `level`, with no date, as the window lists it.
+fn best_at(exp_per_hour: u64, level: u32) -> VisitBest {
+    VisitBest { exp_per_hour, set_at_unix_ms: None, level: Some(level), job: Some("Magician".to_string()) }
+}
+
+#[test]
+fn a_visit_moved_from_one_character_to_another_joins_theirs_and_the_best_row_follows() {
+    // Bob's best on Sunset Sky, at level 13, was Egbert's: the Status Bar misread the name.
+    let (mut player, open) = playing_with(
+        "Egbert",
+        saved(serde_json::json!([
+            { "name": "Egbert", "maps": [{ "id": SUNSET_SKY_ID, "visits": [at_level(7200, 13)] }] },
+            { "name": "Bob", "maps": [{ "id": SUNSET_SKY_ID, "visits": [at_level(9000, 13), at_level(3600, 40)] }] }
+        ])),
+    );
+    assert_eq!(best_row(&open), Some(7200));
+
+    // Moved to the one it's already with, or a Visit Bob doesn't have: nothing changes.
+    player.move_visit(Some("Bob"), SUNSET_SKY_ID, best_at(9000, 13), "Bob");
+    player.move_visit(Some("Bob"), SUNSET_SKY_ID, best_at(9000, 14), "Egbert");
+    assert_eq!(kept(&player.minerva, Some("Bob"), SUNSET_SKY_ID), [(9000, Some(13)), (3600, Some(40))]);
+
+    let moved = player.move_visit(Some("Bob"), SUNSET_SKY_ID, best_at(9000, 13), "Egbert");
+    assert_eq!(kept(&player.minerva, Some("Egbert"), SUNSET_SKY_ID), [(9000, Some(13)), (7200, Some(13))]);
+    assert_eq!(kept(&player.minerva, Some("Bob"), SUNSET_SKY_ID), [(3600, Some(40))]);
+    // Egbert plays on Sunset Sky: the Best row races his new best at once.
+    assert_eq!(best_row(&moved), Some(9000));
+}
+
+#[test]
+fn every_unassigned_visit_can_be_given_to_a_character_at_once() {
+    // Two Unassigned Visits on Sunset Sky and one on the Construction Site; Egbert has one on
+    // Sunset Sky.
+    let mut bests = saved(serde_json::json!([
+        { "name": "Egbert", "maps": [{ "id": SUNSET_SKY_ID, "visits": [at_level(7200, 13)] }] }
+    ]));
+    bests.unassigned = serde_json::from_value(serde_json::json!([
+        { "id": SUNSET_SKY_ID, "visits": [at_level(9000, 14), at_level(3600, 12)] },
+        { "id": CONSTRUCTION_SITE_ID, "visits": [at_level(5000, 15)] }
+    ]))
+    .unwrap();
+    let (mut player, open) = playing_with("Egbert", bests);
+    assert_eq!(choices(&open), [(Some("Egbert"), true, 1), (None, false, 2)]);
+
+    // Each joins Egbert's on its map, and Unassigned is no longer a choice.
+    let assigned = player.assign_unassigned("Egbert");
+    assert_eq!(kept(&player.minerva, Some("Egbert"), SUNSET_SKY_ID), [(9000, Some(14)), (7200, Some(13)), (3600, Some(12))]);
+    assert_eq!(kept(&player.minerva, Some("Egbert"), CONSTRUCTION_SITE_ID), [(5000, Some(15))]);
+    assert!(player.minerva.bests().unassigned.is_empty());
+    assert_eq!(choices(&assigned), [(Some("Egbert"), true, 2)]);
+    assert_eq!(best_row(&assigned), Some(9000));
 }

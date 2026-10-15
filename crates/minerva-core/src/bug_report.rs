@@ -208,9 +208,18 @@ pub enum Event {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         character: Option<String>,
     },
-    /// The player moved the Unassigned Visit whose best was `visit` on `map` to the Character
-    /// named `to`.
-    MoveVisit { map: String, visit: VisitBest, to: String },
+    /// The player moved the Visit whose best was `visit` on `map`, the Character's named
+    /// `from` (an Unassigned one for `None`, as every Visit moved was before Move was on every
+    /// Visit), to the Character named `to`.
+    MoveVisit {
+        map: String,
+        visit: VisitBest,
+        to: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        from: Option<String>,
+    },
+    /// The player gave the Character named `to` every Unassigned Visit.
+    AssignUnassigned { to: String },
     /// The player removed the Character named `name`, with their bests.
     RemoveCharacter { name: String },
     /// The player merged the Character named `from` into the one named `into`.
@@ -218,6 +227,8 @@ pub enum Event {
     /// The player turned "Show on the Map Leaderboards" on (`on`) or off for the Character
     /// named `name`.
     ShowOnLeaderboards { name: String, on: bool },
+    /// The player sent the Character named `name` to the Map Leaderboards again.
+    SendToLeaderboardsAgain { name: String },
     /// The Map Leaderboards answered upload `id`, for the Character named `name` (empty for an
     /// upload no longer under way), with `answer`.
     LeaderboardAnswer { id: u64, name: String, answer: LeaderboardAnswer },
@@ -1433,8 +1444,11 @@ pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
             Event::RemoveVisit { map, visit, character } => {
                 minerva.remove_visit(character.as_deref(), &map, &visit);
             }
-            Event::MoveVisit { map, visit, to } => {
-                minerva.move_visit(&map, &visit, &to);
+            Event::MoveVisit { map, visit, to, from } => {
+                minerva.move_visit(from.as_deref(), &map, &visit, &to);
+            }
+            Event::AssignUnassigned { to } => {
+                minerva.assign_unassigned(&to);
             }
             Event::RemoveCharacter { name } => {
                 minerva.remove_character(&name);
@@ -1444,6 +1458,9 @@ pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
             }
             Event::ShowOnLeaderboards { name, on } => {
                 minerva.show_on_leaderboards(&name, on);
+            }
+            Event::SendToLeaderboardsAgain { name } => {
+                minerva.send_to_leaderboards_again(&name);
             }
             Event::LeaderboardAnswer { id, answer, .. } => {
                 minerva.on_leaderboard_answer(id, answer);
@@ -1508,9 +1525,11 @@ impl Recording {
                     | Event::BestsLost {}
                     | Event::RemoveVisit { .. }
                     | Event::MoveVisit { .. }
+                    | Event::AssignUnassigned { .. }
                     | Event::RemoveCharacter { .. }
                     | Event::MergeCharacters { .. }
                     | Event::ShowOnLeaderboards { .. }
+                    | Event::SendToLeaderboardsAgain { .. }
                     | Event::LeaderboardAnswer { .. }
                     | Event::Error { .. }
                     | Event::BugReport {}
@@ -1735,13 +1754,16 @@ impl Event {
                 let whose = character.as_ref().map_or("the Unassigned".to_string(), |name| format!("{name:?}'s"));
                 format!("Visit removed from {whose} Visit History of {map}: {}", visit_words(visit))
             }
-            Event::MoveVisit { map, visit, to } => {
-                format!("Unassigned Visit on {map} moved to {to:?}: {}", visit_words(visit))
+            Event::MoveVisit { map, visit, to, from } => {
+                let whose = from.as_ref().map_or("Unassigned".to_string(), |name| format!("{name:?}'s"));
+                format!("{whose} Visit on {map} moved to {to:?}: {}", visit_words(visit))
             }
+            Event::AssignUnassigned { to } => format!("Every Unassigned Visit given to {to:?}"),
             Event::RemoveCharacter { name } => format!("Character {name:?} removed, with their bests"),
             Event::MergeCharacters { from, into } => format!("Character {from:?} merged into {into:?}"),
             Event::ShowOnLeaderboards { name, on: true } => format!("{name:?} shown on the Map Leaderboards"),
             Event::ShowOnLeaderboards { name, on: false } => format!("{name:?} taken off the Map Leaderboards"),
+            Event::SendToLeaderboardsAgain { name } => format!("{name:?} sent to the Map Leaderboards again"),
             Event::LeaderboardAnswer { id, name, answer } => {
                 let said = match answer {
                     LeaderboardAnswer::Accepted { rejected } if rejected.is_empty() => "taken".to_string(),

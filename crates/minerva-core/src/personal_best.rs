@@ -290,15 +290,34 @@ impl Bests {
         removed
     }
 
-    /// Move the Unassigned Visit whose best was `visit` from `map`'s history to the history
-    /// of the Character named `to`, where it joins their Visits there as any Visit does;
-    /// whether there was one.
-    pub fn move_visit(&mut self, map: &str, visit: &VisitBest, to: &str) -> bool {
+    /// Move the Visit whose best was `visit` from `map`'s history of the Character named
+    /// `from` (the Unassigned one for `None`) to the history of the Character named `to`,
+    /// where it joins their Visits there as any Visit does; whether there was one to move.
+    pub fn move_visit(&mut self, from: Option<&str>, map: &str, visit: &VisitBest, to: &str) -> bool {
+        if from == Some(to) {
+            return false;
+        }
         let mut moved = false;
         self.changing(|bests| {
-            moved = take(&mut bests.history, None, map, visit);
+            moved = take(&mut bests.history, from, map, visit);
             if moved {
                 join(&mut bests.history, Some(to), map.to_string(), visit.clone());
+            }
+        });
+        moved
+    }
+
+    /// Move every Unassigned Visit to the history of the Character named `to`, where each
+    /// joins their Visits on its map as any Visit does; whether there was one.
+    pub fn assign_unassigned(&mut self, to: &str) -> bool {
+        let mut moved = false;
+        self.changing(|bests| {
+            let unassigned = std::mem::take(&mut bests.history.unassigned);
+            moved = !unassigned.is_empty();
+            for map in unassigned {
+                for visit in map.visits {
+                    join(&mut bests.history, Some(to), map.id.clone(), visit);
+                }
             }
         });
         moved

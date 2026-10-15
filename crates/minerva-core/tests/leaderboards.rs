@@ -9,7 +9,7 @@ use common::player::Player;
 use common::{CONSTRUCTION_SITE_ID, NORTHERN_TOP_ID, SUNSET_SKY_ID, tracking};
 use minerva_core::{
     BESTS_VERSION, CharacterBests, LeaderboardAnswer, LeaderboardCharacter, LeaderboardEntry, LeaderboardStatus,
-    LeaderboardToggle, LeaderboardUpload, MapBests, Minerva, PanelControl, PanelState, RejectedEntry, RejectedListing, RejectedReason, SavedBests, ScreenRect,
+    LeaderboardToggle, LeaderboardUpload, MapBests, Minerva, PanelControl, PanelState, RejectedEntry, RejectedListing, RejectedReason, Request, SavedBests, ScreenRect,
     Settings, StatusBar, StatusBarReading, VisitBest,
 };
 
@@ -100,6 +100,8 @@ fn opting_a_character_in_asks_with_the_count_of_maps_then_uploads_their_best_in_
     let off = LeaderboardToggle {
         on: false,
         maps: 2,
+        offered: true,
+        problem: false,
         status: LeaderboardStatus::Off,
         uploaded_at_unix_ms: None,
         rejected: Vec::new(),
@@ -180,7 +182,27 @@ fn removing_a_visit_sends_the_set_again_with_the_next_best_in_its_band() {
 #[test]
 fn moving_an_unassigned_visit_to_a_shown_character_sends_their_set_again() {
     let mut minerva = both_up();
-    minerva.move_visit(CONSTRUCTION_SITE_ID, &unassigned_visit(), "Egbert");
+    minerva.move_visit(None, CONSTRUCTION_SITE_ID, &unassigned_visit(), "Egbert");
+    let state = minerva.tick(2 * S).clone();
+    let mut entries = egberts_entries();
+    entries.push(entry(CONSTRUCTION_SITE_ID, 50, 3000, 4));
+    assert_eq!(sent(&state), [egbert(entries)]);
+}
+
+#[test]
+fn moving_a_visit_between_shown_characters_sends_both_sets_again() {
+    let mut minerva = both_up();
+    minerva.move_visit(Some("Bob"), SUNSET_SKY_ID, &visit(4000, Some(5), 40), "Egbert");
+    let state = minerva.tick(2 * S).clone();
+    let mut entries = egberts_entries();
+    entries.insert(2, entry(SUNSET_SKY_ID, 40, 4000, 5));
+    assert_eq!(sent(&state), [egbert(entries), ("Bob".to_string(), Some(Vec::new()))]);
+}
+
+#[test]
+fn giving_a_shown_character_every_unassigned_visit_sends_their_set_again() {
+    let mut minerva = both_up();
+    minerva.assign_unassigned("Egbert");
     let state = minerva.tick(2 * S).clone();
     let mut entries = egberts_entries();
     entries.push(entry(CONSTRUCTION_SITE_ID, 50, 3000, 4));
@@ -242,6 +264,51 @@ fn entries_the_site_kept_off_are_listed_but_the_upload_went_through() {
     assert_eq!(up.rejected, listed);
     // The site says so at every upload: it isn't tried again for it.
     assert_eq!(sent(minerva.tick(60 * MIN)), []);
+    // Taken off, nothing of theirs is on the site to keep off.
+    minerva.show_on_leaderboards("Egbert", false);
+    assert_eq!(toggle(minerva.tick(61 * MIN), "Egbert").rejected, []);
+}
+
+#[test]
+fn a_character_with_nothing_that_can_be_uploaded_isnt_offered_the_switch() {
+    // Carol's only best has no date: it can't be an entry.
+    let mut bests = saved_bests();
+    let undated = VisitBest { set_at_unix_ms: None, ..visit(7000, None, 30) };
+    bests.characters.push(CharacterBests { name: "Carol".to_string(), maps: vec![map(NORTHERN_TOP_ID, vec![undated])] });
+    let mut minerva = tracking();
+    minerva.restore_bests(bests);
+    minerva.on_wall_clock(WALL);
+    minerva.press(PanelControl::TogglePersonalBests);
+    let state = minerva.tick(0).clone();
+    let carol = toggle(&state, "Carol");
+    assert_eq!((carol.on, carol.maps, carol.offered), (false, 0, false));
+    assert!(toggle(&state, "Egbert").offered);
+}
+
+/// Where the toggle for Egbert says he stands: (status, a problem).
+fn standing(state: &PanelState) -> (LeaderboardStatus, bool) {
+    let toggle = toggle(state, "Egbert");
+    (toggle.status, toggle.problem)
+}
+
+#[test]
+fn an_upload_that_failed_or_whose_name_another_key_holds_is_a_problem_and_sent_again_goes_at_once() {
+    use LeaderboardStatus::*;
+    let offline = LeaderboardAnswer::Failed { why: "owlofminerva.app couldn't be reached".to_string() };
+    for (answer, status) in [(offline, Retrying), (LeaderboardAnswer::Claimed {}, Claimed)] {
+        let (mut minerva, id) = egbert_uploading();
+        assert_eq!(standing(minerva.panel_state()), (Sending, false));
+        assert_eq!(standing(&minerva.on_leaderboard_answer(id, answer).clone()), (status, true));
+        assert_eq!(sent(minerva.tick(S)), []);
+
+        // Sent again, it goes at the next tick rather than waiting, and is being sent.
+        minerva.send_to_leaderboards_again("Egbert");
+        let state = minerva.tick(2 * S).clone();
+        assert_eq!(sent(&state), [egbert(egberts_entries())]);
+        assert_eq!(standing(&state), (Sending, false));
+        let state = minerva.on_leaderboard_answer(state.leaderboard_uploads[0].id, taken()).clone();
+        assert_eq!(standing(&state), (UpToDate, false));
+    }
 }
 
 #[test]
@@ -345,7 +412,7 @@ fn characters_not_shown_and_the_unassigned_bests_never_leave_the_machine() {
 
 /// The Map Leaderboard link of the row for `map` among `name`'s (`None`: the Unassigned
 /// bests) in the Personal Bests window.
-fn link(state: &PanelState, name: Option<&str>, map: &str) -> String {
+fn link(state: &PanelState, name: Option<&str>, map: &str) -> Option<String> {
     let character = state.personal_bests.characters.iter().find(|c| c.name.as_deref() == name).unwrap();
     character.maps.iter().find(|m| m.id == map).unwrap().leaderboard_url.clone()
 }
@@ -359,12 +426,16 @@ fn each_map_links_to_its_map_leaderboard_at_the_band_of_the_character_playing() 
     let site = "https://owlofminerva.app/leaderboards/map/";
 
     // Egbert, playing at level 27: his band, 20–29, on every map, and his name.
-    assert_eq!(link(&state, Some("Egbert"), SUNSET_SKY_ID), format!("{site}?map={SUNSET_SKY_ID}&band=20&name=Egbert"));
-    assert_eq!(link(&state, Some("Egbert"), CONSTRUCTION_SITE_ID), format!("{site}?map={CONSTRUCTION_SITE_ID}&band=20&name=Egbert"));
+    let egbert = |map: &str| Some(format!("{site}?map={map}&band=20&name=Egbert"));
+    assert_eq!(link(&state, Some("Egbert"), SUNSET_SKY_ID), egbert(SUNSET_SKY_ID));
+    assert_eq!(link(&state, Some("Egbert"), CONSTRUCTION_SITE_ID), egbert(CONSTRUCTION_SITE_ID));
     // Bob, not playing: the band of his best there.
-    assert_eq!(link(&state, Some("Bob"), SUNSET_SKY_ID), format!("{site}?map={SUNSET_SKY_ID}&band=40&name=Bob"));
-    // The Unassigned bests are no one's on the site: the band of the Character playing.
-    assert_eq!(link(&state, None, CONSTRUCTION_SITE_ID), format!("{site}?map={CONSTRUCTION_SITE_ID}&band=20"));
+    assert_eq!(link(&state, Some("Bob"), SUNSET_SKY_ID), Some(format!("{site}?map={SUNSET_SKY_ID}&band=40&name=Bob")));
+    // The Unassigned bests are no one's on the site: no link.
+    assert_eq!(link(&state, None, CONSTRUCTION_SITE_ID), None);
+    assert_eq!(minerva.open_bests_leaderboard(None, CONSTRUCTION_SITE_ID), None);
+    let opened = minerva.open_bests_leaderboard(Some("Egbert"), SUNSET_SKY_ID);
+    assert_eq!(opened, egbert(SUNSET_SKY_ID).map(|url| Request::OpenInBrowser { url }));
 }
 
 #[test]
@@ -525,6 +596,22 @@ fn turning_a_held_character_off_and_on_sends_what_is_here_now() {
     // Bob's are still held.
     let held: Vec<(String, bool)> = player.minerva.settings().map_leaderboards.into_iter().map(|c| (c.name, c.held)).collect();
     assert_eq!(held, [("Bob".to_string(), true), ("Egbert".to_string(), false)]);
+}
+
+#[test]
+fn a_held_character_sent_again_has_what_is_here_replace_their_entries_without_deleting_them_first() {
+    let (mut player, at) = a_best_after_the_bests_were_lost(&["Egbert", "Bob"]);
+    assert_eq!(standing(player.minerva.tick(at)), (LeaderboardStatus::Held, true));
+
+    // One upload of what is here, which replaces the set on the site: no deletion before it.
+    player.minerva.send_to_leaderboards_again("Egbert");
+    let state = player.minerva.tick(at + S).clone();
+    assert_eq!(sent(&state), [egbert(vec![egberts_new_entry(&player)])]);
+    assert!(toggle(&state, "Egbert").on);
+    assert_eq!(standing(&state), (LeaderboardStatus::Sending, false));
+    // Bob's are still held.
+    let held: Vec<(String, bool)> = player.minerva.settings().map_leaderboards.into_iter().map(|c| (c.name, c.held)).collect();
+    assert_eq!(held, [("Egbert".to_string(), false), ("Bob".to_string(), true)]);
 }
 
 #[test]

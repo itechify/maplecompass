@@ -159,11 +159,17 @@ impl Player {
         self.status = Some((name.map(String::from), level));
     }
 
-    /// Move the Unassigned Visit whose best was `visit` on `map` to the Character named `to`,
-    /// in the Personal Bests window.
-    pub fn move_visit(&mut self, map: &str, visit: VisitBest, to: &str) -> PanelState {
-        self.minerva.move_visit(map, &visit, to);
-        self.shell_loop(&format!("moving {visit:?} on {map} to {to}"))
+    /// Move the Visit whose best was `visit` on `map`, of the Character named `from` (`None`:
+    /// an Unassigned one), to the Character named `to`, in the Personal Bests window.
+    pub fn move_visit(&mut self, from: Option<&str>, map: &str, visit: VisitBest, to: &str) -> PanelState {
+        self.minerva.move_visit(from, map, &visit, to);
+        self.shell_loop(&format!("moving {visit:?} on {map} from {from:?} to {to}"))
+    }
+
+    /// Give the Character named `to` every Unassigned Visit, in the Personal Bests window.
+    pub fn assign_unassigned(&mut self, to: &str) -> PanelState {
+        self.minerva.assign_unassigned(to);
+        self.shell_loop(&format!("assigning every Unassigned Visit to {to}"))
     }
 
     /// Remove the Character named `name`, in the Personal Bests window.
