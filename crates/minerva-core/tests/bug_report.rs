@@ -10,7 +10,7 @@ use common::osms;
 use common::{FakeSource, SUNSET_SKY_ID, frame};
 use minerva_core::bug_report::{self, Answer, Event, Note, Recording, ReplayData, MAX_REPORT_BYTES};
 use minerva_core::{
-    ListedPrice, ShopCapture, ShopList, ShopReading, ShopRow,
+    ListedPrice, ShopCapture, ShopList, ShopReading, ShopRow, StatusBar, StatusBarCapture, StatusBarReading,
     Action, BESTS_VERSION, Minerva, ExpBar, ExpBarReading, ExpBarRegion, Foreground, Frame, GameWindow, ItemCapture, ItemTooltip,
     ItemTooltipReading, MapBests, Rect, ReportAbout, SavedBests, ScreenPoint, ScreenRect, Settings, Size, TitleLines,
     TitleReading, TitleRegion, TrackingState, VisitBest,
@@ -741,4 +741,70 @@ fn a_shop_with_a_listing_that_couldnt_be_read_keeps_its_list_for_the_run() {
     let crop = image::load_from_memory(&zip_bytes(&report.zip, &name)).expect("a PNG").to_rgba8();
     assert_eq!(crop.dimensions(), (362, 386), "the list, 10 px around it and past its scroll bar");
     assert_eq!(crop.get_pixel(0, 0).0, [(551 % 256) as u8, (503 % 256) as u8, 40, 255], "its corner at (551,503)");
+}
+
+/// The bottom of the game's client area as the shell captures it for the Status Bar.
+fn status_bar_capture(at_ms: u64) -> StatusBarCapture {
+    let strip = ScreenRect { x: 0, y: 1104, width: 1920, height: 96 };
+    let img = image::RgbaImage::from_fn(strip.width, strip.height, |x, y| {
+        image::Rgba([(x % 256) as u8, ((y + strip.y as u32) % 256) as u8, 40, 255])
+    });
+    StatusBarCapture { frame: frame(&img, at_ms), origin: ScreenPoint { x: strip.x, y: strip.y } }
+}
+
+/// The Status Bar read as a level 13 Magician named `name` (`None`: unreadable).
+fn status_bar_reading(name: Option<&str>, at_ms: u64) -> StatusBarReading {
+    let area = ScreenRect { x: 334, y: 1145, width: 331, height: 55 };
+    StatusBarReading {
+        bar: Some(StatusBar { area, level: Some(13), job: Some("Magician".into()), name: name.map(String::from) }),
+        at_ms,
+    }
+}
+
+/// A run with Characters: Egbert's Status Bar read every second with the EXP bar, then the
+/// character select screen, then Bob's.
+fn run_with_characters() -> Shell {
+    let mut shell = Shell::new(FakeSource::osms());
+    for second in 1..=10 {
+        shell.play(second * S, CONSTRUCTION_SITE, grind);
+        let name = if second == 5 { None } else { Some("Egbert") };
+        shell.minerva.on_status_bar_read(status_bar_capture(second * S), status_bar_reading(name, second * S));
+    }
+    for second in 11..=15 {
+        shell.play(second * S, CONSTRUCTION_SITE, |_| None);
+        shell.minerva.on_status_bar_reading(StatusBarReading { bar: None, at_ms: second * S });
+    }
+    shell.minerva.on_status_bar_read(status_bar_capture(16 * S), status_bar_reading(Some("Bob"), 16 * S));
+    shell.play(30 * S, CONSTRUCTION_SITE, grind);
+    shell
+}
+
+#[test]
+fn characters_replay_through_the_same_states() {
+    let (_, recording) = run_with_characters().report();
+
+    let replay = bug_report::replay(&recording, Some(osms::game().files()));
+
+    assert_eq!(replay.divergence, None);
+    assert_eq!(replay.lines, recording.lines.len());
+    let timeline = recording.timeline(0).join("\n");
+    assert!(timeline.contains(r#"Status Bar read: level 13, "Magician", "Egbert""#), "{timeline}");
+    assert!(timeline.contains(r#"Status Bar read: level 13, "Magician", ?"#), "{timeline}");
+    assert!(timeline.contains(r#"the Status Bar names another character, "Bob": a new Session"#), "{timeline}");
+    assert!(recording.lines.iter().any(|line| line.notes.contains(&Note::NameSwitch { name: "Bob".into() })));
+}
+
+#[test]
+fn a_status_bar_read_the_same_as_before_is_written_as_such_with_no_crop() {
+    let (report, recording) = run_with_characters().report();
+
+    let bars: Vec<&Event> = recording.lines.iter().map(|line| &line.event).filter(|e| matches!(e, Event::StatusBar { .. })).collect();
+    assert!(matches!(bars[0], Event::StatusBar { bar: Some(_), same: false, .. }));
+    assert!(matches!(bars[1], Event::StatusBar { bar: None, same: true, .. }));
+    let crops: Vec<&str> = recording.crops.iter().map(String::as_str).filter(|name| name.starts_with("crops/status-bar-")).collect();
+    // Egbert's, his name unread, Egbert's again, and Bob's.
+    assert_eq!(crops.len(), 4, "{crops:?}");
+    let crop = image::load_from_memory(&zip_bytes(&report.zip, crops[0])).expect("a PNG").to_rgba8();
+    assert_eq!(crop.dimensions(), (351, 65), "the level, job and name, 10 px around them, to the client's bottom");
+    assert_eq!(crop.get_pixel(0, 0).0, [(324 % 256) as u8, (1135 % 256) as u8, 40, 255], "its corner at (324,1135)");
 }

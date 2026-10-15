@@ -30,3 +30,4 @@ When a change alters something a shot shows, the PR that makes it lists the shot
 
 - `item-card.png`: each line under Market now has the Deal Line's ring before its name, filled on the Deal Line (Your price). Update its alt text in `site/index.html` to say so.
 - `hero.png`, `game-window.png`, `mobs.png`, `navigation.png`: the panel's window bar has the Deal Finder's price tag after the Grind Tracker's button. (`hero.png` is cut from `game-window.png`, and `site/reel.ts` ends on that corner, so retake them together.)
+- `grind-tracker.png`: the EXP bar's reading at its foot has the character playing beside it, as the status bar names them ("Egbert · Lv. 13 Magician"). Update its alt text in `site/index.html` to say so.

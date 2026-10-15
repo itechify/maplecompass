@@ -2,11 +2,12 @@
 //! boxes from our own mask and line split, so ocrs' detection model is not shipped.
 
 use crate::Frame;
-use crate::prep::{Numeral, Prepared, Rect, prepare};
+use crate::prep::{Numeral, PAD, Prepared, Rect, prepare};
 use image::{GrayImage, RgbImage};
 use ocrs::{ImageSource, OcrEngine, OcrEngineParams, TextItem, TextLine};
 use rten::Model;
 use rten_imageproc::{RectF, RotatedRect};
+use std::collections::HashMap;
 use std::sync::OnceLock;
 
 /// The bundled ocrs recognition model (CC-BY-SA-4.0, see `models/NOTICE.md`).
@@ -14,6 +15,36 @@ static RECOGNITION_MODEL: &[u8] = include_bytes!("../models/text-recognition.onn
 
 /// Margin around each line box handed to ocrs (it fills outside the box with black).
 const LINE_MARGIN: f32 = 3.0;
+
+/// How many lines' readings [`RememberedLines`] keeps before it forgets them all at once.
+const REMEMBERED: usize = 512;
+
+/// What lines of ink read as, remembered by their ink: a frame read again unchanged costs
+/// no recognition, the costly part of reading it.
+#[derive(Default)]
+pub(crate) struct RememberedLines {
+    read: HashMap<(u32, Vec<u8>), Option<String>>,
+}
+
+impl RememberedLines {
+    /// What each of `inks` (black on white) reads as, enlarged `upscale` times for ocrs:
+    /// those not read before, all at once.
+    pub fn read(&mut self, recogniser: &Recogniser, inks: &[GrayImage], upscale: u32) -> Vec<Option<String>> {
+        let key = |ink: &GrayImage| (ink.width(), ink.as_raw().clone());
+        let keys: Vec<(u32, Vec<u8>)> = inks.iter().map(key).collect();
+        let unknown: Vec<usize> = (0..inks.len()).filter(|&i| !self.read.contains_key(&keys[i])).collect();
+        if !unknown.is_empty() {
+            let read = recogniser.read_stacked(&unknown.iter().map(|&i| &inks[i]).collect::<Vec<_>>(), upscale);
+            if self.read.len() + unknown.len() > REMEMBERED {
+                self.read.clear();
+            }
+            for (&i, text) in unknown.iter().zip(read) {
+                self.read.insert(keys[i].clone(), text);
+            }
+        }
+        keys.iter().map(|key| self.read.get(key).cloned().flatten()).collect()
+    }
+}
 
 /// The two raw text lines read from the minimap title, before they are snapped to a
 /// real map.
@@ -104,6 +135,29 @@ impl Recogniser {
             })
             .collect();
         self.engine.recognize_text(&input, &boxes).ok()
+    }
+
+    /// ocrs's reading of each line's ink (black on white), stacked on one canvas and enlarged
+    /// `upscale` times: `None` where it read nothing, or for every line if it couldn't run.
+    pub fn read_stacked(&self, inks: &[&GrayImage], upscale: u32) -> Vec<Option<String>> {
+        let width = inks.iter().map(|ink| ink.width()).max().unwrap_or(0) + 2 * PAD;
+        let height = inks.iter().map(|ink| ink.height() + PAD).sum::<u32>() + PAD;
+        let mut canvas = GrayImage::from_pixel(width, height, image::Luma([255]));
+        let mut rects = Vec::with_capacity(inks.len());
+        let mut y = PAD;
+        for ink in inks {
+            image::imageops::replace(&mut canvas, *ink, PAD as i64, y as i64);
+            rects.push(Rect { x: PAD * upscale, y: y * upscale, w: ink.width() * upscale, h: ink.height() * upscale });
+            y += ink.height() + PAD;
+        }
+        let canvas = image::imageops::resize(&canvas, width * upscale, height * upscale, image::imageops::FilterType::Triangle);
+        let Some(lines) = self.read_lines(&canvas, &rects) else { return vec![None; inks.len()] };
+        let text = |line: Option<&TextLine>| {
+            let text = line?.to_string();
+            let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+            (!text.is_empty()).then_some(text)
+        };
+        (0..inks.len()).map(|i| text(lines.get(i).and_then(|line| line.as_ref()))).collect()
     }
 
     fn read_prepared(&self, p: &Prepared) -> Option<TitleLines> {

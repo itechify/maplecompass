@@ -38,7 +38,8 @@ mod view;
 use minerva_core::{
     Action, DEAL_FINDER_CAPTURE_MS, Minerva, ExpBarReader, ExpBarReading, Frame, GameWindow, ItemCapture, ItemTooltipReader,
     ItemTooltipReading, KeyPress, Layer, MIN_PANEL_WIDTH, PanelControl, PanelSizes, PlacementMode, PanelState, PlayerShopReader,
-    Request, ScreenPoint, ScreenRect, ShopCapture, ShopReading, Size, TitleReader, TitleReading, VisitBest, default_title_region,
+    Request, ScreenPoint, ScreenRect, ShopCapture, ShopReading, Size, StatusBarCapture, StatusBarReader, StatusBarReading,
+    TitleReader, TitleReading, VisitBest, default_title_region,
 };
 use source::WebSource;
 use bests_window::{BestsWindow, PersonalBestsView};
@@ -188,6 +189,9 @@ pub(crate) enum Command {
     /// The reader is done with a Deal Finder capture of `region` (the game's client area):
     /// the capture and what it read, or `None` if the capture failed.
     ReadShop { region: ScreenRect, reading: Option<(Box<ShopCapture>, ShopReading)> },
+    /// The reader is done with a capture of `region` (the bottom of the game's client area)
+    /// for the Status Bar: the capture and what it read, or `None` if the capture failed.
+    ReadStatusBar { region: ScreenRect, reading: Option<(Box<StatusBarCapture>, StatusBarReading)> },
 }
 
 /// The overlay's drags and resizes, as the core loop hears them.
@@ -503,14 +507,15 @@ enum Capture {
     Item(Box<ItemCapture>),
     /// The game's client area, for the Deal Finder.
     Shop(ScreenRect),
+    /// The bottom of the game's client area, for the Status Bar.
+    StatusBar(ScreenRect),
 }
 
-/// Captures and reads the Title Region, the EXP Bar Region and the Deal Finder's client area
-/// on its own thread, and reads Item Lookup's captures (taken at the press, while the Item
-/// Tooltip shows). Reading
-/// takes tens of ms (far more in a debug build), so the core loop never waits for it:
-/// it keeps following the game window at its own pace and takes each reading when it
-/// arrives.
+/// Captures and reads the Title Region, the EXP Bar Region, the Status Bar's strip and the Deal
+/// Finder's client area on its own thread, and reads Item Lookup's captures (taken at the
+/// press, while the Item Tooltip shows). Reading takes tens of ms (far more in a debug
+/// build), so the core loop never waits for it: it keeps following the game window at its
+/// own pace and takes each reading when it arrives.
 struct ReaderThread {
     captures: Sender<Capture>,
     /// The clock frames and ticks are timed by.
@@ -521,6 +526,8 @@ struct ReaderThread {
     exp_bar_busy: bool,
     /// Likewise for the Deal Finder's capture.
     shop_busy: bool,
+    /// Likewise for the Status Bar's.
+    status_bar_busy: bool,
 }
 
 impl ReaderThread {
@@ -534,6 +541,8 @@ impl ReaderThread {
             let item_reader = ItemTooltipReader::bundled();
             // It remembers the lines it read, so a shop left open costs no recognition.
             let mut shop_reader = PlayerShopReader::bundled();
+            // So does this one: an unchanged Status Bar costs no recognition.
+            let mut status_bar_reader = StatusBarReader::bundled();
             let grab = |r: ScreenRect| match capture::capture_rgba(r.x, r.y, r.width as i32, r.height as i32) {
                 Ok(rgba) => {
                     let at_ms = start.elapsed().as_millis() as u64;
@@ -572,13 +581,21 @@ impl ReaderThread {
                         });
                         Command::ReadShop { region, reading }
                     }
+                    Capture::StatusBar(region) => {
+                        let reading = grab(region).map(|frame| {
+                            let capture = StatusBarCapture { frame, origin: ScreenPoint { x: region.x, y: region.y } };
+                            let read = status_bar_reader.read(&capture);
+                            (Box::new(capture), read)
+                        });
+                        Command::ReadStatusBar { region, reading }
+                    }
                 };
                 if commands.send(command).is_err() {
                     return;
                 }
             }
         })?;
-        Ok(Self { captures, start, title_busy: false, exp_bar_busy: false, shop_busy: false })
+        Ok(Self { captures, start, title_busy: false, exp_bar_busy: false, shop_busy: false, status_bar_busy: false })
     }
 
     /// Capture and read the Title Region `region`, unless the last capture of it is
@@ -600,6 +617,13 @@ impl ReaderThread {
     fn read_shop(&mut self, region: ScreenRect) {
         if !self.shop_busy {
             self.shop_busy = self.captures.send(Capture::Shop(region)).is_ok();
+        }
+    }
+
+    /// Likewise for the Status Bar's capture of the bottom of the game's client area `region`.
+    fn read_status_bar(&mut self, region: ScreenRect) {
+        if !self.status_bar_busy {
+            self.status_bar_busy = self.captures.send(Capture::StatusBar(region)).is_ok();
         }
     }
 
@@ -836,6 +860,13 @@ fn core_loop(
                     minerva.on_player_shop_read(*capture, reading);
                 }
             }
+            Ok(Command::ReadStatusBar { region, reading }) => {
+                reader.status_bar_busy = false;
+                // Not once the game window moved, or another app came in front.
+                if let (Some((capture, reading)), true) = (reading, minerva.panel_state().status_bar_capture == Some(region)) {
+                    minerva.on_status_bar_read(*capture, reading);
+                }
+            }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
         }
@@ -901,6 +932,12 @@ fn core_loop(
         }
         if Instant::now() >= next_exp_bar_capture {
             next_exp_bar_capture = Instant::now() + EXP_BAR_TICK;
+            // The Status Bar first, at the EXP bar's pace: the reader takes captures in turn,
+            // so another Character's name reaches the core before their EXP bar does. None
+            // while another app is in front.
+            if let Some(region) = minerva.panel_state().status_bar_capture {
+                reader.read_status_bar(region);
+            }
             // None while EXP tracking is off.
             if let Some(region) = minerva.panel_state().exp_bar_region {
                 reader.read_exp_bar(region);

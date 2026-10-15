@@ -107,7 +107,11 @@
           </div>
           <!-- The game's own EXP gauge, as its status bar draws it: the last reading. -->
           <div class="exp" id="tracking-exp" hidden>
-            <p class="exp-figures"><b>EXP</b> <span id="exp-figures"></span></p>
+            <!-- Beside the reading, the Character playing, as the game's Status Bar names them. -->
+            <div class="exp-head">
+              <p class="exp-figures"><b>EXP</b> <span id="exp-figures"></span></p>
+              <p class="exp-character" id="exp-character" hidden></p>
+            </div>
             <div class="exp-gauge" id="exp-gauge" role="progressbar" aria-label="EXP this level" aria-valuemin="0" aria-valuemax="100">
               <div class="exp-gauge-fill" id="exp-gauge-fill"></div>
               <!-- Where the bar was before a death, until it is past it again. -->

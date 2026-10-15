@@ -132,8 +132,16 @@ The window beside the panel, turned on at setup by marking the EXP Bar Region, t
 _Avoid_: EXP tracking, EXP tracker
 
 **Session**:
-The stretch of play Minerva measures rates over, from the first EXP gain until the player resets it or switches character. A reset can be undone until the next EXP gain. Idle stretches pause it rather than count against it, and so does a stretch when the EXP bar can't be read; what the EXP did over one too long to be a gap in play isn't counted either. A misread that leads Minerva to learn the level's total wrong doesn't end it: the total is learned again.
+The stretch of play Minerva measures rates over, from the first EXP gain until the player resets it or switches Character. A reset can be undone until the next EXP gain. Idle stretches pause it rather than count against it, and so does a stretch when the EXP bar can't be read; what the EXP did over one too long to be a gap in play isn't counted either. A misread that leads Minerva to learn the level's total wrong doesn't end it: the total is learned again. The switch is by name: another name on the Status Bar, after it was out of sight, is another Character, and a new Session at once. While no name can be read, readings in a row that fit another level after the EXP bar was out of sight are the switch instead. The level the Status Bar shows is the one the Session learns the total of, and a level-up it shows is counted at once.
 _Avoid_: run, grind (the Grind Tracker measures a Session; "grind" alone names nothing)
+
+**Character**:
+Who is playing: one of the player's characters in the game, known by the name the Status Bar shows (Classic World is one world, so a name is one character). Minerva learns a Character the first time it reads the name; their level and job are as the Status Bar last showed them, and change, while the name doesn't.
+_Avoid_: player (the person, who may have many), account, toon
+
+**Status Bar**:
+The game's bar pinned to the bottom of the client area: the Character's level in orange tiles after "LV.", their job and name, then HP, MP and the EXP bar. The game's, not ours. Minerva finds it by itself, with no setup step, and reads the Character from it every second.
+_Avoid_: HUD, bottom bar, EXP bar (the gauge in it)
 
 **EXP Bar Region**:
 The rectangle the player marks around the EXP figures on the in-game EXP bar (e.g. "EXP 266 [6.33%]"), saved relative to the game window.

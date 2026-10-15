@@ -14,7 +14,7 @@ use crate::errors::error;
 use crate::sizemove::{self, Gesture, SizeMove};
 use crate::view::{LastView, ViewSender};
 use crate::{Command, LOOP_START_GRACE, keep_on_top, physical, place};
-use minerva_core::{ExpTracking, PanelState, Size};
+use minerva_core::{Character, ExpTracking, PanelState, Size};
 use serde::Serialize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -42,6 +42,8 @@ struct TrackerView<'a> {
     /// The window shows: otherwise the page draws nothing.
     shown: bool,
     tracking: &'a ExpTracking,
+    /// The Character playing, as the Status Bar names them, beside the EXP bar's reading.
+    character: Option<&'a Character>,
     /// Some map has a Personal Best: the window bar's Personal Bests button shows.
     personal_bests: bool,
     /// The Personal Bests window is open: that button shows as on.
@@ -138,6 +140,7 @@ impl GrindTrackerWindow {
         let view = TrackerView {
             shown: placement.is_some(),
             tracking: &state.exp_tracking,
+            character: state.character.as_ref(),
             personal_bests: state.grind_tracker.personal_bests,
             personal_bests_open: state.personal_bests.open,
         };

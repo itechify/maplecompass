@@ -40,6 +40,7 @@ use crate::player_shop::{ShopCapture, ShopList, ShopReading};
 use crate::recogniser::{TitleLines, TitleReading};
 use crate::session::{ExpTracking, TrackingState};
 use crate::settings::Settings;
+use crate::status_bar::{StatusBar, StatusBarCapture, StatusBarReading};
 use crate::{Minerva, Frame, PanelControl, PanelState};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -96,6 +97,23 @@ pub enum Note {
     /// Readings in a row fitted another level (`level`): another character, and a new
     /// Session.
     CharacterSwitch { level: Level },
+    /// The Status Bar named another Character, `name`, after it was out of sight: a new
+    /// Session.
+    NameSwitch { name: String },
+    /// The Status Bar, with no name read, showed another level (`level`), not the next, after
+    /// it was out of sight: another Character, and a new Session.
+    LevelSwitch { level: u32 },
+    /// The Status Bar's name read as `name`, not the Character's, while it stayed in sight:
+    /// a misread, set aside.
+    NameMisread { name: String },
+    /// The Status Bar showed the next level, `level`: the next EXP bar reading is in it.
+    LevelShown { level: u32 },
+    /// The level-up the Status Bar showed couldn't be counted (the level before's total wasn't
+    /// known, or the reading had more EXP than the last): the new level is learned afresh.
+    LevelUpUncounted,
+    /// The Status Bar showed level `to`, not `from` or the next: the level's total is learned
+    /// afresh from the next EXP bar reading.
+    LevelChanged { from: u32, to: u32 },
     /// The first whole reading after the bar went unread for over 2 minutes: taken as
     /// where the Session stands, without counting the change since.
     Unseen,
@@ -142,6 +160,15 @@ pub enum Event {
         at_ms: u64,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         shop: Option<ShopList>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        same: bool,
+    },
+    /// A Status Bar capture taken at `at_ms` read as `bar` (`None`: no Status Bar), or the
+    /// `same` as the reading before.
+    StatusBar {
+        at_ms: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        bar: Option<StatusBar>,
         #[serde(default, skip_serializing_if = "is_false")]
         same: bool,
     },
@@ -375,6 +402,8 @@ pub(crate) enum Region {
     ItemTooltip { pointer: (u32, u32) },
     /// A Player Shop's item list, at a Deal Finder capture.
     PlayerShop,
+    /// The Status Bar.s level, job and name, at a Status Bar capture.
+    StatusBar,
 }
 
 /// How far the crop of an Item Card or Item Lookup capture reaches from the pointer (px,
@@ -432,6 +461,36 @@ pub(crate) fn player_shop_crop(capture: &ShopCapture, shop: Option<&ShopList>) -
     Some((Region::PlayerShop, Frame { width: x1 - x0, height: y1 - y0, rgba, at_ms: frame.at_ms }))
 }
 
+/// How far the crop of a Status Bar capture reaches around the bar's level, job and name
+/// (px): enough for the reader to find them in it again.
+const STATUS_BAR_MARGIN: u32 = 10;
+
+/// The Status Bar's level, job and name in a Status Bar capture, for a Bug Report, as
+/// `samples/status-bar` keeps them: none of the rest of the bar, nor the game above it.
+/// `None` with no Status Bar.
+pub(crate) fn status_bar_crop(capture: &StatusBarCapture, bar: Option<&StatusBar>) -> Option<(Region, Frame)> {
+    let frame = &capture.frame;
+    let area = bar?.area;
+    if frame.rgba.len() < (frame.width * frame.height * 4) as usize {
+        return None;
+    }
+    let at = |screen: i32, origin: i32, size: u32| (screen - origin).clamp(0, size as i32) as u32;
+    let margin = STATUS_BAR_MARGIN as i32;
+    let x0 = at(area.x - margin, capture.origin.x, frame.width);
+    let y0 = at(area.y - margin, capture.origin.y, frame.height);
+    let x1 = at(area.x + area.width as i32 + margin, capture.origin.x, frame.width);
+    let y1 = at(area.y + area.height as i32 + margin, capture.origin.y, frame.height);
+    if x1 <= x0 || y1 <= y0 {
+        return None;
+    }
+    let mut rgba = Vec::with_capacity(((x1 - x0) * (y1 - y0) * 4) as usize);
+    for y in y0..y1 {
+        let row = ((y * frame.width + x0) * 4) as usize;
+        rgba.extend_from_slice(&frame.rgba[row..row + ((x1 - x0) * 4) as usize]);
+    }
+    Some((Region::StatusBar, Frame { width: x1 - x0, height: y1 - y0, rgba, at_ms: frame.at_ms }))
+}
+
 /// A crop of a captured region, as a PNG.
 struct Crop {
     /// Its name in the report: `crops/exp-bar-<capture ms>.png`.
@@ -482,6 +541,7 @@ struct Last {
     unavailable_hotkeys: Option<(Vec<String>, Vec<String>)>,
     title_lines: Option<Option<TitleLines>>,
     shop: Option<Option<ShopList>>,
+    status_bar: Option<Option<StatusBar>>,
     exp_bar_rgba: Vec<u8>,
 }
 
@@ -538,6 +598,7 @@ impl Recorder {
                 unavailable_hotkeys: None,
                 title_lines: None,
                 shop: None,
+                status_bar: None,
                 exp_bar_rgba: Vec::new(),
             },
             crops: VecDeque::new(),
@@ -592,6 +653,14 @@ impl Recorder {
                 *shop = None;
             } else {
                 self.last.shop = Some(shop.clone());
+            }
+        }
+        if let Event::StatusBar { bar, same, .. } = &mut event {
+            if self.last.status_bar.as_ref() == Some(bar) {
+                *same = true;
+                *bar = None;
+            } else {
+                self.last.status_bar = Some(bar.clone());
             }
         }
         let line = match (&event, at_ms) {
@@ -700,6 +769,17 @@ impl Recorder {
                 };
                 (!same, !same && unread)
             }
+            // One that changed; for the run, one the core made something of (another
+            // Character, a misread name, a level), or with a part found but not read, as it
+            // may have been misread.
+            Region::StatusBar => {
+                let same = matches!(line.event, Event::StatusBar { same: true, .. });
+                let unread = matches!(
+                    &line.event,
+                    Event::StatusBar { bar: Some(bar), .. } if bar.level.is_none() || bar.job.is_none() || bar.name.is_none()
+                );
+                (!same, !same && (unread || line.notes.iter().any(Note::is_unusual)))
+            }
         };
         if changed || kept {
             let name = match region {
@@ -708,6 +788,7 @@ impl Recorder {
                 // Named as `samples/item-tooltip` names its frames: the pointer's spot in it.
                 Region::ItemTooltip { pointer: (x, y) } => format!("crops/item-tooltip-{:010}@{x},{y}.png", frame.at_ms),
                 Region::PlayerShop => format!("crops/player-shop-{:010}.png", frame.at_ms),
+                Region::StatusBar => format!("crops/status-bar-{:010}.png", frame.at_ms),
             };
             if let Some(png) = png(&frame) {
                 line.crop = Some(name.clone());
@@ -1177,6 +1258,7 @@ pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
     let mut wall_clock: Option<(u64, u64)> = None;
     let mut title_lines: Option<TitleLines> = None;
     let mut shop: Option<ShopList> = None;
+    let mut status_bar: Option<StatusBar> = None;
     for line in &recording.lines {
         if let Some((unix_ms, at)) = wall_clock {
             minerva.wall_clock = Some(unix_ms + line.t.saturating_sub(at));
@@ -1246,6 +1328,11 @@ pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
                 let read = if same { shop.clone() } else { read };
                 shop.clone_from(&read);
                 minerva.on_player_shop_reading(ShopReading { shop: read, at_ms });
+            }
+            Event::StatusBar { at_ms, bar, same } => {
+                let bar = if same { status_bar.clone() } else { bar };
+                status_bar.clone_from(&bar);
+                minerva.on_status_bar_reading(StatusBarReading { bar, at_ms });
             }
             Event::ChooseDealLine { line } => {
                 minerva.choose_deal_line(&line);
@@ -1368,7 +1455,13 @@ impl Recording {
             );
             let notable = acted || !line.notes.is_empty() || line.map.is_some() || line.answers.iter().any(Answer::is_set);
             let quiet = consequences.is_empty()
-                && matches!(line.event, Event::Tick {} | Event::Title { same: true, .. } | Event::PlayerShop { same: true, .. });
+                && matches!(
+                    line.event,
+                    Event::Tick {}
+                        | Event::Title { same: true, .. }
+                        | Event::PlayerShop { same: true, .. }
+                        | Event::StatusBar { same: true, .. }
+                );
             if notable || (line.t >= from_ms && !quiet) {
                 let mut text = format!("{}  {}", clock(line.event.at_ms().unwrap_or(line.t)), line.event.describe(title));
                 if !consequences.is_empty() {
@@ -1448,6 +1541,16 @@ impl Note {
             }
             Note::Relearned { from, to } => format!("the level was learned wrong: {} now, not {}", level(*to), level(*from)),
             Note::CharacterSwitch { level: l } => format!("another character, a level of {}: a new Session", level(*l)),
+            Note::NameSwitch { name } => format!("the Status Bar names another character, {name:?}: a new Session"),
+            Note::LevelSwitch { level } => {
+                format!("the Status Bar shows another character's level, {level}, and no name: a new Session")
+            }
+            Note::NameMisread { name } => format!("the Status Bar's name misread as {name:?} while in sight: set aside"),
+            Note::LevelShown { level } => format!("the Status Bar shows level {level}: the next reading is in it"),
+            Note::LevelUpUncounted => "the Status Bar's level-up couldn't be counted: the new level is learned afresh".to_string(),
+            Note::LevelChanged { from, to } => {
+                format!("the Status Bar shows level {to}, not {from}: the level is learned afresh")
+            }
             Note::Unseen => "the bar went unread over 2 minutes: taken without counting the change".to_string(),
             Note::Visit => "a new Visit".to_string(),
         }
@@ -1461,6 +1564,7 @@ impl Event {
             Event::Title { at_ms, .. }
             | Event::ExpBar { at_ms, .. }
             | Event::PlayerShop { at_ms, .. }
+            | Event::StatusBar { at_ms, .. }
             | Event::OpenCardMeowdbPage { at_ms } => Some(*at_ms),
             _ => None,
         }
@@ -1540,6 +1644,15 @@ impl Event {
                     })
                     .collect();
                 format!("Player Shop read: {}", if rows.is_empty() { "no listings".into() } else { rows.join(", ") })
+            }
+            Event::StatusBar { same: true, .. } => "Status Bar read as before".to_string(),
+            Event::StatusBar { bar: None, .. } => "no Status Bar".to_string(),
+            Event::StatusBar { bar: Some(bar), .. } => {
+                let or_unread = |part: Option<String>| part.unwrap_or_else(|| "?".to_string());
+                let level = or_unread(bar.level.map(|level| level.to_string()));
+                let job = or_unread(bar.job.as_ref().map(|job| format!("{job:?}")));
+                let name = or_unread(bar.name.as_ref().map(|name| format!("{name:?}")));
+                format!("Status Bar read: level {level}, {job}, {name}")
             }
             Event::ChooseDealLine { line } => format!("Item Card's market line {line} chosen as the Deal Line"),
             Event::Restore { .. } => "settings restored".to_string(),

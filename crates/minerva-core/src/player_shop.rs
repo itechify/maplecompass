@@ -27,8 +27,8 @@
 
 use crate::Frame;
 use crate::panel::{ScreenPoint, ScreenRect};
-use crate::prep::{PAD, Rect};
-use crate::recogniser::{Recogniser, frame_to_rgb};
+use crate::prep::Rect;
+use crate::recogniser::{Recogniser, RememberedLines, frame_to_rgb};
 use image::{GrayImage, Luma, RgbImage};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -95,7 +95,7 @@ pub struct ListedPrice {
 pub struct PlayerShopReader {
     recogniser: Recogniser,
     /// What each line read as, by its ink.
-    read: HashMap<Vec<u8>, Option<String>>,
+    read: RememberedLines,
     /// The slots a listing was read in, while the list stays where it is: the column its
     /// bands start at, and each slot's top (frame px).
     slots: Option<(u32, Vec<u32>)>,
@@ -159,12 +159,10 @@ const FOREIGN: f32 = 14.0;
 const EDGE: u32 = 2;
 /// The lines are enlarged this many times before ocrs reads them.
 const UPSCALE: u32 = 2;
-/// How many lines' readings are remembered before they are forgotten all at once.
-const REMEMBERED: usize = 512;
 
 impl PlayerShopReader {
     pub fn bundled() -> Self {
-        Self { recogniser: Recogniser::bundled(), read: HashMap::new(), slots: None }
+        Self { recogniser: Recogniser::bundled(), read: RememberedLines::default(), slots: None }
     }
 
     pub fn read(&mut self, capture: &ShopCapture) -> ShopReading {
@@ -239,40 +237,7 @@ impl PlayerShopReader {
     /// one's ink read as: one entry per line, `None` where nothing was read.
     fn read_lines(&mut self, img: &RgbImage, lines: &[&TextLine], scale: f32) -> Vec<Option<String>> {
         let inks: Vec<GrayImage> = lines.iter().map(|line| line_ink(img, line, scale)).collect();
-        let unknown: Vec<usize> = (0..inks.len()).filter(|&i| !self.read.contains_key(inks[i].as_raw())).collect();
-        if !unknown.is_empty() {
-            let read = self.recognise(&unknown.iter().map(|&i| &inks[i]).collect::<Vec<_>>());
-            if self.read.len() + unknown.len() > REMEMBERED {
-                self.read.clear();
-            }
-            for (&i, text) in unknown.iter().zip(read) {
-                self.read.insert(inks[i].as_raw().clone(), text);
-            }
-        }
-        inks.iter().map(|ink| self.read.get(ink.as_raw()).cloned().flatten()).collect()
-    }
-
-    /// ocrs's reading of each line's ink, stacked on one canvas: `None` where it read
-    /// nothing, or for every line if it couldn't run.
-    fn recognise(&self, inks: &[&GrayImage]) -> Vec<Option<String>> {
-        let width = inks.iter().map(|ink| ink.width()).max().unwrap_or(0) + 2 * PAD;
-        let height = inks.iter().map(|ink| ink.height() + PAD).sum::<u32>() + PAD;
-        let mut canvas = GrayImage::from_pixel(width, height, Luma([255]));
-        let mut rects = Vec::with_capacity(inks.len());
-        let mut y = PAD;
-        for ink in inks {
-            image::imageops::replace(&mut canvas, *ink, PAD as i64, y as i64);
-            rects.push(Rect { x: PAD * UPSCALE, y: y * UPSCALE, w: ink.width() * UPSCALE, h: ink.height() * UPSCALE });
-            y += ink.height() + PAD;
-        }
-        let canvas = image::imageops::resize(&canvas, width * UPSCALE, height * UPSCALE, image::imageops::FilterType::Triangle);
-        let Some(lines) = self.recogniser.read_lines(&canvas, &rects) else { return vec![None; inks.len()] };
-        let text = |line: Option<&ocrs::TextLine>| {
-            let text = line?.to_string();
-            let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
-            (!text.is_empty()).then_some(text)
-        };
-        (0..inks.len()).map(|i| text(lines.get(i).and_then(|line| line.as_ref()))).collect()
+        self.read.read(&self.recogniser, &inks, UPSCALE)
     }
 }
 
