@@ -9,7 +9,7 @@ use common::player::Player;
 use common::{CONSTRUCTION_SITE_ID, NORTHERN_TOP_ID, SUNSET_SKY_ID, tracking};
 use minerva_core::{
     BESTS_VERSION, CharacterBests, LeaderboardAnswer, LeaderboardCharacter, LeaderboardEntry, LeaderboardStatus,
-    LeaderboardToggle, LeaderboardUpload, MapBests, Minerva, PanelControl, PanelState, RejectedEntry, RejectedReason, SavedBests, ScreenRect,
+    LeaderboardToggle, LeaderboardUpload, MapBests, Minerva, PanelControl, PanelState, RejectedEntry, RejectedListing, RejectedReason, SavedBests, ScreenRect,
     Settings, StatusBar, StatusBarReading, VisitBest,
 };
 
@@ -228,10 +228,18 @@ fn entries_the_site_kept_off_are_listed_but_the_upload_went_through() {
     let rejected = vec![
         RejectedEntry { map: SUNSET_SKY_ID.to_string(), band: 20, reason: RejectedReason::OverCap { cap: 8000 } },
         RejectedEntry { map: CONSTRUCTION_SITE_ID.to_string(), band: 30, reason: RejectedReason::Removed {} },
+        RejectedEntry { map: NORTHERN_TOP_ID.to_string(), band: 1, reason: RejectedReason::Removed {} },
     ];
-    let state = minerva.on_leaderboard_answer(id, LeaderboardAnswer::Accepted { rejected: rejected.clone() }).clone();
+    let state = minerva.on_leaderboard_answer(id, LeaderboardAnswer::Accepted { rejected }).clone();
     let up = toggle(&state, "Egbert");
-    assert_eq!((up.status, up.uploaded_at_unix_ms, up.rejected), (LeaderboardStatus::UpToDate, Some(WALL), rejected));
+    assert_eq!((up.status, up.uploaded_at_unix_ms), (LeaderboardStatus::UpToDate, Some(WALL)));
+    // Each with its Level Band's levels, for the window to name.
+    let listed = vec![
+        RejectedListing { map: SUNSET_SKY_ID.to_string(), lowest_level: 20, highest_level: 29, reason: RejectedReason::OverCap { cap: 8000 } },
+        RejectedListing { map: CONSTRUCTION_SITE_ID.to_string(), lowest_level: 30, highest_level: 39, reason: RejectedReason::Removed {} },
+        RejectedListing { map: NORTHERN_TOP_ID.to_string(), lowest_level: 1, highest_level: 9, reason: RejectedReason::Removed {} },
+    ];
+    assert_eq!(up.rejected, listed);
     // The site says so at every upload: it isn't tried again for it.
     assert_eq!(sent(minerva.tick(60 * MIN)), []);
 }

@@ -90,27 +90,21 @@ impl SavedBests {
             Some(name) => self.characters.iter().find(|c| c.name == name).map_or(&[], |c| &c.maps),
         }
     }
+}
 
-    /// The best Visit of the Character named `character` on each map in each Level Band, as
-    /// the Map Leaderboards rank them: by map in the order they are saved, then by band,
-    /// lowest first. A Visit with no level read has no band, and isn't among them; nor are
-    /// the Unassigned bests.
-    pub fn band_bests(&self, character: &str) -> Vec<BandBest> {
-        let mut bests = Vec::new();
-        for map in self.maps_of(Some(character)) {
-            let mut bands: Vec<BandBest> = Vec::new();
-            // Highest first: the first in each band is its best.
-            for visit in &map.visits {
-                let Some(band) = visit.level.map(LevelBand::of) else { continue };
-                if bands.iter().all(|b| b.band != band) {
-                    bands.push(BandBest { map: map.id.clone(), band, visit: visit.clone() });
-                }
-            }
-            bands.sort_by_key(|b| b.band);
-            bests.extend(bands);
+/// The best of `visits` (a map's, highest first) in each Level Band they were set in, lowest
+/// band first. A Visit with no level read has no band, and isn't among them.
+pub(crate) fn band_bests<'a>(visits: impl IntoIterator<Item = &'a VisitBest>) -> Vec<(LevelBand, &'a VisitBest)> {
+    let mut bands: Vec<(LevelBand, &VisitBest)> = Vec::new();
+    // Highest first: the first in each band is its best.
+    for visit in visits {
+        let Some(band) = visit.level.map(LevelBand::of) else { continue };
+        if bands.iter().all(|(b, _)| *b != band) {
+            bands.push((band, visit));
         }
-        bests
     }
+    bands.sort_by_key(|(band, _)| *band);
+    bands
 }
 
 /// One Character's bests.
@@ -174,17 +168,6 @@ impl LevelBand {
     pub fn highest(self) -> u32 {
         self.0 * 10 + 9
     }
-}
-
-/// A Character's best Visit on a map in a Level Band: one entry on its Map Leaderboard.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BandBest {
-    /// The 9-digit map ID.
-    pub map: String,
-    pub band: LevelBand,
-    /// The Visit's best, with the level and job that set it.
-    pub visit: VisitBest,
 }
 
 /// Who a best is stamped with, at the refresh that sets it: the Character the Status Bar

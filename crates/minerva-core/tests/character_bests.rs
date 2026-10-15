@@ -204,18 +204,17 @@ fn a_character_that_levels_up_keeps_its_best_in_each_lower_level_band_past_the_1
         window.characters[0].maps[0].visits.iter().map(|v| (v.exp_per_hour, v.level)).collect();
     assert_eq!(listed, expected);
 
-    // His best in each band on the map, as the Map Leaderboards would rank them.
-    let bands: Vec<(String, u32, u32, u64, Option<u32>)> = player
-        .minerva
-        .bests()
-        .band_bests("Egbert")
-        .into_iter()
-        .map(|b| (b.map, b.band.lowest(), b.band.highest(), b.visit.exp_per_hour, b.visit.level))
+    // Shown on the Map Leaderboards, his best in each band on the map is an entry.
+    player.minerva.show_on_leaderboards("Egbert", true);
+    let at = player.at;
+    let state = player.minerva.tick(at);
+    let entries: Vec<(String, u32, u64)> = state.leaderboard_uploads[0]
+        .entries
+        .iter()
+        .flatten()
+        .map(|e| (e.map.clone(), e.level, e.exp_per_hour))
         .collect();
-    assert_eq!(
-        bands,
-        [(SUNSET_SKY_ID.to_string(), 10, 19, 3600, Some(19)), (SUNSET_SKY_ID.to_string(), 20, 29, 7200, Some(20))]
-    );
+    assert_eq!(entries, [(SUNSET_SKY_ID.to_string(), 19, 3600), (SUNSET_SKY_ID.to_string(), 20, 7200)]);
 }
 
 /// A Magician's Visit best of `exp_per_hour` at `level`, with no date.

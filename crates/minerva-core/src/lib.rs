@@ -60,7 +60,7 @@ pub use item_lookup::{ItemChoice, ItemHit, ItemLookup, ItemLookupLine, OurWindow
 pub use item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReader, ItemTooltipReading};
 pub use leaderboards::{
     LeaderboardAnswer, LeaderboardCharacter, LeaderboardEntry, LeaderboardStatus, LeaderboardToggle, LeaderboardUpload,
-    RejectedEntry, RejectedReason, read_leaderboard_answer,
+    RejectedEntry, RejectedListing, RejectedReason, read_leaderboard_answer,
 };
 pub use map_data::{
     HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty, Portal, PortalKind,
@@ -75,7 +75,7 @@ pub use panel::{
     PlacementMode, ScreenPoint,
     ScreenRect, Section, Size,
 };
-pub use personal_best::{BESTS_VERSION, BandBest, CharacterBests, LevelBand, MapBests, SavedBests, VisitBest};
+pub use personal_best::{BESTS_VERSION, CharacterBests, MapBests, SavedBests, VisitBest};
 pub use player_shop::{ListedPrice, PlayerShopReader, ShopCapture, ShopList, ShopReading, ShopRow};
 pub use search::{
     DensityTier, Destination, HuntingTarget, ItemMatch, ItemsMissing, MapMatch, Matches, MobChoice, MobMatch, RouteStop,
@@ -88,7 +88,7 @@ pub use setup::{
     TitleRegion,
 };
 pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
-pub use status_bar::{JOBS, MAX_LEVEL, STATUS_BAR_STRIP, StatusBar, StatusBarCapture, StatusBarReader, StatusBarReading};
+pub use status_bar::{MAX_LEVEL, STATUS_BAR_STRIP, StatusBar, StatusBarCapture, StatusBarReader, StatusBarReading};
 pub use world::{Distance, Step, Travel};
 
 use bests_window::BestsWindow;

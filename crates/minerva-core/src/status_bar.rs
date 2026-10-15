@@ -68,7 +68,7 @@ pub struct StatusBar {
 /// The jobs as the game names them, which a job read must be one of, exactly. Only
 /// "Magician" has been seen in a sample: the rest are the game's job names as players know
 /// them, and one spelt otherwise on the bar reads as unreadable until a sample shows it.
-pub const JOBS: &[&str] = &[
+const JOBS: &[&str] = &[
     "Beginner",
     "Warrior",
     "Fighter",
@@ -443,13 +443,16 @@ fn name_of(read: &str) -> Option<String> {
     shaped.then(|| read.to_string())
 }
 
+// What ocrs reads is the reader's own: no public input carries it, and a frame that ocrs
+// misreads in just this way can't be made to order. So, as `player_shop.rs`'s prices, the text
+// a misread could be is checked here. What the samples read (13, "Magician", "Egbert") is
+// checked through the public inputs, in `tests/status_bar_samples.rs`.
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn a_level_reads_only_as_a_digit_per_tile_with_its_ones_on_narrow_glyphs() {
-        assert_eq!(level_of("13", &[true, false]), Some(13));
         assert_eq!(level_of("l3", &[true, false]), Some(13));
         assert_eq!(level_of("1 3", &[true, false]), Some(13));
         assert_eq!(level_of("113", &[true, true, false]), Some(113));
@@ -468,7 +471,6 @@ mod tests {
 
     #[test]
     fn a_job_reads_only_as_one_the_game_names() {
-        assert_eq!(job_of("Magician"), Some("Magician".to_string()));
         assert_eq!(job_of("White  Knight"), Some("White Knight".to_string()));
         assert_eq!(job_of("Wizard (Fire,Poison)"), Some("Wizard (Fire, Poison)".to_string()));
         for wrong in ["Maqician", "magician", "Magic1an", ""] {
@@ -478,7 +480,6 @@ mod tests {
 
     #[test]
     fn a_name_reads_only_as_letters_and_digits() {
-        assert_eq!(name_of("Egbert"), Some("Egbert".to_string()));
         assert_eq!(name_of("Xx2Cool4U"), Some("Xx2Cool4U".to_string()));
         for wrong in ["Eg bert", "Egbert.", "E", "Abcdefghijklm", "Ëgbert"] {
             assert_eq!(name_of(wrong), None, "{wrong}");

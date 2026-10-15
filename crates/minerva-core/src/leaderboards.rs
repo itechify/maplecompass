@@ -30,7 +30,7 @@
 //!   turns them off (which deletes their entries) and on again. One shown after isn't held:
 //!   turning it on asks with the count.
 
-use crate::personal_best::{LevelBand, SavedBests};
+use crate::personal_best::{LevelBand, SavedBests, VisitBest, band_bests};
 use crate::SITE_URL;
 use crate::status_bar::MAX_LEVEL;
 use serde::{Deserialize, Serialize};
@@ -178,6 +178,31 @@ pub struct RejectedEntry {
     pub reason: RejectedReason,
 }
 
+/// An entry the Map Leaderboards didn't take, as the Personal Bests window lists it: with its
+/// Level Band's levels.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RejectedListing {
+    /// The 9-digit map ID.
+    pub map: String,
+    /// The Level Band's first level and last: 1 and 9, 10 and 19, and so on.
+    pub lowest_level: u32,
+    pub highest_level: u32,
+    pub reason: RejectedReason,
+}
+
+impl From<&RejectedEntry> for RejectedListing {
+    fn from(entry: &RejectedEntry) -> Self {
+        let band = LevelBand::of(entry.band);
+        Self {
+            map: entry.map.clone(),
+            lowest_level: band.lowest(),
+            highest_level: band.highest(),
+            reason: entry.reason.clone(),
+        }
+    }
+}
+
 /// Why the Map Leaderboards didn't take an entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
@@ -219,7 +244,7 @@ pub struct LeaderboardToggle {
     /// has yet.
     pub uploaded_at_unix_ms: Option<u64>,
     /// The entries the site didn't take at the last upload.
-    pub rejected: Vec<RejectedEntry>,
+    pub rejected: Vec<RejectedListing>,
 }
 
 /// Where a Character stands with the Map Leaderboards.
@@ -425,7 +450,7 @@ impl Leaderboards {
             maps: maps.len(),
             status,
             uploaded_at_unix_ms: site.and_then(|site| site.saved.uploaded_at_unix_ms),
-            rejected: site.map_or_else(Vec::new, |site| site.rejected.clone()),
+            rejected: site.map_or_else(Vec::new, |site| site.rejected.iter().map(RejectedListing::from).collect()),
         }
     }
 }
@@ -468,28 +493,15 @@ fn encoded(name: &str) -> String {
 fn entries(history: &SavedBests, name: &str, now_unix_ms: u64) -> Vec<LeaderboardEntry> {
     let mut entries = Vec::new();
     for map in history.maps_of(Some(name)) {
-        let mut bands: Vec<(LevelBand, LeaderboardEntry)> = Vec::new();
-        // Highest first: the first in each band is its best.
-        for visit in &map.visits {
-            let (Some(level), Some(job), Some(set_at)) = (visit.level, &visit.job, visit.set_at_unix_ms) else { continue };
+        let entry = |visit: &VisitBest| {
+            let (Some(level), Some(job), Some(set_at)) = (visit.level, &visit.job, visit.set_at_unix_ms) else { return None };
             let job_fits = (1..=MOST_JOB_CHARS).contains(&job.chars().count());
-            if !(1..=MAX_LEVEL).contains(&level) || !job_fits || set_at > now_unix_ms.saturating_add(AHEAD_MS) {
-                continue;
-            }
-            let band = LevelBand::of(level);
-            if bands.iter().all(|(b, _)| *b != band) {
-                let entry = LeaderboardEntry {
-                    map: map.id.clone(),
-                    level,
-                    job: job.clone(),
-                    exp_per_hour: visit.exp_per_hour,
-                    set_at,
-                };
-                bands.push((band, entry));
-            }
-        }
-        bands.sort_by_key(|(band, _)| *band);
-        entries.extend(bands.into_iter().map(|(_, entry)| entry));
+            let fits = (1..=MAX_LEVEL).contains(&level) && job_fits && set_at <= now_unix_ms.saturating_add(AHEAD_MS);
+            fits.then(|| LeaderboardEntry { map: map.id.clone(), level, job: job.clone(), exp_per_hour: visit.exp_per_hour, set_at })
+        };
+        // One that can't be an entry leaves the next best in its band to stand in.
+        let can_be_entries = map.visits.iter().filter(|visit| entry(visit).is_some());
+        entries.extend(band_bests(can_be_entries).into_iter().filter_map(|(_, visit)| entry(visit)));
     }
     entries
 }

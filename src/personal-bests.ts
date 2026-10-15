@@ -41,11 +41,12 @@ type BestsMap = {
   visits: BestsVisit[];
 };
 
-/** Mirror of `minerva_core::RejectedEntry`: an entry the Map Leaderboards kept off. */
+/** Mirror of `minerva_core::RejectedListing`: an entry the Map Leaderboards kept off. */
 type Rejected = {
   map: string;
-  /** The Level Band by its first level: 1, 10, 20… */
-  band: number;
+  /** Its Level Band's first level and last: 1 and 9, 10 and 19… */
+  lowestLevel: number;
+  highestLevel: number;
   reason: { overCap: { cap: number } } | { removed: Record<string, never> };
 };
 
@@ -666,7 +667,7 @@ function standing(name: string, t: Toggle): (string | HTMLElement)[] {
 /** An entry the site kept off, in words: "Sunset Sky, Lv 20–29: over 5× its solo EXP/h". */
 function rejectedWords(r: Rejected) {
   const map = maps.find((m) => m.id === r.map);
-  const levels = `Lv ${r.band}–${r.band === 1 ? 9 : r.band + 9}`;
+  const levels = `Lv ${r.lowestLevel}–${r.highestLevel}`;
   const why = "overCap" in r.reason ? `above ${whole(r.reason.overCap.cap)} EXP/h, 5× its solo EXP/h` : "taken down by the site";
   return `${map ? mapName(map) : `Map ${r.map}`}, ${levels}: ${why}`;
 }
