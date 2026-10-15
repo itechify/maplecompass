@@ -196,8 +196,22 @@ pub enum Event {
     RestoreMarketPrices { prices: SavedMarketPrices },
     /// A tool of the player's own left `import` for their Market Lines (ADR 0013).
     ImportMarketPrices { import: MarketImport },
-    /// The player removed the Visit whose best was `visit` from `map`'s Visit History.
-    RemoveVisit { map: String, visit: VisitBest },
+    /// The player removed the Visit whose best was `visit` from `map`'s Visit History, the
+    /// Character's named `character` (the Unassigned one for `None`, as every Visit was
+    /// before Characters).
+    RemoveVisit {
+        map: String,
+        visit: VisitBest,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        character: Option<String>,
+    },
+    /// The player moved the Unassigned Visit whose best was `visit` on `map` to the Character
+    /// named `to`.
+    MoveVisit { map: String, visit: VisitBest, to: String },
+    /// The player removed the Character named `name`, with their bests.
+    RemoveCharacter { name: String },
+    /// The player merged the Character named `from` into the one named `into`.
+    MergeCharacters { from: String, into: String },
     /// Not an input: an error the shell or one of our windows ran into (`from`), which
     /// would otherwise go nowhere.
     Error { from: String, message: String },
@@ -1389,8 +1403,17 @@ pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
             Event::RestoreBests { bests } => {
                 minerva.restore_bests(bests);
             }
-            Event::RemoveVisit { map, visit } => {
-                minerva.remove_visit(&map, visit);
+            Event::RemoveVisit { map, visit, character } => {
+                minerva.remove_visit(character.as_deref(), &map, &visit);
+            }
+            Event::MoveVisit { map, visit, to } => {
+                minerva.move_visit(&map, &visit, &to);
+            }
+            Event::RemoveCharacter { name } => {
+                minerva.remove_character(&name);
+            }
+            Event::MergeCharacters { from, into } => {
+                minerva.merge_characters(&from, &into);
             }
             Event::Error { from, message } => minerva.note_error(&from, &message),
             Event::BugReport {} => minerva.mark_bug_report(),
@@ -1450,6 +1473,9 @@ impl Recording {
                     | Event::Restore { .. }
                     | Event::RestoreBests { .. }
                     | Event::RemoveVisit { .. }
+                    | Event::MoveVisit { .. }
+                    | Event::RemoveCharacter { .. }
+                    | Event::MergeCharacters { .. }
                     | Event::Error { .. }
                     | Event::BugReport {}
             );
@@ -1656,11 +1682,19 @@ impl Event {
             }
             Event::ChooseDealLine { line } => format!("Item Card's market line {line} chosen as the Deal Line"),
             Event::Restore { .. } => "settings restored".to_string(),
-            Event::RestoreBests { bests } => format!("Personal Bests restored ({} maps)", bests.maps.len()),
-            Event::RemoveVisit { map, visit } => {
-                let set = visit.set_at_unix_ms.map_or("no date".to_string(), |at| format!("set at {at}"));
-                format!("Visit removed from {map}'s Visit History: {} EXP/h, {set}", thousands(visit.exp_per_hour))
+            Event::RestoreBests { bests } => {
+                let maps = bests.unassigned.len() + bests.characters.iter().map(|c| c.maps.len()).sum::<usize>();
+                format!("Personal Bests restored ({maps} maps, {} Characters)", bests.characters.len())
             }
+            Event::RemoveVisit { map, visit, character } => {
+                let whose = character.as_ref().map_or("the Unassigned".to_string(), |name| format!("{name:?}'s"));
+                format!("Visit removed from {whose} Visit History of {map}: {}", visit_words(visit))
+            }
+            Event::MoveVisit { map, visit, to } => {
+                format!("Unassigned Visit on {map} moved to {to:?}: {}", visit_words(visit))
+            }
+            Event::RemoveCharacter { name } => format!("Character {name:?} removed, with their bests"),
+            Event::MergeCharacters { from, into } => format!("Character {from:?} merged into {into:?}"),
             Event::WallClock { unix_ms } => format!("wall clock {unix_ms} (ms since 1970)"),
             Event::Error { from, message } => format!("{from} error: {message}"),
             Event::BugReport {} => "Bug Report saved".to_string(),
@@ -1723,6 +1757,14 @@ fn json(value: &impl Serialize) -> String {
 fn clock(ms: u64) -> String {
     let s = ms / 1000;
     format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
+}
+
+/// A Visit's best in words: "7,200 EXP/h, level 23 \"Magician\", set at 1791547200000".
+fn visit_words(visit: &VisitBest) -> String {
+    let set = visit.set_at_unix_ms.map_or("no date".to_string(), |at| format!("set at {at}"));
+    let level = visit.level.map(|level| format!(", level {level}")).unwrap_or_default();
+    let job = visit.job.as_ref().map(|job| format!(" {job:?}")).unwrap_or_default();
+    format!("{} EXP/h{level}{job}, {set}", thousands(visit.exp_per_hour))
 }
 
 fn thousands(n: u64) -> String {

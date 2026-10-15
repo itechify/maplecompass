@@ -29,7 +29,7 @@ use crate::grind_tracker::ClientOffset;
 use crate::map_data::MapData;
 use crate::map_index::MapEntry;
 use crate::panel::{GameWindow, ScreenRect, Size, in_view};
-use crate::personal_best::SavedBests;
+use crate::personal_best::{MapBests, SavedBests};
 use crate::shown_map::LevelRange;
 use crate::meowdb;
 use serde::Serialize;
@@ -44,11 +44,27 @@ pub struct PersonalBestsWindow {
     /// Where it goes on screen; `None` while it is hidden: closed, with no game window,
     /// while setup is open, or while another app is in front (see [`crate::Layer`]).
     pub placement: Option<ScreenRect>,
-    /// Every map with a Personal Best, highest EXP/h first; none while it is closed.
-    pub maps: Vec<PersonalBestsMap>,
+    /// Whose bests it can show, one at a time: each Character with a best, and the one
+    /// playing, by name; then the Unassigned bests, if there are any or no Character is
+    /// named. None while it is closed.
+    pub characters: Vec<PersonalBestsCharacter>,
     /// [`crate::OSMS_AND_MEOWDB_CREDIT`]: the names, levels and ceilings are from OSMS's data,
     /// and the rows open MeowDB's pages.
     pub credit: &'static str,
+}
+
+/// One Character's bests in the Personal Bests window, or the Unassigned ones: the choices
+/// of its picker.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalBestsCharacter {
+    /// The Character's name; `None` for the Unassigned bests.
+    pub name: Option<String>,
+    /// They are the Character playing, as the Status Bar names them (the Unassigned bests,
+    /// while it names no one): the one the picker shows until the player picks another.
+    pub current: bool,
+    /// Every map they have a Personal Best on, highest EXP/h first.
+    pub maps: Vec<PersonalBestsMap>,
 }
 
 /// One map's row in the Personal Bests window.
@@ -89,13 +105,17 @@ pub struct PersonalBestsMap {
     pub visits: Vec<PersonalBestsVisit>,
 }
 
-/// One of a map's Visits in the Personal Bests window: what the player removes it by.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+/// One of a map's Visits in the Personal Bests window: what the player removes, or moves, it
+/// by.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersonalBestsVisit {
-    /// Its best: the Rolling Rate's EXP/h, and when it was set.
+    /// Its best: the Rolling Rate's EXP/h, when it was set, and the level and job that set
+    /// it, as the Status Bar showed them (`None`: not read).
     pub exp_per_hour: u64,
     pub set_at_unix_ms: Option<u64>,
+    pub level: Option<u32>,
+    pub job: Option<String>,
     /// The best as a share of the map's solo EXP/h ceiling, in hundredths of a percent, as
     /// the row's; `None` with no ceiling.
     pub ceiling_share_hundredths: Option<u64>,
@@ -148,18 +168,49 @@ impl BestsWindow {
     }
 }
 
-/// The Personal Bests window's rows for the bests `saved`, with `this_visit` the Visit
-/// under way's best among them: its map, and its place in the map's Visits. `map` gives a
-/// map's entry in the map list and its data, if it is in the list; `here` is the map the
-/// player is certainly on, if any.
-pub(crate) fn rows<'a>(
+/// The Personal Bests window's choices for the bests `saved`, with `current` the Character
+/// playing (`None`: none named), and `this_visit` the Visit under way's best among them:
+/// whose it is, its map, and its place in the map's Visits. `map` gives a map's entry in the
+/// map list and its data, if it is in the list; `here` is the map the player is certainly
+/// on, if any.
+pub(crate) fn characters<'a>(
     saved: &SavedBests,
+    current: Option<&str>,
+    this_visit: Option<(Option<&str>, &str, usize)>,
+    map: impl Fn(&str) -> Option<(&'a MapEntry, &'a MapData)> + Copy,
+    here: Option<&str>,
+) -> Vec<PersonalBestsCharacter> {
+    let mut names: Vec<&str> = saved.characters.iter().map(|c| c.name.as_str()).collect();
+    names.extend(current.filter(|name| !names.contains(name)));
+    names.sort_by_key(|name| (name.to_lowercase(), *name));
+    let mut owners: Vec<Option<&str>> = names.into_iter().map(Some).collect();
+    if !saved.unassigned.is_empty() || current.is_none() {
+        owners.push(None);
+    }
+    owners
+        .into_iter()
+        .map(|owner| {
+            let this_visit = this_visit.filter(|(whose, _, _)| *whose == owner).map(|(_, map, at)| (map, at));
+            PersonalBestsCharacter {
+                name: owner.map(String::from),
+                current: owner == current,
+                maps: rows(saved.maps_of(owner), this_visit, map, here),
+            }
+        })
+        .collect()
+}
+
+/// The Personal Bests window's rows for one Character's bests on `saved` maps, with
+/// `this_visit` the Visit under way's best among them: its map, and its place in the map's
+/// Visits. `map` gives a map's entry in the map list and its data, if it is in the list;
+/// `here` is the map the player is certainly on, if any.
+fn rows<'a>(
+    saved: &[MapBests],
     this_visit: Option<(&str, usize)>,
     map: impl Fn(&str) -> Option<(&'a MapEntry, &'a MapData)>,
     here: Option<&str>,
 ) -> Vec<PersonalBestsMap> {
     let mut maps: Vec<PersonalBestsMap> = saved
-        .maps
         .iter()
         .filter_map(|bests| {
             let best = bests.visits.first()?;
@@ -172,6 +223,8 @@ pub(crate) fn rows<'a>(
                 .map(|(at, visit)| PersonalBestsVisit {
                     exp_per_hour: visit.exp_per_hour,
                     set_at_unix_ms: visit.set_at_unix_ms,
+                    level: visit.level,
+                    job: visit.job.clone(),
                     ceiling_share_hundredths: ceiling.map(|c| share_hundredths(visit.exp_per_hour, c)),
                     this_visit: this_visit == Some((bests.id.as_str(), at)),
                 })

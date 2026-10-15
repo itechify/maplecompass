@@ -41,14 +41,20 @@ fn button(state: &PanelState) -> bool {
     state.grind_tracker.personal_bests
 }
 
+/// The window's rows of the Unassigned bests, which are all there are with no Character
+/// named: none if there are none.
+fn maps(window: &PersonalBestsWindow) -> &[PersonalBestsMap] {
+    window.characters.iter().find(|c| c.name.is_none()).map_or(&[], |c| &c.maps)
+}
+
 /// The window's rows as (map ID, EXP/h, marked here), in its order.
 fn rows(window: &PersonalBestsWindow) -> Vec<(&str, u64, bool)> {
-    window.maps.iter().map(|m| (m.id.as_str(), m.exp_per_hour, m.here)).collect()
+    maps(window).iter().map(|m| (m.id.as_str(), m.exp_per_hour, m.here)).collect()
 }
 
 /// The window's row for `map`.
 fn row<'a>(window: &'a PersonalBestsWindow, map: &str) -> &'a PersonalBestsMap {
-    window.maps.iter().find(|m| m.id == map).unwrap_or_else(|| panic!("no row for {map}"))
+    maps(window).iter().find(|m| m.id == map).unwrap_or_else(|| panic!("no row for {map}"))
 }
 
 /// Bests saved at an earlier launch: one Visit's, with no date, on each map.
@@ -64,17 +70,17 @@ fn histories_of(maps: &[(&str, Vec<u64>)]) -> SavedBests {
         .iter()
         .map(|(id, rates)| MapBests { id: (*id).into(), visits: rates.iter().map(|&exp| saved_best(exp)).collect() })
         .collect();
-    SavedBests { version: BESTS_VERSION, maps }
+    SavedBests { version: BESTS_VERSION, unassigned: maps, characters: Vec::new() }
 }
 
 /// A Visit's best of `exp_per_hour` saved with no date: what the player removes it by.
 fn saved_best(exp_per_hour: u64) -> VisitBest {
-    VisitBest { exp_per_hour, set_at_unix_ms: None }
+    VisitBest { exp_per_hour, ..VisitBest::default() }
 }
 
 /// One of a map's Visits as the window lists it.
 fn visit(exp_per_hour: u64, set_at_unix_ms: Option<u64>, share: Option<u64>, this_visit: bool) -> PersonalBestsVisit {
-    PersonalBestsVisit { exp_per_hour, set_at_unix_ms, ceiling_share_hundredths: share, this_visit }
+    PersonalBestsVisit { exp_per_hour, set_at_unix_ms, level: None, job: None, ceiling_share_hundredths: share, this_visit }
 }
 
 /// `map`'s Visits in the window as (EXP/h, the Visit under way's), highest first.
@@ -107,7 +113,7 @@ fn with_no_best_anywhere_there_is_no_button_and_the_window_doesnt_open() {
     let window = toggle(&mut player);
     assert!(!window.open);
     assert_eq!(window.placement, None);
-    assert!(window.maps.is_empty());
+    assert!(window.characters.is_empty());
 }
 
 #[test]
@@ -124,7 +130,7 @@ fn a_first_visits_best_is_in_the_window_with_the_maps_names_levels_and_share_mar
     assert!(window.open);
     assert_eq!(window.credit, OSMS_AND_MEOWDB_CREDIT);
     assert_eq!(
-        window.maps,
+        maps(&window),
         [PersonalBestsMap {
             id: SUNSET_SKY_ID.into(),
             street_name: "Victoria Road".into(),
@@ -189,7 +195,7 @@ fn a_best_on_a_map_the_player_has_not_been_on_has_its_names_region_levels_and_sh
 
     let window = toggle(&mut player);
     assert_eq!(
-        window.maps,
+        maps(&window),
         [
             PersonalBestsMap {
                 id: HENESYS_HUNTING_GROUND_I_ID.into(),
@@ -276,7 +282,7 @@ fn a_best_on_a_map_not_in_the_map_list_is_kept_and_goes_by_its_id() {
 
     let window = toggle(&mut player);
     assert_eq!(
-        window.maps,
+        maps(&window),
         [PersonalBestsMap {
             id: gone.into(),
             street_name: String::new(),
@@ -332,7 +338,7 @@ fn pressing_the_star_again_closes_it_and_closed_it_holds_no_rows() {
 
     let closed = toggle(&mut player);
     assert!(!closed.open);
-    assert!(closed.maps.is_empty());
+    assert!(closed.characters.is_empty());
 
     assert!(toggle(&mut player).open);
     let closed = player.press(PanelControl::ClosePersonalBests).personal_bests;
@@ -365,7 +371,7 @@ fn the_shell_gets_the_window_and_the_button_as_they_render_them() {
     let window = serde_json::to_value(&opened.personal_bests).unwrap();
     assert_eq!(window["open"], true);
     assert_eq!(window["credit"], OSMS_AND_MEOWDB_CREDIT);
-    let sunset = &window["maps"][0];
+    let sunset = &window["characters"][0]["maps"][0];
     assert_eq!(sunset["id"], SUNSET_SKY_ID);
     assert_eq!(sunset["streetName"], "Victoria Road");
     assert_eq!(sunset["mapName"], "Sunset Sky");
@@ -491,11 +497,11 @@ fn this_visits_best_and_a_visit_no_longer_listed_cannot_be_removed() {
     player.arrive(SUNSET);
     player.hunt(6 * MIN, 20);
     let window = toggle(&mut player);
-    let this_visit = row(&window, SUNSET_SKY_ID).visits[0];
+    let this_visit = row(&window, SUNSET_SKY_ID).visits[0].clone();
     assert!(this_visit.this_visit);
     let saves = player.saves();
 
-    let this_one = VisitBest { exp_per_hour: this_visit.exp_per_hour, set_at_unix_ms: this_visit.set_at_unix_ms };
+    let this_one = VisitBest { exp_per_hour: this_visit.exp_per_hour, set_at_unix_ms: this_visit.set_at_unix_ms, ..VisitBest::default() };
     assert_eq!(player.remove_visit(SUNSET_SKY_ID, this_one).personal_bests, window);
     assert_eq!(player.remove_visit(SUNSET_SKY_ID, saved_best(5000)).personal_bests, window);
     assert_eq!(player.remove_visit(CONSTRUCTION_SITE_ID, saved_best(3600)).personal_bests, window);

@@ -134,20 +134,23 @@ fn a_report_replays_through_the_same_states_with_the_runs_osms_set() {
 fn a_visit_removed_in_the_personal_bests_window_replays_and_reads_in_the_timeline() {
     // Sunset Sky's Visits at 10,800 and 7,200 EXP/h, the second set 11 Oct 2026, 11:00 UTC.
     let mut shell = Shell::new(FakeSource::osms());
-    let removed = VisitBest { exp_per_hour: 7200, set_at_unix_ms: Some(WALL_AT_START - HOUR) };
-    let visits = vec![VisitBest { exp_per_hour: 10_800, set_at_unix_ms: None }, removed];
+    let removed = VisitBest { exp_per_hour: 7200, set_at_unix_ms: Some(WALL_AT_START - HOUR), ..VisitBest::default() };
+    let visits = vec![VisitBest { exp_per_hour: 10_800, ..VisitBest::default() }, removed.clone()];
     let maps = vec![MapBests { id: SUNSET_SKY_ID.into(), visits }];
-    shell.minerva.restore_bests(SavedBests { version: BESTS_VERSION, maps });
+    shell.minerva.restore_bests(SavedBests { version: BESTS_VERSION, unassigned: maps, characters: Vec::new() });
     shell.play(MIN, CONSTRUCTION_SITE, grind);
 
-    shell.minerva.remove_visit(SUNSET_SKY_ID, removed);
+    shell.minerva.remove_visit(None, SUNSET_SKY_ID, &removed);
     shell.play(2 * MIN, CONSTRUCTION_SITE, grind);
 
-    let rates: Vec<u64> = shell.minerva.bests().maps[0].visits.iter().map(|v| v.exp_per_hour).collect();
+    let rates: Vec<u64> = shell.minerva.bests().unassigned[0].visits.iter().map(|v| v.exp_per_hour).collect();
     assert_eq!(rates, [10_800]);
     let (_, recording) = shell.report();
     assert_eq!(bug_report::replay(&recording, Some(osms::game().files())).divergence, None);
-    let said = format!("Visit removed from {SUNSET_SKY_ID}'s Visit History: 7,200 EXP/h, set at {}", WALL_AT_START - HOUR);
+    let said = format!(
+        "Visit removed from the Unassigned Visit History of {SUNSET_SKY_ID}: 7,200 EXP/h, set at {}",
+        WALL_AT_START - HOUR
+    );
     assert!(recording.timeline(0).iter().any(|line| line.ends_with(&said)), "{:#?}", recording.timeline(0));
 }
 

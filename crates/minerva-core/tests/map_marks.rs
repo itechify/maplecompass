@@ -197,14 +197,15 @@ fn while_candidates_wait_for_a_choice_the_title_shows_a_mark_only_if_they_share_
 #[test]
 fn the_personal_bests_window_names_each_maps_mark() {
     let mut minerva = Minerva::new(FakeSource::with_world(marked()));
-    let best = |id: &str| MapBests { id: id.into(), visits: vec![VisitBest { exp_per_hour: 7200, set_at_unix_ms: None }] };
-    minerva.restore_bests(SavedBests { version: BESTS_VERSION, maps: vec![best(SUNSET_SKY_ID), best(NORTHERN_TOP_ID)] });
+    let best = |id: &str| MapBests { id: id.into(), visits: vec![VisitBest { exp_per_hour: 7200, ..VisitBest::default() }] };
+    let unassigned = vec![best(SUNSET_SKY_ID), best(NORTHERN_TOP_ID)];
+    minerva.restore_bests(SavedBests { version: BESTS_VERSION, unassigned, characters: Vec::new() });
     arrive(&mut minerva, KERNING, 0);
 
     minerva.press(PanelControl::TogglePersonalBests);
 
     let rows: Vec<(&str, Option<&str>)> =
-        minerva.panel_state().personal_bests.maps.iter().map(|m| (m.id.as_str(), m.mark.as_deref())).collect();
+        minerva.panel_state().personal_bests.characters[0].maps.iter().map(|m| (m.id.as_str(), m.mark.as_deref())).collect();
     // Tied on EXP/h, by ID.
     assert_eq!(rows, [(SUNSET_SKY_ID, Some("KerningCity")), (NORTHERN_TOP_ID, Some("Rith"))]);
 }

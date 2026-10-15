@@ -44,7 +44,7 @@ mod tracker;
 mod travel_links;
 mod world;
 
-pub use bests_window::{PersonalBestsMap, PersonalBestsVisit, PersonalBestsWindow};
+pub use bests_window::{PersonalBestsCharacter, PersonalBestsMap, PersonalBestsVisit, PersonalBestsWindow};
 pub use bug_report::{BugReport, ReportAbout};
 pub use deal_finder::{DealBadge, DealBadges, DealFinderView, DealGrade, DealItem, GREAT_BELOW, STEAL_BELOW, Verdict};
 pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
@@ -70,7 +70,7 @@ pub use panel::{
     PlacementMode, ScreenPoint,
     ScreenRect, Section, Size,
 };
-pub use personal_best::{BESTS_VERSION, MapBests, SavedBests, VisitBest};
+pub use personal_best::{BESTS_VERSION, BandBest, CharacterBests, LevelBand, MapBests, SavedBests, VisitBest};
 pub use player_shop::{ListedPrice, PlayerShopReader, ShopCapture, ShopList, ShopReading, ShopRow};
 pub use search::{
     DensityTier, Destination, HuntingTarget, ItemMatch, ItemsMissing, MapMatch, Matches, MobChoice, MobMatch, RouteStop,
@@ -1179,23 +1179,56 @@ impl Minerva {
     }
 
     /// The player removed one of `map`'s Visits in the Personal Bests window, one that came
-    /// from a bug, named by its best as the window lists it (any map's, not only the one
-    /// they are on). The Visits under it move up, the Best row follows if it is of `map`,
-    /// and with no best left anywhere the window closes. There is no undo. The Visit under
-    /// way's best isn't in the Visit History yet: naming it, or a Visit no longer there,
-    /// changes nothing.
-    pub fn remove_visit(&mut self, map: &str, visit: VisitBest) -> &PanelState {
-        self.record(Event::RemoveVisit { map: map.to_string(), visit });
-        self.session.remove_visit(map, visit);
+    /// from a bug, named by whose it is (`character`, `None` for the Unassigned bests) and
+    /// by its best as the window lists it (any map's, not only the one they are on). The
+    /// Visits under it move up, the Best row follows if it is of `map`, and with no best
+    /// left anywhere the window closes. There is no undo. The Visit under way's best isn't
+    /// in the Visit History yet: naming it, or a Visit no longer there, changes nothing.
+    pub fn remove_visit(&mut self, character: Option<&str>, map: &str, visit: &VisitBest) -> &PanelState {
+        let event = Event::RemoveVisit { map: map.to_string(), visit: visit.clone(), character: character.map(String::from) };
+        self.record(event);
+        self.session.remove_visit(character, map, visit);
         // With no best left, there is nothing for the Personal Bests window to show.
         self.bests_window.open &= self.session.bests().any();
+        self.sync_panel()
+    }
+
+    /// The player moved an Unassigned Visit on `map`, named by its best as the window lists
+    /// it, to the Character named `to`, after confirming: it joins their Visits on the map,
+    /// as any Visit does. The Visit under way's best, or a Visit no longer there, changes
+    /// nothing.
+    pub fn move_visit(&mut self, map: &str, visit: &VisitBest, to: &str) -> &PanelState {
+        self.record(Event::MoveVisit { map: map.to_string(), visit: visit.clone(), to: to.to_string() });
+        self.session.move_visit(map, visit, to);
+        self.sync_panel()
+    }
+
+    /// The player removed the Character named `name` in the Personal Bests window, after
+    /// confirming: every best in their history goes, with no undo, and with no best left
+    /// anywhere the window closes. The Visit under way's best stays: it joins the Visit
+    /// History when the Visit ends. A Character playing stays one of the window's choices.
+    pub fn remove_character(&mut self, name: &str) -> &PanelState {
+        self.record(Event::RemoveCharacter { name: name.to_string() });
+        self.session.remove_character(name);
+        self.bests_window.open &= self.session.bests().any();
+        self.sync_panel()
+    }
+
+    /// The player merged the Character named `from` into the one named `into` in the
+    /// Personal Bests window, after confirming: a name the game changed shows as another
+    /// Character. Each of `from`'s Visits joins `into`'s on its map as any Visit does, so
+    /// the best in each Level Band stays, and `from` is gone.
+    pub fn merge_characters(&mut self, from: &str, into: &str) -> &PanelState {
+        self.record(Event::MergeCharacters { from: from.to_string(), into: into.to_string() });
+        self.session.merge_characters(from, into);
         self.sync_panel()
     }
 
     /// The player clicked a map's name in the Personal Bests window: open its MeowDB page.
     /// `None` for a map the window doesn't list.
     pub fn open_bests_map_page(&self, id: &str) -> Option<Request> {
-        let map = self.state.personal_bests.maps.iter().find(|map| map.id == id)?;
+        let characters = &self.state.personal_bests.characters;
+        let map = characters.iter().flat_map(|c| &c.maps).find(|map| map.id == id)?;
         Some(Request::OpenInBrowser { url: map.url.clone() })
     }
 
@@ -1924,19 +1957,21 @@ impl Minerva {
             Some(game) if shows => Some(window.placement(game, &self.panel.avoid)),
             _ => None,
         };
-        let maps = if window.open {
+        let characters = if window.open {
+            let set = &self.set;
             let map = |id: &str| {
-                let maps = &self.set.as_ref()?.maps;
+                let maps = &set.as_ref()?.maps;
                 Some((maps.entry(id)?, maps.data(id)?))
             };
             let (saved, this_visit) = self.session.bests().standing();
-            let this_visit = this_visit.as_ref().map(|(map, at)| (map.as_str(), *at));
-            bests_window::rows(&saved, this_visit, map, certain_map(&self.state))
+            let this_visit = this_visit.as_ref().map(|(whose, map, at)| (whose.as_deref(), map.as_str(), *at));
+            let current = self.session.character().map(|c| c.name.as_str());
+            bests_window::characters(&saved, current, this_visit, map, certain_map(&self.state))
         } else {
             Vec::new()
         };
         self.state.personal_bests =
-            PersonalBestsWindow { open: window.open, placement, maps, credit: OSMS_AND_MEOWDB_CREDIT };
+            PersonalBestsWindow { open: window.open, placement, characters, credit: OSMS_AND_MEOWDB_CREDIT };
     }
 
     /// Whether EXP tracking is on: there is an EXP Bar Region to read, kept and fitting

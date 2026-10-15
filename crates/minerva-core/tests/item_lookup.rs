@@ -538,8 +538,9 @@ fn the_grind_tracker_over_the_name_says_so() {
 #[test]
 fn the_personal_bests_window_over_the_name_says_so() {
     let mut minerva = started_with(FakeSource::osms_offline(), settings());
-    let visits = vec![VisitBest { exp_per_hour: 7200, set_at_unix_ms: None }];
-    minerva.restore_bests(SavedBests { version: BESTS_VERSION, maps: vec![MapBests { id: "010003070".into(), visits }] });
+    let visits = vec![VisitBest { exp_per_hour: 7200, ..VisitBest::default() }];
+    let unassigned = vec![MapBests { id: "010003070".into(), visits }];
+    minerva.restore_bests(SavedBests { version: BESTS_VERSION, unassigned, characters: Vec::new() });
     minerva.set_personal_bests_size(Size { width: 920, height: 400 });
     minerva.press(PanelControl::TogglePersonalBests);
     let window = minerva.panel_state().personal_bests.placement.expect("the Personal Bests window shows");

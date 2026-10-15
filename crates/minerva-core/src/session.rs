@@ -56,7 +56,7 @@
 
 use crate::ExpBar;
 use crate::bug_report::{Level, Note};
-use crate::personal_best::{Bests, SavedBests, VisitBest};
+use crate::personal_best::{Bests, SavedBests, Stamp, VisitBest};
 use crate::status_bar::StatusBar;
 use serde::{Deserialize, Serialize};
 
@@ -439,6 +439,8 @@ struct Against {
     ceiling: Option<u64>,
     /// The map whose Personal Best the Best row shows.
     map: Option<String>,
+    /// The Character whose Personal Best it is: the Unassigned one for `None`.
+    character: Option<String>,
 }
 
 /// Where a started Session stood at an EXP change.
@@ -766,6 +768,20 @@ impl Session {
         self.character.as_ref()
     }
 
+    /// Who a best set now is stamped with: the Character the Status Bar named, and the level
+    /// and job it showed. With no Character named, it is Unassigned, with the level if one
+    /// was read.
+    fn stamp(&self) -> Stamp {
+        match &self.character {
+            Some(character) => Stamp {
+                character: Some(character.name.clone()),
+                level: character.level.or(self.level),
+                job: character.job.clone(),
+            },
+            None => Stamp { character: None, level: self.level, job: None },
+        }
+    }
+
     /// Take `bar`, a reading after `last` in the same level, whose total it narrows to
     /// `total`: a gain, or with less EXP, a death.
     fn same_level(&mut self, total: Total, last: ExpBar, bar: ExpBar, at_ms: u64) {
@@ -882,14 +898,40 @@ impl Session {
     /// The player removed `map`'s Personal Best from its history: what is shown is
     /// measured afresh against the next best, at once.
     pub fn remove_best(&mut self, map: &str) {
-        self.bests.remove(map);
+        let character = self.character.as_ref().map(|c| c.name.clone());
+        self.bests.remove(character.as_deref(), map);
         self.shown = None;
     }
 
-    /// The player removed the Visit whose best was `visit` from `map`'s history: if it was
-    /// there, what is shown is measured afresh, at once, as the Best row may name another.
-    pub fn remove_visit(&mut self, map: &str, visit: VisitBest) {
-        if self.bests.remove_visit(map, visit) {
+    /// The player removed the Visit whose best was `visit` from `character`'s history of
+    /// `map` (the Unassigned one for `None`): if it was there, what is shown is measured
+    /// afresh, at once, as the Best row may name another.
+    pub fn remove_visit(&mut self, character: Option<&str>, map: &str, visit: &VisitBest) {
+        if self.bests.remove_visit(character, map, visit) {
+            self.shown = None;
+        }
+    }
+
+    /// The player moved the Unassigned Visit whose best was `visit` on `map` to the Character
+    /// named `to`: if it was there, what is shown is measured afresh, at once.
+    pub fn move_visit(&mut self, map: &str, visit: &VisitBest, to: &str) {
+        if self.bests.move_visit(map, visit, to) {
+            self.shown = None;
+        }
+    }
+
+    /// The player removed the Character named `name`, with their bests: if they had any,
+    /// what is shown is measured afresh, at once.
+    pub fn remove_character(&mut self, name: &str) {
+        if self.bests.remove_character(name) {
+            self.shown = None;
+        }
+    }
+
+    /// The player merged the Character named `from` into the one named `into`: if `from`
+    /// had bests, what is shown is measured afresh, at once.
+    pub fn merge_characters(&mut self, from: &str, into: &str) {
+        if self.bests.merge(from, into) {
             self.shown = None;
         }
     }
@@ -971,7 +1013,8 @@ impl Session {
         // they were, unless the player arrives on another map or the share would be of
         // another ceiling or best (the map's page come, or another Candidate chosen).
         let unreadable = fresh.state == TrackingState::Unreadable;
-        let against = Against { visit: self.visit.id, ceiling, map: map.map(String::from) };
+        let character = self.character.as_ref().map(|c| c.name.clone());
+        let against = Against { visit: self.visit.id, ceiling, map: map.map(String::from), character };
         let holds = self.shown.as_ref().is_some_and(|shown| {
             shown.against == against
                 && (unreadable
@@ -996,9 +1039,11 @@ impl Session {
                     let here = self.figures.as_ref().map(|f| f.rolling_since(self.now, f.visit_from));
                     let full = here.filter(|h| h.over_ms >= ROLLING_MS && h.exp > 0);
                     let counted = full.filter(|_| !unreadable).map(|here| here.per_hour(1, 1) as u64);
-                    self.bests.on_shown(map, counted, now_unix_ms);
-                    // Over a full 5 minutes here, the Rolling Rate shown is the one counted.
-                    let best = self.bests.history_best(map).map(|best| best.exp_per_hour);
+                    self.bests.on_shown(map, counted, now_unix_ms, &self.stamp());
+                    // Over a full 5 minutes here, the Rolling Rate shown is the one counted,
+                    // against the Character's best (the Unassigned one while none is named).
+                    let character = self.character.as_ref().map(|c| c.name.as_str());
+                    let best = self.bests.history_best(character, map).map(|best| best.exp_per_hour);
                     fresh.personal_best = best;
                     fresh.new_best = counted
                         .zip(best)
