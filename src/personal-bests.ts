@@ -29,8 +29,11 @@ type BestsMap = {
   /** Its Map Mark, by OSMS's name for it. */
   mark: string | null;
   url: string;
-  /** Its Map Leaderboard on the site, at the band of the Character playing. */
-  leaderboardUrl: string;
+  /** Its Map Leaderboard on the site, at the band of the Character playing; `null` for the
+   *  Unassigned bests and a map not in the map list. */
+  leaderboardUrl: string | null;
+  /** The Character's best of all maps, which the star marks. */
+  bestOfAll: boolean;
   mobLevels: LevelRange | null;
   expPerHour: number;
   soloExpCeiling: number | null;
@@ -55,8 +58,13 @@ type Toggle = {
   on: boolean;
   /** How many maps they have an entry for: what turning it on asks about. */
   maps: number;
+  /** The switch is offered: they're shown, or have something to upload. */
+  offered: boolean;
   status: "off" | "sending" | "upToDate" | "retrying" | "claimed" | "held";
+  /** Where they stand is a problem, said as one, which can be sent again. */
+  problem: boolean;
   uploadedAtUnixMs: number | null;
+  /** The entries the site kept off, while they're shown there. */
   rejected: Rejected[];
 };
 
@@ -83,10 +91,9 @@ type Key = string | number | [number, number] | null;
 const panelEl = byId("panel");
 const whose = byId("whose");
 const count = byId("count");
-const characterActions = byId("character-actions");
-const mergeLine = byId("merge-line");
-const leaderboardLine = byId("leaderboard-line");
-const rejectedLine = byId("rejected-line");
+const countActions = byId("count-actions");
+const manageEl = byId("manage");
+const problemsEl = byId("problems");
 const rows = byId("rows");
 const noteMissing = byId("note-missing");
 const noteDot = byId("note-dot");
@@ -288,7 +295,7 @@ function visitLane(v: BestsVisit) {
   return td;
 }
 
-function row(m: BestsMap, best: BestsMap | null, marks: MapMarks) {
+function row(m: BestsMap, marks: MapMarks) {
   const tr = document.createElement("tr");
   const known = m.mapName !== "";
 
@@ -317,14 +324,6 @@ function row(m: BestsMap, best: BestsMap | null, marks: MapMarks) {
   // The street and its region: "Victoria Road · Victoria Island".
   street.textContent = known ? [m.streetName, m.region].filter(Boolean).join(" · ") : NOT_LISTED;
   mapCell.append(street);
-  // Its Map Leaderboard on the site, at the band of the Character playing.
-  const board = document.createElement("button");
-  board.type = "button";
-  board.className = "row-leaderboard";
-  board.dataset.id = m.id;
-  board.title = "Open its Map Leaderboard on owlofminerva.app";
-  board.append("Map Leaderboard", span("sr-only", ` of ${mapName(m)} (opens in your browser)`));
-  mapCell.append(board);
   tr.append(mapCell);
 
   const lv = cell("Mob levels");
@@ -333,7 +332,7 @@ function row(m: BestsMap, best: BestsMap | null, marks: MapMarks) {
   tr.append(lv);
 
   const exp = cell("Best EXP/h", "exp");
-  if (m === best) exp.append(star());
+  if (m.bestOfAll) exp.append(star());
   // Its lane again under the figure, for a window too narrow for the lanes' own column.
   const under = lane(m);
   under.classList.add("under");
@@ -402,8 +401,8 @@ function setBy(v: BestsVisit) {
 }
 
 /** One of an opened map's Visits, under its row: the level that set it, its best's EXP/h,
- *  share and date under the row's, then its × (or, for the Visit under way's, "This
- *  visit"), and for an Unassigned one, its Move. */
+ *  share and date under the row's, then its Move (with another Character to move it to)
+ *  and its × (or, for the Visit under way's, "This visit"). */
 function visitRow(m: BestsMap, v: BestsVisit, key: string | null, place: number, last: boolean) {
   const tr = document.createElement("tr");
   tr.className = last ? "visit last" : "visit";
@@ -433,10 +432,29 @@ function visitRow(m: BestsMap, v: BestsVisit, key: string | null, place: number,
     controls.append(span("this-visit", "This visit"));
   } else {
     listed.set(key, { map: m.id, visit: v });
-    if (shownKey() === UNASSIGNED && names().length > 0) controls.append(moveButton(key));
+    // While its × asks "Remove?", that takes Move's room too, so the column never widens.
+    if (moveTargets().length > 0 && armed !== `remove:${key}`) controls.append(moveButton(key));
     controls.append(removeButton(key));
   }
   tr.append(controls);
+  return tr;
+}
+
+/** The last line of an opened map's Visit History: its Map Leaderboard on the site, for a
+ *  Character's map that has one. */
+function boardRow(m: BestsMap) {
+  const tr = document.createElement("tr");
+  tr.className = "visit board-row last";
+  const td = cell(null, "text");
+  td.colSpan = 7;
+  const board = document.createElement("button");
+  board.type = "button";
+  board.className = "row-leaderboard";
+  board.dataset.id = m.id;
+  board.title = "Open its Map Leaderboard on owlofminerva.app";
+  board.append("Its Map Leaderboard", span("sr-only", ` for ${mapName(m)} (opens owlofminerva.app in your browser)`));
+  td.append(board);
+  tr.append(td);
   return tr;
 }
 
@@ -450,11 +468,12 @@ function armButton(arm: string, final: boolean) {
   return button;
 }
 
-/** A light text button that arms `arm`: `words`, or `armedWords` once armed. */
+/** A light text button that arms `arm`: `words`, or `armedWords` once armed. Armed, a final
+ *  one takes the problem palette: the next click does what it asks, with no undo. */
 function textButton(arm: string, final: boolean, words: string, armedWords: string, title: string) {
   const button = armButton(arm, final);
   const on = armed === arm;
-  button.className = on ? "text-button armed" : "text-button";
+  button.className = on && final ? "text-button armed" : "text-button";
   button.textContent = on ? armedWords : words;
   button.title = title;
   return button;
@@ -477,22 +496,22 @@ function removeButton(key: string) {
   return button;
 }
 
-/** An Unassigned Visit's Move, which lists the Characters to move it to under its line. */
+/** A Visit's Move, which lists the Characters to move it to under its line. */
 function moveButton(key: string) {
-  const button = textButton(`move:${key}`, false, "Move", "Move", "Move this visit to one of your characters");
+  const button = textButton(`move:${key}`, false, "Move", "Move", "Move this visit to another of your characters");
   button.classList.add("move");
   button.setAttribute("aria-expanded", String(picking("move", key)));
   return button;
 }
 
-/** Whether the list of `what`'s targets (a Visit's Move, or a Character's Merge) is open,
- *  for `key`: its button, or one of the targets, is armed. */
-function picking(what: "move" | "merge", key: string) {
+/** Whether the list of `what`'s targets (a Visit's Move, a Character's Merge, or Unassigned's
+ *  Assign all) is open, for `key`: its button, or one of the targets, is armed. */
+function picking(what: "move" | "merge" | "assign", key: string) {
   return armed === `${what}:${key}` || !!armed?.startsWith(`${what}:${key}>`);
 }
 
-/** Under an Unassigned Visit whose Move is open: a button for each Character to move it to,
- *  each asking again once clicked. */
+/** Under a Visit whose Move is open: a button for each other Character to move it to, each
+ *  asking again once clicked. */
 function moveRow(key: string) {
   const tr = document.createElement("tr");
   tr.className = "visit move-row";
@@ -501,7 +520,7 @@ function moveRow(key: string) {
   const to = document.createElement("div");
   to.className = "move-to";
   to.append(span("move-label", "Move this visit to"));
-  for (const name of names()) {
+  for (const name of moveTargets()) {
     const arm = `move:${key}>${name}`;
     to.append(textButton(arm, true, name, `Move to ${name}?`, `Move this visit to ${name}'s bests`));
   }
@@ -524,12 +543,21 @@ const opened = new Set<string>();
 /** The choice the player picked, by its key; `null` until they pick one, and after it goes:
  *  the picker shows the Character playing. */
 let picked: string | null = null;
+/** The shown Character's Manage is open: their switch, Merge and Remove. Kept as the player
+ *  picks another, until they close it. */
+let managing = false;
 /** What a click armed, until a second click does it, a click anywhere else, the window
  *  hiding or its button going: one at a time. A Visit's × (`remove:<visit>`), its Move
- *  (`move:<visit>`, and `move:<visit>><name>` once a Character is clicked), and a
- *  Character's Remove (`remove-character:<name>`) and Merge (`merge:<name>`, and
- *  `merge:<name>><into>`). */
+ *  (`move:<visit>`, and `move:<visit>><name>` once a Character is clicked); a Character's
+ *  Remove (`remove-character:<name>`), Merge (`merge:<name>`, and `merge:<name>><into>`), switch
+ *  (`leaderboard:<name>`) and held uploads' Send (`send:<name>`); and Unassigned's Assign all
+ *  (`assign:`, and `assign:><name>`). */
 let armed: string | null = null;
+/** When the button now armed was armed (`performance.now()`): a second click within
+ *  [`SECOND_CLICK_MS`] of it is a double-click's, and is ignored, so a double-click never
+ *  does what a confirmed click does. */
+let armedAt = 0;
+const SECOND_CLICK_MS = 400;
 /** The Visits listed with a × now, by their keys: what their buttons act on. */
 const listed = new Map<string, { map: string; visit: BestsVisit }>();
 
@@ -548,28 +576,36 @@ function shownKey() {
   return c ? keyOf(c) : UNASSIGNED;
 }
 
-/** Every Character's name, the one shown included: what a Visit can be moved to. */
+/** Every Character's name, the one shown included. */
 function names() {
   return characters.flatMap((c) => (c.name === null ? [] : [c.name]));
 }
 
+/** The Characters a shown Visit can be moved to: every one but whose it is. */
+function moveTargets() {
+  const from = shown()?.name ?? null;
+  return names().filter((name) => name !== from);
+}
+
+/** "1 map", "14 maps". */
+const mapsText = (n: number) => (n === 1 ? "1 map" : `${n} maps`);
+
 function renderRows() {
-  // The best of all maps, which the star marks; none with only one map to compare.
-  const best = maps.length > 1 ? maps[0] : null;
   const keys = new Map(maps.map((m) => [m.id, visitKeys(m)]));
   scale = scaleOf(maps);
   renderScale();
   listed.clear();
   rows.replaceChildren(
     ...sorted(maps, sort).flatMap((m) => {
-      if (!opened.has(`${shownKey()} ${m.id}`)) return [row(m, best, marks)];
+      if (!opened.has(`${shownKey()} ${m.id}`)) return [row(m, marks)];
       const mapKeys = keys.get(m.id)!;
+      const board = m.leaderboardUrl !== null;
       const visits = m.visits.flatMap((v, i) => {
         const key = mapKeys[i];
-        const line = visitRow(m, v, key, i + 1, i === m.visits.length - 1);
+        const line = visitRow(m, v, key, i + 1, !board && i === m.visits.length - 1);
         return key !== null && picking("move", key) ? [line, moveRow(key)] : [line];
       });
-      return [row(m, best, marks), ...visits];
+      return [row(m, marks), ...visits, ...(board ? [boardRow(m)] : [])];
     }),
   );
   for (const th of headers) {
@@ -579,11 +615,12 @@ function renderRows() {
 }
 
 /** The picker, with a button for each choice, the shown one pressed and the Character
- *  playing marked; none with only one choice. Then the shown one's count, with its Remove
- *  and Merge, and the Characters to merge it into while its Merge is open. */
+ *  playing marked "playing": always, so the window names whose bests these are, even with one
+ *  choice. Then the shown one's count, and at its end the Character's Manage, or Unassigned's
+ *  Assign all to… */
 function renderWhose() {
   const current = shown();
-  whose.hidden = characters.length < 2;
+  whose.hidden = characters.length === 0;
   whose.replaceChildren(
     ...characters.map((c) => {
       const button = document.createElement("button");
@@ -592,40 +629,43 @@ function renderWhose() {
       button.dataset.pick = keyOf(c);
       button.setAttribute("aria-pressed", String(c === current));
       button.append(nameOf(c));
-      if (c.current && c.name !== null) {
-        const dot = span("playing-dot", "");
-        dot.title = "Playing now";
-        button.append(dot, span("sr-only", " (playing now)"));
-      }
+      if (c.current && c.name !== null) button.append(span("playing", "playing"));
       return button;
     }),
   );
-  const n = maps.length === 1 ? "1 map" : `${maps.length} maps`;
-  const unassigned = current?.name === null ? " · set before Minerva read your characters' names, or while it couldn't" : "";
-  count.textContent = maps.length === 0 ? `No bests yet for ${current ? nameOf(current) : "you"}` : `${n}${unassigned}`;
+  const n = mapsText(maps.length);
+  const t = current?.leaderboard ?? null;
+  let words: string;
+  if (maps.length === 0) words = `No bests yet for ${current ? nameOf(current) : "you"}`;
+  else if (current?.name === null) words = `${n} · set before Minerva read your characters' names, or while it couldn't`;
+  else words = t?.on ? `${n} · shown on the Map Leaderboards` : n;
+  count.textContent = words;
 
-  const name = current?.name ?? null;
-  const into = names().filter((other) => other !== name);
-  characterActions.replaceChildren();
-  mergeLine.hidden = true;
-  if (name === null || maps.length === 0) return;
-  if (into.length > 0) {
-    const merge = textButton(`merge:${name}`, false, "Merge into…", "Merge into…", `Move ${name}'s bests to another character`);
-    merge.setAttribute("aria-expanded", String(picking("merge", name)));
-    characterActions.append(merge);
+  countActions.replaceChildren();
+  if (!current) return;
+  if (current.name === null) {
+    // Unassigned: give every Visit to one Character at once.
+    if (maps.length > 0 && names().length > 0) {
+      const assign = textButton("assign:", false, "Assign all to…", "Assign all to…", "Give every Unassigned visit to one of your characters");
+      assign.setAttribute("aria-expanded", String(picking("assign", "")));
+      countActions.append(assign);
+    }
+  } else if (manageable(current)) {
+    // The Character's switch, Merge and Remove, folded under one quiet line so the bars lead.
+    const manage = document.createElement("button");
+    manage.type = "button";
+    manage.className = "manage-toggle";
+    manage.setAttribute("aria-expanded", String(managing));
+    manage.setAttribute("aria-controls", "manage");
+    manage.title = managing ? `Hide what you can do with ${current.name}` : `Show on the Map Leaderboards, merge or remove ${current.name}`;
+    manage.append("Manage", span("sr-only", ` ${current.name}`), chevron());
+    countActions.append(manage);
   }
-  characterActions.append(
-    textButton(`remove-character:${name}`, true, "Remove", `Remove ${name} and all their bests?`, `Remove ${name}, with all their bests`),
-  );
-  if (picking("merge", name)) {
-    mergeLine.hidden = false;
-    mergeLine.replaceChildren(
-      span("move-label", `Merge ${name}'s bests into`),
-      ...into.map((other) =>
-        textButton(`merge:${name}>${other}`, true, other, `Merge ${name} into ${other}?`, `Move ${name}'s bests to ${other}`),
-      ),
-    );
-  }
+}
+
+/** Whether a Character has anything to manage: their switch, or bests to merge or remove. */
+function manageable(c: BestsCharacter) {
+  return c.maps.length > 0 || !!c.leaderboard?.offered;
 }
 
 /** A day and time in the player's local time: "3 Oct, 14:02". */
@@ -635,70 +675,191 @@ function when(unixMs: number) {
   return `${day(unixMs)}, ${time}`;
 }
 
-/** What the toggle says of where the Character stands with the Map Leaderboards. */
-function standing(name: string, t: Toggle): (string | HTMLElement)[] {
-  const last = t.uploadedAtUnixMs === null ? "" : ` Last uploaded ${when(t.uploadedAtUnixMs)}.`;
+/** What the switch says beside it of where the Character stands with the Map Leaderboards,
+ *  when it isn't a problem (those are notes of their own). */
+function standing(t: Toggle): string {
   switch (t.status) {
     case "sending":
-      return [t.on ? "Uploading…" : "Taking them off…"];
+      return t.on ? "Uploading…" : "Taking them off…";
     case "upToDate":
-      return [`Up to date: uploaded ${when(t.uploadedAtUnixMs ?? Date.now())}.`];
-    case "retrying":
-      return [t.on ? `Couldn't upload: trying again.${last}` : "Couldn't take them off yet: trying again."];
-    case "held":
-      return [
-        `Your bests file couldn't be read, so the site may have more of ${name}'s than this, and nothing is sent. ` +
-          "Turn this off and on to send what's here now.",
-      ];
-    case "claimed": {
+      return t.uploadedAtUnixMs === null ? "Up to date." : `Up to date: uploaded ${when(t.uploadedAtUnixMs)}.`;
+    default:
+      return "";
+  }
+}
+
+/** A line of the Manage panel. */
+function line(...parts: (string | HTMLElement)[]) {
+  const div = document.createElement("div");
+  div.className = "manage-line";
+  div.append(...parts);
+  return div;
+}
+
+/** The shown Character's Manage, while open: their "Show on the Map Leaderboards" switch and
+ *  where they stand; then Merge into… (for a Character the game renamed) and Remove, each
+ *  asking again before it does anything. Unassigned's Assign all to… opens its Characters
+ *  here too. */
+function renderManage() {
+  const c = shown();
+  manageEl.replaceChildren();
+  if (c && c.name === null && picking("assign", "")) {
+    const n = maps.length;
+    manageEl.append(
+      line(
+        span("move-label", "Give every Unassigned visit to"),
+        ...names().map((name) =>
+          textButton(`assign:>${name}`, true, name, `Assign all to ${name}?`, `Move every Unassigned visit, on ${mapsText(n)}, to ${name}'s bests`),
+        ),
+      ),
+    );
+  }
+  if (c && c.name !== null && managing && manageable(c)) {
+    const name = c.name;
+    const t = c.leaderboard;
+    const public_ = !!t && (t.on || t.status !== "off");
+    if (t?.offered) {
+      manageEl.append(line(leaderboardSwitch(name, t), span("leaderboard-status", standing(t))));
+    } else if (t) {
+      manageEl.append(
+        line(span("move-label", `Nothing of ${name}'s can go on the Map Leaderboards yet: a best goes up once Minerva has read the level and job that set it, and its date.`)),
+      );
+    }
+    if (c.maps.length > 0) {
+      const into = names().filter((other) => other !== name);
+      const site = public_ ? " and their Map Leaderboard entries" : "";
+      const parts: HTMLElement[] = [];
+      if (into.length > 0) {
+        const merge = textButton(`merge:${name}`, false, "Merge into…", "Merge into…", `For a character renamed in the game: move ${name}'s bests to their new name`);
+        merge.setAttribute("aria-expanded", String(picking("merge", name)));
+        parts.push(span("move-label", "Renamed in the game?"), merge);
+      }
+      const remove = textButton(
+        `remove-character:${name}`,
+        true,
+        `Remove ${name}`,
+        `Remove ${name}, their bests on ${mapsText(c.maps.length)}${site}?`,
+        `Remove ${name}, with all their bests${site}`,
+      );
+      remove.classList.add("remove-character");
+      parts.push(remove);
+      manageEl.append(line(...parts));
+      if (picking("merge", name)) {
+        const off = public_ ? `, and take ${name} off the Map Leaderboards?` : "?";
+        manageEl.append(
+          line(
+            span("move-label", `Merge ${name}'s bests into`),
+            ...into.map((other) =>
+              textButton(`merge:${name}>${other}`, true, other, `Merge ${name} into ${other}${off}`, `Move ${name}'s bests to ${other}, ${name}'s new name`),
+            ),
+          ),
+        );
+      }
+    }
+  }
+  manageEl.hidden = manageEl.childElementCount === 0;
+}
+
+/** A Character's "Show on the Map Leaderboards": a switch, which asks again before it does
+ *  anything, either way: on, with how many maps go up and that the site is public; off, that
+ *  it deletes them there. Armed, it is a button asking, so it is announced as the question. */
+function leaderboardSwitch(name: string, t: Toggle) {
+  const arm = `leaderboard:${name}`;
+  const asking = armed === arm;
+  const button = armButton(arm, true);
+  button.className = asking ? "switch armed" : "switch";
+  button.dataset.on = String(t.on);
+  const question = t.on
+    ? `Take ${name}'s bests off owlofminerva.app?`
+    : `Show ${name}'s bests on ${mapsText(t.maps)} publicly on owlofminerva.app?`;
+  if (!asking) {
+    button.setAttribute("role", "switch");
+    button.setAttribute("aria-checked", String(t.on));
+  }
+  button.title = t.on ? `Take ${name}'s bests off the Map Leaderboards: deleted from the site` : `Show ${name}'s bests on the Map Leaderboards, for anyone to see`;
+  const knob = span("knob", "");
+  knob.setAttribute("aria-hidden", "true");
+  button.append(knob, asking ? question : "Show on the Map Leaderboards");
+  return button;
+}
+
+/** An entry the site kept off, in words: "Sunset Sky, Lv 20–29: over 5× its solo EXP/h". */
+function rejectedWords(r: Rejected) {
+  const map = maps.find((m) => m.id === r.map);
+  // Joined around the dash and after "Lv", so a band never breaks across lines.
+  const levels = `Lv ${r.lowestLevel}⁠–⁠${r.highestLevel}`;
+  const why = "overCap" in r.reason ? `above ${whole(r.reason.overCap.cap)} EXP/h, 5× its solo EXP/h` : "taken down by the site";
+  return `${map ? mapName(map) : `Map ${r.map}`}, ${levels}: ${why}`;
+}
+
+/** A problem note, as the window's others: the orange dot, then its words, wrapping. */
+function problemNote(words: (string | HTMLElement)[], action?: HTMLElement) {
+  const note = document.createElement("div");
+  note.className = "note problem";
+  const text = document.createElement("p");
+  text.className = "problem-words";
+  text.append(...words);
+  note.append(text);
+  if (action) note.append(action);
+  return note;
+}
+
+/** The shown Character's upload problems, whether Manage is open or not: held, claimed or
+ *  tried again, each with its Send again, and the entries the site kept off. */
+function renderProblems() {
+  const c = shown();
+  const t = c?.leaderboard ?? null;
+  problemsEl.replaceChildren();
+  if (c && c.name !== null && t) {
+    const name = c.name;
+    const again = document.createElement("button");
+    again.type = "button";
+    again.className = "text-button";
+    again.dataset.sendAgain = name;
+    again.textContent = "Send again";
+    again.title = t.on ? `Upload ${name}'s bests now, rather than waiting` : `Take ${name}'s bests off the site now, rather than waiting`;
+    if (t.status === "held") {
+      const send = textButton(
+        `send:${name}`,
+        true,
+        "Send what's here",
+        `Replace ${name}'s entries on the site with ${mapsText(t.maps)}?`,
+        `Upload ${name}'s bests as they are here, in place of what the site holds`,
+      );
+      problemsEl.append(
+        problemNote(
+          [
+            `Minerva couldn't read your bests file at a launch, so the site may hold more of ${name}'s bests than are here. `,
+            "Nothing of theirs is sent until you send what's here, which replaces what the site holds.",
+          ],
+          send,
+        ),
+      );
+    } else if (t.status === "claimed") {
       // To the panel's Discord link, as About & Credits' is.
       const discord = document.createElement("button");
       discord.type = "button";
       discord.className = "text-link";
       discord.dataset.control = "openDiscord";
       discord.textContent = "ask on Minerva's Discord";
-      return [`Another Minerva holds the name ${name} there. If it's yours (a new PC, say), `, discord, "."];
+      problemsEl.append(
+        problemNote(
+          [`Not on the Map Leaderboards: another Minerva holds the name ${name} there. If it's yours (a new PC, say), `, discord, ", then send again."],
+          again,
+        ),
+      );
+    } else if (t.status === "retrying") {
+      const last = t.uploadedAtUnixMs === null ? "" : ` Last uploaded ${when(t.uploadedAtUnixMs)}.`;
+      const words = t.on
+        ? `Couldn't upload ${name}'s bests: Minerva tries again by itself.${last}`
+        : `Couldn't take ${name}'s bests off the site yet: Minerva tries again by itself.`;
+      problemsEl.append(problemNote([words], again));
     }
-    default:
-      return [];
+    if (t.rejected.length > 0) {
+      problemsEl.append(problemNote([`Kept off the Map Leaderboards: ${t.rejected.map(rejectedWords).join("; ")}.`]));
+    }
   }
-}
-
-/** An entry the site kept off, in words: "Sunset Sky, Lv 20–29: over 5× its solo EXP/h". */
-function rejectedWords(r: Rejected) {
-  const map = maps.find((m) => m.id === r.map);
-  const levels = `Lv ${r.lowestLevel}–${r.highestLevel}`;
-  const why = "overCap" in r.reason ? `above ${whole(r.reason.overCap.cap)} EXP/h, 5× its solo EXP/h` : "taken down by the site";
-  return `${map ? mapName(map) : `Map ${r.map}`}, ${levels}: ${why}`;
-}
-
-/** The shown Character's "Show on the Map Leaderboards": a switch, which asks first with the
- *  count of maps when turned on, then where they stand there; and any bests the site kept
- *  off. None for the Unassigned bests, which are never uploaded. */
-function renderLeaderboard() {
-  const c = shown();
-  const t = c?.leaderboard ?? null;
-  leaderboardLine.hidden = !c || c.name === null || !t;
-  rejectedLine.hidden = true;
-  if (!c || c.name === null || !t) return;
-  const name = c.name;
-  const arm = `leaderboard:${name}`;
-  // Turning it on asks first; off, it goes at once.
-  const button = t.on ? document.createElement("button") : armButton(arm, true);
-  button.type = "button";
-  if (t.on) button.dataset.leaderboardOff = name;
-  button.setAttribute("role", "switch");
-  button.setAttribute("aria-checked", String(t.on));
-  button.className = armed === arm ? "switch armed" : "switch";
-  const maps = t.maps === 1 ? "1 map" : `${t.maps} maps`;
-  button.title = t.on ? `Take ${name}'s bests off the Map Leaderboards` : `Show ${name}'s bests on the Map Leaderboards`;
-  button.append(span("knob", ""), armed === arm ? `Upload ${name}'s bests on ${maps}?` : "Show on the Map Leaderboards");
-  leaderboardLine.replaceChildren(button, span("leaderboard-status", ""));
-  leaderboardLine.lastElementChild!.append(...standing(name, t));
-  if (t.on && t.rejected.length > 0) {
-    rejectedLine.hidden = false;
-    rejectedLine.textContent = `Not on the site: ${t.rejected.map(rejectedWords).join("; ")}.`;
-  }
+  problemsEl.hidden = problemsEl.childElementCount === 0;
 }
 
 /** Draw the shown choice, and disarm whatever went with its button. */
@@ -707,14 +868,16 @@ function renderAll() {
   maps = c?.maps ?? [];
   noteMissing.hidden = maps.every((m) => m.mobLevels !== null && m.ceilingShareHundredths !== null);
   noteDot.hidden = !maps.some((m) => m.visits.some((v) => v.thisVisit));
-  renderWhose();
-  renderLeaderboard();
-  renderRows();
+  const draw = () => {
+    renderWhose();
+    renderManage();
+    renderProblems();
+    renderRows();
+  };
+  draw();
   if (armed !== null && !document.querySelector(`[data-arm="${CSS.escape(armed)}"]`)) {
     armed = null;
-    renderWhose();
-    renderLeaderboard();
-    renderRows();
+    draw();
   }
 }
 
@@ -732,10 +895,9 @@ function render(view: BestsView) {
     const rowsNow = new Set(characters.flatMap((c) => c.maps.map((m) => `${keyOf(c)} ${m.id}`)));
     for (const key of opened) if (!rowsNow.has(key)) opened.delete(key);
   }
-  // The credit as the main window's info icon, its words in its tooltip.
+  // The credit in words, at the foot, as DESIGN.md asks of this window.
   footer.hidden = !view.credit;
-  credit.title = view.credit;
-  credit.setAttribute("aria-label", view.credit);
+  credit.textContent = view.credit;
   renderAll();
   reportHeight();
 }
@@ -801,30 +963,37 @@ function act(arm: string) {
     }
   } else if (what === "move") {
     const visit = listed.get(key);
-    if (visit && target) invoke("personal_bests_move_visit", { map: visit.map, visit: visitArgs(visit.visit), to: target });
+    if (visit && c && target) {
+      invoke("personal_bests_move_visit", { from: c.name, map: visit.map, visit: visitArgs(visit.visit), to: target });
+    }
+  } else if (what === "assign" && target) {
+    invoke("personal_bests_assign_unassigned", { to: target });
   } else if (what === "remove-character") {
     invoke("personal_bests_remove_character", { name: key });
   } else if (what === "merge" && target) {
     invoke("personal_bests_merge_characters", { from: key, into: target });
   } else if (what === "leaderboard") {
-    invoke("personal_bests_show_on_leaderboards", { name: key, on: true });
+    const on = !characters.find((c) => c.name === key)?.leaderboard?.on;
+    invoke("personal_bests_show_on_leaderboards", { name: key, on });
+  } else if (what === "send") {
+    invoke("personal_bests_send_again", { name: key });
   }
 }
 
 /** What a second click on an armed button does, for screen readers. */
 function armedWords(arm: string) {
-  if (arm.startsWith("remove:")) return "Click Remove? again to remove this visit from your history.";
-  if (arm.startsWith("remove-character:")) return "Click again to remove this character and all their bests.";
-  if (arm.startsWith("move:") && arm.includes(">")) return "Click again to move this visit.";
-  if (arm.startsWith("merge:") && arm.includes(">")) return "Click again to merge these characters.";
-  if (arm.startsWith("leaderboard:")) return "Click again to upload these bests to the Map Leaderboards.";
-  return "";
+  const final = arm.includes(">") || !/^(move|merge|assign):/.test(arm);
+  if (!final) return "";
+  const asks = document.querySelector<HTMLElement>(`[data-arm="${CSS.escape(arm)}"]`)?.textContent ?? "";
+  return `${asks} Click again to confirm. It can't be undone.`;
 }
 
-// Its ×, through the core like the panel's icons; a map's name, to its MeowDB page; a
-// map's count, opening or closing its Visit History; a choice in the picker, showing it.
-// A Visit's × or Move, or a Character's Remove or Merge, arms it, and its button asks
-// again: a second click does it through the core. Any other click disarms it.
+// Its ×, through the core like the panel's icons; a map's name, to its MeowDB page, and its
+// Map Leaderboard to the site; a map's count, opening or closing its Visit History; a choice
+// in the picker, showing it; Manage, opening or closing the Character's. A button that asks
+// first (a Visit's × or Move, a Character's Remove, Merge or switch, Assign all, held
+// uploads' Send) arms it, and asks again: a second click does it through the core, once the
+// double-click it may be part of is over. Any other click disarms it.
 document.addEventListener("click", (e) => {
   const target = e.target instanceof Element ? e.target : null;
   const control = target?.closest<HTMLButtonElement>("button[data-control]");
@@ -833,31 +1002,37 @@ document.addEventListener("click", (e) => {
   if (map) invoke("personal_bests_open_map", { id: map.dataset.id });
   const board = target?.closest<HTMLButtonElement>("button.row-leaderboard");
   if (board) invoke("personal_bests_open_leaderboard", { character: shown()?.name ?? null, id: board.dataset.id });
-  const off = target?.closest<HTMLButtonElement>("button[data-leaderboard-off]");
-  if (off) invoke("personal_bests_show_on_leaderboards", { name: off.dataset.leaderboardOff, on: false });
+  const again = target?.closest<HTMLButtonElement>("button[data-send-again]");
+  if (again) invoke("personal_bests_send_again", { name: again.dataset.sendAgain });
   const toggle = target?.closest<HTMLButtonElement>("button.visits-toggle");
   const pick = target?.closest<HTMLButtonElement>("button[data-pick]");
+  const manage = target?.closest<HTMLButtonElement>("button.manage-toggle");
   const arm = target?.closest<HTMLButtonElement>("button[data-arm]");
   const before = armed;
+  // The second click of a double-click on what it just armed: not a confirmation.
+  if (arm && arm.dataset.arm === before && performance.now() - armedAt < SECOND_CLICK_MS) return;
   armed = null;
   if (arm) {
     const key = arm.dataset.arm!;
     if (key !== before) {
       armed = key;
-      announce.textContent = armedWords(key);
+      armedAt = performance.now();
     } else if (arm.dataset.final !== undefined) {
       act(key);
     }
   }
   if (pick) picked = pick.dataset.pick!;
+  if (manage) managing = !managing;
   if (toggle) {
     const id = `${shownKey()} ${toggle.dataset.id!}`;
     if (!opened.delete(id)) opened.add(id);
   }
-  if (toggle || pick || armed !== before) {
+  if (toggle || pick || manage || armed !== before) {
     renderAll();
     reportHeight();
   }
+  // Said once the armed button is drawn asking.
+  if (armed !== null && armed !== before) announce.textContent = armedWords(armed);
 });
 
 listen<BestsView>("personal-bests-state", (e) => render(e.payload));

@@ -17,9 +17,10 @@
   color: var(--ink-2);
 }
 
-/* The picker: one Character's bests at a time, or the Unassigned ones. Each choice is a
-   light button; the one shown takes Selection Periwinkle, as a selected row does, and the
-   Character playing carries You Yellow's dot after their name. */
+/* The picker: one Character's bests at a time, or the Unassigned ones, always shown so the
+   window names whose bests these are. Each choice is a light button; the one shown takes
+   Selection Periwinkle, as a selected row does, and the Character playing says "playing"
+   after their name in words (You Yellow's dot means where they are, on the map's row). */
 .whose {
   display: flex;
   flex-wrap: wrap;
@@ -57,16 +58,14 @@
   color: var(--ink);
 }
 
-.playing-dot {
-  width: 7px;
-  height: 7px;
-  border: 1px solid var(--you-edge);
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, var(--you-light) 0 30%, var(--you) 45%);
+.pick .playing {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--ink-2);
 }
 
-/* The count, with the shown Character's Remove and Merge at its end; and while Merge is
-   open, the Characters to merge into under it. */
+/* The count, with the shown Character's Manage at its end (Unassigned's Assign all to…):
+   one quiet line, so the bars lead. */
 .count-line {
   display: flex;
   align-items: center;
@@ -75,8 +74,15 @@
   min-height: 19px;
 }
 
-.character-actions,
-.merge-line,
+/* It wraps rather than losing Unassigned's why beside Assign all to… */
+.panel .count {
+  min-width: 0;
+  white-space: normal;
+  text-wrap: pretty;
+}
+
+.count-actions,
+.manage-line,
 .move-to {
   display: flex;
   flex-wrap: wrap;
@@ -84,13 +90,55 @@
   gap: 4px;
 }
 
-.panel .merge-line {
-  margin: 0;
-  justify-content: flex-end;
+.count-actions {
+  flex: none;
 }
 
-.merge-line[hidden] {
+/* Manage: Panel Ink Steel at rest, Portal Blue and underlined under the pointer, as a map's
+   count of visits is, with the same chevron, pointing down while open. */
+.manage-toggle {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 2px;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--ink-2);
+}
+
+.manage-toggle:hover {
+  color: var(--portal);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.manage-toggle:active {
+  color: var(--frame);
+}
+
+.manage-toggle[aria-expanded="true"] .chevron {
+  transform: rotate(90deg);
+}
+
+/* What Manage opens, under the count: the switch and where they stand, then Merge into…
+   and Remove, then the Characters to merge into while Merge is open; or Unassigned's
+   Characters to assign them all to. Lines of light buttons on the glass, no box. */
+.manage {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.manage[hidden],
+.problems[hidden] {
   display: none;
+}
+
+.manage-line .remove-character {
+  margin-left: 8px;
 }
 
 .move-label {
@@ -98,6 +146,67 @@
   font-size: 12px;
   line-height: 16px;
   color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+/* A list that's open (Move, Merge into…, Assign all to…): its button pressed. */
+.text-button[aria-expanded="true"] {
+  background: var(--button-light);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
+}
+
+/* A button asking before it does what can't be undone (a Visit's "Remove?", "Move to
+   Egbert?", a Character's Remove or Merge, the switch either way): in the problem palette,
+   cream with an amber edge and brown words, as the "paused" tag is, without the orange.
+   A second click within 400ms of the first is a double-click's, and is ignored. */
+.text-button.armed,
+.switch.armed {
+  border-color: var(--problem-edge);
+  background: var(--problem-bg);
+  box-shadow: none;
+  color: var(--problem-ink);
+}
+
+.text-button.armed:hover,
+.switch.armed:hover {
+  background: var(--problem-bg);
+}
+
+/* Upload problems: the window's problem notes, the orange dot, the words wrapping to a
+   readable measure, and Send again at the end. */
+.problems {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.panel .problems .note.problem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.problems .note.problem::before {
+  top: 8px;
+}
+
+.panel .problem-words {
+  flex: 0 1 auto;
+  max-width: 75ch;
+  margin-right: auto;
+  white-space: normal;
+  overflow: visible;
+  text-wrap: pretty;
+}
+
+.problems .text-button {
+  margin: -2px -4px -2px 0;
+}
+
+.problems .text-button.armed {
+  border-color: var(--problem-ink);
 }
 
 /* The maps, set into the body as the Grind Tracker's figures are. */
@@ -300,11 +409,14 @@ tbody tr:hover td {
   color: var(--ink-3);
 }
 
-/* Its Map Leaderboard on the site: a quiet link under the street, Portal Blue under the
-   pointer as the name is. */
+/* Its Map Leaderboard on the site: a quiet link at the foot of the opened Visit History,
+   Portal Blue under the pointer as the name is. */
+tbody tr.board-row td {
+  padding-top: 2px;
+}
+
 .row-leaderboard {
   all: unset;
-  margin-left: 24px;
   font-size: 12px;
   line-height: 16px;
   color: var(--ink-2);
@@ -325,22 +437,11 @@ tbody tr:hover td {
   outline-offset: 2px;
 }
 
-/* The shown Character's "Show on the Map Leaderboards": a switch, its knob left while off
-   and right on Selection Periwinkle while on, then where they stand there. Armed, it asks
-   with the count of maps before uploading. */
-.leaderboard-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-  margin-top: 4px;
-}
-
-.leaderboard-line[hidden],
-.rejected-line[hidden] {
-  display: none;
-}
-
+/* The shown Character's "Show on the Map Leaderboards", in Manage: a switch, its knob left
+   on Greyed while off and right on Edit Blue while on (the system's checked colour, as the
+   travel checkboxes'), then where they stand there. Armed, either way, it asks in the
+   problem palette: on, with the count of maps and that the site is public; off, that they
+   come off it. */
 .switch {
   display: inline-flex;
   align-items: center;
@@ -382,29 +483,20 @@ tbody tr:hover td {
   box-shadow: 0 0 0 1px var(--disabled-edge);
 }
 
-.switch[aria-checked="true"] .knob {
-  border-color: var(--select-edge);
-  background: var(--portal);
+.switch[data-on="true"] .knob {
+  border-color: var(--edit);
+  background: var(--edit);
 }
 
-.switch[aria-checked="true"] .knob::after {
+.switch[data-on="true"] .knob::after {
   left: 11px;
 }
 
-.switch.armed {
-  border-color: var(--select-edge);
-  background: var(--select);
-}
-
-.leaderboard-status,
-.panel .rejected-line {
+.leaderboard-status {
+  margin-left: 4px;
   font-size: 12px;
   line-height: 16px;
   color: var(--ink-2);
-}
-
-.panel .rejected-line {
-  margin: 2px 0 0;
 }
 
 .text-link {
@@ -704,7 +796,9 @@ tbody tr.move-row td {
   color: var(--ink-3);
 }
 
+/* The notes keep a reading measure, however wide the window. */
 .notes {
+  max-width: 75ch;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -716,6 +810,23 @@ tbody tr.move-row td {
 
 .notes li + li {
   margin-top: 4px;
+}
+
+/* The credit in its words, 12px Panel Ink Slate under the Panel Rule, as DESIGN.md asks
+   of this window: it is read at a pause, with room for a line. */
+footer {
+  justify-content: flex-start;
+}
+
+.panel .credit {
+  width: auto;
+  height: auto;
+  cursor: auto;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-3);
+  white-space: normal;
+  text-wrap: pretty;
 }
 
 /* Short labels where the long ones don't fit. */
@@ -907,10 +1018,20 @@ tbody tr.move-row td {
   }
 
   .visit-share::before,
-  .visit-date::before {
+  .visit-date::before,
+  .visit-level::after {
     content: "·";
     margin-right: 6px;
     color: var(--ink-3);
+  }
+
+  /* The level and job, then a separator before the figure, as between the figures. */
+  .visit-level::after {
+    margin: 0 0 0 6px;
+  }
+
+  tbody tr.board-row td {
+    padding: 2px 0 0;
   }
 
   tbody tr.visit td.controls {

@@ -23,11 +23,10 @@
         <div class="whose" id="whose" role="group" aria-label="Whose bests to show"></div>
         <div class="count-line">
           <p class="count" id="count"></p>
-          <div class="character-actions" id="character-actions"></div>
+          <div class="count-actions" id="count-actions"></div>
         </div>
-        <p class="merge-line" id="merge-line" hidden></p>
-        <div class="leaderboard-line" id="leaderboard-line" hidden></div>
-        <p class="rejected-line" id="rejected-line" hidden></p>
+        <div class="manage" id="manage" hidden></div>
+        <div class="problems" id="problems" hidden></div>
         <div class="box scroll" id="box">
           <table aria-describedby="count">
             <caption class="sr-only">Your Personal Best on each map</caption>
@@ -71,9 +70,7 @@
           <li id="note-missing" hidden>A dash is a figure not known for that map: it isn't in the map list, or no mobs spawn there.</li>
         </ul>
         <footer id="footer" hidden>
-          <span class="credit" id="credit" role="img">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" /><path d="M8 7.4v3.9" /><circle class="dot" cx="8" cy="4.9" r=".95" /></svg>
-          </span>
+          <p class="credit" id="credit"></p>
         </footer>
       </div>
     </main>

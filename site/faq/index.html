@@ -793,14 +793,18 @@
                   <p>
                     Bests from before Minerva knew your characters, or set while it couldn't read the name, are
                     <strong>Unassigned</strong>. The Grind Tracker races those while no name is read. In your Personal
-                    Bests, pick Unassigned, then a visit's <strong>Move</strong> and a character, and click again to
-                    confirm.
+                    Bests, pick Unassigned, then <strong>Assign all to…</strong> and a character to give them every one,
+                    or a visit's <strong>Move</strong> and a character for just that visit, and click again to confirm.
+                    Any character's visit has a Move too, for one set while Minerva misread the name.
                   </p>
                   <p>
-                    Renamed a character? The new name shows as a new character: pick it, choose
-                    <strong>Merge into…</strong> and the old name, and click again to confirm. Its bests move across. To
-                    remove a character with all their bests, pick them and click <strong>Remove</strong> twice. Neither
-                    can be undone. A best on a map that has left the map list stays, marked "Not in the map list".
+                    Renamed a character? The new name shows as a new character: pick it, click <strong>Manage</strong>,
+                    choose <strong>Merge into…</strong> and the old name, and click again to confirm. Its bests move
+                    across. To remove a character with all their bests, pick them, click <strong>Manage</strong>, then
+                    <strong>Remove</strong> twice. Neither can be undone, and both take the character off the
+                    <a href="#map-leaderboards">Map Leaderboards</a> if they're there. A double-click never confirms:
+                    the second click has to come a moment later. A best on a map that has left the map list stays,
+                    marked "Not in the map list".
                   </p>
                 </details>
                 <details class="qa" id="every-best">
@@ -808,7 +812,8 @@
                   <p>
                     The star on the Grind Tracker's bar opens your Personal Bests over the game: every map's best for the
                     character you're playing, highest first, with its mob levels, how close it came to the map's solo EXP/h
-                    ceiling, and when you set it. Pick another of your characters, or Unassigned, at the top.
+                    ceiling, and when you set it. The top names whose they are; pick another of your characters, or
+                    Unassigned, there.
                     Each best is a bar on one scale, so your best map's is the longest. A notch in a bar is another of your
                     visits there, and the dot is the visit you're on, moving as you play. Click a column to sort by it, or a
                     map to open it on MeowDB.
@@ -821,7 +826,8 @@
                     <a href="#level-bands">Level Band</a> even if it isn't among them, so levelling up never loses your
                     best at lower levels. In your Personal Bests, click its count ("3 visits") to list them, best first,
                     each with the level you set it at, its EXP per hour and its own bar, its share of the ceiling and its
-                    date. The visit you're on is marked "This visit", and joins your history when you leave the map.
+                    date, then a link to the map's <a href="#leaderboard-link">Map Leaderboard</a>. The visit you're on
+                    is marked "This visit", and joins your history when you leave the map.
                   </p>
                 </details>
                 <details class="qa" id="remove-best">
@@ -884,16 +890,19 @@
                 <details class="qa" id="leaderboard-appear">
                   <summary>How do I put my character on the Map Leaderboards?</summary>
                   <p>
-                    Open your <a href="#every-best">Personal Bests</a>, pick the character, and click
-                    <strong>Show on the Map Leaderboards</strong>. It asks once, with how many maps ("Upload Egbert's bests
-                    on 14 maps?"): click again to say yes. Minerva uploads the character's best visit on each map in each
+                    Open your <a href="#every-best">Personal Bests</a>, pick the character, click
+                    <strong>Manage</strong>, then <strong>Show on the Map Leaderboards</strong>. It asks once, with how
+                    many maps and that it's public ("Show Egbert's bests on 14 maps publicly on owlofminerva.app?"):
+                    click again to say yes. Minerva uploads the character's best visit on each map in each
                     <a href="#level-bands">Level Band</a>, then each new best when its visit ends. Removing a visit,
-                    moving one to the character or merging another into them updates the site too.
+                    moving one to or from the character, or merging another into them updates the site too.
                   </p>
                   <p>
                     It's for one character at a time, and only the ones you turn it on for. Unassigned bests are never
-                    uploaded, and nor is a best set before Minerva knew the date or a character's level and job. Offline,
-                    Minerva tries again quietly; beside the switch it says when the last upload went through.
+                    uploaded, and nor is a best set before Minerva knew the date or a character's level and job: a
+                    character with only those has no switch yet. Beside the switch, Minerva says when the last upload
+                    went through. If one didn't (offline, say), a note above your bests says so and Minerva tries again by
+                    itself; <strong>Send again</strong> tries at once.
                   </p>
                 </details>
                 <details class="qa" id="leaderboard-public">
@@ -908,8 +917,8 @@
                 <details class="qa" id="leaderboard-remove">
                   <summary>How do I take my character off the Map Leaderboards?</summary>
                   <p>
-                    Click <strong>Show on the Map Leaderboards</strong> again to turn it off: every entry of the
-                    character is deleted from the site. Removing the character from your Personal Bests, or merging them
+                    Under <strong>Manage</strong>, click <strong>Show on the Map Leaderboards</strong> again, and once
+                    more to confirm, to turn it off: every entry of the character is deleted from the site. Removing the character from your Personal Bests, or merging them
                     into another, takes them off too. The name stays yours, so you can put them back any time. A single
                     best that came from a bug goes when you remove that visit.
                   </p>
@@ -920,19 +929,20 @@
                     A name belongs to the Leaderboard Key that uploaded it first. If that was you, on a PC you've since
                     reinstalled or replaced, your old key went with it. Ask on
                     <a href="https://discord.gg/NnbnVWkRrF">Minerva's Discord</a>, with the character's name: once Minerva
-                    has tried to upload from your new PC, the maintainer can hand the name to its key, and your uploads go
-                    through again. To keep your key when you move PCs, copy <code>leaderboard-key</code> across
+                    has tried to upload from your new PC, the maintainer can hand the name to its key. Then click
+                    <strong>Send again</strong> on the note in your Personal Bests, and your uploads go through again. To keep your key when you move PCs, copy <code>leaderboard-key</code> across
                     (<a href="#kept">where Minerva keeps its files</a>).
                   </p>
                 </details>
                 <details class="qa" id="leaderboard-link">
                   <summary>Where's my character's entry?</summary>
                   <p>
-                    In your Personal Bests, each map has a <strong>Map Leaderboard</strong> link. It opens the map's page
-                    at the Level Band of the character you're playing, marks your entry and says its rank, even outside the
-                    top 50. If it says your character has no entry there any more, the entry has gone: taken off the Map
-                    Leaderboards, or removed after a report. If the site kept one of your bests off, as over 5 times the
-                    map's solo EXP/h or removed after a report, your Personal Bests say so under the switch.
+                    In your Personal Bests, click a map's count of visits: under its visits, <strong>Its Map
+                    Leaderboard</strong> opens the map's page at the Level Band of the character you're playing, marks
+                    your entry and says its rank, even outside the top 50. If it says your character has no entry there
+                    any more, the entry has gone: taken off the Map Leaderboards, or removed after a report. If the site
+                    kept one of your bests off, as over 5 times the map's solo EXP/h or removed after a report, a note
+                    above your bests says so.
                   </p>
                 </details>
                 <details class="qa" id="report-entry">
@@ -1195,8 +1205,9 @@
                   </p>
                   <p>
                     A character you show on the <a href="#leaderboard-appear">Map Leaderboards</a> keeps their entries
-                    there: Minerva sends nothing of theirs, and says so beside the switch, since what's left on your PC
-                    would replace them. Turn the switch off and on to send what's there now instead.
+                    there: Minerva sends nothing of theirs, and a note in your Personal Bests says so, since what's left
+                    on your PC would replace them. Click <strong>Send what's here</strong> on it, and again to confirm,
+                    to send what's there now instead.
                   </p>
                 </details>
               </div>
