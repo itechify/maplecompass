@@ -12,7 +12,7 @@ use minerva_core::bug_report::{self, Answer, Event, Note, Recording, ReplayData,
 use minerva_core::{
     ListedPrice, ShopCapture, ShopList, ShopReading, ShopRow, StatusBar, StatusBarCapture, StatusBarReading,
     Action, BESTS_VERSION, Minerva, ExpBar, ExpBarReading, ExpBarRegion, Foreground, Frame, GameWindow, ItemCapture, ItemTooltip,
-    CharacterBests, ItemTooltipReading, MapBests, Rect, ReportAbout, SavedBests, ScreenPoint, ScreenRect, Settings, Size, TitleLines,
+    CharacterBests, ItemTooltipReading, LeaderboardAnswer, MapBests, RejectedEntry, RejectedReason, Rect, ReportAbout, SavedBests, ScreenPoint, ScreenRect, Settings, Size, TitleLines,
     TitleReading, TitleRegion, TrackingState, VisitBest,
 };
 
@@ -196,6 +196,62 @@ fn a_visit_moved_and_characters_removed_and_merged_replay_and_read_in_the_timeli
         "Character \"Egbert2\" merged into \"Egbert\"".to_string(),
     ] {
         assert!(timeline.iter().any(|line| line.contains(&said)), "{said} in {timeline:#?}");
+    }
+}
+
+/// The upload under way for the Character named `name`: its id.
+fn upload_for(shell: &Shell, name: &str) -> u64 {
+    let uploads = &shell.minerva.panel_state().leaderboard_uploads;
+    uploads.iter().find(|u| u.name == name).unwrap_or_else(|| panic!("no upload for {name} in {uploads:?}")).id
+}
+
+#[test]
+fn showing_a_character_on_the_map_leaderboards_and_each_answer_replay_and_read_in_the_timeline() {
+    // Egbert's best on the Construction Site, set at level 13 an hour before.
+    let mut shell = Shell::new(FakeSource::osms());
+    let best = VisitBest {
+        exp_per_hour: 5000,
+        set_at_unix_ms: Some(WALL_AT_START - HOUR),
+        level: Some(13),
+        job: Some("Magician".to_string()),
+    };
+    let maps = vec![MapBests { id: CONSTRUCTION_SITE_ID.into(), visits: vec![best] }];
+    let characters = vec![CharacterBests { name: "Egbert".into(), maps }];
+    shell.minerva.restore_bests(SavedBests { version: BESTS_VERSION, unassigned: Vec::new(), characters });
+    shell.play(10 * S, CONSTRUCTION_SITE, grind);
+
+    shell.minerva.show_on_leaderboards("Egbert", true);
+    shell.play(20 * S, CONSTRUCTION_SITE, grind);
+    let id = upload_for(&shell, "Egbert");
+    shell.minerva.on_leaderboard_answer(id, LeaderboardAnswer::Failed { why: "offline".into() });
+    // Tried again 30 s on, and taken but for one the maintainer removed.
+    shell.play(55 * S, CONSTRUCTION_SITE, grind);
+    let id = upload_for(&shell, "Egbert");
+    let rejected = vec![RejectedEntry { map: CONSTRUCTION_SITE_ID.into(), band: 10, reason: RejectedReason::Removed {} }];
+    shell.minerva.on_leaderboard_answer(id, LeaderboardAnswer::Accepted { rejected });
+    shell.play(MIN, CONSTRUCTION_SITE, grind);
+    shell.minerva.show_on_leaderboards("Egbert", false);
+    shell.play(MIN + 10 * S, CONSTRUCTION_SITE, grind);
+    let id = upload_for(&shell, "Egbert");
+    shell.minerva.on_leaderboard_answer(id, LeaderboardAnswer::Deleted {});
+    shell.play(MIN + 20 * S, CONSTRUCTION_SITE, grind);
+
+    let (_, recording) = shell.report();
+    let replay = bug_report::replay(&recording, Some(osms::game().files()));
+    assert_eq!(replay.divergence, None);
+    assert_eq!(replay.lines, recording.lines.len());
+    let timeline = recording.timeline(0);
+    for said in [
+        "\"Egbert\" shown on the Map Leaderboards",
+        "Map Leaderboards upload 1 asked: \"Egbert\"'s 1 entries",
+        "Map Leaderboards upload 1 for \"Egbert\": failed: offline",
+        "Map Leaderboards upload 2 asked: \"Egbert\"'s 1 entries",
+        "Map Leaderboards upload 2 for \"Egbert\": taken but for 010003080 band 10 removed",
+        "\"Egbert\" taken off the Map Leaderboards",
+        "Map Leaderboards upload 3 asked: deleting \"Egbert\"'s entries",
+        "Map Leaderboards upload 3 for \"Egbert\": deleted",
+    ] {
+        assert!(timeline.iter().any(|line| line.contains(said)), "{said} in {timeline:#?}");
     }
 }
 

@@ -2,6 +2,7 @@
 //! JSON in the app's config directory and hands it back to the core at startup.
 
 use crate::grind_tracker::ClientOffset;
+use crate::leaderboards::LeaderboardCharacter;
 use crate::panel::{CollapsedSections, InsideOffset, PlacementMode, ScreenPoint};
 use crate::setup::{ExpBarRegion, TitleRegion};
 use crate::world::Travel;
@@ -62,6 +63,10 @@ pub struct Settings {
     /// The Deal Margin (ADR 0014): how far below the Deal Line, in percent, a listing's
     /// price must be for the Deal Finder to call it a deal. 0: any price below it.
     pub deal_margin_percent: u32,
+    /// The Characters the player shows on the Map Leaderboards (#110), and those taken off
+    /// whose entries the site hasn't yet deleted. Not the Leaderboard Key: the shell keeps it
+    /// apart, since everything here goes into a Bug Report.
+    pub map_leaderboards: Vec<LeaderboardCharacter>,
 }
 
 impl Default for Settings {
@@ -83,6 +88,7 @@ impl Default for Settings {
             grind_tracker_at: None,
             personal_bests_at: None,
             deal_margin_percent: 0,
+            map_leaderboards: Vec::new(),
         }
     }
 }

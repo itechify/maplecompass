@@ -362,6 +362,12 @@ impl Bests {
         !self.history.unassigned.is_empty() || !self.history.characters.is_empty() || self.this_visit().is_some()
     }
 
+    /// The history: every Character's (and the Unassigned) bests of the Visits that have
+    /// ended, without the Visit under way's.
+    pub fn history(&self) -> &SavedBests {
+        &self.history
+    }
+
     /// Every map's Visit bests, for the shell to save: the Visit under way's as if it
     /// ended now, since closing Minerva ends it.
     pub fn saved(&self) -> SavedBests {

@@ -15,6 +15,7 @@ mod item_card;
 mod item_data;
 mod item_lookup;
 mod item_tooltip;
+mod leaderboards;
 mod map_data;
 mod map_index;
 mod map_mark;
@@ -57,6 +58,10 @@ pub use item_card::{
 pub use market_prices::{MARKET_PRICES_VERSION, MarketImport, MarketPrice, SavedMarketLine, SavedMarketPrices};
 pub use item_lookup::{ItemChoice, ItemHit, ItemLookup, ItemLookupLine, OurWindow};
 pub use item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReader, ItemTooltipReading};
+pub use leaderboards::{
+    LeaderboardAnswer, LeaderboardCharacter, LeaderboardEntry, LeaderboardStatus, LeaderboardToggle, LeaderboardUpload,
+    RejectedEntry, RejectedReason,
+};
 pub use map_data::{
     HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty, Portal, PortalKind,
 };
@@ -95,6 +100,7 @@ use item_card::{Editing, ItemCards, Pressed};
 use item_data::ItemFilesLoader;
 use market_prices::MarketPrices;
 use item_lookup::ItemLookups;
+use leaderboards::Leaderboards;
 use search::{Search, Searched};
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
@@ -283,6 +289,12 @@ pub struct PanelState {
     /// overlay's state.
     #[serde(skip_serializing)]
     pub personal_bests: PersonalBestsWindow,
+    /// The uploads to the Map Leaderboards under way (#110), for the shell to make: each
+    /// shown Character's whole set of entries, or the deletion of one taken off. The shell
+    /// makes each once, by its id, and tells the answer to [`Minerva::on_leaderboard_answer`].
+    /// Not sent to the overlay.
+    #[serde(skip_serializing)]
+    pub leaderboard_uploads: Vec<LeaderboardUpload>,
     /// The title of the game window to look for: "MapleStory", or one the player
     /// picked by hand.
     pub game_window_title: String,
@@ -501,6 +513,8 @@ pub struct Minerva {
     /// Where the Status Bar's level, job and name were last found, and the game's client
     /// area then: our windows keep clear of them while the client area stays where it was.
     status_bar_area: Option<(ScreenRect, ScreenRect)>,
+    /// The Characters shown on the Map Leaderboards, and the uploads for them.
+    leaderboards: Leaderboards,
     /// What the shell must do that came of time passing (a page MeowDB's answer settled),
     /// for [`Minerva::take_request`].
     requests: VecDeque<Request>,
@@ -557,6 +571,7 @@ impl Minerva {
             deal_badges_size: Size { width: 0, height: 0 },
             status_bar_reader: None,
             status_bar_area: None,
+            leaderboards: Leaderboards::default(),
             requests: VecDeque::new(),
             panel: Panel::default(),
             setup: Setup::default(),
@@ -1210,6 +1225,8 @@ impl Minerva {
     pub fn remove_character(&mut self, name: &str) -> &PanelState {
         self.record(Event::RemoveCharacter { name: name.to_string() });
         self.session.remove_character(name);
+        // Nor does the site keep theirs.
+        self.leaderboards.show(name, false);
         self.bests_window.open &= self.session.bests().any();
         self.sync_panel()
     }
@@ -1221,6 +1238,29 @@ impl Minerva {
     pub fn merge_characters(&mut self, from: &str, into: &str) -> &PanelState {
         self.record(Event::MergeCharacters { from: from.to_string(), into: into.to_string() });
         self.session.merge_characters(from, into);
+        // `from` has no bests left: the site keeps none of theirs either.
+        if from != into {
+            self.leaderboards.show(from, false);
+        }
+        self.sync_panel()
+    }
+
+    /// The player turned "Show on the Map Leaderboards" on (`on`) for the Character named
+    /// `name` in the Personal Bests window, having confirmed, or off. On, their entries go up at
+    /// the next tick, and again whenever they change; off, they are deleted from the site.
+    pub fn show_on_leaderboards(&mut self, name: &str, on: bool) -> &PanelState {
+        self.record(Event::ShowOnLeaderboards { name: name.to_string(), on });
+        self.leaderboards.show(name, on);
+        self.sync_panel()
+    }
+
+    /// The shell made upload `id` of [`PanelState::leaderboard_uploads`], and the Map
+    /// Leaderboards answered `answer` (or it couldn't be made: [`LeaderboardAnswer::Failed`]).
+    /// An answer to an upload no longer under way changes nothing.
+    pub fn on_leaderboard_answer(&mut self, id: u64, answer: LeaderboardAnswer) -> &PanelState {
+        let name = self.leaderboards.uploads().into_iter().find(|upload| upload.id == id).map(|upload| upload.name);
+        self.record(Event::LeaderboardAnswer { id, name: name.unwrap_or_default(), answer: answer.clone() });
+        self.leaderboards.answer(id, answer, self.wall_clock);
         self.sync_panel()
     }
 
@@ -1230,6 +1270,16 @@ impl Minerva {
         let characters = &self.state.personal_bests.characters;
         let map = characters.iter().flat_map(|c| &c.maps).find(|map| map.id == id)?;
         Some(Request::OpenInBrowser { url: map.url.clone() })
+    }
+
+    /// The player clicked a map's Map Leaderboard link among the bests of the Character named
+    /// `character` (`None`: the Unassigned ones) in the Personal Bests window: open it. `None`
+    /// for a map the window doesn't list for them.
+    pub fn open_bests_leaderboard(&self, character: Option<&str>, id: &str) -> Option<Request> {
+        let characters = &self.state.personal_bests.characters;
+        let maps = &characters.iter().find(|c| c.name.as_deref() == character)?.maps;
+        let map = maps.iter().find(|map| map.id == id)?;
+        Some(Request::OpenInBrowser { url: map.leaderboard_url.clone() })
     }
 
     /// The player clicked a listed mob's name in the panel: open its MeowDB page. `None`
@@ -1565,6 +1615,7 @@ impl Minerva {
         self.grind_tracker.open = settings.grind_tracker_open;
         self.grind_tracker.at = settings.grind_tracker_at;
         self.bests_window.at = settings.personal_bests_at;
+        self.leaderboards.restore(settings.map_leaderboards.clone());
         self.settings = settings;
         // The travel toggles change Distances.
         self.sync_search();
@@ -1592,6 +1643,7 @@ impl Minerva {
             grind_tracker_open: self.grind_tracker.open,
             grind_tracker_at: self.grind_tracker.at,
             personal_bests_at: self.bests_window.at,
+            map_leaderboards: self.leaderboards.saved(),
             ..self.settings.clone()
         }
     }
@@ -1630,6 +1682,8 @@ impl Minerva {
     pub fn tick(&mut self, at_ms: u64) -> &PanelState {
         self.record_input(Event::Tick {}, Some(at_ms), None);
         self.session.tick(at_ms);
+        // Uploads only on a tick: at launch the bests are back by the first.
+        self.leaderboards.tick(at_ms, self.session.bests().history(), self.wall_clock);
         self.load_osms(at_ms);
         if self.set.is_some() {
             self.sync_shown_map();
@@ -1812,6 +1866,7 @@ impl Minerva {
         self.state.draggable = self.panel.draggable();
         self.sync_grind_tracker();
         self.sync_personal_bests();
+        self.state.leaderboard_uploads = self.leaderboards.uploads();
         self.sync_item_lookup();
         self.sync_item_card();
         self.sync_deal_finder();
@@ -1965,8 +2020,11 @@ impl Minerva {
             };
             let (saved, this_visit) = self.session.bests().standing();
             let this_visit = this_visit.as_ref().map(|(whose, map, at)| (whose.as_deref(), map.as_str(), *at));
-            let current = self.session.character().map(|c| c.name.as_str());
-            bests_window::characters(&saved, current, this_visit, map, certain_map(&self.state))
+            let playing = self.session.character();
+            let current = (playing.map(|c| c.name.as_str()), playing.and_then(|c| c.level));
+            let history = self.session.bests().history();
+            let toggle = |name: &str| self.leaderboards.toggle(name, history, self.wall_clock);
+            bests_window::characters(&saved, current, this_visit, map, certain_map(&self.state), toggle)
         } else {
             Vec::new()
         };

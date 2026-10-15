@@ -31,10 +31,11 @@
 //!   Grind Tracker if that's where it goes.
 
 use crate::grind_tracker::ClientOffset;
+use crate::leaderboards::{self, LeaderboardToggle};
 use crate::map_data::MapData;
 use crate::map_index::MapEntry;
 use crate::panel::{GameWindow, ScreenRect, Size, in_view};
-use crate::personal_best::{MapBests, SavedBests};
+use crate::personal_best::{LevelBand, MapBests, SavedBests};
 use crate::shown_map::LevelRange;
 use crate::meowdb;
 use serde::Serialize;
@@ -70,6 +71,9 @@ pub struct PersonalBestsCharacter {
     pub current: bool,
     /// Every map they have a Personal Best on, highest EXP/h first.
     pub maps: Vec<PersonalBestsMap>,
+    /// Their "Show on the Map Leaderboards"; `None` for the Unassigned bests, which are never
+    /// uploaded.
+    pub leaderboard: Option<LeaderboardToggle>,
 }
 
 /// One map's row in the Personal Bests window.
@@ -88,6 +92,10 @@ pub struct PersonalBestsMap {
     pub mark: Option<String>,
     /// The map's MeowDB page.
     pub url: String,
+    /// The map's Map Leaderboard on the site, opened at the Level Band of the Character playing
+    /// (for another Character's row, the band of their best there) with this Character's entry
+    /// marked: no one's for the Unassigned bests.
+    pub leaderboard_url: String,
     /// The lowest and highest of its mobs' levels; `None` if it isn't in the map list, or
     /// has no mobs.
     pub mob_levels: Option<LevelRange>,
@@ -174,16 +182,17 @@ impl BestsWindow {
 }
 
 /// The Personal Bests window's choices for the bests `saved`, with `current` the Character
-/// playing (`None`: none named), and `this_visit` the Visit under way's best among them:
+/// playing (`None`: none named) and `level` the level the Status Bar shows, and `this_visit` the Visit under way's best among them:
 /// whose it is, its map, and its place in the map's Visits. `map` gives a map's entry in the
 /// map list and its data, if it is in the list; `here` is the map the player is certainly
-/// on, if any.
+/// on, if any. `toggle` gives a Character's "Show on the Map Leaderboards".
 pub(crate) fn characters<'a>(
     saved: &SavedBests,
-    current: Option<&str>,
+    (current, level): (Option<&str>, Option<u32>),
     this_visit: Option<(Option<&str>, &str, usize)>,
     map: impl Fn(&str) -> Option<(&'a MapEntry, &'a MapData)> + Copy,
     here: Option<&str>,
+    toggle: impl Fn(&str) -> LeaderboardToggle,
 ) -> Vec<PersonalBestsCharacter> {
     let mut names: Vec<&str> = saved.characters.iter().map(|c| c.name.as_str()).collect();
     names.extend(current.filter(|name| !names.contains(name)));
@@ -196,10 +205,18 @@ pub(crate) fn characters<'a>(
         .into_iter()
         .map(|owner| {
             let this_visit = this_visit.filter(|(whose, _, _)| *whose == owner).map(|(_, map, at)| (map, at));
+            // The band of the Character playing, as the Status Bar shows it; another's, of their
+            // best on the map.
+            let playing = level.filter(|_| owner.is_none() || owner == current).map(LevelBand::of);
+            let link = |bests: &MapBests| {
+                let band = playing.or_else(|| bests.visits.iter().find_map(|v| v.level).map(LevelBand::of));
+                leaderboards::map_url(&bests.id, band, owner)
+            };
             PersonalBestsCharacter {
                 name: owner.map(String::from),
                 current: owner == current,
-                maps: rows(saved.maps_of(owner), this_visit, map, here),
+                maps: rows(saved.maps_of(owner), this_visit, map, here, link),
+                leaderboard: owner.map(&toggle),
             }
         })
         .collect()
@@ -214,6 +231,7 @@ fn rows<'a>(
     this_visit: Option<(&str, usize)>,
     map: impl Fn(&str) -> Option<(&'a MapEntry, &'a MapData)>,
     here: Option<&str>,
+    link: impl Fn(&MapBests) -> String,
 ) -> Vec<PersonalBestsMap> {
     let mut maps: Vec<PersonalBestsMap> = saved
         .iter()
@@ -241,6 +259,7 @@ fn rows<'a>(
                 region: entry.map_or_else(String::new, |e| e.region.clone()),
                 mark: entry.and_then(|e| e.mark.clone()),
                 url: meowdb::map_url(&bests.id),
+                leaderboard_url: link(bests),
                 mob_levels: data.and_then(mob_levels),
                 exp_per_hour: best.exp_per_hour,
                 solo_exp_ceiling: ceiling,

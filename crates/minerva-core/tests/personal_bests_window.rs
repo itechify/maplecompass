@@ -41,6 +41,11 @@ fn button(state: &PanelState) -> bool {
     state.grind_tracker.personal_bests
 }
 
+/// `map`'s Map Leaderboard, as the window links it with no Character or level read.
+fn leaderboard(map: &str) -> String {
+    format!("https://owlofminerva.app/leaderboards/map/?map={map}")
+}
+
 /// The window's rows of the Unassigned bests, which are all there are with no Character
 /// named: none if there are none.
 fn maps(window: &PersonalBestsWindow) -> &[PersonalBestsMap] {
@@ -138,6 +143,8 @@ fn a_first_visits_best_is_in_the_window_with_the_maps_names_levels_and_share_mar
             region: "Victoria Island".into(),
             mark: None,
             url: meowdb::map_url(SUNSET_SKY_ID),
+            // No one's, at no band: no Character or level was read.
+            leaderboard_url: leaderboard(SUNSET_SKY_ID),
             mob_levels: Some(SUNSET_SKY_LEVELS),
             exp_per_hour: 7200,
             // Of its solo ceiling, 213,571 EXP/h: 3.37%.
@@ -204,6 +211,7 @@ fn a_best_on_a_map_the_player_has_not_been_on_has_its_names_region_levels_and_sh
                 region: "Victoria Island".into(),
                 mark: None,
                 url: meowdb::map_url(HENESYS_HUNTING_GROUND_I_ID),
+                leaderboard_url: leaderboard(HENESYS_HUNTING_GROUND_I_ID),
                 // Blue Snail and Shroom to Green Mushroom.
                 mob_levels: Some(LevelRange { lowest: 2, highest: 14 }),
                 exp_per_hour: 7661,
@@ -221,6 +229,7 @@ fn a_best_on_a_map_the_player_has_not_been_on_has_its_names_region_levels_and_sh
                 region: "Event".into(),
                 mark: None,
                 url: meowdb::map_url(MAPLE_HILL_ID),
+                leaderboard_url: leaderboard(MAPLE_HILL_ID),
                 mob_levels: Some(LevelRange { lowest: 2, highest: 2 }),
                 exp_per_hour: 2857,
                 // Of its solo ceiling, 4 Blue Snails' 5,714 EXP/h: 50%.
@@ -290,6 +299,7 @@ fn a_best_on_a_map_not_in_the_map_list_is_kept_and_goes_by_its_id() {
             region: String::new(),
             mark: None,
             url: meowdb::map_url(gone),
+            leaderboard_url: leaderboard(gone),
             mob_levels: None,
             exp_per_hour: 5000,
             solo_exp_ceiling: None,

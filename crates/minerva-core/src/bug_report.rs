@@ -29,6 +29,7 @@ use crate::hotkey_settings::KeyPress;
 use crate::item_lookup::ItemHit;
 use crate::item_lookup::ItemLookup;
 use crate::item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReading};
+use crate::leaderboards::{LeaderboardAnswer, RejectedReason};
 use crate::map_data::MapSummary;
 use crate::map_index::{Fetched, MapDataSource, SourceError};
 use crate::market_prices::{MarketImport, SavedMarketPrices};
@@ -212,6 +213,12 @@ pub enum Event {
     RemoveCharacter { name: String },
     /// The player merged the Character named `from` into the one named `into`.
     MergeCharacters { from: String, into: String },
+    /// The player turned "Show on the Map Leaderboards" on (`on`) or off for the Character
+    /// named `name`.
+    ShowOnLeaderboards { name: String, on: bool },
+    /// The Map Leaderboards answered upload `id`, for the Character named `name` (empty for an
+    /// upload no longer under way), with `answer`.
+    LeaderboardAnswer { id: u64, name: String, answer: LeaderboardAnswer },
     /// Not an input: an error the shell or one of our windows ran into (`from`), which
     /// would otherwise go nowhere.
     Error { from: String, message: String },
@@ -308,6 +315,9 @@ pub struct Line {
     /// The map the panel showed after, where it changed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub map: Option<ShownMap>,
+    /// The uploads to the Map Leaderboards the core asked the shell for after.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub uploads: Vec<AskedUpload>,
     /// The crop of the frame read, kept in the report under this name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crop: Option<String>,
@@ -315,8 +325,20 @@ pub struct Line {
 
 impl Line {
     fn new(t: u64, ticked: bool, event: Event) -> Self {
-        Self { t, ticked, event, answers: Vec::new(), notes: Vec::new(), grind_tracker: None, map: None, crop: None }
+        let (answers, notes, uploads) = (Vec::new(), Vec::new(), Vec::new());
+        Self { t, ticked, event, answers, notes, grind_tracker: None, map: None, uploads, crop: None }
     }
+}
+
+/// An upload to the Map Leaderboards the core asked for, as a line writes it down: its id,
+/// whose, and how many entries (`None`: deleting them).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AskedUpload {
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entries: Option<usize>,
 }
 
 /// What the shell knows of the run that the core doesn't, for a Bug Report.
@@ -557,6 +579,8 @@ struct Last {
     shop: Option<Option<ShopList>>,
     status_bar: Option<Option<StatusBar>>,
     exp_bar_rgba: Vec<u8>,
+    /// The id of the last upload to the Map Leaderboards written down as asked for.
+    upload_id: u64,
 }
 
 /// Writes the trace down as the core takes its inputs in, and keeps the crops.
@@ -614,6 +638,7 @@ impl Recorder {
                 shop: None,
                 status_bar: None,
                 exp_bar_rgba: Vec::new(),
+                upload_id: 0,
             },
             crops: VecDeque::new(),
             maps: BTreeSet::new(),
@@ -722,6 +747,12 @@ impl Recorder {
             if map != self.last.map {
                 line.map = Some(map.clone());
                 self.last.map = map;
+            }
+            let last_upload = self.last.upload_id;
+            for upload in outcome.state.leaderboard_uploads.iter().filter(|u| u.id > last_upload) {
+                let entries = upload.entries.as_ref().map(Vec::len);
+                line.uploads.push(AskedUpload { id: upload.id, name: upload.name.clone(), entries });
+                self.last.upload_id = self.last.upload_id.max(upload.id);
             }
             self.last.state = outcome.state.clone();
         }
@@ -1415,6 +1446,12 @@ pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
             Event::MergeCharacters { from, into } => {
                 minerva.merge_characters(&from, &into);
             }
+            Event::ShowOnLeaderboards { name, on } => {
+                minerva.show_on_leaderboards(&name, on);
+            }
+            Event::LeaderboardAnswer { id, answer, .. } => {
+                minerva.on_leaderboard_answer(id, answer);
+            }
             Event::Error { from, message } => minerva.note_error(&from, &message),
             Event::BugReport {} => minerva.mark_bug_report(),
         }
@@ -1476,10 +1513,16 @@ impl Recording {
                     | Event::MoveVisit { .. }
                     | Event::RemoveCharacter { .. }
                     | Event::MergeCharacters { .. }
+                    | Event::ShowOnLeaderboards { .. }
+                    | Event::LeaderboardAnswer { .. }
                     | Event::Error { .. }
                     | Event::BugReport {}
             );
-            let notable = acted || !line.notes.is_empty() || line.map.is_some() || line.answers.iter().any(Answer::is_set);
+            let notable = acted
+                || !line.notes.is_empty()
+                || line.map.is_some()
+                || !line.uploads.is_empty()
+                || line.answers.iter().any(Answer::is_set);
             let quiet = consequences.is_empty()
                 && matches!(
                     line.event,
@@ -1520,6 +1563,10 @@ impl Line {
         if let Some(changes) = self.grind_tracker.as_ref().and_then(grind_tracker_changes) {
             out.push(changes);
         }
+        out.extend(self.uploads.iter().map(|upload| match upload.entries {
+            Some(entries) => format!("Map Leaderboards upload {} asked: {:?}'s {entries} entries", upload.id, upload.name),
+            None => format!("Map Leaderboards upload {} asked: deleting {:?}'s entries", upload.id, upload.name),
+        }));
         out
     }
 }
@@ -1695,6 +1742,28 @@ impl Event {
             }
             Event::RemoveCharacter { name } => format!("Character {name:?} removed, with their bests"),
             Event::MergeCharacters { from, into } => format!("Character {from:?} merged into {into:?}"),
+            Event::ShowOnLeaderboards { name, on: true } => format!("{name:?} shown on the Map Leaderboards"),
+            Event::ShowOnLeaderboards { name, on: false } => format!("{name:?} taken off the Map Leaderboards"),
+            Event::LeaderboardAnswer { id, name, answer } => {
+                let said = match answer {
+                    LeaderboardAnswer::Accepted { rejected } if rejected.is_empty() => "taken".to_string(),
+                    LeaderboardAnswer::Accepted { rejected } => {
+                        let rejected: Vec<String> = rejected
+                            .iter()
+                            .map(|r| match r.reason {
+                                RejectedReason::OverCap { cap } => format!("{} band {} over the cap of {}", r.map, r.band, thousands(cap)),
+                                RejectedReason::Removed {} => format!("{} band {} removed", r.map, r.band),
+                            })
+                            .collect();
+                        format!("taken but for {}", rejected.join(", "))
+                    }
+                    LeaderboardAnswer::Deleted {} => "deleted".to_string(),
+                    LeaderboardAnswer::Claimed {} => "the name is claimed by another key".to_string(),
+                    LeaderboardAnswer::RateLimited { retry_after_secs } => format!("rate-limited for {retry_after_secs} s"),
+                    LeaderboardAnswer::Failed { why } => format!("failed: {why}"),
+                };
+                format!("Map Leaderboards upload {id} for {name:?}: {said}")
+            }
             Event::WallClock { unix_ms } => format!("wall clock {unix_ms} (ms since 1970)"),
             Event::Error { from, message } => format!("{from} error: {message}"),
             Event::BugReport {} => "Bug Report saved".to_string(),
