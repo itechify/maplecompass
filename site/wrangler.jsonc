@@ -17,9 +17,9 @@
     {
       "binding": "DB",
       "database_name": "minerva-leaderboards",
-      // Until `wrangler d1 create` gives the real ID (docs/map-leaderboards-setup.md),
-      // this placeholder works locally and in the tests, but not to deploy.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // Made with `wrangler d1 create minerva-leaderboards` (docs/map-leaderboards-setup.md).
+      // Local runs and the tests use a local copy, never this one.
+      "database_id": "b2c1083b-a098-4d6d-aa44-06ccd5c4d8c8",
       "migrations_dir": "./migrations"
     }
   ],
