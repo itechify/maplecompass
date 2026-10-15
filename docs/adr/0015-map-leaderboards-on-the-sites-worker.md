@@ -25,7 +25,7 @@ Every refusal is `{ "error": "<code>" }`: `bad-request` (with a `detail`), `no-k
 **The app** (#110):
 
 - `PUT /api/characters/<name>/entries`, with the key. Body: `{ "entries": [{ "map": "010001010", "level": 23, "job": "Magician", "expPerHour": 153216, "setAt": 1760000000000 }] }`, the Character's whole set, at most one entry per map and band, at most 2,000. `setAt` is when the Visit set it, in ms since the Unix epoch, and at most a day ahead of the Worker's clock: the app has no date for a best set before it knew the wall clock, and such a best can't be uploaded. Answer `200 { "accepted": 1, "rejected": [{ "map": "010001010", "band": 30, "reason": "over-cap", "cap": 766080 }] }`; `reason` is `over-cap` (with the map's `cap`) or `removed` (the maintainer deleted that Visit). A malformed body is a 400 and changes nothing, nor claims the name.
-- `DELETE /api/characters/<name>/entries`, with the key: opting out. `204`. The name stays claimed by the key.
+- `DELETE /api/characters/<name>/entries`, with the key: opting out. `204`. The name stays claimed by the key; a name no key holds stays unclaimed.
 
 **The site's pages** (#111):
 

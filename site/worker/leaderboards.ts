@@ -95,7 +95,14 @@ interface Claim {
 /// Claim `name` for the request's Leaderboard Key, if no key holds it yet, and say whether
 /// the write may go ahead: only with the key that holds the name. Another key is refused
 /// as "claimed", and kept as the one the maintainer would reassign the name to.
-async function claim(env: Env, request: Request, name: string, now: number): Promise<Claim | Answer> {
+/// With `unclaimed: "leave"`, a name no key holds is left so, and the answer is `null`.
+async function claim(
+  env: Env,
+  request: Request,
+  name: string,
+  now: number,
+  unclaimed: "claim" | "leave" = "claim",
+): Promise<Claim | Answer | null> {
   if (!isName(name)) return badRequest("a Character's name is 1 to 16 letters and digits");
   const key = bearer(request);
   if (key === undefined) return { status: 401, body: { error: "no-key" } };
@@ -103,12 +110,16 @@ async function claim(env: Env, request: Request, name: string, now: number): Pro
   const keyHash = await hash(key);
   const limited = await limit(env, `key:${keyHash}`, WRITES);
   if (limited !== undefined) return limited;
-  const holder = await env.DB.prepare(
-    `INSERT INTO characters (name_key, name, key_hash, claimed_at) VALUES (?, ?, ?, ?)
-     ON CONFLICT (name_key) DO UPDATE SET name_key = name_key RETURNING key_hash`,
-  )
-    .bind(nameKey, name, keyHash, now)
-    .first<string>("key_hash");
+  const holder =
+    unclaimed === "claim"
+      ? await env.DB.prepare(
+          `INSERT INTO characters (name_key, name, key_hash, claimed_at) VALUES (?, ?, ?, ?)
+           ON CONFLICT (name_key) DO UPDATE SET name_key = name_key RETURNING key_hash`,
+        )
+          .bind(nameKey, name, keyHash, now)
+          .first<string>("key_hash")
+      : await env.DB.prepare("SELECT key_hash FROM characters WHERE name_key = ?").bind(nameKey).first<string>("key_hash");
+  if (holder === null) return null;
   if (holder !== keyHash) {
     await env.DB.prepare("UPDATE characters SET refused_key_hash = ?, refused_at = ? WHERE name_key = ?")
       .bind(keyHash, now, nameKey)
@@ -126,7 +137,8 @@ export async function upload(env: Env, request: Request, name: string): Promise<
   // Read first, so an upload that can't be taken claims nothing.
   const entries = entriesOf(await body(request), now);
   if (typeof entries === "string") return badRequest(entries);
-  const claimed = await claim(env, request, name, now);
+  // Never null: an upload claims a name no key holds.
+  const claimed = (await claim(env, request, name, now))!;
   if (!("nameKey" in claimed)) return claimed;
   const { nameKey, keyHash } = claimed;
   const removed = await env.DB.prepare("SELECT map_id, band, exp_per_hour FROM removed_entries WHERE name_key = ?")
@@ -156,7 +168,9 @@ export async function upload(env: Env, request: Request, name: string): Promise<
 }
 
 export async function optOut(env: Env, request: Request, name: string): Promise<Answer> {
-  const claimed = await claim(env, request, name, Date.now());
+  const claimed = await claim(env, request, name, Date.now(), "leave");
+  // A name no key holds has no entries, and stays unclaimed.
+  if (claimed === null) return { status: 204 };
   if (!("nameKey" in claimed)) return claimed;
   await env.DB.prepare(`DELETE FROM entries WHERE name_key = ?1 AND ${HELD}`).bind(claimed.nameKey, claimed.keyHash).run();
   return { status: 204 };

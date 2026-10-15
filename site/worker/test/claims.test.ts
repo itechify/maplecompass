@@ -37,6 +37,14 @@ describe("name claims", () => {
     expect(await names(FIELD, 10)).toContain("Konrad");
   });
 
+  it("doesn't claim a name at an opt-out", async () => {
+    expect((await optOut("Pia", key("pia-first"))).status).toBe(204);
+
+    const response = await upload("Pia", key("pia-second"), [entry(FIELD, 15, 21_000)]);
+
+    expect(response.status).toBe(200);
+  });
+
   it("claims a name whatever its case", async () => {
     await upload("Lotte", key("lotte"), [entry(FIELD, 16, 22_000)]);
 
