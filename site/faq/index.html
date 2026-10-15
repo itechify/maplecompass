@@ -1,7 +1,8 @@
 <!doctype html>
-<!-- The Minerva site's FAQ: every detail a player needs, as the questions they ask, in eight
+<!-- The Minerva site's FAQ: every detail a player needs, as the questions they ask, in nine
      groups. Each question is written once, here, as <details class="qa" id="…">; the build
-     draws it (site/questions.ts), and copies it into the home page where a feature names it.
+     draws it (site/questions.ts), and copies it into the home page where a feature names it,
+     and into the Map Leaderboards pages.
      The text describes the release whose tag the site is built from (docs/releasing.md); a
      change a player notices updates it in the same PR. -->
 <html lang="en">
@@ -11,7 +12,7 @@
     <title>Questions and answers · Minerva</title>
     <meta
       name="description"
-      content="Everything about Minerva, the free MapleStory Classic World overlay: whether it's safe, installing and setting it up, the panel and its map, hunting, grinding, items, and what to do when something goes wrong."
+      content="Everything about Minerva, the free MapleStory Classic World overlay: whether it's safe, installing and setting it up, the panel and its map, hunting, grinding, the Map Leaderboards, items, and what to do when something goes wrong."
     />
     <link rel="canonical" href="@SITE_URL@faq/" />
     <link rel="icon" type="image/png" sizes="32x32" href="../../assets/icon-32.png" />
@@ -55,6 +56,7 @@
         </header>
         <nav class="tabs" aria-label="Pages">
           <a class="tab" href="/">Home</a>
+          <a class="tab" href="/leaderboards/">Map Leaderboards</a>
           <a class="tab" href="/faq/" aria-current="page">FAQ</a>
         </nav>
       </div>
@@ -78,6 +80,7 @@
                   <li><a href="#panel">The panel &amp; the map</a></li>
                   <li><a href="#hunting">Hunting</a></li>
                   <li><a href="#grinding">Grinding</a></li>
+                  <li><a href="#leaderboards">Map Leaderboards</a></li>
                   <li><a href="#items">Items</a></li>
                   <li><a href="#trouble">Troubleshooting &amp; Bug Reports</a></li>
                 </ul>
@@ -791,6 +794,60 @@
                   <p>
                     Yes. It opens in the middle of the game; drag it by its bar and it opens where you left it next time.
                     It keeps up as you play, shows and hides with the panel, and closes with the star or its ×.
+                  </p>
+                </details>
+              </div>
+            </div>
+          </section>
+
+          <section class="faq-group stop" id="leaderboards" data-about="the Map Leaderboards" aria-labelledby="leaderboards-title">
+            <div class="faq-group-head">
+              <h2 id="leaderboards-title">Map Leaderboards</h2>
+              <p>Players' Personal Bests side by side on this site: what they rank, Level Bands, and reporting an entry.</p>
+            </div>
+            <div class="faq-group-body">
+              <div class="qa-list">
+                <details class="qa" id="map-leaderboards">
+                  <summary>What are the Map Leaderboards?</summary>
+                  <p>
+                    Pages on this site, one for each map, where players' Personal Bests from Minerva stand side by side,
+                    so you can see what EXP per hour others at your level get there. Each
+                    <a href="#level-bands">Level Band</a> is ranked on its own and shows its top 50: each character's
+                    name, job, exact level, EXP per hour and the date they set it. Find a map on the
+                    <a href="/leaderboards/">Map Leaderboards</a> page, by its name or among the most uploaded.
+                  </p>
+                </details>
+                <details class="qa" id="level-bands">
+                  <summary>What's a Level Band?</summary>
+                  <p>
+                    Ten levels of a map's leaderboard: 1–9, 10–19, 20–29 and on, so you're ranked against players near
+                    your level. An entry is one character's best visit to the map at those levels, so a character that
+                    levels up can have an entry in each band. The highest EXP per hour ranks first; on a tie, whoever
+                    set it first.
+                  </p>
+                </details>
+                <details class="qa" id="leaderboard-exp">
+                  <summary>What does the EXP per hour on a leaderboard count?</summary>
+                  <p>
+                    The <a href="#personal-bests">Personal Best</a> as Minerva counted it: everything the EXP bar gained,
+                    at its best over 5 minutes of play on the map. It's raw, so party play, EXP events and buffs aren't
+                    told apart from playing solo. Only a figure over 5 times the map's solo EXP/h ceiling is kept off, as
+                    one no map gives.
+                  </p>
+                </details>
+                <details class="qa" id="leaderboard-link">
+                  <summary>Where's my character's entry?</summary>
+                  <p>
+                    A map's page opened from Minerva opens at your character's Level Band, marks its entry and says its
+                    rank, even outside the top 50. If it says your character has no entry there any more, the entry has
+                    gone: taken off the Map Leaderboards, or removed after a report.
+                  </p>
+                </details>
+                <details class="qa" id="report-entry">
+                  <summary>An entry can't be right. What can I do?</summary>
+                  <p>
+                    Report it: each entry has a Report link. Say what's wrong if you like, and send it. Minerva's maker
+                    reads the reports, and removes an entry that can't be right.
                   </p>
                 </details>
               </div>

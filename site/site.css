@@ -687,6 +687,19 @@ strong {
   background: none;
   image-rendering: pixelated;
 }
+/* The Map Leaderboards' stage: the Grind Tracker's gold tally board, the mark of a best,
+   until a shot of a map's leaderboard is taken (site/screenshots/README.md). */
+.stage.tally-board img {
+  width: 192px;
+  height: 192px;
+  border: none;
+  background: none;
+  image-rendering: pixelated;
+}
+/* A feature's way to a page of its own, between its words and its questions. */
+.feature-action {
+  margin: 20px 0 0;
+}
 
 /* ---- Questions: each folded to its question, as the panel folds a section to its
    heading, set into the body as the settings view sets its rows ---- */
@@ -1549,6 +1562,357 @@ button.icon-button:active {
   }
 }
 
+/* ---- The Map Leaderboards (leaderboards/): finding a map, and a map's bands and entries,
+   set into the body as the hotkey table is ---- */
+
+/* Hidden from the eye, kept for screen readers. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.lb-head {
+  padding: 40px 0 8px;
+}
+.lb-head .lede {
+  max-width: 40em;
+  margin: 0;
+}
+.lb-head h1 {
+  margin-bottom: 14px;
+}
+/* Finding a map beside the most-uploaded maps. */
+.lb-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 56px;
+  align-items: start;
+  padding-top: 48px;
+}
+.lb-section h2,
+.lb-questions h2,
+.lb-board h2 {
+  margin-bottom: 12px;
+  font-size: 23px;
+  line-height: 30px;
+}
+.lb-search label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 22px;
+  color: var(--ink-2);
+}
+/* The search field, as the panel's: the one surface set into the body. */
+.lb-search input,
+.lb-dialog textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--frame);
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: inset 0 1px 2px rgba(20, 30, 60, 0.15);
+  color: var(--ink);
+  font: 16px/24px var(--font);
+}
+.lb-search input::placeholder {
+  color: var(--ink-3);
+}
+.lb-said {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 21px;
+  color: var(--ink-2);
+}
+/* A list of maps, rows parted by Window Rules in an inset box: the name over its street,
+   and how many characters have entries there at the right. */
+.lb-maps {
+  margin: 12px 0 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--inset-bg);
+}
+.lb-maps li + li {
+  margin-top: 0;
+  border-top: 1px solid var(--rule);
+}
+.lb-map {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 14px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.lb-map:hover {
+  background: color-mix(in srgb, var(--edit) 8%, transparent);
+  color: var(--ink);
+}
+.lb-map:hover .lb-map-name {
+  color: var(--portal);
+  text-decoration: underline 1px;
+  text-underline-offset: 3px;
+}
+.lb-map:active .lb-map-name {
+  color: var(--frame);
+}
+.lb-map:focus-visible {
+  outline-offset: -2px;
+}
+.lb-map-words {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.lb-map-name {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 22px;
+}
+.lb-map-street,
+.lb-map-aside {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+.lb-map-aside {
+  flex: none;
+  text-align: right;
+}
+/* The pages' questions, beside a heading, as a FAQ group sets them. */
+.lb-questions {
+  display: grid;
+  grid-template-columns: minmax(0, 16em) minmax(0, 44em);
+  gap: 56px;
+  align-items: start;
+  padding-top: 64px;
+}
+.lb-questions > .qa-block {
+  margin-top: 0;
+}
+
+/* A map's page: the way back, the map's name under its street, as the panel titles a map,
+   then its Level Bands. */
+.lb-back {
+  margin: 0 0 18px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 22px;
+}
+.lb-street {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 22px;
+  color: var(--ink-2);
+}
+.lb-head h1 + .lb-bands {
+  margin-top: 24px;
+}
+/* The Level Bands, light steel buttons each with its levels over its count; the band shown
+   is the selected one, in Selection Periwinkle. */
+.lb-bands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.lb-band {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 14px 7px;
+  border: 1px solid var(--select-edge);
+  border-radius: 4px;
+  background: var(--button-light);
+  box-shadow: inset 0 1px 0 #fff;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.lb-band:hover {
+  background: var(--button-light-hover);
+  color: var(--ink);
+}
+.lb-band:active {
+  background: var(--button-light);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
+  color: var(--ink);
+}
+.lb-band[aria-current] {
+  border-color: var(--select-edge);
+  background: var(--select);
+  box-shadow: inset 0 0 0 1px var(--select-edge);
+  color: var(--ink);
+}
+.lb-band-levels {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+.lb-band-entries {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.lb-board {
+  padding-top: 40px;
+}
+.lb-board .lb-said {
+  margin: 0;
+}
+.lb-note {
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 23px;
+}
+.lb-note.gone {
+  font-weight: 400;
+  color: var(--ink-2);
+}
+/* A band's entries: the hotkey table's inset box, rows parted by Window Rules, figures
+   right-aligned, the linked character's row selected. */
+.lb-table {
+  width: 100%;
+  max-width: 60em;
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  border-spacing: 0;
+  background: var(--inset-bg);
+  font-size: 15px;
+  line-height: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.lb-table th,
+.lb-table td {
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: baseline;
+}
+.lb-table thead th {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+.lb-table tbody tr > * {
+  border-top: 1px solid var(--rule);
+}
+.lb-table .lb-rank,
+.lb-table .lb-level,
+.lb-table .lb-exp,
+.lb-table .lb-date,
+.lb-table .lb-report {
+  text-align: right;
+}
+.lb-table td.lb-rank,
+.lb-table td.lb-job,
+.lb-table td.lb-date {
+  color: var(--ink-2);
+}
+.lb-table tbody .lb-name,
+.lb-table td.lb-exp {
+  font-weight: 700;
+}
+.lb-table .lb-rank {
+  width: 3em;
+}
+.lb-table .lb-report {
+  width: 1%;
+}
+.lb-table tr.lb-you > * {
+  background: var(--select);
+}
+.lb-table tr.lb-gap > td {
+  padding: 0 12px;
+  color: var(--ink-3);
+  text-align: center;
+}
+/* Report, a link's look on a button. */
+.lb-report-button {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: 13px/18px var(--font);
+  text-decoration: underline 1px var(--select-edge);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.lb-report-button:hover {
+  color: var(--portal);
+  text-decoration-color: currentColor;
+}
+.lb-report-button:active {
+  color: var(--frame);
+}
+
+/* Reporting an entry: a small window over the page, framed as the site's window, under
+   the title-marking window's navy veil. */
+.lb-dialog {
+  box-sizing: border-box;
+  width: min(30em, calc(100vw - 36px));
+  padding: 0;
+  border: 1px solid var(--window-edge);
+  border-radius: 4px;
+  background: var(--body-solid);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  color: var(--ink);
+}
+.lb-dialog::backdrop {
+  background: rgba(18, 28, 56, 0.3);
+}
+.lb-dialog .window-bar {
+  padding: 7px 16px 8px;
+}
+.lb-dialog-body {
+  padding: 16px 18px 18px;
+  font-size: 15px;
+  line-height: 23px;
+}
+.lb-dialog-body p {
+  margin: 0 0 14px;
+}
+.lb-dialog label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 700;
+}
+.lb-optional {
+  font-weight: 400;
+  color: var(--ink-2);
+}
+.lb-dialog textarea {
+  resize: vertical;
+  font-size: 15px;
+  line-height: 22px;
+}
+.lb-dialog .lb-said {
+  margin: 12px 0 0;
+  font-size: 15px;
+  line-height: 23px;
+  color: var(--ink);
+}
+.lb-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+button.button {
+  font-family: var(--font);
+  cursor: pointer;
+}
+
 /* ---- Narrower ---- */
 
 /* Too narrow for the owl and the whole game window side by side: the window goes under the
@@ -1763,5 +2127,124 @@ button.icon-button:active {
   .window-foot {
     padding: 24px 18px 28px;
     border-radius: 0;
+  }
+}
+
+/* The Map Leaderboards, narrower: finding a map over the most-uploaded maps, the questions
+   under their heading, and a feature's way to its page after its words. */
+@media (max-width: 960px) {
+  .lb-columns,
+  .lb-questions {
+    grid-template-columns: minmax(0, 38em);
+    gap: 24px;
+  }
+  .lb-columns {
+    gap: 48px;
+  }
+  .feature-action {
+    order: 2;
+  }
+}
+
+/* On a phone the three pages' tabs stand side by side, a name that won't fit on one line
+   taking two; and each entry becomes a card, as the Personal Bests window's rows do: its
+   rank beside its name and EXP/h, over its job, level, date and Report. */
+@media (max-width: 640px) {
+  .tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .tab,
+  .tab[aria-current="page"] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 4px;
+    line-height: 16px;
+    white-space: normal;
+  }
+  .lb-head {
+    padding-top: 28px;
+  }
+  .lb-table,
+  .lb-table tbody {
+    display: block;
+  }
+  .lb-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .lb-table tr {
+    display: grid;
+    grid-template-columns: 2.6em auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "rank name name name exp"
+      "rank job level date report";
+    column-gap: 10px;
+    padding: 8px 12px;
+  }
+  .lb-table tbody tr + tr {
+    border-top: 1px solid var(--rule);
+  }
+  .lb-table tbody tr > * {
+    padding: 0;
+    border-top: 0;
+    background: none;
+  }
+  .lb-table tr.lb-you {
+    background: var(--select);
+  }
+  .lb-table tr.lb-gap {
+    display: block;
+    padding: 0 12px;
+  }
+  .lb-table .lb-rank {
+    grid-area: rank;
+    width: auto;
+    text-align: left;
+  }
+  .lb-table .lb-name {
+    grid-area: name;
+    overflow-wrap: anywhere;
+  }
+  .lb-table .lb-exp {
+    grid-area: exp;
+  }
+  .lb-table td.lb-job,
+  .lb-table td.lb-level,
+  .lb-table td.lb-date {
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--ink-2);
+    text-align: left;
+  }
+  .lb-table .lb-job {
+    grid-area: job;
+  }
+  .lb-table .lb-level {
+    grid-area: level;
+  }
+  .lb-table td.lb-level::before {
+    content: "Lv ";
+  }
+  .lb-table .lb-date {
+    grid-area: date;
+  }
+  .lb-table .lb-report {
+    grid-area: report;
+    width: auto;
+  }
+  /* Report takes a thumb's tap, past its edge. */
+  .lb-report-button::after {
+    content: "";
+    position: absolute;
+    inset: -13px -8px;
+  }
+  .lb-dialog-buttons .button {
+    flex: 1;
   }
 }
