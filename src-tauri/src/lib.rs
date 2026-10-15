@@ -298,13 +298,9 @@ pub fn run() {
             minerva.restore(settings::load(&settings_path));
             // The Personal Bests earlier launches set, beside the settings: a small file,
             // read before anything is captured, so no best is set before they are back.
-            let (bests_file, saved_bests) = bests::BestsFile::load(bests::path(app.handle())?);
-            minerva.restore_bests(saved_bests);
-            // There but unreadable: what the site holds of the Characters shown there stays
-            // until the player sends what is here (after the settings, which say who they are).
-            if bests_file.lost() {
-                minerva.bests_lost();
-            }
+            // After the settings: one there but unreadable holds the Map Leaderboards' uploads
+            // of the Characters they show there.
+            let bests_file = bests::restore(&mut minerva, bests::BestsFile::load(bests::path(app.handle())?), &settings_path);
             // The market prices the player keeps on Item Cards, beside them.
             let (prices_file, saved_prices) =
                 market_prices::MarketPricesFile::load(market_prices::path(app.handle())?);

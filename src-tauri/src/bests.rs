@@ -4,10 +4,10 @@
 //! never over a file that was there and didn't read.
 
 use crate::errors::error;
-use minerva_core::SavedBests;
+use minerva_core::{Minerva, SavedBests};
 use std::fs;
 use std::io::ErrorKind;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
 pub fn path(app: &AppHandle) -> tauri::Result<PathBuf> {
@@ -71,12 +71,30 @@ impl BestsFile {
     }
 }
 
+/// Give `minerva`, its settings restored from `settings_path`, the bests this launch found:
+/// `(file, bests)` from [`BestsFile::load`]. A file that was there but didn't read is told to
+/// the core, which holds the Map Leaderboards' uploads of the Characters shown there, and the
+/// settings saying so are saved at once: the bests file saved from now on reads at the next
+/// launch, which wouldn't hold them again, and the settings are otherwise saved only when
+/// something else changes them. The file, for saving the bests to.
+pub fn restore(minerva: &mut Minerva, (file, bests): (BestsFile, SavedBests), settings_path: &Path) -> BestsFile {
+    minerva.restore_bests(bests);
+    if file.lost() {
+        minerva.bests_lost();
+        if let Err(e) = crate::settings::save(settings_path, &minerva.settings()) {
+            error!("saving settings failed: {e}");
+        }
+    }
+    file
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use minerva_core::BESTS_VERSION;
-    use minerva_core::{MapBests, VisitBest};
-    use std::path::Path;
+    use minerva_core::{LeaderboardCharacter, MapBests, Settings, VisitBest};
+
+    use std::task::Poll;
 
     /// `personal-bests.json` in a folder of `test`'s own under the temp folder, emptied
     /// first.
@@ -215,6 +233,49 @@ mod tests {
         let path = file("lost-later-shape");
         save(&path, &SavedBests { version: BESTS_VERSION + 1, ..sunset_sky_bests() }).unwrap();
         assert!(lost(&path));
+    }
+
+    /// A source with nothing: the core here never needs OSMS or MeowDB.
+    struct NoSource;
+
+    impl minerva_core::MapDataSource for NoSource {
+        fn saved_osms_files(&mut self) -> Option<minerva_core::osms::SavedFiles> {
+            None
+        }
+        fn fetch_osms_files(&mut self) -> Poll<Result<minerva_core::osms::OsmsFiles, minerva_core::SourceError>> {
+            Poll::Pending
+        }
+        fn picture(&mut self, _: &str) -> Poll<Result<String, minerva_core::SourceError>> {
+            Poll::Pending
+        }
+        fn item_search(&mut self, _: &str) -> Poll<Result<minerva_core::Fetched<Vec<minerva_core::ItemHit>>, minerva_core::SourceError>> {
+            Poll::Pending
+        }
+        fn saved_item_files(&mut self) -> Option<minerva_core::osms_items::SavedItemFiles> {
+            None
+        }
+        fn fetch_item_files(&mut self) -> Poll<Result<minerva_core::osms_items::ItemFiles, minerva_core::SourceError>> {
+            Poll::Pending
+        }
+    }
+
+    #[test]
+    fn bests_lost_at_launch_hold_the_uploads_in_the_settings_saved_at_once() {
+        // Egbert was shown on the Map Leaderboards, and the bests file doesn't read.
+        let path = file("lost-held");
+        fs::write(&path, r#"{ "version": 1, "maps": ["#).unwrap();
+        let settings_path = path.with_file_name("settings.json");
+        let egbert = LeaderboardCharacter { name: "Egbert".into(), shown: true, uploaded_at_unix_ms: None, held: false };
+        crate::settings::save(&settings_path, &Settings { map_leaderboards: vec![egbert], ..Settings::default() }).unwrap();
+        let mut minerva = Minerva::new(NoSource);
+        minerva.restore(crate::settings::load(&settings_path));
+
+        restore(&mut minerva, BestsFile::load(path.clone()), &settings_path);
+
+        // On disk before anything else is: the bests file saved from now on reads at the next
+        // launch, which wouldn't hold them again.
+        let held: Vec<bool> = crate::settings::load(&settings_path).map_leaderboards.iter().map(|c| c.held).collect();
+        assert_eq!(held, [true]);
     }
 
     #[test]
