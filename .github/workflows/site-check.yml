@@ -9,6 +9,11 @@ on:
       - site/**
       - src/theme.css
       - src/hotkeys.ts
+      # The Map Leaderboards pages write figures and dates as the app does, and name maps
+      # from the map names fixture.
+      - src/figures.ts
+      - src/dates.ts
+      - crates/minerva-core/tests/fixtures/osms-map-names.json
       - assets/**
       - package.json
       - pnpm-lock.yaml
@@ -33,5 +38,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm site:build
-      # The Map Leaderboards API (site/worker), type-checked and tested against a local D1.
+      # The Map Leaderboards API (site/worker), type-checked and tested against a local D1, and
+      # what the Map Leaderboards pages show (site/leaderboards).
       - run: pnpm site:test

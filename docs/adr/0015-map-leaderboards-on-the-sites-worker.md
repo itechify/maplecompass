@@ -34,6 +34,16 @@ Every refusal is `{ "error": "<code>" }`: `bad-request` (with a `detail`), `no-k
 - `GET /api/maps/<map>/bands/<band>[?name=<name>]`: the band's top 50, and that Character's entry with its rank, even outside them (`null` with none there). `{ "map": "010001010", "band": 20, "levels": [20, 29], "total": 63, "entries": [{ "rank": 1, "name": "Egbert", "job": "Magician", "level": 23, "expPerHour": 153216, "setAt": 1760000000000 }], "character": { "rank": 57, ... } }`.
 - `POST /api/reports`: `{ "name": "Egbert", "map": "010001010", "band": 20, "reason": "..." }` (`reason` optional, cut to 500 characters). `201`, or `404 no-entry`.
 
+**The pages** (#111) are static, and read the API from the browser (`site/leaderboards`): `/leaderboards/` finds a map by its name and lists the most-uploaded maps, and a map's page is `/leaderboards/map/?map=<map>`.
+
+**Deep links**, which the app opens from the Personal Bests window (#110), name the map, the Level Band and the Character:
+
+```
+https://owlofminerva.app/leaderboards/map/?map=010001010&band=20&name=Egbert
+```
+
+`map` is the 9-digit ID, `band` the Level Band by its first level (as the API names it), and `name` the Character's name, URL-encoded. The page opens at that band, marks the Character's entry and says its rank, even outside the top 50; with no entry there (opted out, the Visit removed, or deleted by the maintainer), it says the entry has gone. The slash before `?` saves a redirect. Minerva sends all three, but the page takes what it can of a link: without `name` it marks nothing, and without `band` it opens at the lowest band with entries. A `band` that isn't a band's first level is read as the band holding that level (`band=23` is 20), a `map` shorter than 9 digits is padded with zeros, and a part that can't be one (a `map` of more than 9 digits, a `name` that isn't 1 to 16 letters and digits) is dropped.
+
 **The maintainer**, with `Authorization: Bearer <ADMIN_TOKEN>` (`401 not-maintainer` otherwise):
 
 - `GET /api/admin/reports`: `{ "reports": [{ "id": 1, "name": "Egbert", "map": "010001010", "band": 20, "expPerHour": 153216, "reason": "...", "reportedAt": 1760000000000 }] }`, newest first.

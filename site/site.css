@@ -1,6 +1,6 @@
 /* The Minerva site: one of the game's windows opened wide, in setup's opaque language
    and a reading size of its own, standing on the overlay's glass periwinkle as the Personal
-   Bests page does. Its raised tabs are its pages: Home and the FAQ. The tokens are the
+   Bests page does. Its raised tabs are its pages: Home, the Map Leaderboards and the FAQ. The tokens are the
    app's (theme.css, without its TTF faces); see DESIGN.md. No motion: the game's windows
    don't animate. */
 
@@ -688,7 +688,7 @@ strong {
   image-rendering: pixelated;
 }
 /* The Map Leaderboards' stage: the Grind Tracker's gold tally board, the mark of a best,
-   until a shot of a map's leaderboard is taken (site/screenshots/README.md). */
+   at three quarters of its size, pixel for pixel. */
 .stage.tally-board img {
   width: 192px;
   height: 192px;
@@ -2014,14 +2014,14 @@ button.button {
   .window-head {
     display: contents;
   }
-  /* Both pages side by side, each a thumb's height. As in the game, the other sits dimmer
+  /* The pages side by side, each a thumb's height. As in the game, the others sit dimmer
      and the open one is the bright, framed one. */
   .tabs {
     position: sticky;
     top: 0;
     z-index: 10;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 4px;
     padding: 6px 10px 8px;
   }
@@ -2146,13 +2146,9 @@ button.button {
   }
 }
 
-/* On a phone the three pages' tabs stand side by side, a name that won't fit on one line
-   taking two; and each entry becomes a card, as the Personal Bests window's rows do: its
+/* On a phone a tab's name that won't fit on one line takes two; and each entry becomes a card, as the Personal Bests window's rows do: its
    rank beside its name and EXP/h, over its job, level, date and Report. */
 @media (max-width: 640px) {
-  .tabs {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
   .tab,
   .tab[aria-current="page"] {
     display: flex;

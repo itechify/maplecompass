@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { defineConfig, type Plugin } from "vite";
@@ -40,7 +41,7 @@ function fillPlaceholders(): Plugin {
     "@SITE_URL@": SITE_URL,
     "@HOTKEY_ROWS@": hotkeyRows(),
   };
-  // The credits close both pages, written once.
+  // The credits close every page, written once.
   const credits = fileURLToPath(new URL("./credits.html", import.meta.url));
   return {
     name: "minerva-site:placeholders",
@@ -65,7 +66,10 @@ function questions(): Plugin {
       order: "pre",
       handler(html, ctx) {
         const faq = readFaq(readFileSync(FAQ, "utf8"));
-        return isFaq(ctx.filename) ? fillFaqPage(html, faq) : fillQuestionLists(html, faq);
+        if (isFaq(ctx.filename)) return fillFaqPage(html, faq);
+        // The site's folder from the page's: "./" for the home page, "../" a folder down.
+        const root = relative(dirname(ctx.filename), dirname(HOME)).replace(/\\/g, "/");
+        return fillQuestionLists(html, faq, root ? `${root}/` : "./");
       },
     },
     handleHotUpdate({ file, server }) {
