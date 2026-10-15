@@ -153,7 +153,7 @@ _Avoid_: record, high score, PB, max
 
 **Personal Bests window**:
 Every map's Personal Best side by side, in a window over the game that the Grind Tracker opens and closes, to compare maps: each with its mob levels and how close the best came to the map's solo EXP/h ceiling, since the bests don't say which character or level set them. Each map opens to its Visit History, the Visit under way's best among them. It shows the bests as they stand, the Visit under way's included, and keeps up with them while it is open.
-_Avoid_: leaderboard, records, best list, Personal Bests page
+_Avoid_: leaderboard (the site's are Map Leaderboards), records, best list, Personal Bests page
 
 **Visit**:
 The stretch from the panel confirming a map until it confirms another. Losing the title for a while doesn't end it; closing Minerva does.
@@ -162,6 +162,14 @@ _Avoid_: stay, trip
 **Visit History**:
 A map's best Visits that have ended, up to 10, highest first: the first is its Personal Best. The Visit under way's best joins it when the Visit ends. The player can remove any Visit in it that came from a bug.
 _Avoid_: runs, attempts, records
+
+**Map Leaderboard**:
+A map's page on owlofminerva.app where players' Personal Bests stand side by side, each Level Band ranked on its own by EXP/h, ties going to whoever set it first. An entry is one Character's best Visit on the map in the band: its name, job, exact level, EXP/h and date. The site mirrors what the player uploads from Minerva, and keeps off an entry above 5× the map's solo ceiling (ADR 0015).
+_Avoid_: leaderboard (alone), ranking, high scores, hiscores
+
+**Leaderboard Key**:
+The secret each install of Minerva makes and keeps in its settings file, sent with every upload to the Map Leaderboards. A Character's first upload ties its name to the key; later uploads for the name must carry it, and another key's are refused as claimed. Never shown to the player; the site keeps only its hash. A lost one is replaced by the maintainer reassigning the name.
+_Avoid_: password, token, account
 
 **Time to Level**:
 How long the player would take to reach the next level at their net EXP rate.

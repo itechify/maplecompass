@@ -34,6 +34,8 @@ cargo run -p minerva --example probe osms  # no game: fetch OSMS's live data and
 cargo run -p minerva --example probe replay <report.zip>  # no game: a Bug Report's timeline, replayed through the core
 pnpm site:dev                                   # the site, at http://localhost:5173/minerva/
 pnpm site:build                                 # the site, into site/dist (fails while a screenshot is missing)
+pnpm site:test                                  # the site's Worker: the Map Leaderboards API, against a local D1
+cargo run -p minerva --example probe ceilings site/worker/osms-ceilings.json  # no game: the Map Leaderboards' cap, from OSMS
 ```
 
 The tests run on made-up worlds in OSMS's shape and a list of the game's map names; `probe osms` checks the live data, by hand when OSMS changes and before a release.

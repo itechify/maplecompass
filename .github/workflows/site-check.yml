@@ -1,5 +1,5 @@
-# Builds the Minerva site on a pull request that could change it, so a broken build
-# shows before a release would publish it. The build fails while a screenshot the page shows
+# Builds the Minerva site and tests its Worker on a pull request that could change them, so
+# a broken build shows before a release would publish it. The build fails while a screenshot the page shows
 # hasn't been taken (site/screenshots/README.md).
 name: Site check
 
@@ -12,6 +12,7 @@ on:
       - assets/**
       - package.json
       - pnpm-lock.yaml
+      - pnpm-workspace.yaml
       - tsconfig.json
       - .github/workflows/site*.yml
 
@@ -32,3 +33,5 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm site:build
+      # The Map Leaderboards API (site/worker), type-checked and tested against a local D1.
+      - run: pnpm site:test

@@ -1,5 +1,5 @@
 ---
-status: accepted, amended by ADR-0010 (the Item Card reads OSMS's item files, a set of their own)
+status: accepted, amended by ADR-0010 (the Item Card reads OSMS's item files, a set of their own) and ADR-0015 (a table of each map's solo ceiling is committed, for the Map Leaderboards' cap)
 ---
 
 # Map and mob data from OSMS Data Explorer's files, not MeowDB's pages

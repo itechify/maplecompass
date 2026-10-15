@@ -1,0 +1,57 @@
+---
+status: accepted
+---
+
+# Map Leaderboards on the site's Worker
+
+Players want to see what EXP/h others at their level get on a map, so Minerva puts their Personal Bests side by side on owlofminerva.app: a **Map Leaderboard** per map, each Level Band ranked by EXP/h (#106). The app uploads; the site shows. This records how the site keeps them.
+
+## The decision
+
+- **The `minerva-site` Worker answers an API under `/api/`**, from a **Cloudflare D1** database (`minerva-leaderboards`, its schema in `site/migrations`). The Worker serves `site/dist` as before: it runs first for `/api/*` only (`run_worker_first`), and hands any other path that isn't a file back to the assets, for the plain 404. One deploy, one domain. The code is `site/worker`, and its tests run in workerd against a local D1 (`pnpm site:test`).
+- **An entry** is one Character's best Visit on a map in a Level Band: its name, job, exact level, EXP/h, and the date the Visit set it. A band ranks its entries by EXP/h, ties going to whoever set it first (then by name, so a rank never moves between reads).
+- **The site mirrors the app.** Each upload is a Character's whole set of entries and replaces the set before it, so a Visit removed, merged or moved in the app goes from the site too. Opting out deletes every entry of the Character.
+- **Name claims by Leaderboard Key, with no accounts.** Each install makes a secret Leaderboard Key. A Character's first upload ties its name (whatever its case) to the key it carries; later writes for the name need that key, and another key is refused as `claimed`. Only the key's SHA-256 is kept. A player who loses their key (a reinstall, a new PC) asks on Discord: the Worker keeps the last key it refused for the name, and the maintainer reassigns the name to it. Neither the player nor the maintainer ever sees a key.
+- **The cap.** An entry above **5× its map's solo EXP/h ceiling** is rejected, the rest of its upload taken. The ceilings are a table, `site/worker/osms-ceilings.json`, that `probe ceilings` writes from OSMS's live set with the core's own Map Summary arithmetic (`MapSet::solo_ceilings`), so the site never works it out again and the app's word isn't taken for it. A map with no ceiling (no mobs, or one newer than the table) is capped at **25,000,000 EXP/h**, a literal above 5× the highest ceiling in the table (4,393,656 when it was written), so regenerating the table doesn't move it. 5× leaves room for parties, EXP events and buffs, which aren't tagged, while a misread or a made-up figure several times past anything a map gives is kept off.
+- **Rate limits**, counted in D1 over the last 10 minutes: 30 writes per Leaderboard Key, whatever names they're for, and 10 reports per reporter (by IP address, hashed). A Character uploads at opting in and then as each Visit ends, nowhere near the limit.
+- **Moderation.** Anyone can report an entry. The maintainer, with the Worker's `ADMIN_TOKEN` secret, reads the reports, deletes an entry (the same Visit uploaded again stays off; a better one comes back), and reassigns a name.
+
+## The API
+
+All answers are JSON. Public reads are cached for a minute (`Cache-Control: public, max-age=60`); everything else is `no-store`. A Character's name is 1 to 16 letters and digits, matched whatever its case. A map is its 9-digit ID (`"010001010"`, as the app keys Personal Bests). A **Level Band** is named by its first level: `1` (1–9), `10` (10–19), `20` (20–29) and on. The Worker works an entry's band out from its level; the app never sends one. A Leaderboard Key is 32 to 256 letters, digits, `-` or `_`, sent as `Authorization: Bearer <key>`.
+
+Every refusal is `{ "error": "<code>" }`: `bad-request` (with a `detail`), `no-key` (401), `claimed` (409), `rate-limited` (429, with `Retry-After` in seconds), `not-found` (404).
+
+**The app** (#110):
+
+- `PUT /api/characters/<name>/entries`, with the key. Body: `{ "entries": [{ "map": "010001010", "level": 23, "job": "Magician", "expPerHour": 153216, "setAt": 1760000000000 }] }`, the Character's whole set, at most one entry per map and band, at most 2,000. `setAt` is when the Visit set it, in ms since the Unix epoch, and at most a day ahead of the Worker's clock: the app has no date for a best set before it knew the wall clock, and such a best can't be uploaded. Answer `200 { "accepted": 1, "rejected": [{ "map": "010001010", "band": 30, "reason": "over-cap", "cap": 766080 }] }`; `reason` is `over-cap` (with the map's `cap`) or `removed` (the maintainer deleted that Visit). A malformed body is a 400 and changes nothing, nor claims the name.
+- `DELETE /api/characters/<name>/entries`, with the key: opting out. `204`. The name stays claimed by the key.
+
+**The site's pages** (#111):
+
+- `GET /api/maps`: the most-uploaded maps, by Characters with entries there. `{ "maps": [{ "map": "010001010", "characters": 12, "entries": 15 }] }`, at most 50.
+- `GET /api/maps/<map>`: the map's bands with entries. `{ "map": "010001010", "bands": [{ "band": 20, "levels": [20, 29], "entries": 7 }] }`.
+- `GET /api/maps/<map>/bands/<band>[?name=<name>]`: the band's top 50, and that Character's entry with its rank, even outside them (`null` with none there). `{ "map": "010001010", "band": 20, "levels": [20, 29], "total": 63, "entries": [{ "rank": 1, "name": "Egbert", "job": "Magician", "level": 23, "expPerHour": 153216, "setAt": 1760000000000 }], "character": { "rank": 57, ... } }`.
+- `POST /api/reports`: `{ "name": "Egbert", "map": "010001010", "band": 20, "reason": "..." }` (`reason` optional, cut to 500 characters). `201`, or `404 no-entry`.
+
+**The maintainer**, with `Authorization: Bearer <ADMIN_TOKEN>` (`401 not-maintainer` otherwise):
+
+- `GET /api/admin/reports`: `{ "reports": [{ "id": 1, "name": "Egbert", "map": "010001010", "band": 20, "expPerHour": 153216, "reason": "...", "reportedAt": 1760000000000 }] }`, newest first.
+- `DELETE /api/admin/entries/<name>/<map>/<band>`: `204`, or `404 no-entry`. The entry's reports go with it.
+- `POST /api/admin/characters/<name>/reassign`: the name moves to the last key refused for it. `200 { "name": "Egbert", "refusedAt": 1760000000000 }` (check the time with the player), `409 no-refused-key`, or `404 no-character`.
+
+The app calls the API from the shell, not from a web page, so there is no CORS.
+
+## Considered options
+
+- **Accounts or OAuth (Discord, Google).** A real identity per name, and recovery without the maintainer. But Minerva has no account anywhere and the site no sign-in, and a player would trust a third party with a fan tool. A name's worth to a cheater is small, and a lost key is rare; the maintainer reassigning it by hand is enough.
+- **Uploading a Visit's readings as evidence.** The EXP bar's readings over the Visit would let the site check the EXP/h, or a moderator replay it. But they hold the player's whole run, and the site would have to reimplement or host the core's Session to make sense of them. A reading that is made up is no harder to make than a figure. The cap keeps off what can't be true, and reports catch the rest.
+- **Party, event or buff tags.** They'd make entries fairer to compare, but Minerva can't tell party play, an EXP event or a buff from the screen, so the player would tag them, and an honest player would be ranked below one who didn't. Raw EXP/h, capped, is ranked as it is.
+- **A separate service** (its own Worker or a hosted database elsewhere). Isolation from the site's deploys, but another domain, deploy, token and CORS. The site's Worker already serves owlofminerva.app, and D1 is on the same account.
+
+## Consequences
+
+- The site's deploy (`.github/workflows/site.yml`) applies the migrations (`--remote`) before deploying. The API must be deployed before any app version that uploads (#110). Once it's live, publishing the site from a ref older than it would deploy a Worker without the API, so the site is never published from an older tag again.
+- Setting up D1, the API token's D1 permission and the `ADMIN_TOKEN` secret are steps by hand, once: `docs/map-leaderboards-setup.md`.
+- The ceilings table is the second piece of OSMS's data committed, after the map names fixture (ADR 0008): one figure per map, which Minerva works out itself. It is written again with `probe ceilings` when OSMS's set changes, as `probe osms` is run.
+- Names, jobs, levels, EXP/h and dates a player chooses to upload are public. The Leaderboard Key, and the reporters' addresses, are kept only as hashes.

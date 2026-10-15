@@ -3,7 +3,9 @@
 # published. Run it by hand to publish again: from the latest release's tag by default, or
 # from another tag, branch or commit. A tag up to v0.9.0 has no site/wrangler.jsonc,
 # so it won't publish. The `site` environment holds the Cloudflare API token
-# (CLOUDFLARE_API_TOKEN) and lets only main and release tags use it.
+# (CLOUDFLARE_API_TOKEN) and lets only main and release tags use it. Publishing also
+# deploys the Map Leaderboards API, so never publish from a ref older than it once it is
+# live (docs/map-leaderboards-setup.md).
 name: Site
 
 on:
@@ -60,6 +62,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm site:build
       # npx rather than pnpm dlx, which won't run wrangler's install scripts unasked.
+      # The Map Leaderboards' tables first, so the new Worker finds them (--remote: wrangler
+      # applies to a local database by default). Migrations already applied are skipped.
+      - name: Apply the database's migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx --yes wrangler@4 d1 migrations apply minerva-leaderboards --remote --config site/wrangler.jsonc
       - name: Deploy to Cloudflare
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
