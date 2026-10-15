@@ -1,0 +1,441 @@
+// The Map Leaderboards pages (site/leaderboards), worked out as plain data: where a link
+// opens, the maps a search finds, and what a page shows from the API's answers (ADR 0015).
+// The pages' scripts (search.ts, map.ts) only fetch and draw what this gives them.
+
+import { dayText } from "../../src/dates.ts";
+import { levels, rate } from "../../src/figures.ts";
+import { bandOf, levelsOf } from "../level-bands.ts";
+
+/** A map's page as its address names it: `/leaderboards/map/?map=<ID>&band=<first level>&name=<name>`.
+ *  Any part may be missing, or dropped for not being one. */
+export interface Link {
+  /** The map's 9-digit ID ("010001010"). */
+  map: string | null;
+  /** The Level Band, by its first level: 1 (1-9), 10 (10-19), 20 (20-29)... */
+  band: number | null;
+  /** The Character whose entry the page shows: 1 to 16 letters and digits. */
+  name: string | null;
+}
+
+/** The highest level a Character can have. */
+const TOP_LEVEL = 200;
+
+/** The map a link names, as its 9-digit ID: the map names fixture writes IDs as numbers,
+ *  without their leading zeros, so a shorter one is padded. */
+function mapIn(value: string | null): string | null {
+  return value !== null && /^\d{1,9}$/.test(value) ? value.padStart(9, "0") : null;
+}
+
+/** The Level Band a link names, or the one holding the level it names. */
+function bandIn(value: string | null): number | null {
+  if (value === null || !/^\d{1,3}$/.test(value)) return null;
+  const level = Number(value);
+  return level >= 1 && level <= TOP_LEVEL ? bandOf(level) : null;
+}
+
+function nameIn(value: string | null): string | null {
+  return value !== null && /^[A-Za-z0-9]{1,16}$/.test(value) ? value : null;
+}
+
+/** Where a map page's address (its `location.search`) opens. */
+export function readLink(search: string): Link {
+  const query = new URLSearchParams(search);
+  return { map: mapIn(query.get("map")), band: bandIn(query.get("band")), name: nameIn(query.get("name")) };
+}
+
+/** A row of the map names fixture (crates/minerva-core/tests/fixtures/osms-map-names.json),
+ *  as OSMS writes it: its ID a number without its leading zeros, its text untrimmed. */
+export interface MapNameRow {
+  id: number;
+  street_name: string;
+  name: string;
+  region: string;
+}
+
+/** A map as a page names it: its Map Name under its Street Name, as the panel does. */
+export interface MapPlace {
+  /** The 9-digit ID. */
+  id: string;
+  name: string;
+  street: string;
+  region: string;
+  /** Whether the map names fixture names it. */
+  known: boolean;
+}
+
+/** The maps the fixture names, by 9-digit ID. */
+export type MapNames = Map<string, MapPlace>;
+
+/** The regions of maps the player can't normally enter, which search leaves out, as the
+ *  panel's does (`MapEntry::is_left_out`). */
+const LEFT_OUT_REGIONS = ["Event", "Dev"];
+
+/** The maps the fixture names, trimmed as the core reads them, leaving out any with no name
+ *  or street. */
+export function mapNames(rows: MapNameRow[]): MapNames {
+  const names: MapNames = new Map();
+  for (const row of rows) {
+    const [name, street] = [row.name.trim(), row.street_name.trim()];
+    if (name === "" || street === "") continue;
+    const id = String(row.id).padStart(9, "0");
+    names.set(id, { id, name, street, region: row.region, known: true });
+  }
+  return names;
+}
+
+/** Map `id` as a page names it: a map the fixture doesn't name (one newer than it) by its
+ *  ID, "Not in the map list", as the Personal Bests window names it. */
+export function placeOf(names: MapNames, id: string): MapPlace {
+  return names.get(id) ?? { id, name: `Map ${id}`, street: "Not in the map list", region: "", known: false };
+}
+
+/** How well a name holds a query: it starts with it, a word in it does, or it holds it
+ *  elsewhere. Lower is better. */
+function fit(name: string, query: string): number | null {
+  const lower = name.toLowerCase();
+  let best: number | null = null;
+  for (let at = lower.indexOf(query); at !== -1; at = lower.indexOf(query, at + 1)) {
+    const fit = at === 0 ? 0 : /[\p{L}\p{N}]/u.test(lower[at - 1]) ? 2 : 1;
+    best = best === null ? fit : Math.min(best, fit);
+  }
+  return best;
+}
+
+/** Order as the core's strings order: by code unit, not the locale's. */
+function byText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** How many entries each map has on its Map Leaderboard, by 9-digit ID; a map it doesn't
+ *  hold has none. */
+export type EntryCounts = Map<string, number>;
+
+/** The entries each map has, from GET /api/maps. */
+export function entryCounts(answer: MapsAnswer): EntryCounts {
+  return new Map(answer.maps.map((m) => [m.map, m.entries]));
+}
+
+/** A map a search found, with how many entries it has ("12 entries", "No entries yet"), or
+ *  `null` before the API has said (or when it can't be reached). */
+export interface FoundMap extends MapPlace {
+  entries: string | null;
+}
+
+/** The maps whose Map Name holds `query`, whatever the case, as the panel's search finds
+ *  them (`search.rs`): those that start with it, then those with a word that starts with it,
+ *  then the rest, each by name; Event and Dev maps aside. With `counts`, the maps with
+ *  entries come first, so the first map, the one Enter opens, isn't an empty one when
+ *  another isn't. The first `shown`, and how many more. */
+export function searchMaps(
+  names: MapNames,
+  query: string,
+  { shown = 10, counts = null }: { shown?: number; counts?: EntryCounts | null } = {},
+): { maps: FoundMap[]; more: number } {
+  const lower = query.trim().toLowerCase();
+  if (lower === "") return { maps: [], more: 0 };
+  const found: { fit: number; empty: boolean; map: MapPlace }[] = [];
+  for (const map of names.values()) {
+    if (LEFT_OUT_REGIONS.includes(map.region)) continue;
+    const f = fit(map.name, lower);
+    if (f !== null) found.push({ fit: f, empty: !counts?.get(map.id), map });
+  }
+  found.sort(
+    (a, b) =>
+      Number(a.empty) - Number(b.empty) ||
+      a.fit - b.fit ||
+      byText(a.map.name, b.map.name) ||
+      byText(a.map.street, b.map.street) ||
+      byText(a.map.id, b.map.id),
+  );
+  const entries = (id: string) => {
+    if (counts === null) return null;
+    const count = counts.get(id) ?? 0;
+    return count === 0 ? "No entries yet" : entriesCounted(count);
+  };
+  return {
+    maps: found.slice(0, shown).map(({ map }) => ({ ...map, entries: entries(map.id) })),
+    more: Math.max(0, found.length - shown),
+  };
+}
+
+/** What the search says under its field, for `query` and what it found: how many maps, and
+ *  the one Enter opens (the list marks it, and this says it in words). */
+export function searchSaid(query: string, found: { maps: MapPlace[]; more: number }): string {
+  if (query.trim() === "") return "Type part of a map's name as the game writes it, like Ant Tunnel.";
+  if (found.maps.length === 0) return `No map's name holds “${query.trim()}”.`;
+  const shown = counted(found.maps.length, "map");
+  const all = found.more === 0 ? shown : `${shown}, and ${found.more.toLocaleString("en-US")} more: type more of the name`;
+  return `${all}. Enter opens ${found.maps[0].name}.`;
+}
+
+/** `count` of `thing`, plural when it isn't 1: "1 map", "12 maps". */
+function counted(count: number, thing: string): string {
+  return `${count.toLocaleString("en-US")} ${thing}${count === 1 ? "" : "s"}`;
+}
+
+/** How many entries, the one word the pages count a Map Leaderboard in: "1 entry", "12 entries". */
+function entriesCounted(count: number): string {
+  return `${count.toLocaleString("en-US")} ${count === 1 ? "entry" : "entries"}`;
+}
+
+/** GET /api/maps: every map with entries, the most first. */
+export interface MapsAnswer {
+  maps: { map: string; characters: number; entries: number }[];
+}
+
+/** A most-uploaded map as the Map Leaderboards page lists it. */
+export interface UploadedMap {
+  name: string;
+  street: string;
+  href: string;
+  entries: string;
+}
+
+/** What a page says in place of what it can't show, and where to go from there. */
+export interface Said {
+  text: string;
+  link?: { text: string; href: string };
+}
+
+/** Where an empty Map Leaderboard sends the player: putting their own bests there, which
+ *  only Minerva does. */
+const PUT_YOURS = { text: "How to put yours here from Minerva", href: "/faq/#leaderboard-appear" };
+
+/** How many maps the Map Leaderboards page lists as the most uploaded. */
+const MOST_UPLOADED = 50;
+
+/** The most-uploaded maps as the Map Leaderboards page lists them, or why it lists none. */
+export function mostUploaded(names: MapNames, answer: MapsAnswer): { maps: UploadedMap[]; empty: Said | null } {
+  const maps = answer.maps.slice(0, MOST_UPLOADED).map(({ map, entries }) => {
+    const place = placeOf(names, map);
+    return {
+      name: place.name,
+      street: place.street,
+      href: linkTo({ map, band: null, name: null }),
+      entries: entriesCounted(entries),
+    };
+  });
+  const empty = { text: "No one has put a best on the Map Leaderboards yet.", link: PUT_YOURS };
+  return { maps, empty: maps.length === 0 ? empty : null };
+}
+
+/** A Level Band's levels as the panel writes mob levels: "Lv 20–29". */
+function bandLevels(band: number): string {
+  const [lowest, highest] = levelsOf(band);
+  return levels({ lowest, highest });
+}
+
+/** GET /api/maps/<map>: the map's Level Bands with entries, lowest first. */
+export interface MapAnswer {
+  map: string;
+  bands: { band: number; levels: [number, number]; entries: number }[];
+}
+
+/** A Level Band as a map's page offers it. */
+export interface BandChoice {
+  band: number;
+  levels: string;
+  entries: string;
+  href: string;
+  /** Whether it's the band the page shows. */
+  open: boolean;
+}
+
+/** A map's page: the map, its Level Bands, and the one it opens at (`null` with none to
+ *  show), or why it has none. */
+export interface MapPage {
+  place: MapPlace;
+  bands: BandChoice[];
+  open: number | null;
+  empty: Said | null;
+}
+
+/** A map's page as `link` opens it, from its bands as the API gives them. It opens at the
+ *  link's band, even with no entries there (Minerva links a Character's own band, and the
+ *  page says their entry has gone), or else at the lowest band with entries. */
+export function mapPage(link: Link, names: MapNames, answer: MapAnswer): MapPage {
+  const open = link.band ?? answer.bands[0]?.band ?? null;
+  const counts = new Map(answer.bands.map((b) => [b.band, b.entries]));
+  if (open !== null && !counts.has(open)) counts.set(open, 0);
+  const bands = [...counts]
+    .sort(([a], [b]) => a - b)
+    .map(([band, entries]) => ({
+      band,
+      levels: bandLevels(band),
+      entries: entries === 0 ? "No entries" : entriesCounted(entries),
+      href: linkTo({ map: answer.map, band, name: link.name }),
+      open: band === open,
+    }));
+  return {
+    place: placeOf(names, answer.map),
+    bands,
+    open,
+    empty: open === null ? { text: "No one has a best on this Map Leaderboard yet.", link: PUT_YOURS } : null,
+  };
+}
+
+/** An entry as the API ranks it: one Character's best Visit on the map in the band. */
+export interface Ranked {
+  rank: number;
+  name: string;
+  job: string;
+  level: number;
+  expPerHour: number;
+  /** When the Visit set it, in ms since the Unix epoch. */
+  setAt: number;
+}
+
+/** GET /api/maps/<map>/bands/<band>?name=<name>: the band's top 50, and the named
+ *  Character's entry with its rank, wherever it is (`null` with none there). */
+export interface BandAnswer {
+  map: string;
+  band: number;
+  levels: [number, number];
+  total: number;
+  entries: Ranked[];
+  character: Ranked | null;
+}
+
+/** An entry as a band's table writes it. */
+export interface Row {
+  rank: string;
+  name: string;
+  job: string;
+  level: string;
+  expPerHour: string;
+  date: string;
+  /** Whether it's the linked Character's. */
+  you: boolean;
+  /** How far along its lane the EXP/h runs, from 0 to 1: the band's #1 runs it full. */
+  lane: number;
+}
+
+/** A band's table: its rows, the linked Character's under them when it's outside them (after
+ *  how many entries are between), a line about the linked Character over the table and
+ *  another at their row, what the table shows of the band, and why there are no rows when
+ *  there are none. */
+export interface BandTable {
+  rows: Row[];
+  /** Between the top 50 and the linked Character's row under them: "6 more entries". */
+  gap: string | null;
+  yours: Row | null;
+  note: string | null;
+  /** "Top 50 of 63 at Lv 20–29", so the table doesn't stop at 50 silently. */
+  caption: string | null;
+  empty: Said | null;
+  /** The lanes' ruler: 0, then each round step up to #1's EXP/h; none with no rows. */
+  ruler: RulerStep[];
+}
+
+/** A step on a band's ruler: how far along the lanes it falls, and its figure ("50k"). */
+export interface RulerStep {
+  at: number;
+  text: string;
+}
+
+/** The ruler for lanes running from 0 to `top`, at round steps as the Personal Bests
+ *  window rules its lanes: 0, then every step up to `top`, the step the smallest of 1, 2,
+ *  2.5 and 5 to a power of ten that leaves at most five under `top`. Each round step is at
+ *  most twice the one before, so that leaves three to five (fewer only under a `top` of 3). */
+function rulerTo(top: number): RulerStep[] {
+  let step = 1;
+  for (let power = Math.max(1, 10 ** Math.floor(Math.log10(top / 5))); ; power *= 10) {
+    const fits = [1, 2, 2.5, 5].map((n) => n * power).find((n) => Math.floor(top / n) <= 5);
+    if (fits !== undefined) {
+      step = fits;
+      break;
+    }
+  }
+  const steps = [0];
+  for (let n = step; n <= top; n += step) steps.push(n);
+  return steps.map((n) => ({ at: n / top, text: short(n) }));
+}
+
+/** A step on a ruler as the Personal Bests window writes it: 0, 500, 20k, 1.25M. */
+function short(n: number): string {
+  if (n >= 1_000_000) return `${Number((n / 1_000_000).toFixed(2))}M`;
+  if (n >= 1_000) return `${Number((n / 1_000).toFixed(1))}k`;
+  return String(n);
+}
+
+/** A band's table from the API's answer, for the Character `name` the link names (if
+ *  any), with dates written as of `now`. */
+export function bandTable(answer: BandAnswer, name: string | null, now: Date): BandTable {
+  const yours = answer.character;
+  const top = Math.max(1, answer.entries[0]?.expPerHour ?? 1);
+  const row = (entry: Ranked): Row => {
+    const set = new Date(entry.setAt);
+    return {
+      rank: String(entry.rank),
+      name: entry.name,
+      job: entry.job,
+      level: String(entry.level),
+      expPerHour: rate(entry.expPerHour),
+      date: dayText(set, set.getFullYear() !== now.getFullYear()),
+      you: entry.rank === yours?.rank,
+      lane: Math.min(1, entry.expPerHour / top),
+    };
+  };
+  const rows = answer.entries.map(row);
+  const at = bandLevels(answer.band);
+  const total = answer.total.toLocaleString("en-US");
+  let note: string | null = null;
+  if (yours !== null) note = `${yours.name} is #${yours.rank} of ${total} at ${at}.`;
+  else if (name !== null) note = `${name} has no entry here at ${at} any more.`;
+  const below = yours !== null && !rows.some((r) => r.you);
+  const between = below ? yours.rank - rows.length - 1 : 0;
+  const caption =
+    rows.length === 0 ? null : answer.total > rows.length ? `Top ${rows.length} of ${total} at ${at}` : `${entriesCounted(rows.length)} at ${at}`;
+  return {
+    rows,
+    gap: between > 0 ? `${between.toLocaleString("en-US")} more ${between === 1 ? "entry" : "entries"}` : null,
+    yours: below ? row(yours) : null,
+    note,
+    caption,
+    empty: rows.length === 0 ? { text: `No one at ${at} has put a best on this map yet.`, link: PUT_YOURS } : null,
+    ruler: rows.length === 0 ? [] : rulerTo(top),
+  };
+}
+
+/** The rows that slide to their new rank when the page switches from one Level Band's
+ *  `before` to another's `after`: the Characters with an entry in both (names are one
+ *  Character's whatever their case), each by its name as either band writes it, with the
+ *  `view-transition-name` both its rows take. Each is its name in lower case, anything
+ *  but a letter or digit written as its code (`_2d_`), after "lb-row-", so no two meet. */
+export function morphNames(before: Row[], after: Row[]): Map<string, string> {
+  const key = (name: string) => name.toLowerCase();
+  const was = new Set(before.map((r) => key(r.name)));
+  const both = new Set(after.map((r) => key(r.name)).filter((k) => was.has(k)));
+  const names = new Map<string, string>();
+  for (const row of [...before, ...after]) {
+    const k = key(row.name);
+    if (!both.has(k)) continue;
+    const safe = [...k].map((c) => (/[a-z0-9]/.test(c) ? c : `_${c.codePointAt(0)!.toString(16)}_`)).join("");
+    names.set(row.name, `lb-row-${safe}`);
+  }
+  return names;
+}
+
+/** What the page says once POST /api/reports answers with `status` (`null` when it
+ *  couldn't be reached), and whether the report was taken. */
+export function reportOutcome(status: number | null): { taken: boolean; said: string } {
+  switch (status) {
+    case 201:
+      return { taken: true, said: "Reported. Thank you: Minerva's maker will look at it." };
+    case 404:
+      return { taken: false, said: "This entry isn't on the Map Leaderboard any more." };
+    case 429:
+      return { taken: false, said: "That's a lot of reports from you. Try again in a few minutes." };
+    default:
+      return { taken: false, said: "The report didn't go through. Try again later." };
+  }
+}
+
+/** The address of a map's page, from the site's root. */
+export function linkTo(link: Link): string {
+  const query = new URLSearchParams();
+  if (link.map !== null) query.set("map", link.map);
+  if (link.band !== null) query.set("band", String(link.band));
+  if (link.name !== null) query.set("name", link.name);
+  return `/leaderboards/map/?${query}`;
+}

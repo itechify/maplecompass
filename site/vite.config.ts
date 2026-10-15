@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { defineConfig, type Plugin } from "vite";
@@ -6,15 +7,21 @@ import pkg from "../package.json" with { type: "json" };
 import { hotkeyRows } from "./hotkeys.ts";
 import { fillFaqPage, fillQuestionLists, readFaq } from "./questions.ts";
 
-// The Minerva site for players: the home page (site/index.html) and the FAQ
-// (site/faq/index.html), published on Cloudflare from a release's tag
-// (.github/workflows/site.yml, site/wrangler.jsonc). `pnpm site:dev` serves it,
+// The Minerva site for players: the home page (site/index.html), the FAQ
+// (site/faq/index.html) and the Map Leaderboards (site/leaderboards/index.html, and a map's
+// page, site/leaderboards/map/index.html, both reading the Worker's API), published on
+// Cloudflare from a release's tag (.github/workflows/site.yml, site/wrangler.jsonc). `pnpm site:dev` serves it,
 // `pnpm site:build` builds it into site/dist.
 
 const HOME = fileURLToPath(new URL("./index.html", import.meta.url));
 const FAQ = fileURLToPath(new URL("./faq/index.html", import.meta.url));
+const LEADERBOARDS = fileURLToPath(new URL("./leaderboards/index.html", import.meta.url));
+const MAP_LEADERBOARD = fileURLToPath(new URL("./leaderboards/map/index.html", import.meta.url));
+const same = (a: string, b: string) => a.replace(/\\/g, "/") === b.replace(/\\/g, "/");
 /** Whether a page being built is the home page. */
-const isHome = (file: string) => file.replace(/\\/g, "/") === HOME.replace(/\\/g, "/");
+const isHome = (file: string) => same(file, HOME);
+/** Whether a page being built is the FAQ, where the questions are written. */
+const isFaq = (file: string) => same(file, FAQ);
 
 /** Where the site is published, for the links that must be absolute (Open Graph). */
 const SITE_URL = "https://owlofminerva.app/";
@@ -34,7 +41,7 @@ function fillPlaceholders(): Plugin {
     "@SITE_URL@": SITE_URL,
     "@HOTKEY_ROWS@": hotkeyRows(),
   };
-  // The credits close both pages, written once.
+  // The credits close every page, written once.
   const credits = fileURLToPath(new URL("./credits.html", import.meta.url));
   return {
     name: "minerva-site:placeholders",
@@ -50,7 +57,7 @@ function fillPlaceholders(): Plugin {
 
 /**
  * The FAQ's questions, each written once on the FAQ page: drawn there, and copied into the
- * home page where it names them (site/questions.ts). An edit to the FAQ reloads both.
+ * other pages where they name them (site/questions.ts). An edit to the FAQ reloads them all.
  */
 function questions(): Plugin {
   return {
@@ -59,11 +66,14 @@ function questions(): Plugin {
       order: "pre",
       handler(html, ctx) {
         const faq = readFaq(readFileSync(FAQ, "utf8"));
-        return isHome(ctx.filename) ? fillQuestionLists(html, faq) : fillFaqPage(html, faq);
+        if (isFaq(ctx.filename)) return fillFaqPage(html, faq);
+        // The site's folder from the page's: "./" for the home page, "../" a folder down.
+        const root = relative(dirname(ctx.filename), dirname(HOME)).replace(/\\/g, "/");
+        return fillQuestionLists(html, faq, root ? `${root}/` : "./");
       },
     },
     handleHotUpdate({ file, server }) {
-      if (file.replace(/\\/g, "/") === FAQ.replace(/\\/g, "/")) server.ws.send({ type: "full-reload" });
+      if (isFaq(file)) server.ws.send({ type: "full-reload" });
     },
   };
 }
@@ -205,6 +215,9 @@ export default defineConfig({
   base: "/",
   // Copied into the build as they are: Cloudflare's _headers.
   publicDir: "public",
+  // The Map Leaderboards pages read the Worker's API. While developing, it is the Worker
+  // run beside the dev server with `wrangler dev` (README.md).
+  server: { proxy: { "/api": "http://localhost:8787" } },
   plugins: [
     questions(),
     fillPlaceholders(),
@@ -217,7 +230,7 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    rolldownOptions: { input: { home: HOME, faq: FAQ } },
+    rolldownOptions: { input: { home: HOME, faq: FAQ, leaderboards: LEADERBOARDS, map: MAP_LEADERBOARD } },
     // A screenshot keeps a file of its own, however small, so the cards can address it.
     assetsInlineLimit: (file) => (file.includes("/screenshots/") ? false : undefined),
   },

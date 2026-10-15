@@ -72,6 +72,14 @@ impl MapSet {
         self.maps.iter().map(|(entry, data)| (entry, data))
     }
 
+    /// Each map's solo EXP-per-hour ceiling from its Map Summary, by its 9-digit ID: the
+    /// table the Map Leaderboards cap entries with (ADR 0015). A map with no Map Summary,
+    /// or a ceiling of 0, isn't in it.
+    pub fn solo_ceilings(&self) -> BTreeMap<String, u64> {
+        let solo = |data: &MapData| data.summary.map(|s| s.exp_per_hour.solo).filter(|&solo| solo > 0);
+        self.maps().filter_map(|(entry, data)| Some((entry.id.clone(), solo(data)?))).collect()
+    }
+
     /// The map list.
     pub(crate) fn entries(&self) -> Vec<MapEntry> {
         self.maps.iter().map(|(entry, _)| entry.clone()).collect()

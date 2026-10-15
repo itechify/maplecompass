@@ -1,6 +1,7 @@
 // The FAQ's questions, each written once, on the FAQ page (site/faq/index.html), and shown
-// again on the home page where a feature names it. The build fills both pages from the FAQ
-// page's source (vite.config.ts), and fails on a question or group no page has.
+// again on the home page where a feature names it, and on the Map Leaderboards pages. The
+// build fills every page from the FAQ page's source (vite.config.ts), and fails on a
+// question or group no page has.
 //
 // A question as written: `<details class="qa" id="…"><summary>The question?</summary>
 // …its answer…</details>`, inside a `<section class="faq-group" id="…" data-about="…">`.
@@ -39,13 +40,14 @@ const FOLD = `<span class="fold" aria-hidden="true"><svg viewBox="0 0 16 16"><pa
 /**
  * A question as a page shows it: closed, its answer under it ending on a link to it. `page`
  * is the FAQ page's address from the page it's on: "" on the FAQ page itself, where it keeps
- * its id, and "/faq/" on the home page.
+ * its id, and "/faq/" on any other. `root` is the site's folder from the page it's on ("./"
+ * on the home page, "../" a folder down).
  */
-function render(question: Question, page: string): string {
-  // On the home page, an answer's own links lead back to the FAQ, and its pictures are a
-  // folder nearer.
+function render(question: Question, page: string, root = "../"): string {
+  // On another page, an answer's own links lead back to the FAQ, and its pictures, written
+  // from the FAQ's folder ("../screenshots/"), are found from the page's.
   const answer = page
-    ? question.answer.replace(/href="#/g, `href="${page}#`).replace(/src="\.\.\//g, 'src="./')
+    ? question.answer.replace(/href="#/g, `href="${page}#`).replace(/src="\.\.\//g, `src="${root}`)
     : question.answer;
   const id = page ? "" : ` id="${question.id}"`;
   return (
@@ -61,17 +63,18 @@ export function fillFaqPage(html: string, faq: Faq): string {
 }
 
 /**
- * The home page with each list of questions filled from the FAQ, followed by a link to the
- * rest of its group.
+ * A page (the home page, or the Map Leaderboards') with each list of questions filled from
+ * the FAQ, followed by a link to the rest of its group. `root` is the site's folder from
+ * the page: "./" for the home page.
  */
-export function fillQuestionLists(html: string, faq: Faq): string {
+export function fillQuestionLists(html: string, faq: Faq, root = "./"): string {
   return html.replace(LIST, (_, ids: string, groupId: string) => {
     const group = faq.groups.get(groupId);
-    if (!group) throw new Error(`site: the home page names a FAQ group there isn't: "${groupId}"`);
+    if (!group) throw new Error(`site: a page names a FAQ group there isn't: "${groupId}"`);
     const shown = ids.trim().split(/\s+/).map((id) => {
       const question = faq.questions.get(id);
-      if (!question) throw new Error(`site: the home page names a FAQ question there isn't: "${id}"`);
-      return render(question, "/faq/");
+      if (!question) throw new Error(`site: a page names a FAQ question there isn't: "${id}"`);
+      return render(question, "/faq/", root);
     });
     const count = group.ids.length;
     return (

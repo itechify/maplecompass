@@ -15,6 +15,7 @@ mod item_card;
 mod item_data;
 mod item_lookup;
 mod item_tooltip;
+mod leaderboards;
 mod map_data;
 mod map_index;
 mod map_mark;
@@ -39,11 +40,12 @@ mod session;
 mod settings;
 mod setup;
 mod shown_map;
+mod status_bar;
 mod tracker;
 mod travel_links;
 mod world;
 
-pub use bests_window::{PersonalBestsMap, PersonalBestsVisit, PersonalBestsWindow};
+pub use bests_window::{PersonalBestsCharacter, PersonalBestsMap, PersonalBestsVisit, PersonalBestsWindow};
 pub use bug_report::{BugReport, ReportAbout};
 pub use deal_finder::{DealBadge, DealBadges, DealFinderView, DealGrade, DealItem, GREAT_BELOW, STEAL_BELOW, Verdict};
 pub use exp_bar::{ExpBar, ExpBarReader, ExpBarReading};
@@ -56,6 +58,10 @@ pub use item_card::{
 pub use market_prices::{MARKET_PRICES_VERSION, MarketImport, MarketPrice, SavedMarketLine, SavedMarketPrices};
 pub use item_lookup::{ItemChoice, ItemHit, ItemLookup, ItemLookupLine, OurWindow};
 pub use item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReader, ItemTooltipReading};
+pub use leaderboards::{
+    LeaderboardAnswer, LeaderboardCharacter, LeaderboardEntry, LeaderboardStatus, LeaderboardToggle, LeaderboardUpload,
+    RejectedEntry, RejectedListing, RejectedReason, read_leaderboard_answer,
+};
 pub use map_data::{
     HiddenPortal, MapData, MapDataStatus, MapSummary, Mob, PerParty, Portal, PortalKind,
 };
@@ -69,19 +75,20 @@ pub use panel::{
     PlacementMode, ScreenPoint,
     ScreenRect, Section, Size,
 };
-pub use personal_best::{BESTS_VERSION, MapBests, SavedBests, VisitBest};
+pub use personal_best::{BESTS_VERSION, CharacterBests, MapBests, SavedBests, VisitBest};
 pub use player_shop::{ListedPrice, PlayerShopReader, ShopCapture, ShopList, ShopReading, ShopRow};
 pub use search::{
     DensityTier, Destination, HuntingTarget, ItemMatch, ItemsMissing, MapMatch, Matches, MobChoice, MobMatch, RouteStop,
     SearchResult, SearchState, SearchView, Trip,
 };
-pub use session::{Deaths, ExpRate, ExpTracking, Forecast, PacePoint, PaceTrace, TrackingState};
+pub use session::{Character, Deaths, ExpRate, ExpTracking, Forecast, PacePoint, PaceTrace, TrackingState};
 pub use settings::{Hotkey, Hotkeys, Settings};
 pub use setup::{
     ExpBarRegion, ExpBarTestRead, MarkTarget, SelectionDirection, SetupReason, SetupState, TestRead,
     TitleRegion,
 };
 pub use shown_map::{Candidate, Candidates, FIRST_MOBS, LevelRange, Outline};
+pub use status_bar::{MAX_LEVEL, STATUS_BAR_STRIP, StatusBar, StatusBarCapture, StatusBarReader, StatusBarReading};
 pub use world::{Distance, Step, Travel};
 
 use bests_window::BestsWindow;
@@ -93,6 +100,7 @@ use item_card::{Editing, ItemCards, Pressed};
 use item_data::ItemFilesLoader;
 use market_prices::MarketPrices;
 use item_lookup::ItemLookups;
+use leaderboards::Leaderboards;
 use search::{Search, Searched};
 use shown_map::ShownMap;
 use matcher::{Match, Matcher, Snap};
@@ -266,12 +274,27 @@ pub struct PanelState {
     pub exp_bar: Option<ExpBar>,
     /// EXP tracking: the Session's state, Time to Level, rates and deaths.
     pub exp_tracking: ExpTracking,
+    /// Where on screen to capture for the Status Bar (physical px): a strip of
+    /// [`STATUS_BAR_STRIP`] rows across the bottom of the game's client area, while there is a
+    /// game window and the overlay can show (see [`Layer`]); `None` otherwise.
+    pub status_bar_capture: Option<ScreenRect>,
+    /// What the Status Bar showed in the last capture of it; `None` while it isn't found.
+    pub status_bar: Option<StatusBar>,
+    /// The Character playing, as the Status Bar names them, whom the Session is for; `None`
+    /// until a name is read, and after a switch to a Character whose name can't be read.
+    pub character: Option<Character>,
     /// The Grind Tracker's window, which shows `exp_tracking`.
     pub grind_tracker: GrindTrackerWindow,
     /// The Personal Bests window, with its rows: sent to that window alone, not with the
     /// overlay's state.
     #[serde(skip_serializing)]
     pub personal_bests: PersonalBestsWindow,
+    /// The uploads to the Map Leaderboards under way (#110), for the shell to make: each
+    /// shown Character's whole set of entries, or the deletion of one taken off. The shell
+    /// makes each once, by its id, and tells the answer to [`Minerva::on_leaderboard_answer`].
+    /// Not sent to the overlay.
+    #[serde(skip_serializing)]
+    pub leaderboard_uploads: Vec<LeaderboardUpload>,
     /// The title of the game window to look for: "MapleStory", or one the player
     /// picked by hand.
     pub game_window_title: String,
@@ -485,6 +508,13 @@ pub struct Minerva {
     /// The Deal Badges' window's size, in physical px for the current display: its width
     /// counts, as its height follows the shop's list.
     deal_badges_size: Size,
+    /// Reads captures fed to [`Minerva::on_status_bar_capture`]; loaded on the first one.
+    status_bar_reader: Option<StatusBarReader>,
+    /// Where the Status Bar's level, job and name were last found, and the game's client
+    /// area then: our windows keep clear of them while the client area stays where it was.
+    status_bar_area: Option<(ScreenRect, ScreenRect)>,
+    /// The Characters shown on the Map Leaderboards, and the uploads for them.
+    leaderboards: Leaderboards,
     /// What the shell must do that came of time passing (a page MeowDB's answer settled),
     /// for [`Minerva::take_request`].
     requests: VecDeque<Request>,
@@ -539,6 +569,9 @@ impl Minerva {
             deal_finder: DealFinder::default(),
             shop_reader: None,
             deal_badges_size: Size { width: 0, height: 0 },
+            status_bar_reader: None,
+            status_bar_area: None,
+            leaderboards: Leaderboards::default(),
             requests: VecDeque::new(),
             panel: Panel::default(),
             setup: Setup::default(),
@@ -1161,24 +1194,113 @@ impl Minerva {
     }
 
     /// The player removed one of `map`'s Visits in the Personal Bests window, one that came
-    /// from a bug, named by its best as the window lists it (any map's, not only the one
-    /// they are on). The Visits under it move up, the Best row follows if it is of `map`,
-    /// and with no best left anywhere the window closes. There is no undo. The Visit under
-    /// way's best isn't in the Visit History yet: naming it, or a Visit no longer there,
-    /// changes nothing.
-    pub fn remove_visit(&mut self, map: &str, visit: VisitBest) -> &PanelState {
-        self.record(Event::RemoveVisit { map: map.to_string(), visit });
-        self.session.remove_visit(map, visit);
+    /// from a bug, named by whose it is (`character`, `None` for the Unassigned bests) and
+    /// by its best as the window lists it (any map's, not only the one they are on). The
+    /// Visits under it move up, the Best row follows if it is of `map`, and with no best
+    /// left anywhere the window closes. There is no undo. The Visit under way's best isn't
+    /// in the Visit History yet: naming it, or a Visit no longer there, changes nothing.
+    pub fn remove_visit(&mut self, character: Option<&str>, map: &str, visit: &VisitBest) -> &PanelState {
+        let event = Event::RemoveVisit { map: map.to_string(), visit: visit.clone(), character: character.map(String::from) };
+        self.record(event);
+        self.session.remove_visit(character, map, visit);
         // With no best left, there is nothing for the Personal Bests window to show.
         self.bests_window.open &= self.session.bests().any();
+        self.sync_panel()
+    }
+
+    /// The player moved a Visit on `map` of the Character named `from` (`None`: an Unassigned
+    /// one), named by its best as the window lists it, to the Character named `to`, after
+    /// confirming: it joins their Visits on the map, as any Visit does, and a shown
+    /// Character's set goes up again. The Visit under way's best, a Visit no longer there, or
+    /// one moved to the Character it is with, changes nothing.
+    pub fn move_visit(&mut self, from: Option<&str>, map: &str, visit: &VisitBest, to: &str) -> &PanelState {
+        let event = Event::MoveVisit { map: map.to_string(), visit: visit.clone(), to: to.to_string(), from: from.map(String::from) };
+        self.record(event);
+        self.session.move_visit(from, map, visit, to);
+        self.sync_panel()
+    }
+
+    /// The player gave the Character named `to` every Unassigned Visit in the Personal Bests
+    /// window, after confirming: each joins their Visits on its map, as any Visit does, as if
+    /// moved one by one.
+    pub fn assign_unassigned(&mut self, to: &str) -> &PanelState {
+        self.record(Event::AssignUnassigned { to: to.to_string() });
+        self.session.assign_unassigned(to);
+        self.sync_panel()
+    }
+
+    /// The player removed the Character named `name` in the Personal Bests window, after
+    /// confirming: every best in their history goes, with no undo, and with no best left
+    /// anywhere the window closes. The Visit under way's best stays: it joins the Visit
+    /// History when the Visit ends. A Character playing stays one of the window's choices.
+    pub fn remove_character(&mut self, name: &str) -> &PanelState {
+        self.record(Event::RemoveCharacter { name: name.to_string() });
+        self.session.remove_character(name);
+        // Nor does the site keep theirs.
+        self.leaderboards.show(name, false);
+        self.bests_window.open &= self.session.bests().any();
+        self.sync_panel()
+    }
+
+    /// The player merged the Character named `from` into the one named `into` in the
+    /// Personal Bests window, after confirming: a name the game changed shows as another
+    /// Character. Each of `from`'s Visits joins `into`'s on its map as any Visit does, so
+    /// the best in each Level Band stays, and `from` is gone.
+    pub fn merge_characters(&mut self, from: &str, into: &str) -> &PanelState {
+        self.record(Event::MergeCharacters { from: from.to_string(), into: into.to_string() });
+        self.session.merge_characters(from, into);
+        // `from` has no bests left: the site keeps none of theirs either.
+        if from != into {
+            self.leaderboards.show(from, false);
+        }
+        self.sync_panel()
+    }
+
+    /// The player turned "Show on the Map Leaderboards" on (`on`) for the Character named
+    /// `name` in the Personal Bests window, having confirmed, or off. On, their entries go up at
+    /// the next tick, and again whenever they change; off, they are deleted from the site.
+    pub fn show_on_leaderboards(&mut self, name: &str, on: bool) -> &PanelState {
+        self.record(Event::ShowOnLeaderboards { name: name.to_string(), on });
+        self.leaderboards.show(name, on);
+        self.sync_panel()
+    }
+
+    /// The player sent the Character named `name` to the Map Leaderboards again from the
+    /// Personal Bests window, where they stood with a problem: an upload tried again, a name
+    /// another key held, or uploads held since the bests file didn't read (having confirmed,
+    /// since what is here then replaces what the site holds). It goes up at the next tick.
+    pub fn send_to_leaderboards_again(&mut self, name: &str) -> &PanelState {
+        self.record(Event::SendToLeaderboardsAgain { name: name.to_string() });
+        self.leaderboards.send_again(name);
+        self.sync_panel()
+    }
+
+    /// The shell made upload `id` of [`PanelState::leaderboard_uploads`], and the Map
+    /// Leaderboards answered `answer` (or it couldn't be made: [`LeaderboardAnswer::Failed`]).
+    /// An answer to an upload no longer under way changes nothing.
+    pub fn on_leaderboard_answer(&mut self, id: u64, answer: LeaderboardAnswer) -> &PanelState {
+        let name = self.leaderboards.uploads().into_iter().find(|upload| upload.id == id).map(|upload| upload.name);
+        self.record(Event::LeaderboardAnswer { id, name: name.unwrap_or_default(), answer: answer.clone() });
+        self.leaderboards.answer(id, answer, self.wall_clock);
         self.sync_panel()
     }
 
     /// The player clicked a map's name in the Personal Bests window: open its MeowDB page.
     /// `None` for a map the window doesn't list.
     pub fn open_bests_map_page(&self, id: &str) -> Option<Request> {
-        let map = self.state.personal_bests.maps.iter().find(|map| map.id == id)?;
+        let characters = &self.state.personal_bests.characters;
+        let map = characters.iter().flat_map(|c| &c.maps).find(|map| map.id == id)?;
         Some(Request::OpenInBrowser { url: map.url.clone() })
+    }
+
+    /// The player clicked a map's Map Leaderboard link among the bests of the Character named
+    /// `character` (`None`: the Unassigned ones) in the Personal Bests window: open it. `None`
+    /// for a map the window doesn't list for them, or lists with no Map Leaderboard.
+    pub fn open_bests_leaderboard(&self, character: Option<&str>, id: &str) -> Option<Request> {
+        let characters = &self.state.personal_bests.characters;
+        let maps = &characters.iter().find(|c| c.name.as_deref() == character)?.maps;
+        let map = maps.iter().find(|map| map.id == id)?;
+        Some(Request::OpenInBrowser { url: map.leaderboard_url.clone()? })
     }
 
     /// The player clicked a listed mob's name in the panel: open its MeowDB page. `None`
@@ -1267,6 +1389,42 @@ impl Minerva {
         let event = Event::PlayerShop { at_ms: reading.at_ms, shop: reading.shop.clone(), same: false };
         self.record_input(event, Some(reading.at_ms), None);
         self.deal_finder.read(reading);
+        self.sync_panel()
+    }
+
+    /// Read a capture of [`PanelState::status_bar_capture`] and update the panel state: the
+    /// same as [`Minerva::on_status_bar_read`] with what a [`StatusBarReader`] reads in it,
+    /// here.
+    pub fn on_status_bar_capture(&mut self, capture: StatusBarCapture) -> &PanelState {
+        let reading = self.status_bar_reader.get_or_insert_with(StatusBarReader::bundled).read(&capture);
+        self.on_status_bar_read(capture, reading)
+    }
+
+    /// As [`Minerva::on_status_bar_reading`], with the capture it was read from (by a
+    /// [`StatusBarReader`], possibly on another thread), whose level, job and name a Bug
+    /// Report keeps (ADR 0009).
+    pub fn on_status_bar_read(&mut self, capture: StatusBarCapture, reading: StatusBarReading) -> &PanelState {
+        let crop = bug_report::status_bar_crop(&capture, reading.bar.as_ref());
+        let event = Event::StatusBar { at_ms: reading.at_ms, bar: reading.bar.clone(), same: false };
+        self.record_input(event, Some(reading.at_ms), crop);
+        self.take_status_bar_reading(reading)
+    }
+
+    /// Take what a Status Bar capture read as (read by a [`StatusBarReader`], possibly on
+    /// another thread): the Character playing, their level and job. Another Character's
+    /// name starts a new Session, and another level is the one the Session learns.
+    pub fn on_status_bar_reading(&mut self, reading: StatusBarReading) -> &PanelState {
+        let event = Event::StatusBar { at_ms: reading.at_ms, bar: reading.bar.clone(), same: false };
+        self.record_input(event, Some(reading.at_ms), None);
+        self.take_status_bar_reading(reading)
+    }
+
+    fn take_status_bar_reading(&mut self, reading: StatusBarReading) -> &PanelState {
+        self.session.on_status_bar(reading.bar.as_ref(), reading.at_ms);
+        if let (Some(bar), Some(game)) = (&reading.bar, &self.panel.game) {
+            self.status_bar_area = Some((game.client, bar.area));
+        }
+        self.state.status_bar = reading.bar;
         self.sync_panel()
     }
 
@@ -1478,6 +1636,7 @@ impl Minerva {
         self.grind_tracker.open = settings.grind_tracker_open;
         self.grind_tracker.at = settings.grind_tracker_at;
         self.bests_window.at = settings.personal_bests_at;
+        self.leaderboards.restore(settings.map_leaderboards.clone());
         self.settings = settings;
         // The travel toggles change Distances.
         self.sync_search();
@@ -1505,6 +1664,7 @@ impl Minerva {
             grind_tracker_open: self.grind_tracker.open,
             grind_tracker_at: self.grind_tracker.at,
             personal_bests_at: self.bests_window.at,
+            map_leaderboards: self.leaderboards.saved(),
             ..self.settings.clone()
         }
     }
@@ -1526,6 +1686,18 @@ impl Minerva {
         self.sync_panel()
     }
 
+    /// The Personal Bests earlier launches saved were there but didn't read, so the shell
+    /// restored none ([`Minerva::restore_bests`] with [`SavedBests::default`]). After
+    /// [`Minerva::restore`]: every Character shown on the Map Leaderboards then has their uploads
+    /// held, at this launch and the ones after, since sending what is here would take what the
+    /// site holds of theirs off it. Turning one off and on in the Personal Bests window sends
+    /// what is here then.
+    pub fn bests_lost(&mut self) -> &PanelState {
+        self.record(Event::BestsLost {});
+        self.leaderboards.bests_lost();
+        self.sync_panel()
+    }
+
     /// Every map's Personal Bests, for the shell to save: the Visit under way's included,
     /// since closing Minerva ends it.
     pub fn bests(&self) -> SavedBests {
@@ -1543,6 +1715,8 @@ impl Minerva {
     pub fn tick(&mut self, at_ms: u64) -> &PanelState {
         self.record_input(Event::Tick {}, Some(at_ms), None);
         self.session.tick(at_ms);
+        // Uploads only on a tick: at launch the bests are back by the first.
+        self.leaderboards.tick(at_ms, self.session.bests().history(), self.wall_clock);
         self.load_osms(at_ms);
         if self.set.is_some() {
             self.sync_shown_map();
@@ -1709,8 +1883,12 @@ impl Minerva {
             };
         }
         self.sync_setup();
-        // Never over a captured region: the capture would read the panel.
-        self.panel.avoid = [self.state.title_region, self.state.exp_bar_region].into_iter().flatten().collect();
+        self.sync_status_bar();
+        // Never over a captured region, nor the Status Bar's Character: the capture would read
+        // the panel.
+        let client = self.panel.game.as_ref().map(|game| game.client);
+        let status_bar = self.status_bar_area.filter(|&(at, _)| Some(at) == client).map(|(_, area)| area);
+        self.panel.avoid = [self.state.title_region, self.state.exp_bar_region, status_bar].into_iter().flatten().collect();
         self.state.expanded = self.panel.expanded;
         self.state.collapsed_sections = self.settings.collapsed_sections;
         self.state.game_found = self.panel.game.is_some();
@@ -1721,6 +1899,7 @@ impl Minerva {
         self.state.draggable = self.panel.draggable();
         self.sync_grind_tracker();
         self.sync_personal_bests();
+        self.state.leaderboard_uploads = self.leaderboards.uploads();
         self.sync_item_lookup();
         self.sync_item_card();
         self.sync_deal_finder();
@@ -1804,6 +1983,18 @@ impl Minerva {
         };
     }
 
+    /// The Status Bar's strip to capture, always while the overlay can show (see [`Layer`]):
+    /// another app's pixels are never read. And the Character the Session is for.
+    fn sync_status_bar(&mut self) {
+        let shows = self.panel.layer() != Layer::Hidden;
+        self.state.status_bar_capture = self.panel.game.as_ref().filter(|_| shows).map(|game| {
+            let client = game.client;
+            let height = STATUS_BAR_STRIP.min(client.height);
+            ScreenRect { x: client.x, y: client.y + (client.height - height) as i32, width: client.width, height }
+        });
+        self.state.character = self.session.character().cloned();
+    }
+
     fn sync_setup(&mut self) {
         self.setup.follow_needed();
         self.state.setup = self.setup.state();
@@ -1854,19 +2045,24 @@ impl Minerva {
             Some(game) if shows => Some(window.placement(game, &self.panel.avoid)),
             _ => None,
         };
-        let maps = if window.open {
+        let characters = if window.open {
+            let set = &self.set;
             let map = |id: &str| {
-                let maps = &self.set.as_ref()?.maps;
+                let maps = &set.as_ref()?.maps;
                 Some((maps.entry(id)?, maps.data(id)?))
             };
             let (saved, this_visit) = self.session.bests().standing();
-            let this_visit = this_visit.as_ref().map(|(map, at)| (map.as_str(), *at));
-            bests_window::rows(&saved, this_visit, map, certain_map(&self.state))
+            let this_visit = this_visit.as_ref().map(|(whose, map, at)| (whose.as_deref(), map.as_str(), *at));
+            let playing = self.session.character();
+            let current = (playing.map(|c| c.name.as_str()), playing.and_then(|c| c.level));
+            let history = self.session.bests().history();
+            let toggle = |name: &str| self.leaderboards.toggle(name, history, self.wall_clock);
+            bests_window::characters(&saved, current, this_visit, map, certain_map(&self.state), toggle)
         } else {
             Vec::new()
         };
         self.state.personal_bests =
-            PersonalBestsWindow { open: window.open, placement, maps, credit: OSMS_AND_MEOWDB_CREDIT };
+            PersonalBestsWindow { open: window.open, placement, characters, credit: OSMS_AND_MEOWDB_CREDIT };
     }
 
     /// Whether EXP tracking is on: there is an EXP Bar Region to read, kept and fitting

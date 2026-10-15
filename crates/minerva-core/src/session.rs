@@ -52,12 +52,16 @@
 //!   towards the Visit's Personal Best on the map (see [`crate::personal_best`]), unless
 //!   the bar can't be read. The core says which map that is, if any: one it is certain
 //!   of, with a Map Summary. Maps that share a title but would show the same count as the
-//!   first of them, the one the panel shows. Bests outlast Sessions, as Visits do.
+//!   first of them, the one the panel shows. Bests outlast Sessions, as Visits do. Each
+//!   is stamped with the Character the Session is for, and the level and job the Status
+//!   Bar showed, and the Best row races that Character's (the Unassigned one while none
+//!   is named).
 
 use crate::ExpBar;
 use crate::bug_report::{Level, Note};
-use crate::personal_best::{Bests, SavedBests, VisitBest};
-use serde::Serialize;
+use crate::personal_best::{Bests, SavedBests, Stamp, VisitBest};
+use crate::status_bar::StatusBar;
+use serde::{Deserialize, Serialize};
 
 /// What EXP tracking shows: everything the panel's tracking section and the collapsed
 /// icon's badge render.
@@ -366,6 +370,33 @@ pub(crate) struct Session {
     bests: Bests,
     /// What it made of the readings since a Bug Report last took them.
     notes: Vec<Note>,
+    /// Who the Session is for, as the Status Bar names them: `None` until a name is read,
+    /// and after a switch to a Character whose name wasn't read.
+    character: Option<Character>,
+    /// The Status Bar has shown the Character's name since it was last out of sight: another
+    /// name read now is a misread, and readings that fit another level aren't a switch.
+    named: bool,
+    /// The Status Bar has been out of sight since its level was last read: another level
+    /// read now, with no name, is another Character.
+    level_unseen: bool,
+    /// When a Status Bar capture was last taken in, found or not.
+    status_bar_at: Option<u64>,
+    /// The level the level's total is learned in, as the Status Bar showed it (one more after
+    /// a level-up the EXP bar showed first); `None` until it is read, and after a switch.
+    level: Option<u32>,
+    /// The Status Bar showed the next level, in a frame captured then, before the EXP bar
+    /// did: the next reading captured since is the new level's.
+    level_up_at: Option<u64>,
+}
+
+/// A Character (GLOSSARY): who is playing, as the Status Bar names them. The name is the
+/// Character; the job and the level are as the Status Bar last showed them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Character {
+    pub name: String,
+    pub job: Option<String>,
+    pub level: Option<u32>,
 }
 
 /// A Visit (GLOSSARY): from the panel confirming a map until it confirms another.
@@ -411,6 +442,8 @@ struct Against {
     ceiling: Option<u64>,
     /// The map whose Personal Best the Best row shows.
     map: Option<String>,
+    /// The Character whose Personal Best it is: the Unassigned one for `None`.
+    character: Option<String>,
 }
 
 /// Where a started Session stood at an EXP change.
@@ -560,10 +593,29 @@ impl Session {
             self.notes.push(Note::NoLevelAllows);
             return;
         };
+        let level_up_shown = self.level_up_at.is_some_and(|at| at_ms >= at);
         let (Some(total), Some(last)) = (self.total, self.last) else {
+            if level_up_shown {
+                self.level_up_at = None;
+            }
             self.accept(allowed, bar);
             return;
         };
+        if level_up_shown {
+            // The Status Bar showed the next level: this reading is in it, though it may fit
+            // the level before (2 [0.04%] allows a wide range of totals), or the bar was
+            // nowhere near 100% when last read (it went unread through the level-up).
+            self.level_up_at = None;
+            if bar.exp < last.exp || total.meet(allowed).is_none() {
+                self.level_up(total, last, bar, allowed, unseen, at_ms);
+            } else {
+                // More EXP than before, as the level before could hold: what came about
+                // can't be told, so it isn't counted, and the level is learned afresh.
+                self.notes.push(Note::LevelUpUncounted);
+                self.accept(allowed, bar);
+            }
+            return;
+        }
         let wrapped = self.wrapped(total, last, bar, allowed);
         if !wrapped && let Some(narrowed) = total.meet(allowed) {
             if unseen {
@@ -572,22 +624,13 @@ impl Session {
             } else {
                 self.same_level(narrowed, last, bar, at_ms);
             }
-        } else if let Some(doubled_total) = total.doubled_midpoint()
-            && (wrapped || self.levelled_up(total, last, bar, allowed))
-        {
-            // What was left of the old level, and what is in the new one.
-            let gain = (doubled_total as i64 - 2 * last.exp as i64 + 1) / 2 + bar.exp as i64;
-            self.notes.push(Note::LevelUp { gain, level: total.level() });
-            // The new level is bigger than the old: of the totals the reading allows,
-            // only those count.
-            self.accept(Total { lo: allowed.lo.max(total.hi + 1), ..allowed }, bar);
-            self.lost_from = None;
-            if unseen {
-                self.notes.push(Note::Unseen);
-            } else {
-                self.change(gain, at_ms);
+        } else if total.doubled_midpoint().is_some() && (wrapped || self.levelled_up(total, last, bar, allowed)) {
+            self.level_up(total, last, bar, allowed, unseen, at_ms);
+            // Ahead of the Status Bar, which shows it within a capture or two, unless it
+            // showed it already in a frame captured after this one.
+            if self.level_up_at.take().is_none() {
+                self.level = self.level.map(|level| level + 1);
             }
-            self.level_ups += 1;
         } else {
             // A misread, or another character's level: that takes readings in a row
             // that fit it, after the bar was out of sight.
@@ -605,13 +648,145 @@ impl Session {
             } else if !misfits.after_out_of_sight {
                 // The bar read all along: one misread, repeated.
                 self.notes.push(Note::Misfit { count: misfits.count, level: total.level() });
-            } else {
-                self.notes.push(Note::CharacterSwitch { level: misfits.total.level() });
+            } else if self.named {
+                // The Status Bar names the same Character: the level was learned wrong, and
+                // what the EXP did while the bar was out of sight isn't known.
+                self.notes.push(Note::Relearned { from: total.level(), to: misfits.total.level() });
                 self.accept(misfits.total, bar);
-                self.reset();
-                self.lost_from = None;
-                self.character_switched = true;
+            } else {
+                // No name read: the readings alone tell another Character.
+                self.notes.push(Note::CharacterSwitch { level: misfits.total.level() });
+                self.switch(None);
+                self.accept(misfits.total, bar);
             }
+        }
+    }
+
+    /// Take `bar`, the first reading in the level after `last`'s (learned as `total`), which
+    /// allows the totals `allowed`: what was left of the old level and what is in the new one
+    /// are counted, unless the bar went `unseen`, or the old level's total isn't known.
+    fn level_up(&mut self, total: Total, last: ExpBar, bar: ExpBar, allowed: Total, unseen: bool, at_ms: u64) {
+        // The new level is bigger than the old: of the totals the reading allows, only those
+        // count, if any do.
+        let bigger = Total { lo: allowed.lo.max(total.hi.saturating_add(1)), ..allowed };
+        self.accept(if bigger.lo <= bigger.hi { bigger } else { allowed }, bar);
+        self.lost_from = None;
+        self.level_ups += 1;
+        let Some(doubled_total) = total.doubled_midpoint() else {
+            self.notes.push(Note::LevelUpUncounted);
+            return;
+        };
+        let gain = (doubled_total as i64 - 2 * last.exp as i64 + 1) / 2 + bar.exp as i64;
+        self.notes.push(Note::LevelUp { gain, level: total.level() });
+        if unseen {
+            self.notes.push(Note::Unseen);
+        } else {
+            self.change(gain, at_ms);
+        }
+    }
+
+    /// A Status Bar capture taken at `at_ms` found `bar`, or none (the character select
+    /// screen, say). A name other than the Character's, after the bar was out of sight, is
+    /// another Character: a new Session at once. With no name read, so is another level than
+    /// the one before, other than the next. The next level is a level-up the next EXP bar
+    /// reading is in; any other is learned afresh from it.
+    pub fn on_status_bar(&mut self, bar: Option<&StatusBar>, at_ms: u64) {
+        self.tick(at_ms);
+        // No capture for a while is the bar out of sight, as with the EXP bar.
+        if self.status_bar_at.is_some_and(|at| at_ms.saturating_sub(at) > OUT_OF_SIGHT_MS) {
+            self.named = false;
+            self.level_unseen = true;
+        }
+        self.status_bar_at = Some(at_ms);
+        let Some(bar) = bar else {
+            self.named = false;
+            self.level_unseen = true;
+            return;
+        };
+        match (&bar.name, &self.character) {
+            (Some(name), Some(character)) if *name == character.name => self.named = true,
+            (Some(name), Some(_)) if self.named => {
+                // Two names on a bar that never went out of sight: one is a misread.
+                self.notes.push(Note::NameMisread { name: name.clone() });
+                return;
+            }
+            (Some(name), Some(_)) => {
+                self.notes.push(Note::NameSwitch { name: name.clone() });
+                self.switch(Some(name.clone()));
+            }
+            (Some(name), None) => {
+                self.character = Some(Character { name: name.clone(), job: None, level: None });
+                self.named = true;
+            }
+            (None, _) => {}
+        }
+        if let Some(level) = bar.level {
+            match self.level {
+                Some(known) if known == level => {}
+                Some(known) if level == known + 1 => {
+                    self.notes.push(Note::LevelShown { level });
+                    self.level_up_at = Some(at_ms);
+                }
+                Some(_) if bar.name.is_none() && self.level_unseen => {
+                    self.notes.push(Note::LevelSwitch { level });
+                    self.switch(None);
+                }
+                Some(known) => {
+                    // A level the bar couldn't show next: learned afresh from the next reading,
+                    // and the change since isn't counted.
+                    self.notes.push(Note::LevelChanged { from: known, to: level });
+                    self.total = None;
+                    self.misfits = None;
+                    self.level_up_at = None;
+                }
+                None => {}
+            }
+            self.level = Some(level);
+            self.level_unseen = false;
+        }
+        if self.named
+            && let Some(character) = &mut self.character
+        {
+            character.job = bar.job.clone().or(character.job.take());
+            character.level = bar.level.or(character.level);
+        }
+    }
+
+    /// Another Character, named `name` if the Status Bar showed it: a new Session, with
+    /// nothing learned of the level.
+    fn switch(&mut self, name: Option<String>) {
+        self.reset();
+        self.lost_from = None;
+        self.character_switched = true;
+        self.total = None;
+        self.last = None;
+        self.level = None;
+        self.level_up_at = None;
+        self.named = name.is_some();
+        self.character = name.map(|name| Character { name, job: None, level: None });
+    }
+
+    /// Who the Session is for, as the Status Bar named them.
+    pub fn character(&self) -> Option<&Character> {
+        self.character.as_ref()
+    }
+
+    /// The name of who the Session is for: whose bests are raced (`None`: the Unassigned ones).
+    fn character_name(&self) -> Option<&str> {
+        self.character.as_ref().map(|c| c.name.as_str())
+    }
+
+    /// Who a best set now is stamped with: the Character the Status Bar named, and the level
+    /// and job it showed. With no Character named, it is Unassigned, with the level if one
+    /// was read.
+    fn stamp(&self) -> Stamp {
+        match &self.character {
+            Some(character) => Stamp {
+                character: Some(character.name.clone()),
+                level: character.level.or(self.level),
+                job: character.job.clone(),
+            },
+            None => Stamp { character: None, level: self.level, job: None },
         }
     }
 
@@ -731,14 +906,49 @@ impl Session {
     /// The player removed `map`'s Personal Best from its history: what is shown is
     /// measured afresh against the next best, at once.
     pub fn remove_best(&mut self, map: &str) {
-        self.bests.remove(map);
+        let character = self.character_name().map(String::from);
+        self.bests.remove(character.as_deref(), map);
         self.shown = None;
     }
 
-    /// The player removed the Visit whose best was `visit` from `map`'s history: if it was
-    /// there, what is shown is measured afresh, at once, as the Best row may name another.
-    pub fn remove_visit(&mut self, map: &str, visit: VisitBest) {
-        if self.bests.remove_visit(map, visit) {
+    /// The player removed the Visit whose best was `visit` from `character`'s history of
+    /// `map` (the Unassigned one for `None`): if it was there, what is shown is measured
+    /// afresh, at once, as the Best row may name another.
+    pub fn remove_visit(&mut self, character: Option<&str>, map: &str, visit: &VisitBest) {
+        if self.bests.remove_visit(character, map, visit) {
+            self.shown = None;
+        }
+    }
+
+    /// The player moved the Visit whose best was `visit` on `map`, of the Character named
+    /// `from` (the Unassigned one for `None`), to the Character named `to`: if it was there,
+    /// what is shown is measured afresh, at once.
+    pub fn move_visit(&mut self, from: Option<&str>, map: &str, visit: &VisitBest, to: &str) {
+        if self.bests.move_visit(from, map, visit, to) {
+            self.shown = None;
+        }
+    }
+
+    /// The player gave the Character named `to` every Unassigned Visit: if there was one,
+    /// what is shown is measured afresh, at once.
+    pub fn assign_unassigned(&mut self, to: &str) {
+        if self.bests.assign_unassigned(to) {
+            self.shown = None;
+        }
+    }
+
+    /// The player removed the Character named `name`, with their bests: if they had any,
+    /// what is shown is measured afresh, at once.
+    pub fn remove_character(&mut self, name: &str) {
+        if self.bests.remove_character(name) {
+            self.shown = None;
+        }
+    }
+
+    /// The player merged the Character named `from` into the one named `into`: if `from`
+    /// had bests, what is shown is measured afresh, at once.
+    pub fn merge_characters(&mut self, from: &str, into: &str) {
+        if self.bests.merge(from, into) {
             self.shown = None;
         }
     }
@@ -820,7 +1030,8 @@ impl Session {
         // they were, unless the player arrives on another map or the share would be of
         // another ceiling or best (the map's page come, or another Candidate chosen).
         let unreadable = fresh.state == TrackingState::Unreadable;
-        let against = Against { visit: self.visit.id, ceiling, map: map.map(String::from) };
+        let character = self.character_name().map(String::from);
+        let against = Against { visit: self.visit.id, ceiling, map: map.map(String::from), character };
         let holds = self.shown.as_ref().is_some_and(|shown| {
             shown.against == against
                 && (unreadable
@@ -845,9 +1056,11 @@ impl Session {
                     let here = self.figures.as_ref().map(|f| f.rolling_since(self.now, f.visit_from));
                     let full = here.filter(|h| h.over_ms >= ROLLING_MS && h.exp > 0);
                     let counted = full.filter(|_| !unreadable).map(|here| here.per_hour(1, 1) as u64);
-                    self.bests.on_shown(map, counted, now_unix_ms);
-                    // Over a full 5 minutes here, the Rolling Rate shown is the one counted.
-                    let best = self.bests.history_best(map).map(|best| best.exp_per_hour);
+                    self.bests.on_shown(map, counted, now_unix_ms, &self.stamp());
+                    // Over a full 5 minutes here, the Rolling Rate shown is the one counted,
+                    // against the Character's best (the Unassigned one while none is named).
+                    let character = self.character_name();
+                    let best = self.bests.history_best(character, map).map(|best| best.exp_per_hour);
                     fresh.personal_best = best;
                     fresh.new_best = counted
                         .zip(best)

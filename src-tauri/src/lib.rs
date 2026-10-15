@@ -21,6 +21,7 @@ mod hotkeys;
 mod http;
 mod item_card;
 mod item_lookup;
+mod leaderboards;
 mod market_prices;
 mod meowdb;
 mod old_caches;
@@ -37,8 +38,9 @@ mod view;
 
 use minerva_core::{
     Action, DEAL_FINDER_CAPTURE_MS, Minerva, ExpBarReader, ExpBarReading, Frame, GameWindow, ItemCapture, ItemTooltipReader,
-    ItemTooltipReading, KeyPress, Layer, MIN_PANEL_WIDTH, PanelControl, PanelSizes, PlacementMode, PanelState, PlayerShopReader,
-    Request, ScreenPoint, ScreenRect, ShopCapture, ShopReading, Size, TitleReader, TitleReading, VisitBest, default_title_region,
+    ItemTooltipReading, KeyPress, Layer, LeaderboardAnswer, MIN_PANEL_WIDTH, PanelControl, PanelSizes, PlacementMode, PanelState, PlayerShopReader,
+    Request, ScreenPoint, ScreenRect, ShopCapture, ShopReading, Size, StatusBarCapture, StatusBarReader, StatusBarReading,
+    TitleReader, TitleReading, VisitBest, default_title_region,
 };
 use source::WebSource;
 use bests_window::{BestsWindow, PersonalBestsView};
@@ -109,9 +111,32 @@ pub(crate) enum Command {
     OpenMobPage(String),
     /// The player clicked the name of the map with this ID in the Personal Bests window.
     OpenBestsMapPage(String),
-    /// The player removed the Visit whose best was `visit` from `map`'s Visit History, in
-    /// the Personal Bests window.
-    RemoveVisit { map: String, visit: VisitBest },
+    /// The player removed the Visit whose best was `visit` from `map`'s Visit History, the
+    /// Character's named `character` (`None`: the Unassigned one), in the Personal Bests window.
+    RemoveVisit { character: Option<String>, map: String, visit: VisitBest },
+    /// The player moved the Visit whose best was `visit` on `map`, the Character's named `from`
+    /// (`None`: an Unassigned one), to the Character named `to`, in the Personal Bests window.
+    MoveVisit { from: Option<String>, map: String, visit: VisitBest, to: String },
+    /// The player gave the Character with this name every Unassigned Visit, in the Personal
+    /// Bests window.
+    AssignUnassigned(String),
+    /// The player removed the Character with this name, in the Personal Bests window.
+    RemoveCharacter(String),
+    /// The player merged the Character named `from` into the one named `into`, in the
+    /// Personal Bests window.
+    MergeCharacters { from: String, into: String },
+    /// The player turned "Show on the Map Leaderboards" on (`on`) or off for the Character
+    /// named `name`, in the Personal Bests window.
+    ShowOnLeaderboards { name: String, on: bool },
+    /// The player sent the Character with this name to the Map Leaderboards again, in the
+    /// Personal Bests window.
+    SendToLeaderboardsAgain(String),
+    /// The player clicked the Map Leaderboard link of the map with ID `id` among the bests of
+    /// the Character named `character` (`None`: the Unassigned ones), in the Personal Bests
+    /// window.
+    OpenBestsLeaderboard { character: Option<String>, id: String },
+    /// The Map Leaderboards answered the core's upload `id` (or it couldn't be made).
+    LeaderboardAnswer { id: u64, answer: LeaderboardAnswer },
     /// The player picked the item with this MeowDB ID from the ones an Item Lookup found
     /// sharing the name it read.
     PickItem(String),
@@ -188,6 +213,9 @@ pub(crate) enum Command {
     /// The reader is done with a Deal Finder capture of `region` (the game's client area):
     /// the capture and what it read, or `None` if the capture failed.
     ReadShop { region: ScreenRect, reading: Option<(Box<ShopCapture>, ShopReading)> },
+    /// The reader is done with a capture of `region` (the bottom of the game's client area)
+    /// for the Status Bar: the capture and what it read, or `None` if the capture failed.
+    ReadStatusBar { region: ScreenRect, reading: Option<(Box<StatusBarCapture>, StatusBarReading)> },
 }
 
 /// The overlay's drags and resizes, as the core loop hears them.
@@ -276,8 +304,9 @@ pub fn run() {
             minerva.restore(settings::load(&settings_path));
             // The Personal Bests earlier launches set, beside the settings: a small file,
             // read before anything is captured, so no best is set before they are back.
-            let (bests_file, saved_bests) = bests::BestsFile::load(bests::path(app.handle())?);
-            minerva.restore_bests(saved_bests);
+            // After the settings: one there but unreadable holds the Map Leaderboards' uploads
+            // of the Characters they show there.
+            let bests_file = bests::restore(&mut minerva, bests::BestsFile::load(bests::path(app.handle())?), &settings_path);
             // The market prices the player keeps on Item Cards, beside them.
             let (prices_file, saved_prices) =
                 market_prices::MarketPricesFile::load(market_prices::path(app.handle())?);
@@ -350,9 +379,17 @@ pub fn run() {
                 deal_badges,
                 hotkeys,
             };
+            // The uploads to the Map Leaderboards, with the Leaderboard Key, which the core never has.
+            let key = leaderboards::KeyFile::new(leaderboards::key_path(app.handle())?);
+            let uploader = leaderboards::Uploader::new(key, app.state::<Sender<Command>>().inner().clone());
             std::thread::Builder::new().name("core-loop".into()).spawn(move || {
-                let files =
-                    Files { settings: settings_path, bests: bests_file, market_prices: prices_file, market_imports };
+                let files = Files {
+                    settings: settings_path,
+                    bests: bests_file,
+                    market_prices: prices_file,
+                    market_imports,
+                    uploader,
+                };
                 core_loop(handle, windows, minerva, reader, channels, files)
             })?;
             Ok(())
@@ -403,6 +440,13 @@ pub fn run() {
             bests_window::personal_bests_view,
             bests_window::personal_bests_open_map,
             bests_window::personal_bests_remove_visit,
+            bests_window::personal_bests_move_visit,
+            bests_window::personal_bests_assign_unassigned,
+            bests_window::personal_bests_send_again,
+            bests_window::personal_bests_remove_character,
+            bests_window::personal_bests_merge_characters,
+            bests_window::personal_bests_show_on_leaderboards,
+            bests_window::personal_bests_open_leaderboard,
             item_lookup::item_lookup_height,
             item_lookup::item_lookup_view,
             item_card::item_card_height,
@@ -444,12 +488,14 @@ struct Windows {
 }
 
 /// Where the core loop saves the settings, the Personal Bests and the market prices, and
-/// the folder it takes Market Imports from.
+/// the folder it takes Market Imports from; and what makes its uploads to the Map
+/// Leaderboards, with the Leaderboard Key's file.
 struct Files {
     settings: PathBuf,
     bests: bests::BestsFile,
     market_prices: market_prices::MarketPricesFile,
     market_imports: PathBuf,
+    uploader: leaderboards::Uploader,
 }
 
 /// Save the Personal Bests if the core's bests revision moved on from `saved` (the one
@@ -503,14 +549,15 @@ enum Capture {
     Item(Box<ItemCapture>),
     /// The game's client area, for the Deal Finder.
     Shop(ScreenRect),
+    /// The bottom of the game's client area, for the Status Bar.
+    StatusBar(ScreenRect),
 }
 
-/// Captures and reads the Title Region, the EXP Bar Region and the Deal Finder's client area
-/// on its own thread, and reads Item Lookup's captures (taken at the press, while the Item
-/// Tooltip shows). Reading
-/// takes tens of ms (far more in a debug build), so the core loop never waits for it:
-/// it keeps following the game window at its own pace and takes each reading when it
-/// arrives.
+/// Captures and reads the Title Region, the EXP Bar Region, the Status Bar's strip and the Deal
+/// Finder's client area on its own thread, and reads Item Lookup's captures (taken at the
+/// press, while the Item Tooltip shows). Reading takes tens of ms (far more in a debug
+/// build), so the core loop never waits for it: it keeps following the game window at its
+/// own pace and takes each reading when it arrives.
 struct ReaderThread {
     captures: Sender<Capture>,
     /// The clock frames and ticks are timed by.
@@ -521,6 +568,8 @@ struct ReaderThread {
     exp_bar_busy: bool,
     /// Likewise for the Deal Finder's capture.
     shop_busy: bool,
+    /// Likewise for the Status Bar's.
+    status_bar_busy: bool,
 }
 
 impl ReaderThread {
@@ -534,6 +583,8 @@ impl ReaderThread {
             let item_reader = ItemTooltipReader::bundled();
             // It remembers the lines it read, so a shop left open costs no recognition.
             let mut shop_reader = PlayerShopReader::bundled();
+            // So does this one: an unchanged Status Bar costs no recognition.
+            let mut status_bar_reader = StatusBarReader::bundled();
             let grab = |r: ScreenRect| match capture::capture_rgba(r.x, r.y, r.width as i32, r.height as i32) {
                 Ok(rgba) => {
                     let at_ms = start.elapsed().as_millis() as u64;
@@ -572,13 +623,21 @@ impl ReaderThread {
                         });
                         Command::ReadShop { region, reading }
                     }
+                    Capture::StatusBar(region) => {
+                        let reading = grab(region).map(|frame| {
+                            let capture = StatusBarCapture { frame, origin: ScreenPoint { x: region.x, y: region.y } };
+                            let read = status_bar_reader.read(&capture);
+                            (Box::new(capture), read)
+                        });
+                        Command::ReadStatusBar { region, reading }
+                    }
                 };
                 if commands.send(command).is_err() {
                     return;
                 }
             }
         })?;
-        Ok(Self { captures, start, title_busy: false, exp_bar_busy: false, shop_busy: false })
+        Ok(Self { captures, start, title_busy: false, exp_bar_busy: false, shop_busy: false, status_bar_busy: false })
     }
 
     /// Capture and read the Title Region `region`, unless the last capture of it is
@@ -600,6 +659,13 @@ impl ReaderThread {
     fn read_shop(&mut self, region: ScreenRect) {
         if !self.shop_busy {
             self.shop_busy = self.captures.send(Capture::Shop(region)).is_ok();
+        }
+    }
+
+    /// Likewise for the Status Bar's capture of the bottom of the game's client area `region`.
+    fn read_status_bar(&mut self, region: ScreenRect) {
+        if !self.status_bar_busy {
+            self.status_bar_busy = self.captures.send(Capture::StatusBar(region)).is_ok();
         }
     }
 
@@ -629,6 +695,7 @@ fn core_loop(
     files: Files,
 ) {
     let settings_path = files.settings;
+    let mut uploader = files.uploader;
     // Restored at startup: saved already.
     let mut bests_saved = minerva.bests_revision();
     let mut prices_saved = minerva.market_prices_revision();
@@ -690,8 +757,33 @@ fn core_loop(
                 let request = minerva.open_bests_map_page(&id);
                 carry_out(&app, &window.overlay, &mut item_card, &mut deal_badges, &reader, &mut minerva, request);
             }
-            Ok(Command::RemoveVisit { map, visit }) => {
-                minerva.remove_visit(&map, visit);
+            Ok(Command::RemoveVisit { character, map, visit }) => {
+                minerva.remove_visit(character.as_deref(), &map, &visit);
+            }
+            Ok(Command::MoveVisit { from, map, visit, to }) => {
+                minerva.move_visit(from.as_deref(), &map, &visit, &to);
+            }
+            Ok(Command::AssignUnassigned(to)) => {
+                minerva.assign_unassigned(&to);
+            }
+            Ok(Command::RemoveCharacter(name)) => {
+                minerva.remove_character(&name);
+            }
+            Ok(Command::MergeCharacters { from, into }) => {
+                minerva.merge_characters(&from, &into);
+            }
+            Ok(Command::ShowOnLeaderboards { name, on }) => {
+                minerva.show_on_leaderboards(&name, on);
+            }
+            Ok(Command::SendToLeaderboardsAgain(name)) => {
+                minerva.send_to_leaderboards_again(&name);
+            }
+            Ok(Command::OpenBestsLeaderboard { character, id }) => {
+                let request = minerva.open_bests_leaderboard(character.as_deref(), &id);
+                carry_out(&app, &window.overlay, &mut item_card, &mut deal_badges, &reader, &mut minerva, request);
+            }
+            Ok(Command::LeaderboardAnswer { id, answer }) => {
+                minerva.on_leaderboard_answer(id, answer);
             }
             Ok(Command::PickItem(id)) => {
                 let request = minerva.pick_item(&id);
@@ -836,6 +928,13 @@ fn core_loop(
                     minerva.on_player_shop_read(*capture, reading);
                 }
             }
+            Ok(Command::ReadStatusBar { region, reading }) => {
+                reader.status_bar_busy = false;
+                // Not once the game window moved, or another app came in front.
+                if let (Some((capture, reading)), true) = (reading, minerva.panel_state().status_bar_capture == Some(region)) {
+                    minerva.on_status_bar_read(*capture, reading);
+                }
+            }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
         }
@@ -883,6 +982,8 @@ fn core_loop(
         while let Some(request) = minerva.take_request() {
             carry_out(&app, &window.overlay, &mut item_card, &mut deal_badges, &reader, &mut minerva, Some(request));
         }
+        // The core asks for uploads to the Map Leaderboards on a tick: each is made once.
+        uploader.sync(&minerva.panel_state().leaderboard_uploads);
         // Prices a tool of the player's own left (ADR 0013), saved below like those typed.
         // Left waiting while the prices can't be saved, rather than taken in and lost.
         if Instant::now() >= next_import_check && files.market_prices.saves() {
@@ -901,6 +1002,12 @@ fn core_loop(
         }
         if Instant::now() >= next_exp_bar_capture {
             next_exp_bar_capture = Instant::now() + EXP_BAR_TICK;
+            // The Status Bar first, at the EXP bar's pace: the reader takes captures in turn,
+            // so another Character's name reaches the core before their EXP bar does. None
+            // while another app is in front.
+            if let Some(region) = minerva.panel_state().status_bar_capture {
+                reader.read_status_bar(region);
+            }
             // None while EXP tracking is off.
             if let Some(region) = minerva.panel_state().exp_bar_region {
                 reader.read_exp_bar(region);

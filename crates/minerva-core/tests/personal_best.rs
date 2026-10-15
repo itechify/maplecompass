@@ -37,7 +37,7 @@ fn starred(state: &PanelState) -> bool {
 /// way's included.
 fn saved(player: &Player, map: &str) -> Vec<VisitBest> {
     let bests = player.minerva.bests();
-    bests.maps.into_iter().find(|m| m.id == map).map_or_else(Vec::new, |m| m.visits)
+    bests.unassigned.into_iter().find(|m| m.id == map).map_or_else(Vec::new, |m| m.visits)
 }
 
 /// The EXP/h of each of [`saved`].
@@ -49,7 +49,7 @@ fn saved_rates(player: &Player, map: &str) -> Vec<u64> {
 fn a_first_visits_best_is_dated_by_the_wall_clock_at_the_refresh_that_showed_it() {
     let mut player = Player::clocked(tracking());
     player.arrive(SUNSET);
-    let best = |exp_per_hour, set_at_unix_ms| vec![VisitBest { exp_per_hour, set_at_unix_ms }];
+    let best = |exp_per_hour, set_at_unix_ms| vec![VisitBest { exp_per_hour, set_at_unix_ms, ..VisitBest::default() }];
 
     // 3,600 EXP/h: the first best is the refresh's 5 minutes in, and was set then.
     let five = player.hunt(5 * MIN, 10);
@@ -197,7 +197,7 @@ fn nothing_is_recorded_on_a_map_without_a_map_summary() {
     // A town has none: no best there, however long the play.
     player.arrive(KERNING);
     assert_eq!(best_row(&player.hunt(6 * MIN, 30)), None);
-    assert!(player.minerva.bests().maps.is_empty());
+    assert!(player.minerva.bests().unassigned.is_empty());
 
     // Sunset Sky has one: its best from 5 minutes there.
     player.arrive(SUNSET);
@@ -219,7 +219,7 @@ fn nothing_is_recorded_while_candidates_wait_for_a_choice() {
     // 10,800 EXP/h, then 3,600, with nothing chosen: no best.
     player.hunt(6 * MIN, 30);
     player.hunt(5 * MIN, 10);
-    assert!(player.minerva.bests().maps.is_empty());
+    assert!(player.minerva.bests().unassigned.is_empty());
 
     // The player chooses the Construction Site: the hotkey shows Sunset Sky, then it.
     player.choose_next();

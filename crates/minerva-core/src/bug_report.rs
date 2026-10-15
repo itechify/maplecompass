@@ -29,17 +29,19 @@ use crate::hotkey_settings::KeyPress;
 use crate::item_lookup::ItemHit;
 use crate::item_lookup::ItemLookup;
 use crate::item_tooltip::{ItemCapture, ItemTooltip, ItemTooltipReading};
+use crate::leaderboards::{LeaderboardAnswer, RejectedReason};
 use crate::map_data::MapSummary;
 use crate::map_index::{Fetched, MapDataSource, SourceError};
 use crate::market_prices::{MarketImport, SavedMarketPrices};
 use crate::osms::{OsmsFiles, SavedFiles};
 use crate::osms_items::{ItemFiles, SavedItemFiles};
-use crate::panel::{Action, Foreground, GameWindow, PanelSizes, ScreenRect, Size};
+use crate::panel::{Action, Foreground, GameWindow, PanelSizes, ScreenPoint, ScreenRect, Size};
 use crate::personal_best::{SavedBests, VisitBest};
 use crate::player_shop::{ShopCapture, ShopList, ShopReading};
 use crate::recogniser::{TitleLines, TitleReading};
 use crate::session::{ExpTracking, TrackingState};
 use crate::settings::Settings;
+use crate::status_bar::{StatusBar, StatusBarCapture, StatusBarReading};
 use crate::{Minerva, Frame, PanelControl, PanelState};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -96,6 +98,23 @@ pub enum Note {
     /// Readings in a row fitted another level (`level`): another character, and a new
     /// Session.
     CharacterSwitch { level: Level },
+    /// The Status Bar named another Character, `name`, after it was out of sight: a new
+    /// Session.
+    NameSwitch { name: String },
+    /// The Status Bar, with no name read, showed another level (`level`), not the next, after
+    /// it was out of sight: another Character, and a new Session.
+    LevelSwitch { level: u32 },
+    /// The Status Bar's name read as `name`, not the Character's, while it stayed in sight:
+    /// a misread, set aside.
+    NameMisread { name: String },
+    /// The Status Bar showed the next level, `level`: the next EXP bar reading is in it.
+    LevelShown { level: u32 },
+    /// The level-up the Status Bar showed couldn't be counted (the level before's total wasn't
+    /// known, or the reading had more EXP than the last): the new level is learned afresh.
+    LevelUpUncounted,
+    /// The Status Bar showed level `to`, not `from` or the next: the level's total is learned
+    /// afresh from the next EXP bar reading.
+    LevelChanged { from: u32, to: u32 },
     /// The first whole reading after the bar went unread for over 2 minutes: taken as
     /// where the Session stands, without counting the change since.
     Unseen,
@@ -145,6 +164,15 @@ pub enum Event {
         #[serde(default, skip_serializing_if = "is_false")]
         same: bool,
     },
+    /// A Status Bar capture taken at `at_ms` read as `bar` (`None`: no Status Bar), or the
+    /// `same` as the reading before.
+    StatusBar {
+        at_ms: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        bar: Option<StatusBar>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        same: bool,
+    },
     /// The player chose the Item Card's Market Line `line` as the Deal Line.
     ChooseDealLine { line: String },
     PickItem { id: String },
@@ -166,11 +194,44 @@ pub enum Event {
     PickGameWindow { title: String },
     WallClock { unix_ms: u64 },
     RestoreBests { bests: SavedBests },
+    /// The Personal Bests file was there but didn't read: the shell restored none.
+    BestsLost {},
     RestoreMarketPrices { prices: SavedMarketPrices },
     /// A tool of the player's own left `import` for their Market Lines (ADR 0013).
     ImportMarketPrices { import: MarketImport },
-    /// The player removed the Visit whose best was `visit` from `map`'s Visit History.
-    RemoveVisit { map: String, visit: VisitBest },
+    /// The player removed the Visit whose best was `visit` from `map`'s Visit History, the
+    /// Character's named `character` (the Unassigned one for `None`, as every Visit was
+    /// before Characters).
+    RemoveVisit {
+        map: String,
+        visit: VisitBest,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        character: Option<String>,
+    },
+    /// The player moved the Visit whose best was `visit` on `map`, the Character's named
+    /// `from` (an Unassigned one for `None`, as every Visit moved was before Move was on every
+    /// Visit), to the Character named `to`.
+    MoveVisit {
+        map: String,
+        visit: VisitBest,
+        to: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        from: Option<String>,
+    },
+    /// The player gave the Character named `to` every Unassigned Visit.
+    AssignUnassigned { to: String },
+    /// The player removed the Character named `name`, with their bests.
+    RemoveCharacter { name: String },
+    /// The player merged the Character named `from` into the one named `into`.
+    MergeCharacters { from: String, into: String },
+    /// The player turned "Show on the Map Leaderboards" on (`on`) or off for the Character
+    /// named `name`.
+    ShowOnLeaderboards { name: String, on: bool },
+    /// The player sent the Character named `name` to the Map Leaderboards again.
+    SendToLeaderboardsAgain { name: String },
+    /// The Map Leaderboards answered upload `id`, for the Character named `name` (empty for an
+    /// upload no longer under way), with `answer`.
+    LeaderboardAnswer { id: u64, name: String, answer: LeaderboardAnswer },
     /// Not an input: an error the shell or one of our windows ran into (`from`), which
     /// would otherwise go nowhere.
     Error { from: String, message: String },
@@ -267,6 +328,9 @@ pub struct Line {
     /// The map the panel showed after, where it changed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub map: Option<ShownMap>,
+    /// The uploads to the Map Leaderboards the core asked the shell for after.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub uploads: Vec<AskedUpload>,
     /// The crop of the frame read, kept in the report under this name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crop: Option<String>,
@@ -274,8 +338,20 @@ pub struct Line {
 
 impl Line {
     fn new(t: u64, ticked: bool, event: Event) -> Self {
-        Self { t, ticked, event, answers: Vec::new(), notes: Vec::new(), grind_tracker: None, map: None, crop: None }
+        let (answers, notes, uploads) = (Vec::new(), Vec::new(), Vec::new());
+        Self { t, ticked, event, answers, notes, grind_tracker: None, map: None, uploads, crop: None }
     }
+}
+
+/// An upload to the Map Leaderboards the core asked for, as a line writes it down: its id,
+/// whose, and how many entries (`None`: deleting them).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AskedUpload {
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entries: Option<usize>,
 }
 
 /// What the shell knows of the run that the core doesn't, for a Bug Report.
@@ -375,6 +451,8 @@ pub(crate) enum Region {
     ItemTooltip { pointer: (u32, u32) },
     /// A Player Shop's item list, at a Deal Finder capture.
     PlayerShop,
+    /// The Status Bar's level, job and name, at a Status Bar capture.
+    StatusBar,
 }
 
 /// How far the crop of an Item Card or Item Lookup capture reaches from the pointer (px,
@@ -392,13 +470,29 @@ pub(crate) fn item_tooltip_crop(capture: &ItemCapture) -> Option<(Region, Frame)
     let (px, py) = (at(capture.pointer.x, capture.origin.x, frame.width), at(capture.pointer.y, capture.origin.y, frame.height));
     let (x0, y0) = (px.saturating_sub(ITEM_TOOLTIP_REACH), py.saturating_sub(ITEM_TOOLTIP_REACH));
     let (x1, y1) = ((px + ITEM_TOOLTIP_REACH).min(frame.width), (py + ITEM_TOOLTIP_REACH).min(frame.height));
+    Some((Region::ItemTooltip { pointer: (px - x0, py - y0) }, cut(frame, (x0, y0), (x1, y1))))
+}
+
+/// Columns `x0..x1` and rows `y0..y1` of `frame`, which holds them.
+fn cut(frame: &Frame, (x0, y0): (u32, u32), (x1, y1): (u32, u32)) -> Frame {
     let mut rgba = Vec::with_capacity(((x1 - x0) * (y1 - y0) * 4) as usize);
     for y in y0..y1 {
         let row = ((y * frame.width + x0) * 4) as usize;
         rgba.extend_from_slice(&frame.rgba[row..row + ((x1 - x0) * 4) as usize]);
     }
-    let crop = Frame { width: x1 - x0, height: y1 - y0, rgba, at_ms: frame.at_ms };
-    Some((Region::ItemTooltip { pointer: (px - x0, py - y0) }, crop))
+    Frame { width: x1 - x0, height: y1 - y0, rgba, at_ms: frame.at_ms }
+}
+
+/// What of `frame`, its top-left pixel at `origin` on screen, lies between the screen points
+/// `top_left` and `bottom_right`; `None` if nothing does, or the frame is short of pixels.
+fn cut_on_screen(frame: &Frame, origin: ScreenPoint, top_left: (i32, i32), bottom_right: (i32, i32)) -> Option<Frame> {
+    if frame.rgba.len() < (frame.width * frame.height * 4) as usize {
+        return None;
+    }
+    let at = |screen: i32, origin: i32, size: u32| (screen - origin).clamp(0, size as i32) as u32;
+    let (x0, y0) = (at(top_left.0, origin.x, frame.width), at(top_left.1, origin.y, frame.height));
+    let (x1, y1) = (at(bottom_right.0, origin.x, frame.width), at(bottom_right.1, origin.y, frame.height));
+    (x1 > x0 && y1 > y0).then(|| cut(frame, (x0, y0), (x1, y1)))
 }
 
 /// How far the crop of a Deal Finder capture reaches around the shop's list (px): enough
@@ -411,25 +505,26 @@ const PLAYER_SHOP_WIDTH: u32 = 352;
 /// The Player Shop's item list in a Deal Finder capture, for a Bug Report: the listings the
 /// reader read, or should have, as `samples/player-shop` keeps them. `None` with no shop.
 pub(crate) fn player_shop_crop(capture: &ShopCapture, shop: Option<&ShopList>) -> Option<(Region, Frame)> {
-    let frame = &capture.frame;
     let list = shop?.area;
-    if frame.rgba.len() < (frame.width * frame.height * 4) as usize {
-        return None;
-    }
-    let at = |screen: i32, origin: i32, size: u32| (screen - origin).clamp(0, size as i32) as u32;
-    let x0 = at(list.x - PLAYER_SHOP_MARGIN as i32, capture.origin.x, frame.width);
-    let y0 = at(list.y - PLAYER_SHOP_MARGIN as i32, capture.origin.y, frame.height);
-    let x1 = at(list.x + PLAYER_SHOP_WIDTH as i32, capture.origin.x, frame.width);
-    let y1 = at(list.y + (list.height + PLAYER_SHOP_MARGIN) as i32, capture.origin.y, frame.height);
-    if x1 <= x0 || y1 <= y0 {
-        return None;
-    }
-    let mut rgba = Vec::with_capacity(((x1 - x0) * (y1 - y0) * 4) as usize);
-    for y in y0..y1 {
-        let row = ((y * frame.width + x0) * 4) as usize;
-        rgba.extend_from_slice(&frame.rgba[row..row + ((x1 - x0) * 4) as usize]);
-    }
-    Some((Region::PlayerShop, Frame { width: x1 - x0, height: y1 - y0, rgba, at_ms: frame.at_ms }))
+    let margin = PLAYER_SHOP_MARGIN as i32;
+    let top_left = (list.x - margin, list.y - margin);
+    let bottom_right = (list.x + PLAYER_SHOP_WIDTH as i32, list.y + list.height as i32 + margin);
+    Some((Region::PlayerShop, cut_on_screen(&capture.frame, capture.origin, top_left, bottom_right)?))
+}
+
+/// How far the crop of a Status Bar capture reaches around the bar's level, job and name
+/// (px): enough for the reader to find them in it again.
+const STATUS_BAR_MARGIN: u32 = 10;
+
+/// The Status Bar's level, job and name in a Status Bar capture, for a Bug Report, as
+/// `samples/status-bar` keeps them: none of the rest of the bar, nor the game above it.
+/// `None` with no Status Bar.
+pub(crate) fn status_bar_crop(capture: &StatusBarCapture, bar: Option<&StatusBar>) -> Option<(Region, Frame)> {
+    let area = bar?.area;
+    let margin = STATUS_BAR_MARGIN as i32;
+    let top_left = (area.x - margin, area.y - margin);
+    let bottom_right = (area.x + area.width as i32 + margin, area.y + area.height as i32 + margin);
+    Some((Region::StatusBar, cut_on_screen(&capture.frame, capture.origin, top_left, bottom_right)?))
 }
 
 /// A crop of a captured region, as a PNG.
@@ -482,7 +577,10 @@ struct Last {
     unavailable_hotkeys: Option<(Vec<String>, Vec<String>)>,
     title_lines: Option<Option<TitleLines>>,
     shop: Option<Option<ShopList>>,
+    status_bar: Option<Option<StatusBar>>,
     exp_bar_rgba: Vec<u8>,
+    /// The id of the last upload to the Map Leaderboards written down as asked for.
+    upload_id: u64,
 }
 
 /// Writes the trace down as the core takes its inputs in, and keeps the crops.
@@ -538,7 +636,9 @@ impl Recorder {
                 unavailable_hotkeys: None,
                 title_lines: None,
                 shop: None,
+                status_bar: None,
                 exp_bar_rgba: Vec::new(),
+                upload_id: 0,
             },
             crops: VecDeque::new(),
             maps: BTreeSet::new(),
@@ -594,6 +694,14 @@ impl Recorder {
                 self.last.shop = Some(shop.clone());
             }
         }
+        if let Event::StatusBar { bar, same, .. } = &mut event {
+            if self.last.status_bar.as_ref() == Some(bar) {
+                *same = true;
+                *bar = None;
+            } else {
+                self.last.status_bar = Some(bar.clone());
+            }
+        }
         let line = match (&event, at_ms) {
             (Event::Tick {}, Some(at)) => Line::new(at, false, event),
             _ => match self.idle_tick.take() {
@@ -639,6 +747,12 @@ impl Recorder {
             if map != self.last.map {
                 line.map = Some(map.clone());
                 self.last.map = map;
+            }
+            let last_upload = self.last.upload_id;
+            for upload in outcome.state.leaderboard_uploads.iter().filter(|u| u.id > last_upload) {
+                let entries = upload.entries.as_ref().map(Vec::len);
+                line.uploads.push(AskedUpload { id: upload.id, name: upload.name.clone(), entries });
+                self.last.upload_id = self.last.upload_id.max(upload.id);
             }
             self.last.state = outcome.state.clone();
         }
@@ -700,6 +814,17 @@ impl Recorder {
                 };
                 (!same, !same && unread)
             }
+            // One that changed; for the run, one the core made something of (another
+            // Character, a misread name, a level), or with a part found but not read, as it
+            // may have been misread.
+            Region::StatusBar => {
+                let same = matches!(line.event, Event::StatusBar { same: true, .. });
+                let unread = matches!(
+                    &line.event,
+                    Event::StatusBar { bar: Some(bar), .. } if bar.level.is_none() || bar.job.is_none() || bar.name.is_none()
+                );
+                (!same, !same && (unread || line.notes.iter().any(Note::is_unusual)))
+            }
         };
         if changed || kept {
             let name = match region {
@@ -708,6 +833,7 @@ impl Recorder {
                 // Named as `samples/item-tooltip` names its frames: the pointer's spot in it.
                 Region::ItemTooltip { pointer: (x, y) } => format!("crops/item-tooltip-{:010}@{x},{y}.png", frame.at_ms),
                 Region::PlayerShop => format!("crops/player-shop-{:010}.png", frame.at_ms),
+                Region::StatusBar => format!("crops/status-bar-{:010}.png", frame.at_ms),
             };
             if let Some(png) = png(&frame) {
                 line.crop = Some(name.clone());
@@ -756,7 +882,11 @@ impl Recorder {
             }
         }
         let Ok(json) = serde_json::to_string(&line) else { return };
-        if matches!(line.event, Event::Restore { .. } | Event::RestoreBests { .. } | Event::RestoreMarketPrices { .. }) {
+        let launch = matches!(
+            line.event,
+            Event::Restore { .. } | Event::RestoreBests { .. } | Event::BestsLost {} | Event::RestoreMarketPrices { .. }
+        );
+        if launch {
             self.launch.push_str(&json);
             self.launch.push('\n');
         }
@@ -1177,6 +1307,7 @@ pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
     let mut wall_clock: Option<(u64, u64)> = None;
     let mut title_lines: Option<TitleLines> = None;
     let mut shop: Option<ShopList> = None;
+    let mut status_bar: Option<StatusBar> = None;
     for line in &recording.lines {
         if let Some((unix_ms, at)) = wall_clock {
             minerva.wall_clock = Some(unix_ms + line.t.saturating_sub(at));
@@ -1247,6 +1378,11 @@ pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
                 shop.clone_from(&read);
                 minerva.on_player_shop_reading(ShopReading { shop: read, at_ms });
             }
+            Event::StatusBar { at_ms, bar, same } => {
+                let bar = if same { status_bar.clone() } else { bar };
+                status_bar.clone_from(&bar);
+                minerva.on_status_bar_reading(StatusBarReading { bar, at_ms });
+            }
             Event::ChooseDealLine { line } => {
                 minerva.choose_deal_line(&line);
             }
@@ -1302,8 +1438,32 @@ pub fn replay_with(recording: &Recording, with: ReplayData) -> Replay {
             Event::RestoreBests { bests } => {
                 minerva.restore_bests(bests);
             }
-            Event::RemoveVisit { map, visit } => {
-                minerva.remove_visit(&map, visit);
+            Event::BestsLost {} => {
+                minerva.bests_lost();
+            }
+            Event::RemoveVisit { map, visit, character } => {
+                minerva.remove_visit(character.as_deref(), &map, &visit);
+            }
+            Event::MoveVisit { map, visit, to, from } => {
+                minerva.move_visit(from.as_deref(), &map, &visit, &to);
+            }
+            Event::AssignUnassigned { to } => {
+                minerva.assign_unassigned(&to);
+            }
+            Event::RemoveCharacter { name } => {
+                minerva.remove_character(&name);
+            }
+            Event::MergeCharacters { from, into } => {
+                minerva.merge_characters(&from, &into);
+            }
+            Event::ShowOnLeaderboards { name, on } => {
+                minerva.show_on_leaderboards(&name, on);
+            }
+            Event::SendToLeaderboardsAgain { name } => {
+                minerva.send_to_leaderboards_again(&name);
+            }
+            Event::LeaderboardAnswer { id, answer, .. } => {
+                minerva.on_leaderboard_answer(id, answer);
             }
             Event::Error { from, message } => minerva.note_error(&from, &message),
             Event::BugReport {} => minerva.mark_bug_report(),
@@ -1362,13 +1522,31 @@ impl Recording {
                     | Event::ChooseDealLine { .. }
                     | Event::Restore { .. }
                     | Event::RestoreBests { .. }
+                    | Event::BestsLost {}
                     | Event::RemoveVisit { .. }
+                    | Event::MoveVisit { .. }
+                    | Event::AssignUnassigned { .. }
+                    | Event::RemoveCharacter { .. }
+                    | Event::MergeCharacters { .. }
+                    | Event::ShowOnLeaderboards { .. }
+                    | Event::SendToLeaderboardsAgain { .. }
+                    | Event::LeaderboardAnswer { .. }
                     | Event::Error { .. }
                     | Event::BugReport {}
             );
-            let notable = acted || !line.notes.is_empty() || line.map.is_some() || line.answers.iter().any(Answer::is_set);
+            let notable = acted
+                || !line.notes.is_empty()
+                || line.map.is_some()
+                || !line.uploads.is_empty()
+                || line.answers.iter().any(Answer::is_set);
             let quiet = consequences.is_empty()
-                && matches!(line.event, Event::Tick {} | Event::Title { same: true, .. } | Event::PlayerShop { same: true, .. });
+                && matches!(
+                    line.event,
+                    Event::Tick {}
+                        | Event::Title { same: true, .. }
+                        | Event::PlayerShop { same: true, .. }
+                        | Event::StatusBar { same: true, .. }
+                );
             if notable || (line.t >= from_ms && !quiet) {
                 let mut text = format!("{}  {}", clock(line.event.at_ms().unwrap_or(line.t)), line.event.describe(title));
                 if !consequences.is_empty() {
@@ -1401,6 +1579,10 @@ impl Line {
         if let Some(changes) = self.grind_tracker.as_ref().and_then(grind_tracker_changes) {
             out.push(changes);
         }
+        out.extend(self.uploads.iter().map(|upload| match upload.entries {
+            Some(entries) => format!("Map Leaderboards upload {} asked: {:?}'s {entries} entries", upload.id, upload.name),
+            None => format!("Map Leaderboards upload {} asked: deleting {:?}'s entries", upload.id, upload.name),
+        }));
         out
     }
 }
@@ -1448,6 +1630,16 @@ impl Note {
             }
             Note::Relearned { from, to } => format!("the level was learned wrong: {} now, not {}", level(*to), level(*from)),
             Note::CharacterSwitch { level: l } => format!("another character, a level of {}: a new Session", level(*l)),
+            Note::NameSwitch { name } => format!("the Status Bar names another character, {name:?}: a new Session"),
+            Note::LevelSwitch { level } => {
+                format!("the Status Bar shows another character's level, {level}, and no name: a new Session")
+            }
+            Note::NameMisread { name } => format!("the Status Bar's name misread as {name:?} while in sight: set aside"),
+            Note::LevelShown { level } => format!("the Status Bar shows level {level}: the next reading is in it"),
+            Note::LevelUpUncounted => "the Status Bar's level-up couldn't be counted: the new level is learned afresh".to_string(),
+            Note::LevelChanged { from, to } => {
+                format!("the Status Bar shows level {to}, not {from}: the level is learned afresh")
+            }
             Note::Unseen => "the bar went unread over 2 minutes: taken without counting the change".to_string(),
             Note::Visit => "a new Visit".to_string(),
         }
@@ -1461,6 +1653,7 @@ impl Event {
             Event::Title { at_ms, .. }
             | Event::ExpBar { at_ms, .. }
             | Event::PlayerShop { at_ms, .. }
+            | Event::StatusBar { at_ms, .. }
             | Event::OpenCardMeowdbPage { at_ms } => Some(*at_ms),
             _ => None,
         }
@@ -1541,12 +1734,55 @@ impl Event {
                     .collect();
                 format!("Player Shop read: {}", if rows.is_empty() { "no listings".into() } else { rows.join(", ") })
             }
+            Event::StatusBar { same: true, .. } => "Status Bar read as before".to_string(),
+            Event::StatusBar { bar: None, .. } => "no Status Bar".to_string(),
+            Event::StatusBar { bar: Some(bar), .. } => {
+                let or_unread = |part: Option<String>| part.unwrap_or_else(|| "?".to_string());
+                let level = or_unread(bar.level.map(|level| level.to_string()));
+                let job = or_unread(bar.job.as_ref().map(|job| format!("{job:?}")));
+                let name = or_unread(bar.name.as_ref().map(|name| format!("{name:?}")));
+                format!("Status Bar read: level {level}, {job}, {name}")
+            }
             Event::ChooseDealLine { line } => format!("Item Card's market line {line} chosen as the Deal Line"),
             Event::Restore { .. } => "settings restored".to_string(),
-            Event::RestoreBests { bests } => format!("Personal Bests restored ({} maps)", bests.maps.len()),
-            Event::RemoveVisit { map, visit } => {
-                let set = visit.set_at_unix_ms.map_or("no date".to_string(), |at| format!("set at {at}"));
-                format!("Visit removed from {map}'s Visit History: {} EXP/h, {set}", thousands(visit.exp_per_hour))
+            Event::RestoreBests { bests } => {
+                let maps = bests.unassigned.len() + bests.characters.iter().map(|c| c.maps.len()).sum::<usize>();
+                format!("Personal Bests restored ({maps} maps, {} Characters)", bests.characters.len())
+            }
+            Event::BestsLost {} => "Personal Bests file unreadable: uploads to the Map Leaderboards held".to_string(),
+            Event::RemoveVisit { map, visit, character } => {
+                let whose = character.as_ref().map_or("the Unassigned".to_string(), |name| format!("{name:?}'s"));
+                format!("Visit removed from {whose} Visit History of {map}: {}", visit_words(visit))
+            }
+            Event::MoveVisit { map, visit, to, from } => {
+                let whose = from.as_ref().map_or("Unassigned".to_string(), |name| format!("{name:?}'s"));
+                format!("{whose} Visit on {map} moved to {to:?}: {}", visit_words(visit))
+            }
+            Event::AssignUnassigned { to } => format!("Every Unassigned Visit given to {to:?}"),
+            Event::RemoveCharacter { name } => format!("Character {name:?} removed, with their bests"),
+            Event::MergeCharacters { from, into } => format!("Character {from:?} merged into {into:?}"),
+            Event::ShowOnLeaderboards { name, on: true } => format!("{name:?} shown on the Map Leaderboards"),
+            Event::ShowOnLeaderboards { name, on: false } => format!("{name:?} taken off the Map Leaderboards"),
+            Event::SendToLeaderboardsAgain { name } => format!("{name:?} sent to the Map Leaderboards again"),
+            Event::LeaderboardAnswer { id, name, answer } => {
+                let said = match answer {
+                    LeaderboardAnswer::Accepted { rejected } if rejected.is_empty() => "taken".to_string(),
+                    LeaderboardAnswer::Accepted { rejected } => {
+                        let rejected: Vec<String> = rejected
+                            .iter()
+                            .map(|r| match r.reason {
+                                RejectedReason::OverCap { cap } => format!("{} band {} over the cap of {}", r.map, r.band, thousands(cap)),
+                                RejectedReason::Removed {} => format!("{} band {} removed", r.map, r.band),
+                            })
+                            .collect();
+                        format!("taken but for {}", rejected.join(", "))
+                    }
+                    LeaderboardAnswer::Deleted {} => "deleted".to_string(),
+                    LeaderboardAnswer::Claimed {} => "the name is claimed by another key".to_string(),
+                    LeaderboardAnswer::RateLimited { retry_after_secs } => format!("rate-limited for {retry_after_secs} s"),
+                    LeaderboardAnswer::Failed { why } => format!("failed: {why}"),
+                };
+                format!("Map Leaderboards upload {id} for {name:?}: {said}")
             }
             Event::WallClock { unix_ms } => format!("wall clock {unix_ms} (ms since 1970)"),
             Event::Error { from, message } => format!("{from} error: {message}"),
@@ -1610,6 +1846,14 @@ fn json(value: &impl Serialize) -> String {
 fn clock(ms: u64) -> String {
     let s = ms / 1000;
     format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
+}
+
+/// A Visit's best in words: "7,200 EXP/h, level 23 \"Magician\", set at 1791547200000".
+fn visit_words(visit: &VisitBest) -> String {
+    let set = visit.set_at_unix_ms.map_or("no date".to_string(), |at| format!("set at {at}"));
+    let level = visit.level.map(|level| format!(", level {level}")).unwrap_or_default();
+    let job = visit.job.as_ref().map(|job| format!(" {job:?}")).unwrap_or_default();
+    format!("{} EXP/h{level}{job}, {set}", thousands(visit.exp_per_hour))
 }
 
 fn thousands(n: u64) -> String {

@@ -6,18 +6,23 @@
 //! - Live: the bests as saved now, the Visit under way's included, as closing Minerva
 //!   would keep them. So a map's row may be higher than the Best row there, which shows
 //!   only the earlier Visits'.
+//! - One Character's bests at a time: the core gives each Character's with a best, and the
+//!   one playing's (with none, if they have none), by name, then the Unassigned ones while
+//!   there are any or no Character is named. The page's picker shows the one playing until
+//!   the player picks another, and keeps which they picked; the core never knows.
 //! - One row a map, its Personal Best, highest EXP/h first. The window re-sorts as the
 //!   player likes; the core gives the figures, never text.
 //! - Each map's names, region, mob levels and solo EXP/h ceiling (its Map Summary, worked
-//!   out as NiaMeowDB does) from OSMS's file set (ADR 0008), the same for every map. Bests
-//!   are shared by all the player's characters and record no level, so the levels and the
-//!   share of the ceiling say what a best was worth. A best on a map not in the map list
-//!   is kept, with none of these, and a map without mobs has no levels or ceiling.
+//!   out as NiaMeowDB does) from OSMS's file set (ADR 0008), the same for every map: the
+//!   levels and the share of the ceiling say what a best was worth. A best on a map not in
+//!   the map list is kept, with none of these, and a map without mobs has no levels or
+//!   ceiling.
 //! - The map the player is on is marked: only while the panel is certain of it.
 //! - Each map's row holds its Visit History, highest first, for the player to open: each
-//!   Visit's EXP/h, its share of the ceiling and its date. The Visit under way's best is
-//!   among them, marked, where it makes the map's 10, but it isn't in the history yet, so
-//!   it can't be removed. The page keeps which maps are open; the core never knows.
+//!   Visit's EXP/h, its share of the ceiling, its date, and the level and job that set it.
+//!   The Visit under way's best is among them, marked, where the history would keep it, but
+//!   it isn't in the history yet, so it can't be removed. The page keeps which maps are
+//!   open; the core never knows.
 //! - Where it goes: centred over the game's client area until the player drags it, then
 //!   where they left it relative to the client area, until they drag it back to the
 //!   middle. As wide as its page lays it out, unless the client area is narrower, and no
@@ -26,10 +31,11 @@
 //!   Grind Tracker if that's where it goes.
 
 use crate::grind_tracker::ClientOffset;
+use crate::leaderboards::{self, LeaderboardToggle};
 use crate::map_data::MapData;
 use crate::map_index::MapEntry;
 use crate::panel::{GameWindow, ScreenRect, Size, in_view};
-use crate::personal_best::SavedBests;
+use crate::personal_best::{LevelBand, MapBests, SavedBests};
 use crate::shown_map::LevelRange;
 use crate::meowdb;
 use serde::Serialize;
@@ -44,11 +50,30 @@ pub struct PersonalBestsWindow {
     /// Where it goes on screen; `None` while it is hidden: closed, with no game window,
     /// while setup is open, or while another app is in front (see [`crate::Layer`]).
     pub placement: Option<ScreenRect>,
-    /// Every map with a Personal Best, highest EXP/h first; none while it is closed.
-    pub maps: Vec<PersonalBestsMap>,
+    /// Whose bests it can show, one at a time: each Character with a best, and the one
+    /// playing, by name; then the Unassigned bests, if there are any or no Character is
+    /// named. None while it is closed.
+    pub characters: Vec<PersonalBestsCharacter>,
     /// [`crate::OSMS_AND_MEOWDB_CREDIT`]: the names, levels and ceilings are from OSMS's data,
     /// and the rows open MeowDB's pages.
     pub credit: &'static str,
+}
+
+/// One Character's bests in the Personal Bests window, or the Unassigned ones: the choices
+/// of its picker.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalBestsCharacter {
+    /// The Character's name; `None` for the Unassigned bests.
+    pub name: Option<String>,
+    /// They are the Character playing, as the Status Bar names them (the Unassigned bests,
+    /// while it names no one): the one the picker shows until the player picks another.
+    pub current: bool,
+    /// Every map they have a Personal Best on, highest EXP/h first.
+    pub maps: Vec<PersonalBestsMap>,
+    /// Their "Show on the Map Leaderboards"; `None` for the Unassigned bests, which are never
+    /// uploaded.
+    pub leaderboard: Option<LeaderboardToggle>,
 }
 
 /// One map's row in the Personal Bests window.
@@ -67,6 +92,14 @@ pub struct PersonalBestsMap {
     pub mark: Option<String>,
     /// The map's MeowDB page.
     pub url: String,
+    /// The map's Map Leaderboard on the site, opened at the Level Band of the Character playing
+    /// (for another Character's row, the band of their best there) with this Character's entry
+    /// marked. `None` for the Unassigned bests, which are no one's on the site, and for a map
+    /// not in the map list, which has no page there.
+    pub leaderboard_url: Option<String>,
+    /// It is the Character's best of all maps, which the window stars: the first row, with
+    /// more than one to compare. Never one of the Unassigned bests, which aren't one player's.
+    pub best_of_all: bool,
     /// The lowest and highest of its mobs' levels; `None` if it isn't in the map list, or
     /// has no mobs.
     pub mob_levels: Option<LevelRange>,
@@ -89,13 +122,17 @@ pub struct PersonalBestsMap {
     pub visits: Vec<PersonalBestsVisit>,
 }
 
-/// One of a map's Visits in the Personal Bests window: what the player removes it by.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+/// One of a map's Visits in the Personal Bests window: what the player removes, or moves, it
+/// by.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersonalBestsVisit {
-    /// Its best: the Rolling Rate's EXP/h, and when it was set.
+    /// Its best: the Rolling Rate's EXP/h, when it was set, and the level and job that set
+    /// it, as the Status Bar showed them (`None`: not read).
     pub exp_per_hour: u64,
     pub set_at_unix_ms: Option<u64>,
+    pub level: Option<u32>,
+    pub job: Option<String>,
     /// The best as a share of the map's solo EXP/h ceiling, in hundredths of a percent, as
     /// the row's; `None` with no ceiling.
     pub ceiling_share_hundredths: Option<u64>,
@@ -148,18 +185,61 @@ impl BestsWindow {
     }
 }
 
-/// The Personal Bests window's rows for the bests `saved`, with `this_visit` the Visit
-/// under way's best among them: its map, and its place in the map's Visits. `map` gives a
-/// map's entry in the map list and its data, if it is in the list; `here` is the map the
-/// player is certainly on, if any.
-pub(crate) fn rows<'a>(
+/// The Personal Bests window's choices for the bests `saved`, with `current` the Character
+/// playing (`None`: none named) and `level` the level the Status Bar shows, and `this_visit` the Visit under way's best among them:
+/// whose it is, its map, and its place in the map's Visits. `map` gives a map's entry in the
+/// map list and its data, if it is in the list; `here` is the map the player is certainly
+/// on, if any. `toggle` gives a Character's "Show on the Map Leaderboards".
+pub(crate) fn characters<'a>(
     saved: &SavedBests,
+    (current, level): (Option<&str>, Option<u32>),
+    this_visit: Option<(Option<&str>, &str, usize)>,
+    map: impl Fn(&str) -> Option<(&'a MapEntry, &'a MapData)> + Copy,
+    here: Option<&str>,
+    toggle: impl Fn(&str) -> LeaderboardToggle,
+) -> Vec<PersonalBestsCharacter> {
+    let mut names: Vec<&str> = saved.characters.iter().map(|c| c.name.as_str()).collect();
+    names.extend(current.filter(|name| !names.contains(name)));
+    names.sort_by_key(|name| (name.to_lowercase(), *name));
+    let mut owners: Vec<Option<&str>> = names.into_iter().map(Some).collect();
+    if !saved.unassigned.is_empty() || current.is_none() {
+        owners.push(None);
+    }
+    owners
+        .into_iter()
+        .map(|owner| {
+            let this_visit = this_visit.filter(|(whose, _, _)| *whose == owner).map(|(_, map, at)| (map, at));
+            // The band of the Character playing, as the Status Bar shows it; another's, of their
+            // best on the map.
+            let playing = level.filter(|_| owner.is_none() || owner == current).map(LevelBand::of);
+            // None for the Unassigned bests: they are no one's on the site.
+            let link = |bests: &MapBests| {
+                let name = owner?;
+                let band = playing.or_else(|| bests.visits.iter().find_map(|v| v.level).map(LevelBand::of));
+                Some(leaderboards::map_url(&bests.id, band, Some(name)))
+            };
+            let mut maps = rows(saved.maps_of(owner), this_visit, map, here, link);
+            // The star on a Character's best of all maps, with another to compare it with.
+            if owner.is_some() && maps.len() > 1 {
+                maps[0].best_of_all = true;
+            }
+            PersonalBestsCharacter { name: owner.map(String::from), current: owner == current, maps, leaderboard: owner.map(&toggle) }
+        })
+        .collect()
+}
+
+/// The Personal Bests window's rows for one Character's bests on `saved` maps, with
+/// `this_visit` the Visit under way's best among them: its map, and its place in the map's
+/// Visits. `map` gives a map's entry in the map list and its data, if it is in the list;
+/// `here` is the map the player is certainly on, if any.
+fn rows<'a>(
+    saved: &[MapBests],
     this_visit: Option<(&str, usize)>,
     map: impl Fn(&str) -> Option<(&'a MapEntry, &'a MapData)>,
     here: Option<&str>,
+    link: impl Fn(&MapBests) -> Option<String>,
 ) -> Vec<PersonalBestsMap> {
     let mut maps: Vec<PersonalBestsMap> = saved
-        .maps
         .iter()
         .filter_map(|bests| {
             let best = bests.visits.first()?;
@@ -172,6 +252,8 @@ pub(crate) fn rows<'a>(
                 .map(|(at, visit)| PersonalBestsVisit {
                     exp_per_hour: visit.exp_per_hour,
                     set_at_unix_ms: visit.set_at_unix_ms,
+                    level: visit.level,
+                    job: visit.job.clone(),
                     ceiling_share_hundredths: ceiling.map(|c| share_hundredths(visit.exp_per_hour, c)),
                     this_visit: this_visit == Some((bests.id.as_str(), at)),
                 })
@@ -183,6 +265,9 @@ pub(crate) fn rows<'a>(
                 region: entry.map_or_else(String::new, |e| e.region.clone()),
                 mark: entry.and_then(|e| e.mark.clone()),
                 url: meowdb::map_url(&bests.id),
+                // A map not in the map list has no page on the site.
+                leaderboard_url: entry.and_then(|_| link(bests)),
+                best_of_all: false,
                 mob_levels: data.and_then(mob_levels),
                 exp_per_hour: best.exp_per_hour,
                 solo_exp_ceiling: ceiling,

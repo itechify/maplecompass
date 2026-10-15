@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-// The site's behaviours, on both pages: on a wide screen the page's minimap shows where you
+// The site's behaviours, on every page: on a wide screen the page's minimap shows where you
 // are in it (minimap.ts), following the scroll; on the home page the hero films how Minerva
 // reads the map you're on as the page scrolls past it (reel.ts); and a question the address
 // names opens. Without the script the pages still read whole, the hero is its still shot,

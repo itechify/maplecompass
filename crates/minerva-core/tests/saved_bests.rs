@@ -47,12 +47,12 @@ fn best_row(state: &PanelState) -> Option<u64> {
 
 /// `map`'s Visit bests in what `minerva` hands out, highest first.
 fn saved(minerva: &Minerva, map: &str) -> Vec<VisitBest> {
-    handed_out(minerva).maps.into_iter().find(|m| m.id == map).map_or_else(Vec::new, |m| m.visits)
+    handed_out(minerva).unassigned.into_iter().find(|m| m.id == map).map_or_else(Vec::new, |m| m.visits)
 }
 
 /// A best of `exp_per_hour`, set at `set_at` by the wall clock.
 fn best(exp_per_hour: u64, set_at: Option<u64>) -> VisitBest {
-    VisitBest { exp_per_hour, set_at_unix_ms: set_at }
+    VisitBest { exp_per_hour, set_at_unix_ms: set_at, ..VisitBest::default() }
 }
 
 #[test]
@@ -139,7 +139,7 @@ fn bests_of_no_exp_in_a_hand_edited_file_are_left_out() {
     );
     let mut next = relaunch(serde_json::from_str(&edited).unwrap(), WALL_AT_START + DAY);
     let handed = handed_out(&next.minerva);
-    assert!(handed.maps.iter().all(|m| m.id != SUNSET_SKY_ID));
+    assert!(handed.unassigned.iter().all(|m| m.id != SUNSET_SKY_ID));
     assert_eq!(saved_rates(&handed, CONSTRUCTION_SITE_ID), [7200]);
 
     // Sunset Sky has no best: a first Visit, with its own best from 5 minutes there.
@@ -158,7 +158,7 @@ fn bests_of_no_exp_in_a_hand_edited_file_are_left_out() {
 
 /// The EXP/h of each Visit's best a map's saved bests hold, in their order.
 fn saved_rates(bests: &SavedBests, map: &str) -> Vec<u64> {
-    let map = bests.maps.iter().find(|m| m.id == map);
+    let map = bests.unassigned.iter().find(|m| m.id == map);
     map.map_or_else(Vec::new, |m| m.visits.iter().map(|v| v.exp_per_hour).collect())
 }
 
@@ -351,7 +351,7 @@ fn the_hotkey_passing_a_candidate_that_had_a_best_this_visit_leaves_the_visits_b
 
     // The Visit ends with the Construction Site's 21,600 joining its bests.
     player.arrive(ROCKY_ROAD);
-    let maps: Vec<_> = player.minerva.bests().maps.into_iter().map(|m| m.id).collect();
+    let maps: Vec<_> = player.minerva.bests().unassigned.into_iter().map(|m| m.id).collect();
     assert_eq!(maps, [CONSTRUCTION_SITE_ID]);
     assert_eq!(rates(&player, CONSTRUCTION_SITE_ID), [21_600]);
 }
@@ -390,7 +390,7 @@ fn removing_a_best_from_the_history_changes_the_bests_the_shell_saves() {
 
     // Removing the map's only best leaves it none to save.
     next.press(PanelControl::RemoveBest);
-    assert!(next.minerva.bests().maps.iter().all(|m| m.id != SUNSET_SKY_ID));
+    assert!(next.minerva.bests().unassigned.iter().all(|m| m.id != SUNSET_SKY_ID));
 }
 
 #[test]

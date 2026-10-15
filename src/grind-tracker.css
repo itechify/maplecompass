@@ -331,6 +331,29 @@
   color: var(--ink);
 }
 
+/* The reading, and at the far end who it is: the Character, quieter, cut short before it
+   crowds the figures. */
+.exp-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.exp-head .exp-figures {
+  flex: none;
+}
+
+.panel .exp-character {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 15px;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .exp-figures b {
   margin-right: 2px;
   font-weight: 700;

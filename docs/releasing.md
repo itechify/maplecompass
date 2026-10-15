@@ -24,12 +24,14 @@ How a Minerva version is numbered, made and published as a GitHub Release. Follo
   - `cargo test -p minerva --lib`
   - `cargo clippy --workspace --all-targets -- -D warnings`
   - `pnpm build`
+  - `pnpm site:test`
 - **The live data still reads:** `cargo run -p minerva --example probe osms` reads OSMS Data Explorer's live set in full.
 - **A smoke test against the game** (`pnpm tauri dev`): the map is recognised; the Map section shows its picture; Search sets a Hunting Target, then a Destination, and Navigation shows the route to each; an item picked in Search shows its card beside the panel; a Mob Card opens; Item Lookup opens a page.
 - **The site describes this release** (`site/`, published from the tag in step 6): every change a player notices is on it, and nothing that's gone. While the game is open for the smoke test, retake each shot under Retake in `site/screenshots/README.md` as it says, set the version they were taken on, empty the list, and merge them into `main`. `pnpm site:build` passes, and `pnpm site:dev` reads right.
 - **The credits are current:**
   - If dependencies were added, removed or upgraded, regenerate the crate table in `THIRD-PARTY-NOTICES.md` (how is described there).
   - If a bundled asset or data source changed, update About & Credits in `setup.html` to match.
+- **The Map Leaderboards API is live** before the first release that uploads to it: its one-time setup and deploy are in `docs/map-leaderboards-setup.md`. `curl https://owlofminerva.app/api/maps` answers with JSON.
 - **Tools:** `gh` is signed in to an account that can push to `itechify/minerva`. Cargo is on `PATH`; in Git Bash, `export PATH="$HOME/.cargo/bin:$PATH"`.
 
 ## 1. Bump the version
@@ -140,7 +142,7 @@ Then check the release:
 ## If a release goes wrong
 
 - **Before anyone could download it** (minutes after publishing):
-  1. `gh release delete vX.Y.Z --cleanup-tag --yes` removes the release and its tag. If the site was already published from it, publish it again from the previous release: `gh workflow run site.yml` builds from the latest release's tag.
+  1. `gh release delete vX.Y.Z --cleanup-tag --yes` removes the release and its tag. If the site was already published from it, publish it again from the previous release: `gh workflow run site.yml` builds from the latest release's tag. But if that tag is older than the Map Leaderboards API, publish from `main` instead (`gh workflow run site.yml -f ref=main`): an older tag deploys a Worker without the API (`docs/map-leaderboards-setup.md`).
   2. Fix the problem on `main`.
   3. Tag and publish again from step 3.
 - **After that:** leave the release, and publish `X.Y.(Z+1)` with the fix.

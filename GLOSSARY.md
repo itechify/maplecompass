@@ -132,8 +132,16 @@ The window beside the panel, turned on at setup by marking the EXP Bar Region, t
 _Avoid_: EXP tracking, EXP tracker
 
 **Session**:
-The stretch of play Minerva measures rates over, from the first EXP gain until the player resets it or switches character. A reset can be undone until the next EXP gain. Idle stretches pause it rather than count against it, and so does a stretch when the EXP bar can't be read; what the EXP did over one too long to be a gap in play isn't counted either. A misread that leads Minerva to learn the level's total wrong doesn't end it: the total is learned again.
+The stretch of play Minerva measures rates over, from the first EXP gain until the player resets it or switches Character. A reset can be undone until the next EXP gain. Idle stretches pause it rather than count against it, and so does a stretch when the EXP bar can't be read; what the EXP did over one too long to be a gap in play isn't counted either. A misread that leads Minerva to learn the level's total wrong doesn't end it: the total is learned again. The switch is by name: another name on the Status Bar, after it was out of sight, is another Character, and a new Session at once. While no name can be read, readings in a row that fit another level after the EXP bar was out of sight are the switch instead. The level the Status Bar shows is the one the Session learns the total of, and a level-up it shows is counted at once.
 _Avoid_: run, grind (the Grind Tracker measures a Session; "grind" alone names nothing)
+
+**Character**:
+Who is playing: one of the player's characters in the game, known by the name the Status Bar shows (Classic World is one world, so a name is one character). Minerva learns a Character the first time it reads the name; their level and job are as the Status Bar last showed them, and change, while the name doesn't.
+_Avoid_: player (the person, who may have many), account, toon
+
+**Status Bar**:
+The game's bar pinned to the bottom of the client area: the Character's level in orange tiles after "LV.", their job and name, then HP, MP and the EXP bar. The game's, not ours. Minerva finds it by itself, with no setup step, and reads the Character from it every second.
+_Avoid_: HUD, bottom bar, EXP bar (the gauge in it)
 
 **EXP Bar Region**:
 The rectangle the player marks around the EXP figures on the in-game EXP bar (e.g. "EXP 266 [6.33%]"), saved relative to the game window.
@@ -148,20 +156,36 @@ The last 5 minutes of active play drawn kill by kill on the Grind Tracker, raced
 _Avoid_: graph, chart, sparkline
 
 **Personal Best**:
-The highest Rolling Rate, in EXP/h, the player has had over a full 5 minutes of active play on one map, shared by all their characters: the best in the map's Visit History. The Grind Tracker shows it and marks the Rolling Rate while it beats it.
+The highest Rolling Rate, in EXP/h, a Character has had over a full 5 minutes of active play on one map: the best in their Visit History of the map. Each is stamped with the Character, level and job the Status Bar showed at the refresh that set it. The Grind Tracker shows the Character playing's (the Unassigned one while no name is read) and marks the Rolling Rate while it beats it.
 _Avoid_: record, high score, PB, max
 
+**Level Band**:
+Ten levels, 1–9, 10–19, 20–29 and so on, that a Visit's best is counted in by the level that set it. A Visit History keeps the best Visit in each, and a Map Leaderboard ranks each on its own.
+_Avoid_: bracket, tier, level range
+
+**Unassigned**:
+The Personal Bests no Character is known for: those saved before Minerva read Characters, and any set while the Status Bar's name couldn't be read. They stand apart in the Personal Bests window, the Grind Tracker races them while no name is read, and the player can move each to a Character, or assign them all to one at once. They are never uploaded.
+_Avoid_: unknown character, shared bests
+
 **Personal Bests window**:
-Every map's Personal Best side by side, in a window over the game that the Grind Tracker opens and closes, to compare maps: each with its mob levels and how close the best came to the map's solo EXP/h ceiling, since the bests don't say which character or level set them. Each map opens to its Visit History, the Visit under way's best among them. It shows the bests as they stand, the Visit under way's included, and keeps up with them while it is open.
-_Avoid_: leaderboard, records, best list, Personal Bests page
+Every map's Personal Best side by side for one Character at a time, in a window over the game that the Grind Tracker opens and closes, to compare maps: each with its mob levels and how close the best came to the map's solo EXP/h ceiling. Its picker shows the Character playing until the player picks another, or Unassigned. Each map opens to its Visit History, the Visit under way's best among them, each Visit with the level that set it. It shows the bests as they stand, the Visit under way's included, and keeps up with them while it is open. In it the player moves any Visit to another Character, assigns every Unassigned Visit to one, and, under a Character's Manage, removes them with their bests or merges them into another (a name changed in the game shows as a new Character), each after confirming. Manage also holds their switch "Show on the Map Leaderboards", which uploads their bests there (after confirming with the count of maps, and that the site is public) and takes them off again (after confirming too); upload problems show whether it is open or not, each with Send again. An opened map's Visit History links to its Map Leaderboard.
+_Avoid_: leaderboard (the site's are Map Leaderboards), records, best list, Personal Bests page
 
 **Visit**:
 The stretch from the panel confirming a map until it confirms another. Losing the title for a while doesn't end it; closing Minerva does.
 _Avoid_: stay, trip
 
 **Visit History**:
-A map's best Visits that have ended, up to 10, highest first: the first is its Personal Best. The Visit under way's best joins it when the Visit ends. The player can remove any Visit in it that came from a bug.
+A Character's best Visits on a map that have ended (or the Unassigned ones), highest first: the first is its Personal Best. It keeps the 10 best, and the best in each Level Band even if it isn't among them, so a Character that levels up keeps their lower bands' bests. The Visit under way's best joins it when the Visit ends, or when another Character is named. The player can remove any Visit in it that came from a bug.
 _Avoid_: runs, attempts, records
+
+**Map Leaderboard**:
+A map's page on owlofminerva.app where players' Personal Bests stand side by side, each Level Band ranked on its own by EXP/h, ties going to whoever set it first. An entry is one Character's best Visit on the map in the band: its name, job, exact level, EXP/h and date. The site mirrors what the player uploads from Minerva, and keeps off an entry above 5× the map's solo ceiling (ADR 0015).
+_Avoid_: leaderboard (alone), ranking, high scores, hiscores
+
+**Leaderboard Key**:
+The secret each install of Minerva makes on its first upload to the Map Leaderboards and keeps in a file of its own beside the settings (`leaderboard-key`), sent with every upload. The shell keeps it, never the core, so no Bug Report holds it. A Character's first upload ties its name to the key; later uploads for the name must carry it, and another key's are refused as claimed. Never shown to the player; the site keeps only its hash. A lost one is replaced by the maintainer reassigning the name.
+_Avoid_: password, token, account
 
 **Time to Level**:
 How long the player would take to reach the next level at their net EXP rate.

@@ -7,12 +7,12 @@ mod common;
 
 use common::items::{ItemWorld, equip, etc, item_world};
 use common::osms;
-use common::{FakeSource, SUNSET_SKY_ID, frame};
+use common::{CONSTRUCTION_SITE_ID, FakeSource, SUNSET_SKY_ID, frame};
 use minerva_core::bug_report::{self, Answer, Event, Note, Recording, ReplayData, MAX_REPORT_BYTES};
 use minerva_core::{
-    ListedPrice, ShopCapture, ShopList, ShopReading, ShopRow,
+    ListedPrice, ShopCapture, ShopList, ShopReading, ShopRow, StatusBar, StatusBarCapture, StatusBarReading,
     Action, BESTS_VERSION, Minerva, ExpBar, ExpBarReading, ExpBarRegion, Foreground, Frame, GameWindow, ItemCapture, ItemTooltip,
-    ItemTooltipReading, MapBests, Rect, ReportAbout, SavedBests, ScreenPoint, ScreenRect, Settings, Size, TitleLines,
+    CharacterBests, ItemTooltipReading, LeaderboardAnswer, LeaderboardCharacter, MapBests, RejectedEntry, RejectedReason, Rect, ReportAbout, SavedBests, ScreenPoint, ScreenRect, Settings, Size, TitleLines,
     TitleReading, TitleRegion, TrackingState, VisitBest,
 };
 
@@ -134,21 +134,172 @@ fn a_report_replays_through_the_same_states_with_the_runs_osms_set() {
 fn a_visit_removed_in_the_personal_bests_window_replays_and_reads_in_the_timeline() {
     // Sunset Sky's Visits at 10,800 and 7,200 EXP/h, the second set 11 Oct 2026, 11:00 UTC.
     let mut shell = Shell::new(FakeSource::osms());
-    let removed = VisitBest { exp_per_hour: 7200, set_at_unix_ms: Some(WALL_AT_START - HOUR) };
-    let visits = vec![VisitBest { exp_per_hour: 10_800, set_at_unix_ms: None }, removed];
+    let removed = VisitBest { exp_per_hour: 7200, set_at_unix_ms: Some(WALL_AT_START - HOUR), ..VisitBest::default() };
+    let visits = vec![VisitBest { exp_per_hour: 10_800, ..VisitBest::default() }, removed.clone()];
     let maps = vec![MapBests { id: SUNSET_SKY_ID.into(), visits }];
-    shell.minerva.restore_bests(SavedBests { version: BESTS_VERSION, maps });
+    shell.minerva.restore_bests(SavedBests { version: BESTS_VERSION, unassigned: maps, characters: Vec::new() });
     shell.play(MIN, CONSTRUCTION_SITE, grind);
 
-    shell.minerva.remove_visit(SUNSET_SKY_ID, removed);
+    shell.minerva.remove_visit(None, SUNSET_SKY_ID, &removed);
     shell.play(2 * MIN, CONSTRUCTION_SITE, grind);
 
-    let rates: Vec<u64> = shell.minerva.bests().maps[0].visits.iter().map(|v| v.exp_per_hour).collect();
+    let rates: Vec<u64> = shell.minerva.bests().unassigned[0].visits.iter().map(|v| v.exp_per_hour).collect();
     assert_eq!(rates, [10_800]);
     let (_, recording) = shell.report();
     assert_eq!(bug_report::replay(&recording, Some(osms::game().files())).divergence, None);
-    let said = format!("Visit removed from {SUNSET_SKY_ID}'s Visit History: 7,200 EXP/h, set at {}", WALL_AT_START - HOUR);
+    let said = format!(
+        "Visit removed from the Unassigned Visit History of {SUNSET_SKY_ID}: 7,200 EXP/h, set at {}",
+        WALL_AT_START - HOUR
+    );
     assert!(recording.timeline(0).iter().any(|line| line.ends_with(&said)), "{:#?}", recording.timeline(0));
+}
+
+#[test]
+fn a_visit_moved_and_characters_removed_and_merged_replay_and_read_in_the_timeline() {
+    // An Unassigned Visit on Sunset Sky; Egbert's, Egbert2's and Bob's on the Construction
+    // Site.
+    let mut shell = Shell::new(FakeSource::osms());
+    let unassigned = VisitBest { exp_per_hour: 7200, set_at_unix_ms: Some(WALL_AT_START - HOUR), ..VisitBest::default() };
+    let at = |exp_per_hour, level: u32| VisitBest {
+        exp_per_hour,
+        set_at_unix_ms: None,
+        level: Some(level),
+        job: Some("Magician".to_string()),
+    };
+    let on_the_site = |visit: VisitBest| vec![MapBests { id: CONSTRUCTION_SITE_ID.into(), visits: vec![visit] }];
+    let characters = vec![
+        CharacterBests { name: "Egbert".into(), maps: on_the_site(at(5000, 13)) },
+        CharacterBests { name: "Egbert2".into(), maps: on_the_site(at(6000, 14)) },
+        CharacterBests { name: "Bob".into(), maps: on_the_site(at(3000, 40)) },
+        CharacterBests { name: "Carol".into(), maps: on_the_site(at(4000, 15)) },
+    ];
+    // And one more Unassigned, on the Construction Site.
+    let unassigned_maps = vec![
+        MapBests { id: SUNSET_SKY_ID.into(), visits: vec![unassigned.clone()] },
+        MapBests { id: CONSTRUCTION_SITE_ID.into(), visits: vec![at(2000, 12)] },
+    ];
+    shell.minerva.restore_bests(SavedBests { version: BESTS_VERSION, unassigned: unassigned_maps, characters });
+    shell.play(MIN, CONSTRUCTION_SITE, grind);
+
+    shell.minerva.move_visit(None, SUNSET_SKY_ID, &unassigned, "Egbert");
+    shell.play(MIN + 5 * S, CONSTRUCTION_SITE, grind);
+    shell.minerva.move_visit(Some("Carol"), CONSTRUCTION_SITE_ID, &at(4000, 15), "Egbert");
+    shell.play(MIN + 10 * S, CONSTRUCTION_SITE, grind);
+    shell.minerva.assign_unassigned("Egbert");
+    shell.play(MIN + 20 * S, CONSTRUCTION_SITE, grind);
+    shell.minerva.remove_character("Bob");
+    shell.play(MIN + 40 * S, CONSTRUCTION_SITE, grind);
+    shell.minerva.merge_characters("Egbert2", "Egbert");
+    shell.play(2 * MIN, CONSTRUCTION_SITE, grind);
+
+    let bests = shell.minerva.bests();
+    let names: Vec<&str> = bests.characters.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, ["Egbert"]);
+    assert!(bests.unassigned.is_empty());
+    let (_, recording) = shell.report();
+    assert_eq!(bug_report::replay(&recording, Some(osms::game().files())).divergence, None);
+    let timeline = recording.timeline(0);
+    for said in [
+        format!("Unassigned Visit on {SUNSET_SKY_ID} moved to \"Egbert\": 7,200 EXP/h, set at {}", WALL_AT_START - HOUR),
+        format!("\"Carol\"'s Visit on {CONSTRUCTION_SITE_ID} moved to \"Egbert\": 4,000 EXP/h"),
+        "Every Unassigned Visit given to \"Egbert\"".to_string(),
+        "Character \"Bob\" removed, with their bests".to_string(),
+        "Character \"Egbert2\" merged into \"Egbert\"".to_string(),
+    ] {
+        assert!(timeline.iter().any(|line| line.contains(&said)), "{said} in {timeline:#?}");
+    }
+}
+
+/// The upload under way for the Character named `name`: its id.
+fn upload_for(shell: &Shell, name: &str) -> u64 {
+    let uploads = &shell.minerva.panel_state().leaderboard_uploads;
+    uploads.iter().find(|u| u.name == name).unwrap_or_else(|| panic!("no upload for {name} in {uploads:?}")).id
+}
+
+#[test]
+fn showing_a_character_on_the_map_leaderboards_and_each_answer_replay_and_read_in_the_timeline() {
+    // Egbert's best on the Construction Site, set at level 13 an hour before.
+    let mut shell = Shell::new(FakeSource::osms());
+    let best = VisitBest {
+        exp_per_hour: 5000,
+        set_at_unix_ms: Some(WALL_AT_START - HOUR),
+        level: Some(13),
+        job: Some("Magician".to_string()),
+    };
+    let maps = vec![MapBests { id: CONSTRUCTION_SITE_ID.into(), visits: vec![best] }];
+    let characters = vec![CharacterBests { name: "Egbert".into(), maps }];
+    shell.minerva.restore_bests(SavedBests { version: BESTS_VERSION, unassigned: Vec::new(), characters });
+    shell.play(10 * S, CONSTRUCTION_SITE, grind);
+
+    shell.minerva.show_on_leaderboards("Egbert", true);
+    shell.play(20 * S, CONSTRUCTION_SITE, grind);
+    let id = upload_for(&shell, "Egbert");
+    shell.minerva.on_leaderboard_answer(id, LeaderboardAnswer::Failed { why: "offline".into() });
+    // Sent again 10 s on, rather than waiting, and taken but for one the maintainer removed.
+    shell.play(25 * S, CONSTRUCTION_SITE, grind);
+    shell.minerva.send_to_leaderboards_again("Egbert");
+    shell.play(35 * S, CONSTRUCTION_SITE, grind);
+    let id = upload_for(&shell, "Egbert");
+    let rejected = vec![RejectedEntry { map: CONSTRUCTION_SITE_ID.into(), band: 10, reason: RejectedReason::Removed {} }];
+    shell.minerva.on_leaderboard_answer(id, LeaderboardAnswer::Accepted { rejected });
+    shell.play(MIN, CONSTRUCTION_SITE, grind);
+    shell.minerva.show_on_leaderboards("Egbert", false);
+    shell.play(MIN + 10 * S, CONSTRUCTION_SITE, grind);
+    let id = upload_for(&shell, "Egbert");
+    shell.minerva.on_leaderboard_answer(id, LeaderboardAnswer::Deleted {});
+    shell.play(MIN + 20 * S, CONSTRUCTION_SITE, grind);
+
+    let (_, recording) = shell.report();
+    let replay = bug_report::replay(&recording, Some(osms::game().files()));
+    assert_eq!(replay.divergence, None);
+    assert_eq!(replay.lines, recording.lines.len());
+    let timeline = recording.timeline(0);
+    for said in [
+        "\"Egbert\" shown on the Map Leaderboards",
+        "Map Leaderboards upload 1 asked: \"Egbert\"'s 1 entries",
+        "Map Leaderboards upload 1 for \"Egbert\": failed: offline",
+        "\"Egbert\" sent to the Map Leaderboards again",
+        "Map Leaderboards upload 2 asked: \"Egbert\"'s 1 entries",
+        "Map Leaderboards upload 2 for \"Egbert\": taken but for 010003080 band 10 removed",
+        "\"Egbert\" taken off the Map Leaderboards",
+        "Map Leaderboards upload 3 asked: deleting \"Egbert\"'s entries",
+        "Map Leaderboards upload 3 for \"Egbert\": deleted",
+    ] {
+        assert!(timeline.iter().any(|line| line.contains(said)), "{said} in {timeline:#?}");
+    }
+}
+
+#[test]
+fn bests_lost_at_launch_replay_holding_the_uploads_and_read_in_the_timeline() {
+    // Egbert shown on the Map Leaderboards at an earlier launch, and this one's bests file
+    // unreadable.
+    let mut shell = Shell::new(FakeSource::osms());
+    let egbert = LeaderboardCharacter { name: "Egbert".into(), shown: true, uploaded_at_unix_ms: None, held: false };
+    let settings = Settings { map_leaderboards: vec![egbert], ..shell.minerva.settings() };
+    shell.minerva.restore(settings);
+    shell.minerva.restore_bests(SavedBests::default());
+    shell.minerva.bests_lost();
+    shell.play(20 * S, CONSTRUCTION_SITE, grind);
+    assert_eq!(shell.minerva.panel_state().leaderboard_uploads, []);
+
+    let (_, recording) = shell.report();
+    let replay = bug_report::replay(&recording, Some(osms::game().files()));
+    assert_eq!(replay.divergence, None);
+    assert_eq!(replay.lines, recording.lines.len());
+    let said = "Personal Bests file unreadable: uploads to the Map Leaderboards held";
+    let timeline = recording.timeline(0);
+    assert!(timeline.iter().any(|line| line.contains(said)), "{said} in {timeline:#?}");
+}
+
+#[test]
+fn a_visit_removed_in_a_report_from_before_characters_replays_as_an_unassigned_one() {
+    // A line as a report from before Characters wrote it: no Character, no level or job.
+    let line = format!(
+        r#"{{"removeVisit": {{"map": "{SUNSET_SKY_ID}", "visit": {{"expPerHour": 7200, "setAtUnixMs": null}}}}}}"#
+    );
+    let event: bug_report::Event = serde_json::from_str(&line).unwrap();
+    let visit = VisitBest { exp_per_hour: 7200, ..VisitBest::default() };
+    assert_eq!(event, bug_report::Event::RemoveVisit { map: SUNSET_SKY_ID.into(), visit, character: None });
 }
 
 #[test]
@@ -741,4 +892,70 @@ fn a_shop_with_a_listing_that_couldnt_be_read_keeps_its_list_for_the_run() {
     let crop = image::load_from_memory(&zip_bytes(&report.zip, &name)).expect("a PNG").to_rgba8();
     assert_eq!(crop.dimensions(), (362, 386), "the list, 10 px around it and past its scroll bar");
     assert_eq!(crop.get_pixel(0, 0).0, [(551 % 256) as u8, (503 % 256) as u8, 40, 255], "its corner at (551,503)");
+}
+
+/// The bottom of the game's client area as the shell captures it for the Status Bar.
+fn status_bar_capture(at_ms: u64) -> StatusBarCapture {
+    let strip = ScreenRect { x: 0, y: 1104, width: 1920, height: 96 };
+    let img = image::RgbaImage::from_fn(strip.width, strip.height, |x, y| {
+        image::Rgba([(x % 256) as u8, ((y + strip.y as u32) % 256) as u8, 40, 255])
+    });
+    StatusBarCapture { frame: frame(&img, at_ms), origin: ScreenPoint { x: strip.x, y: strip.y } }
+}
+
+/// The Status Bar read as a level 13 Magician named `name` (`None`: unreadable).
+fn status_bar_reading(name: Option<&str>, at_ms: u64) -> StatusBarReading {
+    let area = ScreenRect { x: 334, y: 1145, width: 331, height: 55 };
+    StatusBarReading {
+        bar: Some(StatusBar { area, level: Some(13), job: Some("Magician".into()), name: name.map(String::from) }),
+        at_ms,
+    }
+}
+
+/// A run with Characters: Egbert's Status Bar read every second with the EXP bar, then the
+/// character select screen, then Bob's.
+fn run_with_characters() -> Shell {
+    let mut shell = Shell::new(FakeSource::osms());
+    for second in 1..=10 {
+        shell.play(second * S, CONSTRUCTION_SITE, grind);
+        let name = if second == 5 { None } else { Some("Egbert") };
+        shell.minerva.on_status_bar_read(status_bar_capture(second * S), status_bar_reading(name, second * S));
+    }
+    for second in 11..=15 {
+        shell.play(second * S, CONSTRUCTION_SITE, |_| None);
+        shell.minerva.on_status_bar_reading(StatusBarReading { bar: None, at_ms: second * S });
+    }
+    shell.minerva.on_status_bar_read(status_bar_capture(16 * S), status_bar_reading(Some("Bob"), 16 * S));
+    shell.play(30 * S, CONSTRUCTION_SITE, grind);
+    shell
+}
+
+#[test]
+fn characters_replay_through_the_same_states() {
+    let (_, recording) = run_with_characters().report();
+
+    let replay = bug_report::replay(&recording, Some(osms::game().files()));
+
+    assert_eq!(replay.divergence, None);
+    assert_eq!(replay.lines, recording.lines.len());
+    let timeline = recording.timeline(0).join("\n");
+    assert!(timeline.contains(r#"Status Bar read: level 13, "Magician", "Egbert""#), "{timeline}");
+    assert!(timeline.contains(r#"Status Bar read: level 13, "Magician", ?"#), "{timeline}");
+    assert!(timeline.contains(r#"the Status Bar names another character, "Bob": a new Session"#), "{timeline}");
+    assert!(recording.lines.iter().any(|line| line.notes.contains(&Note::NameSwitch { name: "Bob".into() })));
+}
+
+#[test]
+fn a_status_bar_read_the_same_as_before_is_written_as_such_with_no_crop() {
+    let (report, recording) = run_with_characters().report();
+
+    let bars: Vec<&Event> = recording.lines.iter().map(|line| &line.event).filter(|e| matches!(e, Event::StatusBar { .. })).collect();
+    assert!(matches!(bars[0], Event::StatusBar { bar: Some(_), same: false, .. }));
+    assert!(matches!(bars[1], Event::StatusBar { bar: None, same: true, .. }));
+    let crops: Vec<&str> = recording.crops.iter().map(String::as_str).filter(|name| name.starts_with("crops/status-bar-")).collect();
+    // Egbert's, his name unread, Egbert's again, and Bob's.
+    assert_eq!(crops.len(), 4, "{crops:?}");
+    let crop = image::load_from_memory(&zip_bytes(&report.zip, crops[0])).expect("a PNG").to_rgba8();
+    assert_eq!(crop.dimensions(), (351, 65), "the level, job and name, 10 px around them, to the client's bottom");
+    assert_eq!(crop.get_pixel(0, 0).0, [(324 % 256) as u8, (1135 % 256) as u8, 40, 255], "its corner at (324,1135)");
 }

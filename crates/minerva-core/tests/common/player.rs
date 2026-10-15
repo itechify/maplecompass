@@ -2,7 +2,9 @@
 //! 10 s, the panel confirming maps, the Grind Tracker's buttons pressed, and, if a test
 //! asks, the shell's saves of the bests followed after each.
 
-use minerva_core::{Minerva, ExpBar, ExpBarReading, PanelControl, PanelState, SavedBests, VisitBest};
+use minerva_core::{
+    ExpBar, ExpBarReading, Minerva, PanelControl, PanelState, SavedBests, ScreenRect, StatusBar, StatusBarReading, VisitBest,
+};
 
 const S: u64 = 1000;
 
@@ -24,6 +26,9 @@ pub struct Player {
     wall_at_start: Option<u64>,
     /// The shell's saves of the Personal Bests, if the test follows them.
     shell: Option<Shell>,
+    /// What the Status Bar shows with each reading, once the test says: a Magician's name
+    /// (`None`: unreadable) and level.
+    status: Option<(Option<String>, u32)>,
 }
 
 impl Player {
@@ -53,7 +58,7 @@ impl Player {
     }
 
     fn start(minerva: Minerva, wall_at_start: Option<u64>, shell: Option<Shell>) -> Self {
-        let mut player = Player { minerva, exp: 1000, at: 0, wall_at_start, shell };
+        let mut player = Player { minerva, exp: 1000, at: 0, wall_at_start, shell, status: None };
         player.read();
         player.hunt(30 * S, 10);
         player
@@ -80,6 +85,13 @@ impl Player {
     pub fn read(&mut self) -> PanelState {
         if let Some(now) = self.wall_clock() {
             self.minerva.on_wall_clock(now);
+        }
+        if let Some((name, level)) = &self.status {
+            let area = ScreenRect { x: 334, y: 1145, width: 331, height: 55 };
+            let bar = StatusBar { area, level: Some(*level), job: Some("Magician".to_string()), name: name.clone() };
+            // Captured just before the EXP bar, so the refresh at a half minute takes in both.
+            let at_ms = self.at.saturating_sub(500);
+            self.minerva.on_status_bar_reading(StatusBarReading { bar: Some(bar), at_ms });
         }
         let bar = Some(ExpBar { exp: self.exp, percent_hundredths: percent(self.exp) });
         self.minerva.on_exp_bar_reading(ExpBarReading { bar, at_ms: self.at });
@@ -128,10 +140,49 @@ impl Player {
         self.shell_loop(&format!("{control:?}"))
     }
 
-    /// Remove the Visit whose best was `visit` from `map`'s, in the Personal Bests window.
+    /// Remove the Unassigned Visit whose best was `visit` from `map`'s, in the Personal Bests
+    /// window.
     pub fn remove_visit(&mut self, map: &str, visit: VisitBest) -> PanelState {
-        self.minerva.remove_visit(map, visit);
-        self.shell_loop(&format!("removing {visit:?} from {map}"))
+        self.remove_visit_of(None, map, visit)
+    }
+
+    /// Remove the Visit whose best was `visit` from `character`'s history of `map` (the
+    /// Unassigned one for `None`), in the Personal Bests window.
+    pub fn remove_visit_of(&mut self, character: Option<&str>, map: &str, visit: VisitBest) -> PanelState {
+        self.minerva.remove_visit(character, map, &visit);
+        self.shell_loop(&format!("removing {visit:?} from {character:?}'s {map}"))
+    }
+
+    /// From the next reading on, the Status Bar shows a Magician named `name` (`None`: the
+    /// name unreadable) at `level`, with each EXP bar reading.
+    pub fn status(&mut self, name: Option<&str>, level: u32) {
+        self.status = Some((name.map(String::from), level));
+    }
+
+    /// Move the Visit whose best was `visit` on `map`, of the Character named `from` (`None`:
+    /// an Unassigned one), to the Character named `to`, in the Personal Bests window.
+    pub fn move_visit(&mut self, from: Option<&str>, map: &str, visit: VisitBest, to: &str) -> PanelState {
+        self.minerva.move_visit(from, map, &visit, to);
+        self.shell_loop(&format!("moving {visit:?} on {map} from {from:?} to {to}"))
+    }
+
+    /// Give the Character named `to` every Unassigned Visit, in the Personal Bests window.
+    pub fn assign_unassigned(&mut self, to: &str) -> PanelState {
+        self.minerva.assign_unassigned(to);
+        self.shell_loop(&format!("assigning every Unassigned Visit to {to}"))
+    }
+
+    /// Remove the Character named `name`, in the Personal Bests window.
+    pub fn remove_character(&mut self, name: &str) -> PanelState {
+        self.minerva.remove_character(name);
+        self.shell_loop(&format!("removing {name}"))
+    }
+
+    /// Merge the Character named `from` into the one named `into`, in the Personal Bests
+    /// window.
+    pub fn merge_characters(&mut self, from: &str, into: &str) -> PanelState {
+        self.minerva.merge_characters(from, into);
+        self.shell_loop(&format!("merging {from} into {into}"))
     }
 }
 

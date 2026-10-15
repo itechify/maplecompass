@@ -1,7 +1,8 @@
 <!doctype html>
-<!-- The Minerva site's FAQ: every detail a player needs, as the questions they ask, in eight
+<!-- The Minerva site's FAQ: every detail a player needs, as the questions they ask, in nine
      groups. Each question is written once, here, as <details class="qa" id="…">; the build
-     draws it (site/questions.ts), and copies it into the home page where a feature names it.
+     draws it (site/questions.ts), and copies it into the home page where a feature names it,
+     and into the Map Leaderboards pages.
      The text describes the release whose tag the site is built from (docs/releasing.md); a
      change a player notices updates it in the same PR. -->
 <html lang="en">
@@ -11,7 +12,7 @@
     <title>Questions and answers · Minerva</title>
     <meta
       name="description"
-      content="Everything about Minerva, the free MapleStory Classic World overlay: whether it's safe, installing and setting it up, the panel and its map, hunting, grinding, items, and what to do when something goes wrong."
+      content="Everything about Minerva, the free MapleStory Classic World overlay: whether it's safe, installing and setting it up, the panel and its map, hunting, grinding, the Map Leaderboards, items, and what to do when something goes wrong."
     />
     <link rel="canonical" href="@SITE_URL@faq/" />
     <link rel="icon" type="image/png" sizes="32x32" href="../../assets/icon-32.png" />
@@ -55,6 +56,7 @@
         </header>
         <nav class="tabs" aria-label="Pages">
           <a class="tab" href="/">Home</a>
+          <a class="tab" href="/leaderboards/">Map Leaderboards</a>
           <a class="tab" href="/faq/" aria-current="page">FAQ</a>
         </nav>
       </div>
@@ -78,6 +80,7 @@
                   <li><a href="#panel">The panel &amp; the map</a></li>
                   <li><a href="#hunting">Hunting</a></li>
                   <li><a href="#grinding">Grinding</a></li>
+                  <li><a href="#leaderboards">Map Leaderboards</a></li>
                   <li><a href="#items">Items</a></li>
                   <li><a href="#trouble">Troubleshooting &amp; Bug Reports</a></li>
                 </ul>
@@ -131,7 +134,11 @@
                 </details>
                 <details class="qa" id="free">
                   <summary>Is Minerva free? Does it need an account?</summary>
-                  <p>It's free, and needs no account. There's no analytics and no update check.</p>
+                  <p>
+                    It's free, and you never sign up. There's no analytics and no update check. Putting a character on the
+                    Map Leaderboards needs no account either: a secret key Minerva makes on your PC ties the name to it
+                    (<a href="#leaderboard-public">see what the site shows</a>).
+                  </p>
                 </details>
                 <details class="qa" id="maker">
                   <summary>Who makes Minerva?</summary>
@@ -142,7 +149,7 @@
                   </p>
                 </details>
                 <details class="qa" id="data">
-                  <summary>What does Minerva download?</summary>
+                  <summary>What does Minerva download, and what does it send?</summary>
                   <dl class="facts">
                     <dt>Map and mob data</dt>
                     <dd>
@@ -158,12 +165,18 @@
                     </dd>
                   </dl>
                   <p>Item Lookup also asks MeowDB's search for an item's name: <a href="#meowdb">see below</a>.</p>
+                  <p>
+                    It sends nothing, unless you put a character on the
+                    <a href="#leaderboard-appear">Map Leaderboards</a>: then their bests go to this site, with their name,
+                    job, level and dates, and your Leaderboard Key, which the site keeps only as a hash.
+                  </p>
                 </details>
                 <details class="qa" id="offline">
                   <summary>Does Minerva work offline?</summary>
                   <p>
                     Yes, once it has the data: its first launch needs a connection. If OSMS Data Explorer can't be reached
-                    for over a week, the panel says it's showing a saved copy, with its date.
+                    for over a week, the panel says it's showing a saved copy, with its date. Uploads to the
+                    <a href="#leaderboard-appear">Map Leaderboards</a> wait until you're back online.
                   </p>
                 </details>
                 <details class="qa" id="meowdb">
@@ -182,9 +195,15 @@
                       hotkeys) in <code class="path">%APPDATA%\<wbr />com.<wbr />itechify.<wbr />minerva\<wbr />settings.json</code>.
                     </li>
                     <li>
-                      Beside them: your Personal Bests, each map's 10 best visits, in <code>personal-bests.json</code>; the
+                      Beside them: your Personal Bests, each character's best visits on each map, in
+                      <code>personal-bests.json</code>; the
                       market prices you keep, in <code>market-prices.json</code>; and the 10 newest
                       <a href="#bug-reports">Bug Reports</a> you save, in <code>Bug Reports</code>.
+                    </li>
+                    <li>
+                      Once you put a character on the <a href="#leaderboard-appear">Map Leaderboards</a>, also beside them:
+                      the secret Leaderboard Key that ties their name to you, in <code>leaderboard-key</code>. Copy it
+                      across when you move to a new PC, and keep it to yourself.
                     </li>
                     <li>
                       The map and item data, pictures and animations in
@@ -697,8 +716,9 @@
                       and, when you come close, your <a href="#personal-bests">Personal Best</a>.
                     </li>
                     <li>
-                      At its foot, the EXP bar as it last read it, so you can see it's being read. After a death, the
-                      hatched stretch is the ground it took back, until you're past it again.
+                      At its foot, the EXP bar as it last read it, so you can see it's being read, with the
+                      <a href="#which-character">character</a> playing beside it. After a death, the hatched stretch is
+                      the ground it took back, until you're past it again.
                     </li>
                     <li>Under the EXP bar, where it will be in so long at your pace, and Time to Level at its end.</li>
                   </ul>
@@ -716,7 +736,17 @@
                   <p>
                     The circular arrow beside Time to Level resets it, and a new one starts at your next EXP gain; until
                     then, Undo brings the old one back. It has no hotkey, so a stray key press while you fight can't clear
-                    it. Switch character and the Session starts afresh by itself.
+                    it. <a href="#which-character">Switch character</a> and the Session starts afresh by itself.
+                  </p>
+                </details>
+                <details class="qa" id="which-character">
+                  <summary>How does Minerva know which character I'm playing?</summary>
+                  <p>
+                    From the status bar at the bottom of the game window, with nothing to set up: it reads your level,
+                    job and name there every second, and the Grind Tracker shows your name and level beside your EXP bar. Log in as
+                    another character and it reads the new name, so the Session starts afresh at once. A level-up the
+                    status bar shows counts at once, even if something covered your EXP bar as it filled. While it
+                    can't read a name, it still tells another character from the EXP bar.
                   </p>
                 </details>
                 <details class="qa" id="move-tracker">
@@ -734,9 +764,9 @@
                 <details class="qa" id="personal-bests">
                   <summary>What's a Personal Best?</summary>
                   <p>
-                    On a map with mobs, the best EXP per hour you've had over 5 minutes of play there. Come back to the map
-                    and a Best row shows it from the moment you arrive. Once you've played 5 minutes, a yellow star marks
-                    your last 5 minutes while they beat it.
+                    On a map with mobs, the best EXP per hour the character you're playing has had over 5 minutes of play
+                    there. Come back to the map and a Best row shows it from the moment you arrive. Once you've played 5
+                    minutes, a yellow star marks your last 5 minutes while they beat it.
                   </p>
                 </details>
                 <details class="qa" id="pace-trace">
@@ -756,15 +786,34 @@
                 <details class="qa" id="best-characters">
                   <summary>Are bests kept for each character?</summary>
                   <p>
-                    No: all your characters share them, so the mob levels say what each best was worth. A best on a map
-                    that has left the map list stays, marked "Not in the map list".
+                    Yes. Minerva reads your character's name, level and job from the game's status bar, keeps each
+                    character's bests apart, and notes the level and job you had when you set each one. The Grind
+                    Tracker races the best of the character you're playing.
+                  </p>
+                  <p>
+                    Bests from before Minerva knew your characters, or set while it couldn't read the name, are
+                    <strong>Unassigned</strong>. The Grind Tracker races those while no name is read. In your Personal
+                    Bests, pick Unassigned, then <strong>Assign all to…</strong> and a character to give them every one,
+                    or a visit's <strong>Move</strong> and a character for just that visit, and click again to confirm.
+                    Any character's visit has a Move too, for one set while Minerva misread the name.
+                  </p>
+                  <p>
+                    Renamed a character? The new name shows as a new character: pick it, click <strong>Manage</strong>,
+                    choose <strong>Merge into…</strong> and the old name, and click again to confirm. Its bests move
+                    across. To remove a character with all their bests, pick them, click <strong>Manage</strong>, then
+                    <strong>Remove</strong> twice. Neither can be undone, and both take the character off the
+                    <a href="#map-leaderboards">Map Leaderboards</a> if they're there. A double-click never confirms:
+                    the second click has to come a moment later. A best on a map that has left the map list stays,
+                    marked "Not in the map list".
                   </p>
                 </details>
                 <details class="qa" id="every-best">
                   <summary>Where can I see my best on every map?</summary>
                   <p>
-                    The star on the Grind Tracker's bar opens your Personal Bests over the game: every map's best, highest
-                    first, with its mob levels, how close it came to the map's solo EXP/h ceiling, and when you set it.
+                    The star on the Grind Tracker's bar opens your Personal Bests over the game: every map's best for the
+                    character you're playing, highest first, with its mob levels, how close it came to the map's solo EXP/h
+                    ceiling, and when you set it. The top names whose they are; pick another of your characters, or
+                    Unassigned, there.
                     Each best is a bar on one scale, so your best map's is the longest. A notch in a bar is another of your
                     visits there, and the dot is the visit you're on, moving as you play. Click a column to sort by it, or a
                     map to open it on MeowDB.
@@ -773,9 +822,12 @@
                 <details class="qa" id="visits">
                   <summary>Can I see each of my visits to a map?</summary>
                   <p>
-                    A map keeps your 10 best visits. In your Personal Bests, click its count ("3 visits") to list them, best
-                    first, each with its EXP per hour and its own bar, its share of the ceiling and its date. The visit
-                    you're on is marked "This visit", and joins your history when you leave the map.
+                    A map keeps each character's 10 best visits, and their best in each
+                    <a href="#level-bands">Level Band</a> even if it isn't among them, so levelling up never loses your
+                    best at lower levels. In your Personal Bests, click its count ("3 visits") to list them, best first,
+                    each with the level you set it at, its EXP per hour and its own bar, its share of the ceiling and its
+                    date, then a link to the map's <a href="#leaderboard-link">Map Leaderboard</a>. The visit you're on
+                    is marked "This visit", and joins your history when you leave the map.
                   </p>
                 </details>
                 <details class="qa" id="remove-best">
@@ -791,6 +843,116 @@
                   <p>
                     Yes. It opens in the middle of the game; drag it by its bar and it opens where you left it next time.
                     It keeps up as you play, shows and hides with the panel, and closes with the star or its ×.
+                  </p>
+                </details>
+              </div>
+            </div>
+          </section>
+
+          <section class="faq-group stop" id="leaderboards" data-about="the Map Leaderboards" aria-labelledby="leaderboards-title">
+            <div class="faq-group-head">
+              <h2 id="leaderboards-title">Map Leaderboards</h2>
+              <p>
+                Players' Personal Bests side by side on this site: what they rank, Level Bands, putting your character
+                there or taking them off, and reporting an entry.
+              </p>
+            </div>
+            <div class="faq-group-body">
+              <div class="qa-list">
+                <details class="qa" id="map-leaderboards">
+                  <summary>What are the Map Leaderboards?</summary>
+                  <p>
+                    Pages on this site, one for each map, where players' Personal Bests from Minerva stand side by side,
+                    so you can see what EXP per hour others at your level get there. Each
+                    <a href="#level-bands">Level Band</a> is ranked on its own and shows its top 50: each character's
+                    name, job, exact level, EXP per hour and the date they set it, with a bar drawn as the game's EXP
+                    bar, from 0 to #1's EXP per hour, so you see how far each is behind. Find a map on the
+                    <a href="/leaderboards/">Map Leaderboards</a> page, by its name or among the most uploaded.
+                  </p>
+                </details>
+                <details class="qa" id="level-bands">
+                  <summary>What's a Level Band?</summary>
+                  <p>
+                    Ten levels of a Map Leaderboard: 1–9, 10–19, 20–29 and on, so you're ranked against players near
+                    your level. An entry is one character's best visit to the map at those levels, so a character that
+                    levels up can have an entry in each band. The highest EXP per hour ranks first; on a tie, whoever
+                    set it first.
+                  </p>
+                </details>
+                <details class="qa" id="leaderboard-exp">
+                  <summary>What does the EXP per hour on the Map Leaderboards count?</summary>
+                  <p>
+                    The <a href="#personal-bests">Personal Best</a> as Minerva counted it: everything the EXP bar gained,
+                    at its best over 5 minutes of play on the map. It's raw, so party play, EXP events and buffs aren't
+                    told apart from playing solo. Only a figure over 5 times the map's solo EXP/h ceiling is kept off, as
+                    one no map gives.
+                  </p>
+                </details>
+                <details class="qa" id="leaderboard-appear">
+                  <summary>How do I put my character on the Map Leaderboards?</summary>
+                  <p>
+                    Open your <a href="#every-best">Personal Bests</a>, pick the character, click
+                    <strong>Manage</strong>, then <strong>Show on the Map Leaderboards</strong>. It asks once, with how
+                    many maps and that it's public ("Show Egbert's bests on 14 maps publicly on owlofminerva.app?"):
+                    click again to say yes. Minerva uploads the character's best visit on each map in each
+                    <a href="#level-bands">Level Band</a>, then each new best when its visit ends. Removing a visit,
+                    moving one to or from the character, or merging another into them updates the site too.
+                  </p>
+                  <p>
+                    It's for one character at a time, and only the ones you turn it on for. Unassigned bests are never
+                    uploaded, and nor is a best set before Minerva knew the date or a character's level and job: a
+                    character with only those has no switch yet. Beside the switch, Minerva says when the last upload
+                    went through. If one didn't (offline, say), a note above your bests says so and Minerva tries again by
+                    itself; <strong>Send again</strong> tries at once.
+                  </p>
+                </details>
+                <details class="qa" id="leaderboard-public">
+                  <summary>What does the site show of me?</summary>
+                  <p>
+                    For each entry: your character's name and job, the exact level they set it at, the EXP per hour, and
+                    the date, for everyone to see. Nothing else about you or your PC goes, and there's no account. Instead Minerva makes a secret <strong>Leaderboard Key</strong> on your PC the
+                    first time it uploads, which ties your character's name to it, so no one else can upload under that
+                    name. The site keeps only a scrambled form (a hash) of the key, and you never need to see it.
+                  </p>
+                </details>
+                <details class="qa" id="leaderboard-remove">
+                  <summary>How do I take my character off the Map Leaderboards?</summary>
+                  <p>
+                    Under <strong>Manage</strong>, click <strong>Show on the Map Leaderboards</strong> again, and once
+                    more to confirm, to turn it off: every entry of the character is deleted from the site. Removing the character from your Personal Bests, or merging them
+                    into another, takes them off too. The name stays yours, so you can put them back any time. A single
+                    best that came from a bug goes when you remove that visit.
+                  </p>
+                </details>
+                <details class="qa" id="leaderboard-claimed">
+                  <summary>It says another Minerva holds my character's name. What now?</summary>
+                  <p>
+                    A name belongs to the Leaderboard Key that uploaded it first. If that was you, on a PC you've since
+                    reinstalled or replaced, your old key went with it. Ask on
+                    <a href="https://discord.gg/NnbnVWkRrF">Minerva's Discord</a>, with the character's name: once Minerva
+                    has tried to upload from your new PC, the maintainer can hand the name to its key. Then click
+                    <strong>Send again</strong> on the note in your Personal Bests, and your uploads go through again. To keep your key when you move PCs, copy <code>leaderboard-key</code> across
+                    (<a href="#kept">where Minerva keeps its files</a>).
+                  </p>
+                </details>
+                <details class="qa" id="leaderboard-link">
+                  <summary>Where's my character's entry?</summary>
+                  <p>
+                    In your Personal Bests, click a map's count of visits: under its visits, <strong>Its Map
+                    Leaderboard</strong> opens the map's page at the Level Band of the character you're playing, marks
+                    your entry and says its rank, even outside the top 50. If it says your character has no entry there
+                    any more, the entry has gone: taken off the Map Leaderboards, or removed after a report. If the site
+                    kept one of your bests off, as over 5 times the map's solo EXP/h or removed after a report, a note
+                    above your bests says so.
+                  </p>
+                </details>
+                <details class="qa" id="report-entry">
+                  <summary>An entry can't be right. What can I do?</summary>
+                  <p>
+                    Report it: each entry has Report at the end of its row. Say what's wrong if you like, and send it.
+                    Minerva's maker reads the reports, and removes an entry that can't be right. Your own entry, the one
+                    your Map Leaderboard link stars, has no Report: to take it off, see
+                    <a href="#leaderboard-remove">taking your character off</a>.
                   </p>
                 </details>
               </div>
@@ -1044,6 +1206,12 @@
                     bests. If it can't rename it, it leaves it as it is and saves no bests until the next launch. The file
                     is <a href="#kept">beside your settings</a>.
                   </p>
+                  <p>
+                    A character you show on the <a href="#leaderboard-appear">Map Leaderboards</a> keeps their entries
+                    there: Minerva sends nothing of theirs, and a note in your Personal Bests says so, since what's left
+                    on your PC would replace them. Click <strong>Send what's here</strong> on it, and again to confirm,
+                    to send what's there now instead.
+                  </p>
                 </details>
               </div>
 
@@ -1078,8 +1246,9 @@
                     </li>
                     <li>What you did in Minerva: its buttons, hotkeys and searches.</li>
                     <li>
-                      Your settings and Personal Bests, Minerva's version, your Windows version and display scaling, and any
-                      errors it ran into.
+                      Your settings and Personal Bests, which characters you show on the Map Leaderboards and what the site
+                      answered (never your Leaderboard Key), Minerva's version, your Windows version and display scaling,
+                      and any errors it ran into.
                     </li>
                   </ul>
                 </details>

@@ -18,7 +18,7 @@ mod common;
 use common::player::Player;
 use common::{CONSTRUCTION_SITE_ID, FakeSource, SUNSET_SKY_ID, osms, sharing_a_title, tracking, tracking_with};
 use minerva_core::{
-    Action, BESTS_VERSION, ClientOffset, Minerva, ExpBarRegion, Foreground, GameWindow, LevelRange, MapBests,
+    Action, BESTS_VERSION, CharacterBests, ClientOffset, Minerva, ExpBarRegion, Foreground, GameWindow, LevelRange, MapBests,
     OSMS_AND_MEOWDB_CREDIT, PanelControl, PanelSizes, PanelState, PersonalBestsMap, PersonalBestsVisit,
     PersonalBestsWindow, Rect, Request, SavedBests, ScreenRect, Settings, Size, TitleRegion, VisitBest, meowdb,
 };
@@ -41,14 +41,26 @@ fn button(state: &PanelState) -> bool {
     state.grind_tracker.personal_bests
 }
 
+/// `map`'s Map Leaderboard, as the window links it for the Character named `name` with no
+/// level read.
+fn leaderboard(map: &str, name: &str) -> Option<String> {
+    Some(format!("https://owlofminerva.app/leaderboards/map/?map={map}&name={name}"))
+}
+
+/// The window's rows of the Unassigned bests, which are all there are with no Character
+/// named: none if there are none.
+fn maps(window: &PersonalBestsWindow) -> &[PersonalBestsMap] {
+    window.characters.iter().find(|c| c.name.is_none()).map_or(&[], |c| &c.maps)
+}
+
 /// The window's rows as (map ID, EXP/h, marked here), in its order.
 fn rows(window: &PersonalBestsWindow) -> Vec<(&str, u64, bool)> {
-    window.maps.iter().map(|m| (m.id.as_str(), m.exp_per_hour, m.here)).collect()
+    maps(window).iter().map(|m| (m.id.as_str(), m.exp_per_hour, m.here)).collect()
 }
 
 /// The window's row for `map`.
 fn row<'a>(window: &'a PersonalBestsWindow, map: &str) -> &'a PersonalBestsMap {
-    window.maps.iter().find(|m| m.id == map).unwrap_or_else(|| panic!("no row for {map}"))
+    maps(window).iter().find(|m| m.id == map).unwrap_or_else(|| panic!("no row for {map}"))
 }
 
 /// Bests saved at an earlier launch: one Visit's, with no date, on each map.
@@ -64,17 +76,17 @@ fn histories_of(maps: &[(&str, Vec<u64>)]) -> SavedBests {
         .iter()
         .map(|(id, rates)| MapBests { id: (*id).into(), visits: rates.iter().map(|&exp| saved_best(exp)).collect() })
         .collect();
-    SavedBests { version: BESTS_VERSION, maps }
+    SavedBests { version: BESTS_VERSION, unassigned: maps, characters: Vec::new() }
 }
 
 /// A Visit's best of `exp_per_hour` saved with no date: what the player removes it by.
 fn saved_best(exp_per_hour: u64) -> VisitBest {
-    VisitBest { exp_per_hour, set_at_unix_ms: None }
+    VisitBest { exp_per_hour, ..VisitBest::default() }
 }
 
 /// One of a map's Visits as the window lists it.
 fn visit(exp_per_hour: u64, set_at_unix_ms: Option<u64>, share: Option<u64>, this_visit: bool) -> PersonalBestsVisit {
-    PersonalBestsVisit { exp_per_hour, set_at_unix_ms, ceiling_share_hundredths: share, this_visit }
+    PersonalBestsVisit { exp_per_hour, set_at_unix_ms, level: None, job: None, ceiling_share_hundredths: share, this_visit }
 }
 
 /// `map`'s Visits in the window as (EXP/h, the Visit under way's), highest first.
@@ -107,7 +119,7 @@ fn with_no_best_anywhere_there_is_no_button_and_the_window_doesnt_open() {
     let window = toggle(&mut player);
     assert!(!window.open);
     assert_eq!(window.placement, None);
-    assert!(window.maps.is_empty());
+    assert!(window.characters.is_empty());
 }
 
 #[test]
@@ -124,7 +136,7 @@ fn a_first_visits_best_is_in_the_window_with_the_maps_names_levels_and_share_mar
     assert!(window.open);
     assert_eq!(window.credit, OSMS_AND_MEOWDB_CREDIT);
     assert_eq!(
-        window.maps,
+        maps(&window),
         [PersonalBestsMap {
             id: SUNSET_SKY_ID.into(),
             street_name: "Victoria Road".into(),
@@ -132,6 +144,10 @@ fn a_first_visits_best_is_in_the_window_with_the_maps_names_levels_and_share_mar
             region: "Victoria Island".into(),
             mark: None,
             url: meowdb::map_url(SUNSET_SKY_ID),
+            // The Unassigned bests are no one's on the site: no Map Leaderboard. Nor a star,
+            // with only one map.
+            leaderboard_url: None,
+            best_of_all: false,
             mob_levels: Some(SUNSET_SKY_LEVELS),
             exp_per_hour: 7200,
             // Of its solo ceiling, 213,571 EXP/h: 3.37%.
@@ -189,7 +205,7 @@ fn a_best_on_a_map_the_player_has_not_been_on_has_its_names_region_levels_and_sh
 
     let window = toggle(&mut player);
     assert_eq!(
-        window.maps,
+        maps(&window),
         [
             PersonalBestsMap {
                 id: HENESYS_HUNTING_GROUND_I_ID.into(),
@@ -198,6 +214,9 @@ fn a_best_on_a_map_the_player_has_not_been_on_has_its_names_region_levels_and_sh
                 region: "Victoria Island".into(),
                 mark: None,
                 url: meowdb::map_url(HENESYS_HUNTING_GROUND_I_ID),
+                leaderboard_url: None,
+                // The Unassigned bests' best of all maps isn't the player's: no star.
+                best_of_all: false,
                 // Blue Snail and Shroom to Green Mushroom.
                 mob_levels: Some(LevelRange { lowest: 2, highest: 14 }),
                 exp_per_hour: 7661,
@@ -215,6 +234,8 @@ fn a_best_on_a_map_the_player_has_not_been_on_has_its_names_region_levels_and_sh
                 region: "Event".into(),
                 mark: None,
                 url: meowdb::map_url(MAPLE_HILL_ID),
+                leaderboard_url: None,
+                best_of_all: false,
                 mob_levels: Some(LevelRange { lowest: 2, highest: 2 }),
                 exp_per_hour: 2857,
                 // Of its solo ceiling, 4 Blue Snails' 5,714 EXP/h: 50%.
@@ -276,7 +297,7 @@ fn a_best_on_a_map_not_in_the_map_list_is_kept_and_goes_by_its_id() {
 
     let window = toggle(&mut player);
     assert_eq!(
-        window.maps,
+        maps(&window),
         [PersonalBestsMap {
             id: gone.into(),
             street_name: String::new(),
@@ -284,6 +305,8 @@ fn a_best_on_a_map_not_in_the_map_list_is_kept_and_goes_by_its_id() {
             region: String::new(),
             mark: None,
             url: meowdb::map_url(gone),
+            leaderboard_url: None,
+            best_of_all: false,
             mob_levels: None,
             exp_per_hour: 5000,
             solo_exp_ceiling: None,
@@ -292,6 +315,48 @@ fn a_best_on_a_map_not_in_the_map_list_is_kept_and_goes_by_its_id() {
             here: false,
             visits: vec![visit(5000, None, None, false)],
         }]
+    );
+}
+
+/// The window's rows of the Character named `name` as (map ID, starred, Map Leaderboard), in
+/// its order.
+fn starred_and_linked(window: &PersonalBestsWindow, name: Option<&str>) -> Vec<(String, bool, Option<String>)> {
+    let character = window.characters.iter().find(|c| c.name.as_deref() == name).unwrap();
+    character.maps.iter().map(|m| (m.id.clone(), m.best_of_all, m.leaderboard_url.clone())).collect()
+}
+
+#[test]
+fn a_characters_best_of_all_maps_is_starred_and_each_map_in_the_list_links_to_its_map_leaderboard() {
+    // Egbert's bests on Sunset Sky, the Construction Site and a map not in the map list; Bob's
+    // on Sunset Sky alone; and the same three as Egbert's Unassigned.
+    let gone = "999999999";
+    let mut bests = histories_of(&[(SUNSET_SKY_ID, vec![7200]), (CONSTRUCTION_SITE_ID, vec![10_800]), (gone, vec![5000])]);
+    let bob = histories_of(&[(SUNSET_SKY_ID, vec![3600])]).unassigned;
+    bests.characters = vec![
+        CharacterBests { name: "Egbert".into(), maps: bests.unassigned.clone() },
+        CharacterBests { name: "Bob".into(), maps: bob },
+    ];
+    let mut minerva = tracking();
+    minerva.restore_bests(bests);
+    let mut player = Player::clocked(minerva);
+    player.arrive(SUNSET);
+    let window = toggle(&mut player);
+
+    // Egbert's best of all maps has the star; a map not in the list has no Map Leaderboard.
+    assert_eq!(
+        starred_and_linked(&window, Some("Egbert")),
+        [
+            (CONSTRUCTION_SITE_ID.into(), true, leaderboard(CONSTRUCTION_SITE_ID, "Egbert")),
+            (SUNSET_SKY_ID.into(), false, leaderboard(SUNSET_SKY_ID, "Egbert")),
+            (gone.into(), false, None),
+        ]
+    );
+    // With one map, there is nothing to compare: no star.
+    assert_eq!(starred_and_linked(&window, Some("Bob")), [(SUNSET_SKY_ID.into(), false, leaderboard(SUNSET_SKY_ID, "Bob"))]);
+    // The Unassigned bests are no one's: no star, and nothing of theirs is on the site.
+    assert_eq!(
+        starred_and_linked(&window, None),
+        [(CONSTRUCTION_SITE_ID.into(), false, None), (SUNSET_SKY_ID.into(), false, None), (gone.into(), false, None)]
     );
 }
 
@@ -332,7 +397,7 @@ fn pressing_the_star_again_closes_it_and_closed_it_holds_no_rows() {
 
     let closed = toggle(&mut player);
     assert!(!closed.open);
-    assert!(closed.maps.is_empty());
+    assert!(closed.characters.is_empty());
 
     assert!(toggle(&mut player).open);
     let closed = player.press(PanelControl::ClosePersonalBests).personal_bests;
@@ -365,7 +430,7 @@ fn the_shell_gets_the_window_and_the_button_as_they_render_them() {
     let window = serde_json::to_value(&opened.personal_bests).unwrap();
     assert_eq!(window["open"], true);
     assert_eq!(window["credit"], OSMS_AND_MEOWDB_CREDIT);
-    let sunset = &window["maps"][0];
+    let sunset = &window["characters"][0]["maps"][0];
     assert_eq!(sunset["id"], SUNSET_SKY_ID);
     assert_eq!(sunset["streetName"], "Victoria Road");
     assert_eq!(sunset["mapName"], "Sunset Sky");
@@ -491,11 +556,11 @@ fn this_visits_best_and_a_visit_no_longer_listed_cannot_be_removed() {
     player.arrive(SUNSET);
     player.hunt(6 * MIN, 20);
     let window = toggle(&mut player);
-    let this_visit = row(&window, SUNSET_SKY_ID).visits[0];
+    let this_visit = row(&window, SUNSET_SKY_ID).visits[0].clone();
     assert!(this_visit.this_visit);
     let saves = player.saves();
 
-    let this_one = VisitBest { exp_per_hour: this_visit.exp_per_hour, set_at_unix_ms: this_visit.set_at_unix_ms };
+    let this_one = VisitBest { exp_per_hour: this_visit.exp_per_hour, set_at_unix_ms: this_visit.set_at_unix_ms, ..VisitBest::default() };
     assert_eq!(player.remove_visit(SUNSET_SKY_ID, this_one).personal_bests, window);
     assert_eq!(player.remove_visit(SUNSET_SKY_ID, saved_best(5000)).personal_bests, window);
     assert_eq!(player.remove_visit(CONSTRUCTION_SITE_ID, saved_best(3600)).personal_bests, window);

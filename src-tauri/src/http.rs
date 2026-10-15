@@ -33,6 +33,41 @@ pub(crate) async fn text(client: &reqwest::Client, url: &str) -> Result<String, 
     text.map_err(|e| format!("{url}: {e}"))
 }
 
+/// What a site answered a request: its HTTP status, its `Retry-After` header and its body,
+/// whatever the status. The caller reads what they mean.
+pub(crate) struct Reply {
+    pub status: u16,
+    pub retry_after: Option<String>,
+    pub body: String,
+}
+
+/// Send `method` to `url` with `key` as its bearer token, and `body` as JSON if there is one;
+/// the reply, or why none came (naming the URL).
+pub(crate) async fn send(
+    client: &reqwest::Client,
+    method: reqwest::Method,
+    url: &str,
+    key: &str,
+    body: Option<String>,
+) -> Result<Reply, String> {
+    let mut request = client.request(method, url).bearer_auth(key);
+    if let Some(body) = body {
+        request = request.header(reqwest::header::CONTENT_TYPE, "application/json").body(body);
+    }
+    let sent = async {
+        let response = request.send().await?;
+        let status = response.status().as_u16();
+        let retry_after = response
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|value| value.to_str().ok())
+            .map(String::from);
+        let body = response.text().await?;
+        Ok::<_, reqwest::Error>(Reply { status, retry_after, body })
+    };
+    sent.await.map_err(|e| format!("{url}: {e}"))
+}
+
 /// Run `work` on the async runtime: its outcome arrives on the receiver.
 pub(crate) fn in_background<T: Send + 'static>(work: impl Future<Output = T> + Send + 'static) -> Receiver<T> {
     let (tx, rx) = mpsc::channel();

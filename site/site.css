@@ -1,6 +1,6 @@
 /* The Minerva site: one of the game's windows opened wide, in setup's opaque language
    and a reading size of its own, standing on the overlay's glass periwinkle as the Personal
-   Bests page does. Its raised tabs are its pages: Home and the FAQ. The tokens are the
+   Bests page does. Its raised tabs are its pages: Home, the Map Leaderboards and the FAQ. The tokens are the
    app's (theme.css, without its TTF faces); see DESIGN.md. No motion: the game's windows
    don't animate. */
 
@@ -32,6 +32,12 @@
   /* How tall the window's head is while it sticks, kept by site.ts, so a jump to a heading
      lands below it. */
   --head: 100px;
+}
+
+/* Hidden means hidden, whatever display a rule gives the element (a .button's, a phone
+   table's): the pages' scripts show and hide with it. */
+[hidden] {
+  display: none !important;
 }
 
 ::selection {
@@ -687,6 +693,19 @@ strong {
   background: none;
   image-rendering: pixelated;
 }
+/* The Map Leaderboards' stage: the Grind Tracker's gold tally board, the mark of a best,
+   at three quarters of its size, pixel for pixel. */
+.stage.tally-board img {
+  width: 192px;
+  height: 192px;
+  border: none;
+  background: none;
+  image-rendering: pixelated;
+}
+/* A feature's way to a page of its own, between its words and its questions. */
+.feature-action {
+  margin: 20px 0 0;
+}
 
 /* ---- Questions: each folded to its question, as the panel folds a section to its
    heading, set into the body as the settings view sets its rows ---- */
@@ -1252,6 +1271,10 @@ code.path {
   color: var(--ink-2);
   break-inside: avoid;
 }
+/* The fine print under the credits keeps a reading measure across the whole foot. */
+.window-foot .fine {
+  max-width: 55ch;
+}
 
 /* ---- The page's minimap ---- */
 
@@ -1549,6 +1572,535 @@ button.icon-button:active {
   }
 }
 
+/* ---- The Map Leaderboards (leaderboards/): finding a map, and a map's bands and entries,
+   set into the body as the hotkey table is ---- */
+
+/* Hidden from the eye, kept for screen readers. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.lb-head {
+  padding: 40px 0 8px;
+}
+.lb-head .lede {
+  max-width: 36em;
+  margin: 0;
+}
+.lb-head h1 {
+  margin-bottom: 14px;
+}
+/* Finding a map beside the most-uploaded maps. */
+.lb-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 56px;
+  align-items: start;
+  padding-top: 48px;
+}
+.lb-section h2,
+.lb-questions h2,
+.lb-board h2 {
+  margin-bottom: 12px;
+  font-size: 23px;
+  line-height: 30px;
+}
+.lb-search label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 22px;
+  color: var(--ink-2);
+}
+/* The search field, as the panel's: the one surface set into the body. */
+.lb-search input,
+.lb-dialog textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--frame);
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: inset 0 1px 2px rgba(20, 30, 60, 0.15);
+  color: var(--ink);
+  font: 16px/24px var(--font);
+}
+.lb-said {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 21px;
+  color: var(--ink-2);
+}
+/* A list of maps, rows parted by Window Rules in an inset box: the name over its street,
+   and how many characters have entries there at the right. */
+.lb-maps {
+  margin: 12px 0 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--inset-bg);
+}
+.lb-maps li + li {
+  margin-top: 0;
+  border-top: 1px solid var(--rule);
+}
+.lb-map {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 14px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.lb-map:hover {
+  background: color-mix(in srgb, var(--edit) 8%, transparent);
+  color: var(--ink);
+}
+.lb-map:hover .lb-map-name {
+  color: var(--portal);
+  text-decoration: underline 1px;
+  text-underline-offset: 3px;
+}
+.lb-map:active .lb-map-name {
+  color: var(--frame);
+}
+.lb-map:focus-visible {
+  outline-offset: -2px;
+}
+/* The map Enter opens: Selection Periwinkle with its inset ring, as the panel marks the
+   match Enter picks; the line under the field names it. */
+.lb-map.lb-enter {
+  background: var(--select);
+  box-shadow: inset 0 0 0 1px var(--select-edge);
+}
+.lb-map-words {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.lb-map-name {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 22px;
+}
+.lb-map-street,
+.lb-map-aside {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+.lb-map-aside {
+  flex: none;
+  text-align: right;
+}
+/* The pages' questions, beside a heading, as a FAQ group sets them. */
+.lb-questions {
+  display: grid;
+  grid-template-columns: minmax(0, 16em) minmax(0, 44em);
+  gap: 56px;
+  align-items: start;
+  padding-top: 64px;
+}
+.lb-questions > .qa-block {
+  margin-top: 0;
+}
+/* Prose on the Map Leaderboards keeps a reading measure, about 70 characters a line (the
+   face's 0 is wide, so 55ch). */
+.lb-questions .qa p,
+.lb-said {
+  max-width: 55ch;
+}
+
+/* A map's page: the way back, the map's name under its street, as the panel titles a map,
+   then its Level Bands. */
+.lb-back {
+  margin: 0 0 18px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 22px;
+}
+.lb-street {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 22px;
+  color: var(--ink-2);
+}
+.lb-head h1 + .lb-bands {
+  margin-top: 24px;
+}
+/* The Level Bands, light steel buttons each with its levels over its count; the band shown
+   is the selected one, in Selection Periwinkle. */
+.lb-bands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.lb-band {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 14px 7px;
+  border: 1px solid var(--select-edge);
+  border-radius: 4px;
+  background: var(--button-light);
+  box-shadow: inset 0 1px 0 #fff;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.lb-band:hover {
+  background: var(--button-light-hover);
+  color: var(--ink);
+}
+.lb-band:active {
+  background: var(--button-light);
+  box-shadow: inset 0 1px 3px rgba(10, 20, 50, 0.25);
+  color: var(--ink);
+}
+.lb-band[aria-current] {
+  border-color: var(--select-edge);
+  background: var(--select);
+  box-shadow: inset 0 0 0 1px var(--select-edge);
+  color: var(--ink);
+}
+.lb-band-levels {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+.lb-band-entries {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.lb-board {
+  padding-top: 40px;
+}
+.lb-board .lb-said {
+  margin: 0;
+}
+/* With no band to show (loading, or a map with no entries), the line that says so sits
+   close under the map's name, not a band's distance away. */
+.lb-board:has(> #band-title[hidden]) {
+  padding-top: 12px;
+}
+.lb-note {
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 23px;
+}
+.lb-note.gone {
+  font-weight: 400;
+  color: var(--ink-2);
+}
+/* A band's entries: the hotkey table's inset box, rows parted by Window Rules, figures
+   right-aligned, the linked character's row selected. */
+.lb-table {
+  width: 100%;
+  max-width: 60em;
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  border-spacing: 0;
+  background: var(--inset-bg);
+  font-size: 15px;
+  line-height: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.lb-table th,
+.lb-table td {
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: baseline;
+}
+.lb-table thead th {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+.lb-table tbody tr > * {
+  border-top: 1px solid var(--rule);
+}
+.lb-table .lb-rank,
+.lb-table .lb-level,
+.lb-table .lb-exp,
+.lb-table .lb-date,
+.lb-table .lb-report {
+  text-align: right;
+}
+.lb-table td.lb-rank,
+.lb-table td.lb-job,
+.lb-table td.lb-date {
+  color: var(--ink-2);
+}
+.lb-table tbody .lb-name,
+.lb-table td.lb-exp {
+  font-weight: 700;
+}
+.lb-table .lb-rank {
+  width: 3em;
+}
+.lb-table .lb-report {
+  width: 1%;
+}
+/* A date never breaks across lines ("12 / Oct"). */
+.lb-table .lb-date {
+  white-space: nowrap;
+}
+/* Each entry's lane, the Personal Bests window's: its EXP/h drawn as the game's EXP gauge
+   draws the bar, lime in its grey frame, from 0 to the band's #1, whose lane runs full.
+   Read down the page, the table is a chart. The ruler's lines run down every lane behind
+   the bars, and the linked Character's lane is on the same scale as everyone's. */
+.lb-table .lb-lane {
+  --lane-inset: 14px;
+  --lane-end: 20px;
+  position: relative;
+  width: 24%;
+  padding-left: var(--lane-inset);
+  padding-right: var(--lane-end);
+}
+.lb-grid {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--lane-inset) + var(--at) * (100% - var(--lane-inset) - var(--lane-end)));
+  width: 1px;
+  background: rgba(30, 45, 90, 0.09);
+}
+.lb-lane-track {
+  position: relative;
+  display: block;
+  height: 10px;
+}
+.lb-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  width: calc(var(--at) * 100%);
+  min-width: 3px;
+  height: 100%;
+  border: 1px solid var(--exp-frame);
+  border-radius: 2px;
+  background: var(--exp-fill);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+/* The lane under the figure, for a page too narrow for the lanes' column: shown there
+   only. */
+.lb-under {
+  display: none;
+}
+@media (min-width: 641px) and (max-width: 899px) {
+  .lb-table .lb-lane {
+    display: none;
+  }
+  .lb-table .lb-under {
+    display: block;
+    height: 6px;
+    margin-top: 5px;
+  }
+}
+/* The ruler over the lanes: each round step's figure over a notch that hangs to the rows,
+   as the Personal Bests window's ruler does. */
+.lb-ruler {
+  position: relative;
+  display: block;
+  height: 18px;
+}
+.lb-step {
+  position: absolute;
+  top: 0;
+  left: calc(var(--at) * 100%);
+  transform: translateX(-50%);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.lb-step::after {
+  content: "";
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 50%;
+  width: 1px;
+  height: 6px;
+  background: var(--exp-frame);
+}
+.lb-step-zero {
+  transform: none;
+}
+.lb-step-zero::after {
+  left: 0;
+}
+/* A step whose figure would crowd its neighbours' keeps its notch alone. */
+.lb-step.lb-quiet {
+  color: transparent;
+}
+/* A Level Band switched by a click: the lanes regrow from the left, as the rows that stay
+   slide to their new rank (the view transition below). */
+.lb-grow .lb-bar {
+  transform-origin: left;
+  animation: lb-grow 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes lb-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+/* The band switch: one exponential ease-out, 300ms, the page's only motion a click makes.
+   The rows of Characters in both bands slide to their new rank; the rest cross-fade. The
+   head that sticks at the top stays over the rows going by under it. */
+html.lb-morph::view-transition-group(*),
+html.lb-morph::view-transition-old(*),
+html.lb-morph::view-transition-new(*) {
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+html.lb-morph .window-head {
+  view-transition-name: lb-head;
+}
+html.lb-morph::view-transition-group(lb-head) {
+  z-index: 1;
+}
+/* With reduced motion the switch is at once: script doesn't start it, and nothing here
+   would move if it did. */
+@media (prefers-reduced-motion: reduce) {
+  .lb-grow .lb-bar,
+  html.lb-morph::view-transition-group(*),
+  html.lb-morph::view-transition-old(*),
+  html.lb-morph::view-transition-new(*) {
+    animation: none;
+  }
+}
+/* Under the rows, where the table stops: "Top 50 of 63 at Lv 20–29". */
+.lb-caption {
+  caption-side: bottom;
+  padding: 8px 12px 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink-2);
+  text-align: left;
+}
+/* The keys between Reports, said in the caption while one has the keyboard's focus. */
+.lb-keys {
+  display: none;
+}
+.lb-table:has(.lb-report-button:focus-visible) .lb-keys {
+  display: inline;
+  font-variant-emoji: text;
+}
+/* The linked character's entry: Selection Periwinkle, the You Yellow star before the name
+   (a best of the player's, as the Personal Bests window stars one), and under it a line of
+   where they stand, the two one block. */
+.lb-table tr.lb-you > * {
+  background: var(--select);
+}
+.lb-star {
+  width: 13px;
+  height: 13px;
+  margin-right: 6px;
+  vertical-align: -1px;
+  fill: var(--you);
+  stroke: var(--you-edge);
+  stroke-width: 1.1;
+  stroke-linejoin: round;
+}
+/* Between the top 50 and the linked character's entry: how many more entries. */
+.lb-table tr.lb-gap > td {
+  padding: 4px 12px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink-2);
+  text-align: center;
+}
+/* Report, quiet on every row: a link's words without the underline, which it takes under
+   the pointer, its own or its row's. */
+.lb-report-button {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: 13px/18px var(--font);
+  text-decoration: underline 1px transparent;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.lb-table tbody tr:hover .lb-report-button {
+  text-decoration-color: var(--select-edge);
+}
+.lb-table tbody tr .lb-report-button:hover {
+  color: var(--portal);
+  text-decoration-color: currentColor;
+}
+.lb-report-button:active {
+  color: var(--frame);
+}
+
+/* Reporting an entry: a small window over the page, framed as the site's window, under
+   the title-marking window's navy veil. */
+.lb-dialog {
+  box-sizing: border-box;
+  width: min(30em, calc(100vw - 36px));
+  padding: 0;
+  border: 1px solid var(--window-edge);
+  border-radius: 4px;
+  background: var(--body-solid);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  color: var(--ink);
+}
+.lb-dialog::backdrop {
+  background: rgba(18, 28, 56, 0.3);
+}
+.lb-dialog .window-bar {
+  padding: 7px 16px 8px;
+}
+.lb-dialog-body {
+  padding: 16px 18px 18px;
+  font-size: 15px;
+  line-height: 23px;
+}
+.lb-dialog-body p {
+  margin: 0 0 14px;
+}
+.lb-dialog label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 700;
+}
+.lb-optional {
+  font-weight: 400;
+  color: var(--ink-2);
+}
+.lb-dialog textarea {
+  resize: vertical;
+  font-size: 15px;
+  line-height: 22px;
+}
+.lb-dialog .lb-said {
+  margin: 12px 0 0;
+  font-size: 15px;
+  line-height: 23px;
+  color: var(--ink);
+}
+.lb-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+button.button {
+  font-family: var(--font);
+  cursor: pointer;
+}
+
 /* ---- Narrower ---- */
 
 /* Too narrow for the owl and the whole game window side by side: the window goes under the
@@ -1650,14 +2202,14 @@ button.icon-button:active {
   .window-head {
     display: contents;
   }
-  /* Both pages side by side, each a thumb's height. As in the game, the other sits dimmer
+  /* The pages side by side, each a thumb's height. As in the game, the others sit dimmer
      and the open one is the bright, framed one. */
   .tabs {
     position: sticky;
     top: 0;
     z-index: 10;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 4px;
     padding: 6px 10px 8px;
   }
@@ -1763,5 +2315,158 @@ button.icon-button:active {
   .window-foot {
     padding: 24px 18px 28px;
     border-radius: 0;
+  }
+}
+
+/* The Map Leaderboards, narrower: finding a map over the most-uploaded maps, the questions
+   under their heading, and a feature's way to its page after its words. */
+@media (max-width: 960px) {
+  .lb-columns,
+  .lb-questions {
+    grid-template-columns: minmax(0, 38em);
+    gap: 24px;
+  }
+  .lb-columns {
+    gap: 48px;
+  }
+  .feature-action {
+    order: 2;
+  }
+}
+
+/* On a phone a tab's name that won't fit on one line takes two; and each entry becomes a card, as the Personal Bests window's rows do: its
+   rank beside its name and EXP/h, over its job, level, date and Report. */
+@media (max-width: 640px) {
+  .tab,
+  .tab[aria-current="page"] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 4px;
+    line-height: 16px;
+    white-space: normal;
+  }
+  .lb-head {
+    padding-top: 28px;
+  }
+  /* The rows as cards, the table's roles kept in the markup; the caption still under them. */
+  .lb-table {
+    display: flex;
+    flex-direction: column;
+  }
+  .lb-table tbody {
+    display: block;
+  }
+  .lb-caption {
+    display: block;
+    order: 1;
+    padding: 8px 12px;
+    border-top: 1px solid var(--rule);
+  }
+  .lb-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .lb-table tr {
+    display: grid;
+    /* The job gives way (it wraps) before the level or the date, which never break. */
+    grid-template-columns: 2.6em minmax(0, max-content) max-content minmax(max-content, 1fr) auto;
+    grid-template-areas:
+      "rank name name name exp"
+      "rank job level date report"
+      "lane lane lane lane lane";
+    column-gap: 10px;
+    padding: 8px 12px;
+  }
+  .lb-table tbody tr + tr {
+    border-top: 1px solid var(--rule);
+  }
+  .lb-table tbody tr > * {
+    padding: 0;
+    border-top: 0;
+    background: none;
+  }
+  .lb-table tr.lb-you {
+    background: var(--select);
+  }
+  .lb-table tr.lb-gap {
+    display: block;
+    padding: 4px 12px;
+  }
+  .lb-table tr.lb-gap > td {
+    display: block;
+  }
+  .lb-table .lb-rank {
+    grid-area: rank;
+    width: auto;
+    text-align: left;
+  }
+  .lb-table .lb-name {
+    grid-area: name;
+    overflow-wrap: anywhere;
+  }
+  .lb-table .lb-exp {
+    grid-area: exp;
+  }
+  .lb-table td.lb-job,
+  .lb-table td.lb-level,
+  .lb-table td.lb-date {
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--ink-2);
+    text-align: left;
+  }
+  .lb-table .lb-job {
+    grid-area: job;
+  }
+  .lb-table .lb-level {
+    grid-area: level;
+  }
+  .lb-table td.lb-level::before {
+    content: "Lv ";
+  }
+  .lb-table .lb-date {
+    grid-area: date;
+  }
+  .lb-table .lb-report {
+    grid-area: report;
+    width: auto;
+  }
+  /* The lane under the figures, the card's whole width, still on the band's one scale. */
+  .lb-table .lb-lane {
+    --lane-inset: 0px;
+    --lane-end: 0px;
+    grid-area: lane;
+    width: auto;
+  }
+  .lb-table tbody tr > .lb-lane {
+    padding-top: 6px;
+  }
+  .lb-grid {
+    display: none;
+  }
+  .lb-lane-track {
+    height: 6px;
+  }
+  /* Only the tabs stick here, so they're what stays over the rows in a switch. */
+  html.lb-morph .window-head {
+    view-transition-name: none;
+  }
+  html.lb-morph .tabs {
+    view-transition-name: lb-head;
+  }
+  /* Report takes a thumb's tap, past its edge. */
+  .lb-report-button::after {
+    content: "";
+    position: absolute;
+    inset: -13px -8px;
+  }
+  .lb-dialog-buttons .button {
+    flex: 1;
   }
 }
