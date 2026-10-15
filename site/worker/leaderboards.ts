@@ -221,13 +221,18 @@ export async function readBand(env: Env, map: string, first: string, name: strin
   };
 }
 
-/** The maps with the most Characters on their Map Leaderboards, most first. */
+/** The most maps the maps read lists: more than the game has, so it lists every real map with
+ *  entries (the page's search says how many each has), while one made up by the thousand
+ *  can't make the answer endless. */
+const MOST_MAPS = 10_000;
+
+/** Every map with entries on its Map Leaderboard, the most entries first. */
 export async function readMaps(env: Env): Promise<Answer> {
   const rows = await env.DB.prepare(
     `SELECT map_id AS map, COUNT(DISTINCT name_key) AS characters, COUNT(*) AS entries FROM entries
-     GROUP BY map_id ORDER BY characters DESC, entries DESC, map_id LIMIT ?`,
+     GROUP BY map_id ORDER BY entries DESC, characters DESC, map_id LIMIT ?`,
   )
-    .bind(TOP)
+    .bind(MOST_MAPS)
     .all<{ map: string; characters: number; entries: number }>();
   return { status: 200, body: { maps: rows.results } };
 }

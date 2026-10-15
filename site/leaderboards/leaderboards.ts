@@ -106,40 +106,79 @@ function byText(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
+/** How many entries each map has on its Map Leaderboard, by 9-digit ID; a map it doesn't
+ *  hold has none. */
+export type EntryCounts = Map<string, number>;
+
+/** The entries each map has, from GET /api/maps. */
+export function entryCounts(answer: MapsAnswer): EntryCounts {
+  return new Map(answer.maps.map((m) => [m.map, m.entries]));
+}
+
+/** A map a search found, with how many entries it has ("12 entries", "No entries yet"), or
+ *  `null` before the API has said (or when it can't be reached). */
+export interface FoundMap extends MapPlace {
+  entries: string | null;
+}
+
 /** The maps whose Map Name holds `query`, whatever the case, as the panel's search finds
  *  them (`search.rs`): those that start with it, then those with a word that starts with it,
- *  then the rest, each by name; Event and Dev maps aside. The first `shown`, and how many
- *  more. */
-export function searchMaps(names: MapNames, query: string, shown = 10): { maps: MapPlace[]; more: number } {
+ *  then the rest, each by name; Event and Dev maps aside. With `counts`, the maps with
+ *  entries come first, so the first map, the one Enter opens, isn't an empty one when
+ *  another isn't. The first `shown`, and how many more. */
+export function searchMaps(
+  names: MapNames,
+  query: string,
+  { shown = 10, counts = null }: { shown?: number; counts?: EntryCounts | null } = {},
+): { maps: FoundMap[]; more: number } {
   const lower = query.trim().toLowerCase();
   if (lower === "") return { maps: [], more: 0 };
-  const found: { fit: number; map: MapPlace }[] = [];
+  const found: { fit: number; empty: boolean; map: MapPlace }[] = [];
   for (const map of names.values()) {
     if (LEFT_OUT_REGIONS.includes(map.region)) continue;
     const f = fit(map.name, lower);
-    if (f !== null) found.push({ fit: f, map });
+    if (f !== null) found.push({ fit: f, empty: !counts?.get(map.id), map });
   }
   found.sort(
     (a, b) =>
-      a.fit - b.fit || byText(a.map.name, b.map.name) || byText(a.map.street, b.map.street) || byText(a.map.id, b.map.id),
+      Number(a.empty) - Number(b.empty) ||
+      a.fit - b.fit ||
+      byText(a.map.name, b.map.name) ||
+      byText(a.map.street, b.map.street) ||
+      byText(a.map.id, b.map.id),
   );
-  return { maps: found.slice(0, shown).map((f) => f.map), more: Math.max(0, found.length - shown) };
+  const entries = (id: string) => {
+    if (counts === null) return null;
+    const count = counts.get(id) ?? 0;
+    return count === 0 ? "No entries yet" : entriesCounted(count);
+  };
+  return {
+    maps: found.slice(0, shown).map(({ map }) => ({ ...map, entries: entries(map.id) })),
+    more: Math.max(0, found.length - shown),
+  };
 }
 
-/** What the search says under its field, for `query` and what it found. */
+/** What the search says under its field, for `query` and what it found: how many maps, and
+ *  the one Enter opens (the list marks it, and this says it in words). */
 export function searchSaid(query: string, found: { maps: MapPlace[]; more: number }): string {
-  if (query.trim() === "") return "Type part of a map's name, as the game writes it.";
+  if (query.trim() === "") return "Type part of a map's name as the game writes it, like Ant Tunnel.";
   if (found.maps.length === 0) return `No map's name holds “${query.trim()}”.`;
   const shown = counted(found.maps.length, "map");
-  return found.more === 0 ? shown : `${shown}, and ${found.more.toLocaleString("en-US")} more: type more of the name.`;
+  const all = found.more === 0 ? shown : `${shown}, and ${found.more.toLocaleString("en-US")} more: type more of the name`;
+  return `${all}. Enter opens ${found.maps[0].name}.`;
 }
 
-/** `count` of `thing`, plural when it isn't 1: "1 character", "12 characters". */
+/** `count` of `thing`, plural when it isn't 1: "1 map", "12 maps". */
 function counted(count: number, thing: string): string {
   return `${count.toLocaleString("en-US")} ${thing}${count === 1 ? "" : "s"}`;
 }
 
-/** GET /api/maps: the most-uploaded maps, by Characters with entries there. */
+/** How many entries, the one word the pages count a Map Leaderboard in: "1 entry", "12 entries". */
+function entriesCounted(count: number): string {
+  return `${count.toLocaleString("en-US")} ${count === 1 ? "entry" : "entries"}`;
+}
+
+/** GET /api/maps: every map with entries, the most first. */
 export interface MapsAnswer {
   maps: { map: string; characters: number; entries: number }[];
 }
@@ -149,21 +188,35 @@ export interface UploadedMap {
   name: string;
   street: string;
   href: string;
-  characters: string;
+  entries: string;
 }
 
+/** What a page says in place of what it can't show, and where to go from there. */
+export interface Said {
+  text: string;
+  link?: { text: string; href: string };
+}
+
+/** Where an empty Map Leaderboard sends the player: putting their own bests there, which
+ *  only Minerva does. */
+const PUT_YOURS = { text: "How to put yours here from Minerva", href: "/faq/#leaderboard-appear" };
+
+/** How many maps the Map Leaderboards page lists as the most uploaded. */
+const MOST_UPLOADED = 50;
+
 /** The most-uploaded maps as the Map Leaderboards page lists them, or why it lists none. */
-export function mostUploaded(names: MapNames, answer: MapsAnswer): { maps: UploadedMap[]; empty: string | null } {
-  const maps = answer.maps.map(({ map, characters }) => {
+export function mostUploaded(names: MapNames, answer: MapsAnswer): { maps: UploadedMap[]; empty: Said | null } {
+  const maps = answer.maps.slice(0, MOST_UPLOADED).map(({ map, entries }) => {
     const place = placeOf(names, map);
     return {
       name: place.name,
       street: place.street,
       href: linkTo({ map, band: null, name: null }),
-      characters: counted(characters, "character"),
+      entries: entriesCounted(entries),
     };
   });
-  return { maps, empty: maps.length === 0 ? "No one has put a best on the Map Leaderboards yet." : null };
+  const empty = { text: "No one has put a best on the Map Leaderboards yet.", link: PUT_YOURS };
+  return { maps, empty: maps.length === 0 ? empty : null };
 }
 
 /** A Level Band's levels as the panel writes mob levels: "Lv 20–29". */
@@ -194,7 +247,7 @@ export interface MapPage {
   place: MapPlace;
   bands: BandChoice[];
   open: number | null;
-  empty: string | null;
+  empty: Said | null;
 }
 
 /** A map's page as `link` opens it, from its bands as the API gives them. It opens at the
@@ -209,7 +262,7 @@ export function mapPage(link: Link, names: MapNames, answer: MapAnswer): MapPage
     .map(([band, entries]) => ({
       band,
       levels: bandLevels(band),
-      entries: entries === 0 ? "No entries" : `${entries.toLocaleString("en-US")} ${entries === 1 ? "entry" : "entries"}`,
+      entries: entries === 0 ? "No entries" : entriesCounted(entries),
       href: linkTo({ map: answer.map, band, name: link.name }),
       open: band === open,
     }));
@@ -217,7 +270,7 @@ export function mapPage(link: Link, names: MapNames, answer: MapAnswer): MapPage
     place: placeOf(names, answer.map),
     bands,
     open,
-    empty: open === null ? "No one has a best on this Map Leaderboard yet." : null,
+    empty: open === null ? { text: "No one has a best on this Map Leaderboard yet.", link: PUT_YOURS } : null,
   };
 }
 
@@ -255,13 +308,22 @@ export interface Row {
   you: boolean;
 }
 
-/** A band's table: its rows, the linked Character's under them when it's outside them, a
- *  line about the linked Character, and why there are no rows when there are none. */
+/** A band's table: its rows, the linked Character's under them when it's outside them (after
+ *  how many entries are between), a line about the linked Character over the table and
+ *  another at their row, what the table shows of the band, and why there are no rows when
+ *  there are none. */
 export interface BandTable {
   rows: Row[];
+  /** Between the top 50 and the linked Character's row under them: "6 more entries". */
+  gap: string | null;
   yours: Row | null;
   note: string | null;
-  empty: string | null;
+  /** At the linked Character's row, where the page scrolls to: their rank, and what #1 and
+   *  the last row shown get. */
+  atYours: string | null;
+  /** "Top 50 of 63 at Lv 20–29", so the table doesn't stop at 50 silently. */
+  caption: string | null;
+  empty: Said | null;
 }
 
 /** A band's table from the API's answer, for the Character `name` the link names (if
@@ -282,15 +344,34 @@ export function bandTable(answer: BandAnswer, name: string | null, now: Date): B
   };
   const rows = answer.entries.map(row);
   const at = bandLevels(answer.band);
+  const total = answer.total.toLocaleString("en-US");
   let note: string | null = null;
-  if (yours !== null) note = `${yours.name} is #${yours.rank} of ${answer.total.toLocaleString("en-US")} at ${at}.`;
+  if (yours !== null) note = `${yours.name} is #${yours.rank} of ${total} at ${at}.`;
   else if (name !== null) note = `${name} has no entry here at ${at} any more.`;
+  const below = yours !== null && !rows.some((r) => r.you);
+  const between = below ? yours.rank - rows.length - 1 : 0;
+  const caption =
+    rows.length === 0 ? null : answer.total > rows.length ? `Top ${rows.length} of ${total} at ${at}` : `${entriesCounted(rows.length)} at ${at}`;
   return {
     rows,
-    yours: yours !== null && !rows.some((r) => r.you) ? row(yours) : null,
+    gap: between > 0 ? `${between.toLocaleString("en-US")} more ${between === 1 ? "entry" : "entries"}` : null,
+    yours: below ? row(yours) : null,
     note,
-    empty: rows.length === 0 ? `No one at ${at} has put a best on this map yet.` : null,
+    atYours: yours === null ? null : atRank(yours, answer),
+    caption,
+    empty: rows.length === 0 ? { text: `No one at ${at} has put a best on this map yet.`, link: PUT_YOURS } : null,
   };
+}
+
+/** What the linked Character's row says of where they stand: "Egbert is #57 of 63. #1 gets
+ *  157,000 EXP/h, and #50 gets 73,400.", leaving out the rank that's theirs. */
+function atRank(yours: Ranked, answer: BandAnswer): string {
+  const said = `${yours.name} is #${yours.rank} of ${answer.total.toLocaleString("en-US")}.`;
+  const others = [answer.entries[0], answer.entries[answer.entries.length - 1]].filter(
+    (e, i, all): e is Ranked => e !== undefined && e.rank !== yours.rank && all.indexOf(e) === i,
+  );
+  const gets = others.map((e, i) => `#${e.rank} gets ${rate(e.expPerHour)}${i === 0 ? " EXP/h" : ""}`);
+  return gets.length === 0 ? said : `${said} ${gets.join(", and ")}.`;
 }
 
 /** What the page says once POST /api/reports answers with `status` (`null` when it

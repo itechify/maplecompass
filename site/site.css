@@ -34,6 +34,12 @@
   --head: 100px;
 }
 
+/* Hidden means hidden, whatever display a rule gives the element (a .button's, a phone
+   table's): the pages' scripts show and hide with it. */
+[hidden] {
+  display: none !important;
+}
+
 ::selection {
   background: var(--select);
   color: var(--ink);
@@ -1265,6 +1271,10 @@ code.path {
   color: var(--ink-2);
   break-inside: avoid;
 }
+/* The fine print under the credits keeps a reading measure across the whole foot. */
+.window-foot .fine {
+  max-width: 55ch;
+}
 
 /* ---- The page's minimap ---- */
 
@@ -1579,7 +1589,7 @@ button.icon-button:active {
   padding: 40px 0 8px;
 }
 .lb-head .lede {
-  max-width: 40em;
+  max-width: 36em;
   margin: 0;
 }
 .lb-head h1 {
@@ -1620,9 +1630,6 @@ button.icon-button:active {
   box-shadow: inset 0 1px 2px rgba(20, 30, 60, 0.15);
   color: var(--ink);
   font: 16px/24px var(--font);
-}
-.lb-search input::placeholder {
-  color: var(--ink-3);
 }
 .lb-said {
   margin: 10px 0 0;
@@ -1668,6 +1675,12 @@ button.icon-button:active {
 .lb-map:focus-visible {
   outline-offset: -2px;
 }
+/* The map Enter opens: Selection Periwinkle with its inset ring, as the panel marks the
+   match Enter picks; the line under the field names it. */
+.lb-map.lb-enter {
+  background: var(--select);
+  box-shadow: inset 0 0 0 1px var(--select-edge);
+}
 .lb-map-words {
   display: flex;
   flex: 1;
@@ -1699,6 +1712,12 @@ button.icon-button:active {
 }
 .lb-questions > .qa-block {
   margin-top: 0;
+}
+/* Prose on the Map Leaderboards keeps a reading measure, about 70 characters a line (the
+   face's 0 is wide, so 55ch). */
+.lb-questions .qa p,
+.lb-said {
+  max-width: 55ch;
 }
 
 /* A map's page: the way back, the map's name under its street, as the panel titles a map,
@@ -1768,6 +1787,11 @@ button.icon-button:active {
 .lb-board .lb-said {
   margin: 0;
 }
+/* With no band to show (loading, or a map with no entries), the line that says so sits
+   close under the map's name, not a band's distance away. */
+.lb-board:has(> #band-title[hidden]) {
+  padding-top: 12px;
+}
 .lb-note {
   margin: 0 0 14px;
   font-size: 15px;
@@ -1828,15 +1852,61 @@ button.icon-button:active {
 .lb-table .lb-report {
   width: 1%;
 }
+/* A date never breaks across lines ("12 / Oct"). */
+.lb-table .lb-date {
+  white-space: nowrap;
+}
+/* Under the rows, where the table stops: "Top 50 of 63 at Lv 20–29". */
+.lb-caption {
+  caption-side: bottom;
+  padding: 8px 12px 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink-2);
+  text-align: left;
+}
+/* The keys between Reports, said in the caption while one has the keyboard's focus. */
+.lb-keys {
+  display: none;
+}
+.lb-table:has(.lb-report-button:focus-visible) .lb-keys {
+  display: inline;
+  font-variant-emoji: text;
+}
+/* The linked character's entry: Selection Periwinkle, the You Yellow star before the name
+   (a best of the player's, as the Personal Bests window stars one), and under it a line of
+   where they stand, the two one block. */
 .lb-table tr.lb-you > * {
   background: var(--select);
 }
+.lb-star {
+  width: 13px;
+  height: 13px;
+  margin-right: 6px;
+  vertical-align: -1px;
+  fill: var(--you);
+  stroke: var(--you-edge);
+  stroke-width: 1.1;
+  stroke-linejoin: round;
+}
+.lb-table tbody tr.lb-you-says > td {
+  padding-top: 0;
+  border-top: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink);
+  text-align: left;
+}
+/* Between the top 50 and the linked character's entry: how many more entries. */
 .lb-table tr.lb-gap > td {
-  padding: 0 12px;
-  color: var(--ink-3);
+  padding: 4px 12px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink-2);
   text-align: center;
 }
-/* Report, a link's look on a button. */
+/* Report, quiet on every row: a link's words without the underline, which it takes under
+   the pointer, its own or its row's. */
 .lb-report-button {
   position: relative;
   padding: 0;
@@ -1844,11 +1914,14 @@ button.icon-button:active {
   background: none;
   color: var(--ink-2);
   font: 13px/18px var(--font);
-  text-decoration: underline 1px var(--select-edge);
+  text-decoration: underline 1px transparent;
   text-underline-offset: 3px;
   cursor: pointer;
 }
-.lb-report-button:hover {
+.lb-table tbody tr:hover .lb-report-button {
+  text-decoration-color: var(--select-edge);
+}
+.lb-table tbody tr .lb-report-button:hover {
   color: var(--portal);
   text-decoration-color: currentColor;
 }
@@ -2163,9 +2236,19 @@ button.button {
   .lb-head {
     padding-top: 28px;
   }
-  .lb-table,
+  /* The rows as cards, the table's roles kept in the markup; the caption still under them. */
+  .lb-table {
+    display: flex;
+    flex-direction: column;
+  }
   .lb-table tbody {
     display: block;
+  }
+  .lb-caption {
+    display: block;
+    order: 1;
+    padding: 8px 12px;
+    border-top: 1px solid var(--rule);
   }
   .lb-table thead {
     position: absolute;
@@ -2176,7 +2259,8 @@ button.button {
   }
   .lb-table tr {
     display: grid;
-    grid-template-columns: 2.6em auto auto minmax(0, 1fr) auto;
+    /* The job gives way (it wraps) before the level or the date, which never break. */
+    grid-template-columns: 2.6em minmax(0, max-content) max-content minmax(max-content, 1fr) auto;
     grid-template-areas:
       "rank name name name exp"
       "rank job level date report";
@@ -2194,9 +2278,18 @@ button.button {
   .lb-table tr.lb-you {
     background: var(--select);
   }
-  .lb-table tr.lb-gap {
+  .lb-table tr.lb-gap,
+  .lb-table tr.lb-you-says {
     display: block;
-    padding: 0 12px;
+    padding: 4px 12px;
+  }
+  .lb-table tbody tr.lb-you-says {
+    padding-top: 0;
+    border-top: 0;
+  }
+  .lb-table tr.lb-gap > td,
+  .lb-table tr.lb-you-says > td {
+    display: block;
   }
   .lb-table .lb-rank {
     grid-area: rank;
