@@ -4,6 +4,10 @@ export type ExpRate = { expPerHour: number; percentPerHourHundredths: number | n
 /** Mirror of `minerva_core::ExpBar`: the EXP bar's figures, "EXP 160 [3.81%]". */
 export type ExpBar = { exp: number; percentHundredths: number };
 
+/** Mirror of `minerva_core::Character`: who is playing, as the game's Status Bar names them,
+ *  with the job and level it last showed. */
+export type Character = { name: string; job: string | null; level: number | null };
+
 /** Mirror of `minerva_core::ExpTracking`. */
 export type ExpTracking = {
   state: "off" | "waiting" | "warmingUp" | "active" | "paused" | "unreadable";

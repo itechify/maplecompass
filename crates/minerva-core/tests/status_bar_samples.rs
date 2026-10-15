@@ -157,6 +157,26 @@ fn the_status_bar_is_found_at_the_bottom_of_a_whole_client_area_wherever_it_sits
 }
 
 #[test]
+fn a_name_under_the_pointer_is_unreadable_and_the_rest_still_reads() {
+    let file = "13__magician__Egbert--kerning-city-window.png";
+    let mut img = image::open(samples_dir().join(file)).expect(file).to_rgba8();
+    // The game's pointer, white with a black outline, over the "b" of "Egbert".
+    let (x, y) = (165, img.height() - 18);
+    for dy in 0..12 {
+        for dx in 0..=dy / 2 {
+            let edge = dx == 0 || dx == dy / 2 || dy == 11;
+            img.put_pixel(x + dx, y + dy, image::Rgba(if edge { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
+        }
+    }
+    let mut minerva = started();
+    let capture = StatusBarCapture { frame: frame(&img, 1.0), origin: ScreenPoint { x: 0, y: 0 } };
+
+    let read = read(minerva.on_status_bar_capture(capture));
+
+    assert_eq!(read, Some((Some(13), Some("magician".to_string()), None)));
+}
+
+#[test]
 fn the_top_of_a_client_area_has_no_status_bar() {
     for window in WINDOWS {
         let client = client_of(&common::load(window));

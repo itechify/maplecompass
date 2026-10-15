@@ -10,8 +10,8 @@ mod common;
 
 use common::tracking;
 use minerva_core::{
-    Character, Deaths, ExpBar, ExpBarReading, ExpTracking, Minerva, PanelState, ScreenRect, StatusBar, StatusBarReading,
-    TrackingState,
+    Action, Character, Deaths, ExpBar, ExpBarReading, ExpTracking, Foreground, Minerva, PanelSizes, PanelState, STATUS_BAR_STRIP,
+    ScreenRect, Size, StatusBar, StatusBarReading, TrackingState,
 };
 
 const S: u64 = 1000;
@@ -232,4 +232,35 @@ fn a_level_up_the_status_bar_shows_is_taken_at_once_however_far_the_bar_was_from
     let levelled_late = read(&mut late, 40 * S, 520, LV14);
     assert_eq!(levelled_late.exp_tracking.bar, Some(ExpBar { exp: 520, percent_hundredths: percent(520, LV14) }));
     assert_eq!(levelled_late.exp_tracking.deaths, Deaths::default());
+}
+
+fn overlaps(a: ScreenRect, b: ScreenRect) -> bool {
+    let (ar, ab) = (a.x + a.width as i32, a.y + a.height as i32);
+    let (br, bb) = (b.x + b.width as i32, b.y + b.height as i32);
+    a.x < br && b.x < ar && a.y < bb && b.y < ab
+}
+
+#[test]
+fn a_panel_dragged_onto_the_status_bars_character_is_moved_clear_of_it() {
+    let mut minerva = tracking();
+    minerva.set_panel_sizes(PanelSizes { expanded: Size { width: 340, height: 72 }, collapsed: Size { width: 44, height: 44 } });
+    let area = status(&mut minerva, 0, Some("Egbert"), Some(13)).status_bar.expect("found").area;
+
+    let state = minerva.act(Action::PanelMoved { x: 300, y: 1120 }).clone();
+
+    let placement = state.placement.expect("placed");
+    assert!(!overlaps(placement, area), "{placement:?} over {area:?}");
+}
+
+#[test]
+fn the_status_bar_is_captured_across_the_bottom_of_the_client_area_while_the_game_can_show() {
+    let mut minerva = tracking();
+    assert_eq!(
+        minerva.panel_state().status_bar_capture,
+        Some(ScreenRect { x: 0, y: 1200 - STATUS_BAR_STRIP as i32, width: 1920, height: STATUS_BAR_STRIP })
+    );
+
+    let state = minerva.on_foreground(Foreground::OtherApp);
+
+    assert_eq!(state.status_bar_capture, None, "another app's pixels are never read");
 }

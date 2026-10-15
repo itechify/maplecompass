@@ -3,13 +3,19 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { byId, span } from "./dom";
-import type { ExpRate, ExpTracking, PacePoint, PaceTrace } from "./exp-tracking";
+import type { Character, ExpRate, ExpTracking, PacePoint, PaceTrace } from "./exp-tracking";
 import { percent, rate, sharePercent, whole } from "./figures";
 
-/** What the shell sends: the figures, whether the window shows at all, whether some map
- *  has a Personal Best (the Personal Bests button shows), and whether the Personal Bests
- *  window is open (the button shows as on). */
-type TrackerView = { shown: boolean; tracking: ExpTracking; personalBests: boolean; personalBestsOpen: boolean };
+/** What the shell sends: the figures, the Character playing (none until the Status Bar names
+ *  one), whether the window shows at all, whether some map has a Personal Best (the Personal
+ *  Bests button shows), and whether the Personal Bests window is open (the button shows as on). */
+type TrackerView = {
+  shown: boolean;
+  tracking: ExpTracking;
+  character: Character | null;
+  personalBests: boolean;
+  personalBestsOpen: boolean;
+};
 
 const panelEl = byId("panel");
 const openBests = byId("open-bests");
@@ -36,6 +42,7 @@ const share = byId("tracking-share");
 const deaths = byId("tracking-deaths");
 const exp = byId("tracking-exp");
 const expFigures = byId("exp-figures");
+const expCharacter = byId("exp-character");
 const expGauge = byId("exp-gauge");
 const expGaugeLost = byId("exp-gauge-lost");
 const forecast = byId("forecast");
@@ -142,6 +149,13 @@ function render(view: TrackerView) {
     // As the bar writes it: "8,435 [41.72%]".
     const reading = `${whole(t.bar.exp)} [${(t.bar.percentHundredths / 100).toFixed(2)}%]`;
     expFigures.textContent = reading;
+    // Who it is, as the game's Status Bar shows them beside its EXP bar.
+    const c = view.character;
+    expCharacter.hidden = !c;
+    if (c) {
+      const about = [c.level === null ? "" : `Lv. ${c.level}`, c.job ?? ""].filter(Boolean).join(" ");
+      expCharacter.textContent = about ? `${c.name} · ${about}` : c.name;
+    }
     expGauge.setAttribute("aria-valuenow", String(t.bar.percentHundredths / 100));
     const lost = t.lostFromHundredths;
     const before = lost === null ? "" : `, down from ${barPercent(lost)} before a death`;
