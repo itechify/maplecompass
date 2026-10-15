@@ -2012,14 +2012,6 @@ html.lb-morph::view-transition-group(lb-head) {
   stroke-width: 1.1;
   stroke-linejoin: round;
 }
-.lb-table tbody tr.lb-you-says > td {
-  padding-top: 0;
-  border-top: 0;
-  font-size: 13px;
-  line-height: 18px;
-  color: var(--ink);
-  text-align: left;
-}
 /* Between the top 50 and the linked character's entry: how many more entries. */
 .lb-table tr.lb-gap > td {
   padding: 4px 12px;
@@ -2402,17 +2394,11 @@ button.button {
   .lb-table tr.lb-you {
     background: var(--select);
   }
-  .lb-table tr.lb-gap,
-  .lb-table tr.lb-you-says {
+  .lb-table tr.lb-gap {
     display: block;
     padding: 4px 12px;
   }
-  .lb-table tbody tr.lb-you-says {
-    padding-top: 0;
-    border-top: 0;
-  }
-  .lb-table tr.lb-gap > td,
-  .lb-table tr.lb-you-says > td {
+  .lb-table tr.lb-gap > td {
     display: block;
   }
   .lb-table .lb-rank {

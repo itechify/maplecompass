@@ -37,7 +37,6 @@ describe("a Level Band", () => {
     expect(table.yours).toBe(null);
     expect(table.gap).toBe(null);
     expect(table.note).toBe(null);
-    expect(table.atYours).toBe(null);
     expect(table.empty).toBe(null);
   });
 
@@ -47,7 +46,7 @@ describe("a Level Band", () => {
     expect(bandTable(answer([ranked(1, "Ada", 60_000)]), null, NOW).caption).toBe("1 entry at Lv 20–29");
   });
 
-  it("marks the linked Character's entry, and says at it its rank and what #1 and the last shown get", () => {
+  it("marks the linked Character's entry and says its rank above the table", () => {
     const egbert = ranked(2, "Egbert", 50_000);
     const table = bandTable(answer([ranked(1, "Ada", 60_000), egbert, ranked(3, "Bea", 40_000)], egbert), "egbert", NOW);
 
@@ -58,21 +57,8 @@ describe("a Level Band", () => {
     ]);
     expect(table.yours).toBe(null);
     expect(table.note).toBe("Egbert is #2 of 3 at Lv 20–29.");
-    expect(table.atYours).toBe("Egbert is #2 of 3. #1 gets 60,000 EXP/h, and #3 gets 40,000.");
   });
 
-  it("says at the linked entry only what's above or below it when it's first or last", () => {
-    const first = ranked(1, "Egbert", 60_000);
-    expect(bandTable(answer([first, ranked(2, "Ada", 40_000)], first), "Egbert", NOW).atYours).toBe(
-      "Egbert is #1 of 2. #2 gets 40,000 EXP/h.",
-    );
-    const last = ranked(2, "Egbert", 40_000);
-    expect(bandTable(answer([ranked(1, "Ada", 60_000), last], last), "Egbert", NOW).atYours).toBe(
-      "Egbert is #2 of 2. #1 gets 60,000 EXP/h.",
-    );
-    const alone = ranked(1, "Egbert", 60_000);
-    expect(bandTable(answer([alone], alone), "Egbert", NOW).atYours).toBe("Egbert is #1 of 1.");
-  });
 
   it("shows the linked Character's entry under the top 50 when it's outside them, after how many are between", () => {
     const egbert = ranked(57, "Egbert", 1_234);
@@ -92,7 +78,6 @@ describe("a Level Band", () => {
       lane: expect.any(Number),
     });
     expect(table.note).toBe("Egbert is #57 of 63 at Lv 20–29.");
-    expect(table.atYours).toBe("Egbert is #57 of 63. #1 gets 157,000 EXP/h, and #50 gets 73,400.");
   });
 
   it("puts the linked Character's entry right under the top 50 when it's #51", () => {
@@ -110,7 +95,6 @@ describe("a Level Band", () => {
     expect(table.rows.map((r) => r.you)).toEqual([false]);
     expect(table.yours).toBe(null);
     expect(table.note).toBe("Egbert has no entry here at Lv 20–29 any more.");
-    expect(table.atYours).toBe(null);
   });
 
   it("says when no one has a best in the band, and how to put yours there from Minerva", () => {
@@ -119,7 +103,6 @@ describe("a Level Band", () => {
       gap: null,
       yours: null,
       note: null,
-      atYours: null,
       caption: null,
       empty: {
         text: "No one at Lv 20–29 has put a best on this map yet.",

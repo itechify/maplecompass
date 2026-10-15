@@ -102,12 +102,12 @@ function drawBand(band: BandAnswer, morph: Map<string, string> | null, grow: boo
   said.hidden = true;
   byId("caption").textContent = table.caption ?? "";
   drawRuler(table.ruler);
-  const at = { place: place!, band: band.band, atYours: table.atYours, ruler: table.ruler, morph };
+  const at = { place: place!, band: band.band, ruler: table.ruler, morph };
   rows.replaceChildren();
-  for (const row of table.rows) rows.append(...drawRow(row, at));
+  for (const row of table.rows) rows.append(drawRow(row, at));
   if (table.yours !== null) {
     if (table.gap !== null) rows.append(lineRow("lb-gap", table.gap));
-    rows.append(...drawRow(table.yours, at));
+    rows.append(drawRow(table.yours, at));
   }
   rows.classList.toggle("lb-grow", grow);
   rovingReports(rows);
@@ -216,8 +216,7 @@ async function switchTo(to: Link, href: string | null, animate: boolean) {
 /** Name the shown rows of the Characters in `morph` for the switch, or no row (`null`). */
 function nameRows(morph: Map<string, string> | null) {
   for (const tr of rows.querySelectorAll<HTMLTableRowElement>("tr[data-name]")) {
-    const name = morph?.get(tr.dataset.name!) ?? "";
-    tr.style.viewTransitionName = name && tr.dataset.says !== undefined ? `${name}-says` : name;
+    tr.style.viewTransitionName = morph?.get(tr.dataset.name!) ?? "";
   }
 }
 
@@ -294,21 +293,20 @@ function star(): SVGSVGElement {
   return svg;
 }
 
-/** Where an entry's rows are drawn: the map and band (for its report), what the linked
- *  Character's row says, the band's ruler, and the rows that slide in a switch. */
+/** Where an entry's row is drawn: the map and band (for its report), the band's ruler, and
+ *  the rows that slide in a switch. */
 interface RowsAt {
   place: MapPlace;
   band: number;
-  atYours: string | null;
   ruler: RulerStep[];
   morph: Map<string, string> | null;
 }
 
-/** An entry's rows: its rank, name, job, level, EXP/h, lane, date and report link; or, for
- *  the linked Character's, the You Yellow star before the name, no report link (the player
- *  takes their own entries off from Minerva), and under it where they stand. A row that
- *  slides in a switch takes its Character's name for it, and so does the line under it. */
-function drawRow(row: Row, { place, band, atYours, ruler, morph }: RowsAt): HTMLTableRowElement[] {
+/** An entry's row: its rank, name, job, level, EXP/h, lane, date and report link; or, for
+ *  the linked Character's, the You Yellow star before the name and no report link (the
+ *  player takes their own entries off from Minerva). A row that slides in a switch takes
+ *  its Character's name for it. */
+function drawRow(row: Row, { place, band, ruler, morph }: RowsAt): HTMLTableRowElement {
   const tr = make("tr", row.you ? "lb-you" : "");
   tr.setAttribute("role", "row");
   tr.dataset.name = row.name;
@@ -335,12 +333,7 @@ function drawRow(row: Row, { place, band, atYours, ruler, morph }: RowsAt): HTML
   const figures = [exp, make("td", "lb-date", row.date), reportCell];
   for (const cell of [...cells, ...figures]) cell.setAttribute("role", "cell");
   tr.append(cells[0], name, cells[1], cells[2], figures[0], laneCell(row, ruler), figures[1], figures[2]);
-  if (!row.you || atYours === null) return [tr];
-  const says = lineRow("lb-you lb-you-says", atYours);
-  says.dataset.name = row.name;
-  says.dataset.says = "";
-  says.style.viewTransitionName = tr.style.viewTransitionName && `${tr.style.viewTransitionName}-says`;
-  return [tr, says];
+  return tr;
 }
 
 /** The table's Report buttons as one Tab stop: the up and down arrows (Home and End too)

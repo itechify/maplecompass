@@ -320,9 +320,6 @@ export interface BandTable {
   gap: string | null;
   yours: Row | null;
   note: string | null;
-  /** At the linked Character's row, where the page scrolls to: their rank, and what #1 and
-   *  the last row shown get. */
-  atYours: string | null;
   /** "Top 50 of 63 at Lv 20–29", so the table doesn't stop at 50 silently. */
   caption: string | null;
   empty: Said | null;
@@ -394,7 +391,6 @@ export function bandTable(answer: BandAnswer, name: string | null, now: Date): B
     gap: between > 0 ? `${between.toLocaleString("en-US")} more ${between === 1 ? "entry" : "entries"}` : null,
     yours: below ? row(yours) : null,
     note,
-    atYours: yours === null ? null : atRank(yours, answer),
     caption,
     empty: rows.length === 0 ? { text: `No one at ${at} has put a best on this map yet.`, link: PUT_YOURS } : null,
     ruler: rows.length === 0 ? [] : rulerTo(top),
@@ -418,17 +414,6 @@ export function morphNames(before: Row[], after: Row[]): Map<string, string> {
     names.set(row.name, `lb-row-${safe}`);
   }
   return names;
-}
-
-/** What the linked Character's row says of where they stand: "Egbert is #57 of 63. #1 gets
- *  157,000 EXP/h, and #50 gets 73,400.", leaving out the rank that's theirs. */
-function atRank(yours: Ranked, answer: BandAnswer): string {
-  const said = `${yours.name} is #${yours.rank} of ${answer.total.toLocaleString("en-US")}.`;
-  const others = [answer.entries[0], answer.entries[answer.entries.length - 1]].filter(
-    (e, i, all): e is Ranked => e !== undefined && e.rank !== yours.rank && all.indexOf(e) === i,
-  );
-  const gets = others.map((e, i) => `#${e.rank} gets ${rate(e.expPerHour)}${i === 0 ? " EXP/h" : ""}`);
-  return gets.length === 0 ? said : `${said} ${gets.join(", and ")}.`;
 }
 
 /** What the page says once POST /api/reports answers with `status` (`null` when it
