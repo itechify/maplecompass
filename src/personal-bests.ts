@@ -6,6 +6,7 @@ import { dayText } from "./dates";
 import { byId, span } from "./dom";
 import { type LevelRange, levels, rate, sharePercent, whole } from "./figures";
 import { mapMark, type MapMarks } from "./map-marks";
+import { soloExpHelp } from "./solo-exp-help";
 
 /** Mirror of `minerva_core::PersonalBestsVisit`: one of a map's Visits. */
 type BestsVisit = {
@@ -53,7 +54,7 @@ type Rejected = {
   reason: { overCap: { cap: number } } | { removed: Record<string, never> };
 };
 
-/** Mirror of `minerva_core::LeaderboardToggle`: a Character's "Show on the Map Leaderboards". */
+/** Mirror of `minerva_core::LeaderboardToggle`: a Character's "Share to the Map Leaderboards". */
 type Toggle = {
   on: boolean;
   /** How many maps they have an entry for: what turning it on asks about. */
@@ -76,13 +77,13 @@ type BestsCharacter = {
   current: boolean;
   /** Their rows, highest EXP/h first. */
   maps: BestsMap[];
-  /** Their "Show on the Map Leaderboards"; `null` for the Unassigned bests, never uploaded. */
+  /** Their "Share to the Map Leaderboards"; `null` for the Unassigned bests, never uploaded. */
   leaderboard: Toggle | null;
 };
 
 /** What the shell sends: whether the window shows at all, whose bests it can show, each
  *  with the core's rows, and every Map Mark, which each row's map names its own by. */
-type BestsView = { shown: boolean; characters: BestsCharacter[]; credit: string; mapMarks: MapMarks };
+type BestsView = { shown: boolean; characters: BestsCharacter[]; mapMarks: MapMarks };
 
 type Column = "map" | "levels" | "exp" | "share" | "set";
 type Way = "ascending" | "descending";
@@ -98,8 +99,7 @@ const rows = byId("rows");
 const noteMissing = byId("note-missing");
 const noteDot = byId("note-dot");
 const scaleEl = byId("scale");
-const footer = byId("footer");
-const credit = byId("credit");
+byId("solo-exp-help").append(soloExpHelp());
 const announce = byId("announce");
 const headers = [...document.querySelectorAll<HTMLTableCellElement>("th[data-column]")];
 
@@ -452,7 +452,7 @@ function boardRow(m: BestsMap) {
   board.className = "row-leaderboard";
   board.dataset.id = m.id;
   board.title = "Open its Map Leaderboard on owlofminerva.app";
-  board.append("Its Map Leaderboard", span("sr-only", ` for ${mapName(m)} (opens owlofminerva.app in your browser)`));
+  board.append("Map Leaderboard", span("sr-only", ` for ${mapName(m)} (opens owlofminerva.app in your browser)`));
   td.append(board);
   tr.append(td);
   return tr;
@@ -616,7 +616,7 @@ function renderRows() {
 
 /** The picker, with a button for each choice, the shown one pressed and the Character
  *  playing marked "playing": always, so the window names whose bests these are, even with one
- *  choice. Then the shown one's count, and at its end the Character's Manage, or Unassigned's
+ *  choice. Then an empty-state or Unassigned note, and the Character's Manage, or Unassigned's
  *  Assign all to… */
 function renderWhose() {
   const current = shown();
@@ -633,14 +633,11 @@ function renderWhose() {
       return button;
     }),
   );
-  const n = mapsText(maps.length);
-  const t = current?.leaderboard ?? null;
-  let words: string;
+  let words = "";
   if (maps.length === 0) words = `No bests yet for ${current ? nameOf(current) : "you"}`;
-  else if (current?.name === null) words = `${n} · set before Minerva read your characters' names, or while it couldn't`;
-  // Shown there only while it isn't a problem: a problem says so in its own note.
-  else words = t?.on && !t.problem ? `${n} · shown on the Map Leaderboards` : n;
+  else if (current?.name === null) words = "Set before Minerva read your characters' names, or while it couldn't";
   count.textContent = words;
+  count.hidden = words === "";
 
   countActions.replaceChildren();
   if (!current) return;
@@ -658,7 +655,7 @@ function renderWhose() {
     manage.className = "manage-toggle";
     manage.setAttribute("aria-expanded", String(managing));
     manage.setAttribute("aria-controls", "manage");
-    manage.title = managing ? `Hide what you can do with ${current.name}` : `Show on the Map Leaderboards, merge or remove ${current.name}`;
+    manage.title = managing ? `Hide what you can do with ${current.name}` : `Share to the Map Leaderboards, merge or remove ${current.name}`;
     manage.append("Manage", span("sr-only", ` ${current.name}`), chevron());
     countActions.append(manage);
   }
@@ -697,7 +694,7 @@ function line(...parts: (string | HTMLElement)[]) {
   return div;
 }
 
-/** The shown Character's Manage, while open: their "Show on the Map Leaderboards" switch and
+/** The shown Character's Manage, while open: their "Share to the Map Leaderboards" switch and
  *  where they stand; then Merge into… (for a Character the game renamed) and Remove, each
  *  asking again before it does anything. Unassigned's Assign all to… opens its Characters
  *  here too. */
@@ -761,7 +758,7 @@ function renderManage() {
   manageEl.hidden = manageEl.childElementCount === 0;
 }
 
-/** A Character's "Show on the Map Leaderboards": a switch, which asks again before it does
+/** A Character's "Share to the Map Leaderboards": a switch, which asks again before it does
  *  anything, either way: on, with how many maps go up and that the site is public; off, that
  *  it deletes them there. Armed, it is a button asking, so it is announced as the question. */
 function leaderboardSwitch(name: string, t: Toggle) {
@@ -772,15 +769,15 @@ function leaderboardSwitch(name: string, t: Toggle) {
   button.dataset.on = String(t.on);
   const question = t.on
     ? `Take ${name}'s bests off owlofminerva.app?`
-    : `Show ${name}'s bests on ${mapsText(t.maps)} publicly on owlofminerva.app?`;
+    : `Share ${name}'s bests on ${mapsText(t.maps)} publicly on owlofminerva.app?`;
   if (!asking) {
     button.setAttribute("role", "switch");
     button.setAttribute("aria-checked", String(t.on));
   }
-  button.title = t.on ? `Take ${name}'s bests off the Map Leaderboards: deleted from the site` : `Show ${name}'s bests on the Map Leaderboards, for anyone to see`;
+  button.title = t.on ? `Take ${name}'s bests off the Map Leaderboards: deleted from the site` : `Share ${name}'s bests to the Map Leaderboards, for anyone to see`;
   const knob = span("knob", "");
   knob.setAttribute("aria-hidden", "true");
-  button.append(knob, asking ? question : "Show on the Map Leaderboards");
+  button.append(knob, asking ? question : "Share to the Map Leaderboards");
   return button;
 }
 
@@ -896,9 +893,6 @@ function render(view: BestsView) {
     const rowsNow = new Set(characters.flatMap((c) => c.maps.map((m) => `${keyOf(c)} ${m.id}`)));
     for (const key of opened) if (!rowsNow.has(key)) opened.delete(key);
   }
-  // The credit in words, at the foot, as DESIGN.md asks of this window.
-  footer.hidden = !view.credit;
-  credit.textContent = view.credit;
   renderAll();
   reportHeight();
 }

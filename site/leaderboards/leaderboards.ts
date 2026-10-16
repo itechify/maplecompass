@@ -439,3 +439,11 @@ export function linkTo(link: Link): string {
   if (link.name !== null) query.set("name", link.name);
   return `/leaderboards/map/?${query}`;
 }
+
+/** A map's picture in OSMS's live manifest. Only a content hash can name a picture;
+ *  absent or malformed entries have no picture, and never supply an arbitrary URL. */
+export function mapPicture(manifest: unknown, map: string): string | null {
+  if (manifest === null || typeof manifest !== "object" || Array.isArray(manifest)) return null;
+  const hash = (manifest as Record<string, unknown>)[map];
+  return typeof hash === "string" && /^[a-f0-9]{32}$/i.test(hash) ? `https://osmsdataexplorer.com/data/maps/${hash}.webp` : null;
+}

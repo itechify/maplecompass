@@ -1,0 +1,68 @@
+.solo-exp-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 3px;
+  padding: 1px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-2);
+  vertical-align: middle;
+  cursor: help;
+}
+
+.solo-exp-help svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.solo-exp-help:hover {
+  color: var(--portal);
+  background: var(--inset-bg);
+}
+
+.solo-exp-help:active {
+  color: var(--frame);
+}
+
+.solo-exp-help:focus-visible {
+  outline: 2px solid var(--edit);
+  outline-offset: 2px;
+}
+
+.solo-exp-tip {
+  position: fixed;
+  z-index: 30;
+  box-sizing: border-box;
+  width: min(330px, calc(100vw - 12px));
+  max-height: calc(100vh - 12px);
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--window-edge);
+  border-radius: 4px;
+  background: var(--body-solid);
+  color: var(--ink);
+  font: 12px/17px var(--font);
+  text-align: left;
+  text-wrap: pretty;
+}
+
+.solo-exp-tip p {
+  margin: 0;
+}
+
+.solo-exp-tip p + p {
+  margin-top: 7px;
+}
+
+.hidden .solo-exp-tip {
+  display: none;
+}

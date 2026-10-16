@@ -20,15 +20,15 @@
             </button>
           </div>
         </header>
-        <div class="whose" id="whose" role="group" aria-label="Whose bests to show"></div>
-        <div class="count-line">
-          <p class="count" id="count"></p>
+        <div class="bests-toolbar">
+          <div class="whose" id="whose" role="group" aria-label="Whose bests to show"></div>
           <div class="count-actions" id="count-actions"></div>
         </div>
+        <p class="count" id="count" hidden></p>
         <div class="manage" id="manage" hidden></div>
         <div class="problems" id="problems" hidden></div>
         <div class="box scroll" id="box">
-          <table aria-describedby="count">
+          <table>
             <caption class="sr-only">Your Personal Best on each map</caption>
             <thead>
               <tr>
@@ -50,6 +50,7 @@
                     <span class="label long" data-label="% of solo EXP/h">% of solo EXP/h</span>
                     <span class="label short" data-label="% of solo">% of solo</span>
                   </button>
+                  <span id="solo-exp-help"></span>
                 </th>
                 <th scope="col" data-column="set">
                   <button type="button" class="sort"><span class="label" data-label="Date set">Date set</span></button>
@@ -66,12 +67,8 @@
               >, and the dot the visit you're on</span
             >.
           </li>
-          <li>Solo EXP/h is the map's ceiling, worked out as NiaMeowDB does.</li>
           <li id="note-missing" hidden>A dash is a figure not known for that map: it isn't in the map list, or no mobs spawn there.</li>
         </ul>
-        <footer id="footer" hidden>
-          <p class="credit" id="credit"></p>
-        </footer>
       </div>
     </main>
     <p class="sr-only" aria-live="polite" id="announce"></p>
