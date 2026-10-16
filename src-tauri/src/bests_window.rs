@@ -44,7 +44,6 @@ struct BestsView<'a> {
     shown: bool,
     /// Whose bests it can show, one at a time, as its picker offers them.
     characters: &'a [PersonalBestsCharacter],
-    credit: &'a str,
     /// Every Map Mark, which each map names its own by.
     map_marks: &'a BTreeMap<String, MapMark>,
 }
@@ -143,7 +142,6 @@ impl BestsWindow {
         let view = BestsView {
             shown: placement.is_some(),
             characters: &bests.characters,
-            credit: bests.credit,
             map_marks: &state.map_marks,
         };
         self.view.send(&self.app, &view, &self.app.state::<PersonalBestsView>().0);
@@ -228,7 +226,7 @@ pub fn personal_bests_merge_characters(from: String, into: String, commands: Sta
     let _ = commands.send(Command::MergeCharacters { from, into });
 }
 
-/// The player turned "Show on the Map Leaderboards" on (`on`, having confirmed) or off for the
+/// The player turned "Share to the Map Leaderboards" on (`on`, having confirmed) or off for the
 /// Character named `name`.
 #[tauri::command]
 pub fn personal_bests_show_on_leaderboards(name: String, on: bool, commands: State<'_, Sender<Command>>) {

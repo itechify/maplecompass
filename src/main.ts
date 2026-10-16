@@ -1,4 +1,5 @@
 import "./errors";
+import { soloExpHelp } from "./solo-exp-help";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -167,6 +168,7 @@ const candidatesEl = byId("candidates");
 const candidatesNote = byId("candidates-note");
 const candidateRows = byId("candidate-rows");
 const summary = byId("summary");
+summary.querySelector(".unit")!.append(soloExpHelp());
 const mobsTable = byId("mobs");
 const mobRows = byId("mob-rows");
 const portals = byId("portals");

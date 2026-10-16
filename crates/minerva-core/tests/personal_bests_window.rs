@@ -19,7 +19,7 @@ use common::player::Player;
 use common::{CONSTRUCTION_SITE_ID, FakeSource, SUNSET_SKY_ID, osms, sharing_a_title, tracking, tracking_with};
 use minerva_core::{
     Action, BESTS_VERSION, CharacterBests, ClientOffset, Minerva, ExpBarRegion, Foreground, GameWindow, LevelRange, MapBests,
-    OSMS_AND_MEOWDB_CREDIT, PanelControl, PanelSizes, PanelState, PersonalBestsMap, PersonalBestsVisit,
+    PanelControl, PanelSizes, PanelState, PersonalBestsMap, PersonalBestsVisit,
     PersonalBestsWindow, Rect, Request, SavedBests, ScreenRect, Settings, Size, TitleRegion, VisitBest, meowdb,
 };
 
@@ -134,7 +134,6 @@ fn a_first_visits_best_is_in_the_window_with_the_maps_names_levels_and_share_mar
 
     let window = toggle(&mut player);
     assert!(window.open);
-    assert_eq!(window.credit, OSMS_AND_MEOWDB_CREDIT);
     assert_eq!(
         maps(&window),
         [PersonalBestsMap {
@@ -429,7 +428,6 @@ fn the_shell_gets_the_window_and_the_button_as_they_render_them() {
     assert!(serde_json::to_value(&opened).unwrap().get("personalBests").is_none());
     let window = serde_json::to_value(&opened.personal_bests).unwrap();
     assert_eq!(window["open"], true);
-    assert_eq!(window["credit"], OSMS_AND_MEOWDB_CREDIT);
     let sunset = &window["characters"][0]["maps"][0];
     assert_eq!(sunset["id"], SUNSET_SKY_ID);
     assert_eq!(sunset["streetName"], "Victoria Road");

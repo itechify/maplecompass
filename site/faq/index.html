@@ -557,9 +557,17 @@
                 <details class="qa" id="map-summary">
                   <summary>What are the EXP/h and Mobs/h figures?</summary>
                   <p>
-                    The map's <strong>Map Summary</strong>: the EXP and mobs an hour you can expect there, solo and in a
-                    party of 6 or more, worked out as MeowDB works them out. Each mob's <strong>Share</strong> is its share
-                    of all the map's spawns: the higher it is, the fewer other mobs in your way.
+                    The map's <strong>Map Summary</strong> estimates its hourly ceiling, assuming mobs are killed as they
+                    respawn. For each mob, multiply its spawn points by its spawns per hour, then by its base EXP.
+                    Normal spawns use 3,600 ÷ 7.56 per point per hour for a party of 6 or more, and 75% of that solo
+                    (about 357). Timed spawns use 3,600 ÷ their timer in seconds for either party size; a ranged timer
+                    uses OSMS's listed average. Round each mob's result, then add them for the map. Mobs/h uses the same
+                    calculation without multiplying by EXP. EXP buffs, events and the map's Mob Rate aren't applied.
+                  </p>
+                  <p>
+                    Hover the <strong>?</strong> beside solo EXP/h in the panel, Grind Tracker or Personal Bests to see
+                    the calculation there too. Each mob's <strong>Share</strong> is its share of all the map's spawn
+                    points: the higher it is, the fewer other mobs in your way.
                   </p>
                 </details>
                 <details class="qa" id="spawn-points">
@@ -812,7 +820,7 @@
                   <p>
                     The star on the Grind Tracker's bar opens your Personal Bests over the game: every map's best for the
                     character you're playing, highest first, with its mob levels, how close it came to the map's solo EXP/h
-                    ceiling, and when you set it. The top names whose they are; pick another of your characters, or
+                    ceiling (the <strong>?</strong> explains how it's computed), and when you set it. The top names whose they are; pick another of your characters, or
                     Unassigned, there.
                     Each best is a bar on one scale, so your best map's is the longest. A notch in a bar is another of your
                     visits there, and the dot is the visit you're on, moving as you play. Click a column to sort by it, or a
@@ -863,7 +871,8 @@
                   <summary>What are the Map Leaderboards?</summary>
                   <p>
                     Pages on this site, one for each map, where players' Personal Bests from Minerva stand side by side,
-                    so you can see what EXP per hour others at your level get there. Each
+                    so you can see what EXP per hour others at your level get there. Each map's page shows its picture
+                    from OSMS Data Explorer when one is available. Each
                     <a href="#level-bands">Level Band</a> is ranked on its own and shows its top 50: each character's
                     name, job, exact level, EXP per hour and the date they set it, with a bar drawn as the game's EXP
                     bar, from 0 to #1's EXP per hour, so you see how far each is behind. Find a map on the
@@ -892,8 +901,8 @@
                   <summary>How do I put my character on the Map Leaderboards?</summary>
                   <p>
                     Open your <a href="#every-best">Personal Bests</a>, pick the character, click
-                    <strong>Manage</strong>, then <strong>Show on the Map Leaderboards</strong>. It asks once, with how
-                    many maps and that it's public ("Show Egbert's bests on 14 maps publicly on owlofminerva.app?"):
+                    <strong>Manage</strong>, then <strong>Share to the Map Leaderboards</strong>. It asks once, with how
+                    many maps and that it's public ("Share Egbert's bests on 14 maps publicly on owlofminerva.app?"):
                     click again to say yes. Minerva uploads the character's best visit on each map in each
                     <a href="#level-bands">Level Band</a>, then each new best when its visit ends. Removing a visit,
                     moving one to or from the character, or merging another into them updates the site too.
@@ -918,7 +927,7 @@
                 <details class="qa" id="leaderboard-remove">
                   <summary>How do I take my character off the Map Leaderboards?</summary>
                   <p>
-                    Under <strong>Manage</strong>, click <strong>Show on the Map Leaderboards</strong> again, and once
+                    Under <strong>Manage</strong>, click <strong>Share to the Map Leaderboards</strong> again, and once
                     more to confirm, to turn it off: every entry of the character is deleted from the site. Removing the character from your Personal Bests, or merging them
                     into another, takes them off too. The name stays yours, so you can put them back any time. A single
                     best that came from a bug goes when you remove that visit.
@@ -938,7 +947,7 @@
                 <details class="qa" id="leaderboard-link">
                   <summary>Where's my character's entry?</summary>
                   <p>
-                    In your Personal Bests, click a map's count of visits: under its visits, <strong>Its Map
+                    In your Personal Bests, click a map's count of visits: under its visits, <strong>Map
                     Leaderboard</strong> opens the map's page at the Level Band of the character you're playing, marks
                     your entry and says its rank, even outside the top 50. If it says your character has no entry there
                     any more, the entry has gone: taken off the Map Leaderboards, or removed after a report. If the site

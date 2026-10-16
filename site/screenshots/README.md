@@ -28,6 +28,9 @@ The pictures on the Minerva site, taken by hand in the game. The site's build fa
 
 When a change alters something a shot shows, the PR that makes it lists the shot here, with what changed. At release, the smoke test retakes every shot listed (`docs/releasing.md`) and empties the list.
 
+- `hero.png`, `game-window.png`, `mobs.png`, `navigation.png`: the Mobs summary has a ? help icon beside its solo EXP/h figure, explaining the calculation. Retake with the summary visible where the shot shows it.
+- `grind-tracker.png`: the solo EXP/h comparison has a ? help icon explaining the calculation. Update its alt text in `site/index.html` to say so.
+
 - `item-card.png`: each line under Market now has the Deal Line's ring before its name, filled on the Deal Line (Your price). Update its alt text in `site/index.html` to say so.
 - `hero.png`, `game-window.png`, `mobs.png`, `navigation.png`: the panel's window bar has the Deal Finder's price tag after the Grind Tracker's button. (`hero.png` is cut from `game-window.png`, and `site/reel.ts` ends on that corner, so retake them together.)
 - `grind-tracker.png`: the EXP bar's reading at its foot has the character playing beside it, by the name and level the status bar shows ("Egbert · Lv. 13"). Update its alt text in `site/index.html` to say so.

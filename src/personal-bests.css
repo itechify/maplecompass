@@ -64,14 +64,12 @@
   color: var(--ink-2);
 }
 
-/* The count, with the shown Character's Manage at its end (Unassigned's Assign all to…):
-   one quiet line, so the bars lead. */
-.count-line {
+/* Manage (or Assign all to…) shares the picker's row, leaving the table right below. */
+.bests-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 19px;
 }
 
 /* It wraps rather than losing Unassigned's why beside Assign all to… */
@@ -92,6 +90,7 @@
 
 .count-actions {
   flex: none;
+  margin-left: auto;
 }
 
 /* Manage: Panel Ink Steel at rest, Portal Blue and underlined under the pointer, as a map's
@@ -123,7 +122,7 @@
   transform: rotate(90deg);
 }
 
-/* What Manage opens, under the count: the switch and where they stand, then Merge into…
+/* What Manage opens, under the picker: the switch and where they stand, then Merge into…
    and Remove, then the Characters to merge into while Merge is open; or Unassigned's
    Characters to assign them all to. Lines of light buttons on the glass, no box. */
 .manage {
@@ -437,7 +436,7 @@ tbody tr.board-row td {
   outline-offset: 2px;
 }
 
-/* The shown Character's "Show on the Map Leaderboards", in Manage: a switch, its knob left
+/* The shown Character's "Share to the Map Leaderboards", in Manage: a switch, its knob left
    on Greyed while off and right on Edit Blue while on (the system's checked colour, as the
    travel checkboxes'), then where they stand there. Armed, either way, it asks in the
    problem palette: on, with the count of maps and that the site is public; off, that they
@@ -810,23 +809,6 @@ tbody tr.move-row td {
 
 .notes li + li {
   margin-top: 4px;
-}
-
-/* The credit in its words, 12px Panel Ink Slate under the Panel Rule, as DESIGN.md asks
-   of this window: it is read at a pause, with room for a line. */
-footer {
-  justify-content: flex-start;
-}
-
-.panel .credit {
-  width: auto;
-  height: auto;
-  cursor: auto;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--ink-3);
-  white-space: normal;
-  text-wrap: pretty;
 }
 
 /* Short labels where the long ones don't fit. */

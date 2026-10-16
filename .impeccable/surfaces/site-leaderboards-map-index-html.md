@@ -22,3 +22,7 @@ Chosen by the user. The critique of 15 Oct found the board generic ("could be an
 - **Fallbacks.** No View Transitions, reduced motion, or the browser's own swipe-back animation: the switch is at once. Script off: the page says it needs it, as before. First load and deep links never move. Nothing runs on a timer.
 - **Logic is tested.** The scale, the ruler's steps, each lane's fraction and the rows two bands share are plain functions in leaderboards.ts (`bandTable`'s `ruler` and each row's `lane`, `morphNames`), tested in site/leaderboards/test/lanes.test.ts and morph.test.ts.
 - **Checked** in the browser at 1280, 900, 700 and 375px, on made-up entries: Henesys Hunting Ground I with 60 in Lv 20–29 (the linked Character #60) and 18 in Lv 30–39, 12 of them in both; a switch held mid-transition, Back and Forward, a deep link outside the top 50, reduced motion and no View Transitions.
+
+## Map picture (15 Oct 2026)
+
+Under the map's name, before the Level Bands, show the whole OSMS map picture fitted on Minimap Paper in a shallow inset. Read the content hash from OSMS's live map manifest and load the picture independently of the rankings. Neither file is bundled. Keep the frame's height through loading, missing and failed pictures, and explain each state in plain Ink Steel.

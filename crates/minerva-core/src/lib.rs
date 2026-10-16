@@ -1256,7 +1256,7 @@ impl Minerva {
         self.sync_panel()
     }
 
-    /// The player turned "Show on the Map Leaderboards" on (`on`) for the Character named
+    /// The player turned "Share to the Map Leaderboards" on (`on`) for the Character named
     /// `name` in the Personal Bests window, having confirmed, or off. On, their entries go up at
     /// the next tick, and again whenever they change; off, they are deleted from the site.
     pub fn show_on_leaderboards(&mut self, name: &str, on: bool) -> &PanelState {
@@ -2061,8 +2061,7 @@ impl Minerva {
         } else {
             Vec::new()
         };
-        self.state.personal_bests =
-            PersonalBestsWindow { open: window.open, placement, characters, credit: OSMS_AND_MEOWDB_CREDIT };
+        self.state.personal_bests = PersonalBestsWindow { open: window.open, placement, characters };
     }
 
     /// Whether EXP tracking is on: there is an EXP Bar Region to read, kept and fitting

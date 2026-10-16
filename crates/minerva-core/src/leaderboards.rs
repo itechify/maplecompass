@@ -236,7 +236,7 @@ pub struct LeaderboardCharacter {
     pub held: bool,
 }
 
-/// The Personal Bests window's "Show on the Map Leaderboards" for a Character.
+/// The Personal Bests window's "Share to the Map Leaderboards" for a Character.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LeaderboardToggle {

@@ -1735,8 +1735,39 @@ button.icon-button:active {
   line-height: 22px;
   color: var(--ink-2);
 }
-.lb-head h1 + .lb-bands {
+.lb-head .lb-bands {
   margin-top: 24px;
+}
+/* The whole map on the panel's minimap paper, kept within one shallow inset so both
+   wide fields and tall towers fit without cropping or pushing the bands as it loads. */
+.lb-picture {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: clamp(160px, 24vw, 240px);
+  margin: 20px 0 0;
+  padding: 12px;
+  border: 1px solid var(--inset-edge);
+  border-radius: 4px;
+  background: var(--minimap-paper);
+}
+.lb-picture[hidden],
+.lb-picture [hidden] {
+  display: none;
+}
+.lb-picture img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.lb-picture p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 21px;
 }
 /* The Level Bands, light steel buttons each with its levels over its count; the band shown
    is the selected one, in Selection Periwinkle. */

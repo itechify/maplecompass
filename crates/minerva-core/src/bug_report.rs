@@ -224,7 +224,7 @@ pub enum Event {
     RemoveCharacter { name: String },
     /// The player merged the Character named `from` into the one named `into`.
     MergeCharacters { from: String, into: String },
-    /// The player turned "Show on the Map Leaderboards" on (`on`) or off for the Character
+    /// The player turned "Share to the Map Leaderboards" on (`on`) or off for the Character
     /// named `name`.
     ShowOnLeaderboards { name: String, on: bool },
     /// The player sent the Character named `name` to the Map Leaderboards again.

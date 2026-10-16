@@ -54,9 +54,6 @@ pub struct PersonalBestsWindow {
     /// playing, by name; then the Unassigned bests, if there are any or no Character is
     /// named. None while it is closed.
     pub characters: Vec<PersonalBestsCharacter>,
-    /// [`crate::OSMS_AND_MEOWDB_CREDIT`]: the names, levels and ceilings are from OSMS's data,
-    /// and the rows open MeowDB's pages.
-    pub credit: &'static str,
 }
 
 /// One Character's bests in the Personal Bests window, or the Unassigned ones: the choices
@@ -71,7 +68,7 @@ pub struct PersonalBestsCharacter {
     pub current: bool,
     /// Every map they have a Personal Best on, highest EXP/h first.
     pub maps: Vec<PersonalBestsMap>,
-    /// Their "Show on the Map Leaderboards"; `None` for the Unassigned bests, which are never
+    /// Their "Share to the Map Leaderboards"; `None` for the Unassigned bests, which are never
     /// uploaded.
     pub leaderboard: Option<LeaderboardToggle>,
 }
@@ -189,7 +186,7 @@ impl BestsWindow {
 /// playing (`None`: none named) and `level` the level the Status Bar shows, and `this_visit` the Visit under way's best among them:
 /// whose it is, its map, and its place in the map's Visits. `map` gives a map's entry in the
 /// map list and its data, if it is in the list; `here` is the map the player is certainly
-/// on, if any. `toggle` gives a Character's "Show on the Map Leaderboards".
+/// on, if any. `toggle` gives a Character's "Share to the Map Leaderboards".
 pub(crate) fn characters<'a>(
     saved: &SavedBests,
     (current, level): (Option<&str>, Option<u32>),

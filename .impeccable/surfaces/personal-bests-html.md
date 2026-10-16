@@ -21,3 +21,7 @@ Chosen by the user over re-ranking rows in motion and a whole-map card beside a 
 - **The EXP Lime Rule** now lets the lime draw a best's EXP/h on its lane: EXP, and nothing else.
 - **No new motion.** The lanes change at once, as the game changes them.
 - **Checked** headless at 920 (1× and 2×), 800, 700, 600 and 520 px, on made-up bests: nine maps with an opened history, the Visit under way and an armed "Remove?", bests in the millions, and a single map.
+
+## Simpler comparison chrome (15 Oct 2026)
+
+Manage shares the Character picker's row. The map count, top-level sharing status and attribution footer are removed; upload status remains under Manage and problems remain visible. The sharing switch says "Share to the Map Leaderboards", and an opened Visit History links to "Map Leaderboard". The share header's ? explains the actual solo ceiling calculation, using the same hover/focus tooltip as the panel and Grind Tracker.

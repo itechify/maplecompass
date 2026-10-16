@@ -5,6 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { byId, span } from "./dom";
 import type { Character, ExpRate, ExpTracking, PacePoint, PaceTrace } from "./exp-tracking";
 import { percent, rate, sharePercent, whole } from "./figures";
+import { soloExpHelp } from "./solo-exp-help";
 
 /** What the shell sends: the figures, the Character playing (none until the Status Bar names
  *  one), whether the window shows at all, whether some map has a Personal Best (the Personal
@@ -39,6 +40,8 @@ const sessionPercent = byId("session-percent");
 const bestRow = byId("best-row");
 const bestExp = byId("best-exp");
 const share = byId("tracking-share");
+const shareText = document.createElement("span");
+share.append(shareText, soloExpHelp());
 const deaths = byId("tracking-deaths");
 const exp = byId("tracking-exp");
 const expFigures = byId("exp-figures");
@@ -136,7 +139,7 @@ function render(view: TrackerView) {
   const shareOf = t.ceilingShareHundredths;
   share.hidden = shareOf === null || t.soloExpCeiling === null;
   if (shareOf !== null && t.soloExpCeiling !== null) {
-    share.textContent = `${sharePercent(shareOf)} of this map's solo EXP/h (${whole(t.soloExpCeiling)})`;
+    shareText.textContent = `${sharePercent(shareOf)} of this map's solo EXP/h (${whole(t.soloExpCeiling)})`;
   }
   const died = t.deaths.count;
   deaths.hidden = died === 0;

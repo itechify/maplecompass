@@ -12,6 +12,7 @@ import {
   type MapAnswer,
   type MapPlace,
   mapPage,
+  mapPicture,
   morphNames,
   placeOf,
   readLink,
@@ -54,6 +55,8 @@ async function open() {
   street.textContent = place.region ? `${place.street} · ${place.region}` : place.street;
   street.hidden = false;
   document.title = `${place.name} · Map Leaderboard · Minerva`;
+  // Pictures load independently: a missing picture never holds up the rankings.
+  showPicture(place);
 
   mapAnswer = await read<MapAnswer>(`/api/maps/${place.id}`);
   if (mapAnswer === null) return say(UNREACHABLE);
@@ -67,6 +70,32 @@ async function open() {
   drawBand(band, null, false);
   // The linked Character's entry is what the player came to see.
   rows.querySelector<HTMLElement>(".lb-you")?.scrollIntoView({ block: "center" });
+}
+
+/** OSMS's live map picture, fetched at runtime rather than bundled with the site. */
+async function showPicture(place: MapPlace) {
+  byId("map-picture").hidden = false;
+  const image = byId<HTMLImageElement>("map-image");
+  const status = byId("map-picture-status");
+  const manifest = await read<unknown>("https://osmsdataexplorer.com/data/current/map_manifest.json");
+  if (manifest === null) {
+    status.textContent = "Couldn't load the map picture.";
+    return;
+  }
+  const url = mapPicture(manifest, place.id);
+  if (url === null) {
+    status.textContent = "No map picture available.";
+    return;
+  }
+  image.alt = `Map layout of ${place.name}`;
+  image.onload = () => {
+    status.hidden = true;
+    image.hidden = false;
+  };
+  image.onerror = () => {
+    status.textContent = "Couldn't load the map picture.";
+  };
+  image.src = url;
 }
 
 /** The bands read so far, by their address, so Back and Forward don't wait on the API. */
